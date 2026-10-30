@@ -807,11 +807,11 @@ surface_to_texture(struct eagl *e, struct image *image)
 	    image->format, image->type, base);
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, row_length);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
-	if (!image->target && image->width == image->height && image->width >= 100 && image->width <= 200) {
-		/* (Galaxy S7 port) an icon's picture: is there anything in it when it becomes a texture? */
-		static unsigned told;
+	if (!image->target && ((image->width == image->height && image->width >= 100 && image->width <= 200) || image->width >= 900)) {
+		/* (Galaxy S7 port) an icon's picture, or one of a wallpaper's size: is there anything in it when it becomes a texture? */
+		static unsigned told, told_large;
 
-		if (told++ < 40) {
+		if (image->width >= 900 ? told_large++ < 16 : told++ < 40) {
 			size_t lit = 0, opaque = 0;
 
 			for (GLsizei y = 0; y < image->height; y++) {
@@ -1308,14 +1308,14 @@ drawing(struct eagl *e)
 	struct image *image;
 
 	frame_begin(e);
-	if (e->bound[0] != 0 && (image = image_of(e, e->bound[0])) != NULL && !image->target && image->width == image->height &&
-	    image->width >= 100 && image->width <= 200) {
-		/* (Galaxy S7 port) an icon's picture is drawn: into what, and how */
-		static unsigned told;
+	if (e->bound[0] != 0 && (image = image_of(e, e->bound[0])) != NULL && !image->target &&
+	    ((image->width == image->height && image->width >= 100 && image->width <= 200) || image->width >= 900)) {
+		/* (Galaxy S7 port) an icon's picture, or one of a wallpaper's size, is drawn: into what, and how */
+		static unsigned told, told_large;
 		struct image *into = e->colour != 0 ? image_of(e, e->colour) : NULL;
 		GLint viewport[4] = { 0, 0, 0, 0 }, scissor[4] = { 0, 0, 0, 0 };
 
-		if (told++ < 40) {
+		if (image->width >= 900 ? told_large++ < 16 : told++ < 40) {
 			glGetIntegerv(GL_VIEWPORT, viewport);
 			glGetIntegerv(GL_SCISSOR_BOX, scissor);
 			say("hakios-gl: icon: texture %u (surface %u) drawn by program %u into framebuffer %u (texture %u%s%s, %d x %d), "
