@@ -267,6 +267,29 @@ register_plugins_in(id workspace, const char *frameworks)
    return done;
 }
 
+/* What the wallpaper needs goes first, and says how long it took. */
+static void
+register_posters(id workspace)
+{
+   static const char *const paths[] = {
+      "/System/Library/PrivateFrameworks/WallpaperKit.framework/PlugIns/CollectionsPoster.appex",
+      "/System/Library/PrivateFrameworks/GradientPoster.framework/PlugIns/GradientPosterExtension.appex",
+      "/System/Library/PrivateFrameworks/EmojiPoster.framework/PlugIns/EmojiPosterExtension.appex",
+      "/System/Library/PrivateFrameworks/PhotosUIPrivate.framework/PlugIns/PhotosPosterProvider.appex",
+      "/System/Library/PrivateFrameworks/UnityPoster.framework/PlugIns/UnityPosterExtension.appex",
+      "/System/Library/PrivateFrameworks/PridePoster.framework/PlugIns/PridePosterExtension.appex",
+      "/Applications/PaperBoard.app/PlugIns/LegacyPoster.appex",
+      "/Applications/Weather.app/PlugIns/WeatherPoster.appex",
+   };
+   for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
+      time_t start = time(NULL);
+      id url = ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"),
+         nsstring(paths[i]));
+      BOOL ok = ((BOOL (*)(id, SEL, id))objc_msgSend)(workspace, sel_registerName("registerPlugin:"), url);
+      dprintf(census_fd, "register %s: %d, %ld s, exists %d\n", paths[i], ok, (long)(time(NULL) - start), access(paths[i], F_OK) == 0);
+   }
+}
+
 static void
 register_system_plugins(id workspace)
 {
@@ -306,8 +329,8 @@ extension_census(void)
          sel_registerName("_LSPrivateRebuildApplicationDatabasesForSystemApps:internal:user:"), YES, YES, YES);
       dprintf(census_fd, "database rebuilt: %d\n", rebuilt);
    }
-   if (workspace && access(DROP_DIR "plugins.done", F_OK) != 0)
-      register_system_plugins(workspace);
+   if (workspace)
+      register_posters(workspace);
    Class records = objc_getClass("LSApplicationExtensionRecord");
    for (size_t i = 0; records && i < sizeof(known) / sizeof(known[0]); i++) {
       id error = nil;
@@ -323,6 +346,10 @@ extension_census(void)
    dprintf(census_fd, "of the poster point: %s; error %s\n", text_of(found), text_of(error));
    if (workspace)
       plugins_census(workspace);
+   /* The rest takes minutes (a registration can take seconds): last, with no alarm over it. */
+   alarm(0);
+   if (workspace && access(DROP_DIR "plugins.done", F_OK) != 0)
+      register_system_plugins(workspace);
    if (reader > 0)
       waitpid(reader, NULL, 0);
 }
