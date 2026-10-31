@@ -251,7 +251,8 @@ census_drain(void)
 #define MIGRATION_PLIST "/private/var/mobile/Library/Preferences/com.apple.migration.plist"
 #define MIGRATION_SAVED DROP_DIR "migration.saved"
 #define LS_MIGRATOR     "/System/Library/DataClassMigrators/00LaunchServicesMigrator.migrator"
-#define LS_MIGRATED     DROP_DIR "lsmigrator.done"
+#define LS_MIGRATED     DROP_DIR "lsmigrator2.done"
+#define LS_ANSWER       DROP_DIR "lsmigrator.log"
 
 static void
 migration_restore(void)
@@ -272,6 +273,15 @@ disable_refused_jobs(void)
    static const char *const jobs[] = {
       "com.apple.bluetoothd", "com.apple.ReportCrash", "com.apple.analyticsd", "com.apple.aggregated",
       "com.apple.homed", "com.apple.cloudd", "com.apple.searchd", "com.apple.voicemail.vmd",
+      /* and what uses the CPU here for nothing: no account, no modem, no watch, no health sensors */
+      "com.apple.healthd", "com.apple.remindd", "com.apple.nanotimekitcompaniond", "com.apple.nanoregistryd",
+      "com.apple.nanoregistrylaunchd", "com.apple.nanoprefsyncd.2", "com.apple.email.maild", "com.apple.suggestd",
+      "com.apple.siriinferenced", "com.apple.siriknowledged", "com.apple.siriactionsd", "com.apple.assistantd",
+      "com.apple.financed", "com.apple.routined", "com.apple.fitcore", "com.apple.fitnesscoachingd", "com.apple.triald",
+      "com.apple.mediaanalysisd", "com.apple.itunescloudd", "com.apple.parsecd", "com.apple.parsec-fbf",
+      "com.apple.familycircled", "com.apple.transparencyd", "com.apple.Maps.mapspushd", "com.apple.navd",
+      "com.apple.ap.adprivacyd", "com.apple.ap.promotedcontentd", "com.apple.amsengagementd", "com.apple.sociallayerd",
+      "com.apple.intelligenceplatformd", "com.apple.coreidvd", "com.apple.watchlistd", "com.apple.driverkitd",
    };
    mkdir("/private/var/db/com.apple.xpc.launchd", 0755);
    FILE *f = fopen("/private/var/db/com.apple.xpc.launchd/disabled.plist", "w");
@@ -291,20 +301,32 @@ disable_refused_jobs(void)
 static void
 run_ls_migrator(void)
 {
+   char said[1024];
+   int old = open(LS_ANSWER, O_RDONLY);
+   ssize_t got = old >= 0 ? read(old, said, sizeof(said) - 1) : 0;
+   if (old >= 0)
+      close(old);
+   if (got > 0) {
+      said[got] = 0;
+      dprintf(census_fd, "LS migrator, last time:\n%s", said);
+   }
    if (access(LS_MIGRATED, F_OK) == 0)
       return;
    close(open(LS_MIGRATED, O_WRONLY | O_CREAT, 0644));
+   int answer = open(LS_ANSWER, O_WRONLY | O_CREAT | O_TRUNC, 0644);
    id bundle = ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("NSBundle"), sel_registerName("bundleWithPath:"),
       nsstring(LS_MIGRATOR));
    BOOL loaded = bundle ? ((BOOL (*)(id, SEL))objc_msgSend)(bundle, sel_registerName("load")) : NO;
    id cls = bundle ? send0(bundle, "principalClass") : nil;
    dprintf(census_fd, "LS migrator: bundle %s, loaded %d, class %s\n", text_of(bundle), loaded, text_of(cls));
+   dprintf(answer, "LS migrator: bundle %s, loaded %d, class %s\n", text_of(bundle), loaded, text_of(cls));
    if (!cls)
       return;
    id migrator = send0(send0(cls, "alloc"), "init");
    time_t start = time(NULL);
    BOOL done = ((BOOL (*)(id, SEL))objc_msgSend)(migrator, sel_registerName("performMigration"));
    dprintf(census_fd, "LS migrator: performMigration %d, %ld s\n", done, (long)(time(NULL) - start));
+   dprintf(answer, "LS migrator: performMigration %d, %ld s\n", done, (long)(time(NULL) - start));
 }
 
 int
