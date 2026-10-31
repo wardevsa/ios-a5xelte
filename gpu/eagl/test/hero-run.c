@@ -7,6 +7,7 @@
  * after 180 s.
  */
 #include <dirent.h>
+#include <sys/stat.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <objc/message.h>
@@ -178,6 +179,8 @@ plugins_census(id workspace)
    }
 }
 
+static void run_ls_migrator(void);
+
 static void
 extension_census(void)
 {
@@ -189,8 +192,10 @@ extension_census(void)
    /* LaunchServices is told once of the system's bundles: DataMigration, which does it on a real phone, is skipped
     * on this image (herolte-tune-ios-root.sh). The parent marks it done when this child has lived through it. */
    int first_time = access(DROP_DIR "database.done", F_OK) != 0;
-   alarm(300);
+   alarm(0);
    sleep(60);
+   run_ls_migrator();
+   alarm(300);
    if (setgid(501) != 0 || setuid(501) != 0)
       dprintf(census_fd, "cannot become mobile\n");
    dlopen("/System/Library/Frameworks/CoreServices.framework/CoreServices", RTLD_NOW);
@@ -239,54 +244,75 @@ census_drain(void)
 }
 
 /*
- * registerPlugin: does not take the poster extensions (0 after 176 s, with installd at 200%). What registers what is
- * inside the system on a phone is DataMigration, whose 00LaunchServicesMigrator and others this image skips by
- * having com.apple.migration.plist say it already ran. This lets it run once: the plist goes aside now, the next
- * boot migrates, and five minutes into that boot it comes back if the migration has not written its own, since
- * backboardd holds SpringBoard until DataMigration finishes.
+ * The whole of DataMigration does not finish here: datamigrator waits on its plug-in wrapper, for good. So its plist
+ * stays as the image has it (put back first thing, before launchd gets to the migration), and of its plug-ins only
+ * the one that tells LaunchServices about the system runs, once, in this process.
  */
 #define MIGRATION_PLIST "/private/var/mobile/Library/Preferences/com.apple.migration.plist"
 #define MIGRATION_SAVED DROP_DIR "migration.saved"
-#define MIGRATION_ASKED DROP_DIR "migration.asked"
-#define MIGRATION_RAN   DROP_DIR "migration.ran"
-
-static int migration_boot;
+#define LS_MIGRATOR     "/System/Library/DataClassMigrators/00LaunchServicesMigrator.migrator"
+#define LS_MIGRATED     DROP_DIR "lsmigrator.done"
 
 static void
-migration_step(void)
+migration_restore(void)
 {
-   if (access(MIGRATION_RAN, F_OK) == 0) {
-      herodrm_log("hero-run: migration: already tried; plist %s", access(MIGRATION_PLIST, F_OK) == 0 ? "present" : "missing");
-   } else if (access(MIGRATION_ASKED, F_OK) == 0) {
-      migration_boot = 1;
-      close(open(MIGRATION_RAN, O_WRONLY | O_CREAT, 0644));
-      herodrm_log("hero-run: migration: this boot migrates");
-   } else {
-      int moved = rename(MIGRATION_PLIST, MIGRATION_SAVED);
-      close(open(MIGRATION_ASKED, O_WRONLY | O_CREAT, 0644));
-      herodrm_log("hero-run: migration: plist set aside (%d): the NEXT boot migrates", moved);
-   }
+   if (access(MIGRATION_SAVED, F_OK) == 0)
+      herodrm_log("hero-run: migration: plist put back (%d)", rename(MIGRATION_SAVED, MIGRATION_PLIST));
+   herodrm_log("hero-run: migration: plist %s", access(MIGRATION_PLIST, F_OK) == 0 ? "present" : "MISSING");
 }
 
+/*
+ * The services heronoexec refuses are relaunched by launchd every ten seconds for ever, and each try costs a good
+ * part of a CPU (kernel_task and xpcproxy at 100% and more). launchd's own list of disabled jobs stops that from the
+ * next boot on.
+ */
 static void
-migration_finish(void)
+disable_refused_jobs(void)
 {
-   if (!migration_boot)
+   static const char *const jobs[] = {
+      "com.apple.bluetoothd", "com.apple.ReportCrash", "com.apple.analyticsd", "com.apple.aggregated",
+      "com.apple.homed", "com.apple.cloudd", "com.apple.searchd", "com.apple.voicemail.vmd",
+   };
+   mkdir("/private/var/db/com.apple.xpc.launchd", 0755);
+   FILE *f = fopen("/private/var/db/com.apple.xpc.launchd/disabled.plist", "w");
+   if (!f) {
+      herodrm_log("hero-run: cannot write launchd's disabled jobs");
       return;
-   sleep(240);
-   if (access(MIGRATION_PLIST, F_OK) == 0) {
-      herodrm_log("hero-run: migration: finished, it wrote its plist");
-   } else {
-      int back = rename(MIGRATION_SAVED, MIGRATION_PLIST);
-      herodrm_log("hero-run: migration: NOT finished after 5 min; plist put back (%d) for the next boot", back);
    }
+   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\">\n<dict>\n", f);
+   for (size_t i = 0; i < sizeof(jobs) / sizeof(jobs[0]); i++)
+      fprintf(f, "\t<key>%s</key>\n\t<true/>\n", jobs[i]);
+   fputs("</dict>\n</plist>\n", f);
+   fclose(f);
+   herodrm_log("hero-run: %zu jobs in launchd's disabled list", sizeof(jobs) / sizeof(jobs[0]));
+}
+
+/* In the census child, as root, before it becomes mobile. */
+static void
+run_ls_migrator(void)
+{
+   if (access(LS_MIGRATED, F_OK) == 0)
+      return;
+   close(open(LS_MIGRATED, O_WRONLY | O_CREAT, 0644));
+   id bundle = ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("NSBundle"), sel_registerName("bundleWithPath:"),
+      nsstring(LS_MIGRATOR));
+   BOOL loaded = bundle ? ((BOOL (*)(id, SEL))objc_msgSend)(bundle, sel_registerName("load")) : NO;
+   id cls = bundle ? send0(bundle, "principalClass") : nil;
+   dprintf(census_fd, "LS migrator: bundle %s, loaded %d, class %s\n", text_of(bundle), loaded, text_of(cls));
+   if (!cls)
+      return;
+   id migrator = send0(send0(cls, "alloc"), "init");
+   time_t start = time(NULL);
+   BOOL done = ((BOOL (*)(id, SEL))objc_msgSend)(migrator, sel_registerName("performMigration"));
+   dprintf(census_fd, "LS migrator: performMigration %d, %ld s\n", done, (long)(time(NULL) - start));
 }
 
 int
 main(void)
 {
    wallpapers_for_this_screen();
-   migration_step();
+   migration_restore();
+   disable_refused_jobs();
    census_fd = open(DROP_DIR "census.out", O_RDWR | O_CREAT | O_TRUNC, 0644);
    pid_t census = fork();
    if (census == 0) {
@@ -356,6 +382,5 @@ main(void)
          close(open(DROP_DIR "database.done", O_WRONLY | O_CREAT, 0644));
       }
    }
-   migration_finish();
    return 0;
 }
