@@ -32,6 +32,7 @@ send0(id target, const char *selector)
 }
 
 static id picture;
+static bool gestures_on;
 static unsigned rounds;
 
 static void
@@ -70,7 +71,7 @@ look_at_windows(void *unused)
    }
    size_t count = windows ? ((size_t (*)(id, SEL))objc_msgSend)(windows, sel_registerName("count")) : 0;
    if (rounds == 1 || rounds == 6)
-      herodrm_log("herosb: round %u, %zu windows, picture %d", rounds, count, picture != nil);
+      herodrm_log("herosb: round %u, %zu windows, picture %d, gestures %d", rounds, count, picture != nil, gestures_on);
    for (size_t i = 0; picture && i < count; i++) {
       id window = ((id (*)(id, SEL, size_t))objc_msgSend)(windows, sel_registerName("objectAtIndex:"), i);
       const char *name = object_getClassName(window);
@@ -85,9 +86,43 @@ look_at_windows(void *unused)
       dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), NULL, look_at_windows);
 }
 
+/*
+ * The ADT says "home button" (home-button-type 1): UIKit then has a status bar for this 750x1334 screen, where type 2
+ * gets the red rdar:45025538 one. SpringBoard alone is told type 2, which is where the home gestures are decided, as
+ * the old home-gesture tweaks did. DROP_DIR gestures.off turns it off.
+ */
+static long
+says_gestures(id self, SEL cmd)
+{
+   return 2;
+}
+
+static BOOL
+says_yes(id self, SEL cmd)
+{
+   return YES;
+}
+
+static void
+ask_for_gestures(void)
+{
+   Class platform = objc_getClass("BSPlatform");
+   Method type = platform ? class_getInstanceMethod(platform, sel_registerName("homeButtonType")) : NULL;
+   if (type) {
+      method_setImplementation(type, (IMP)says_gestures);
+      gestures_on = true;
+   }
+   Class settings = objc_getClass("SBHomeGestureSettings");
+   Method enabled = settings ? class_getInstanceMethod(settings, sel_registerName("isHomeGestureEnabled")) : NULL;
+   if (enabled)
+      method_setImplementation(enabled, (IMP)says_yes);
+}
+
 __attribute__((constructor)) static void
 herosb_start(void)
 {
+   if (access(DROP_DIR "gestures.off", F_OK) != 0)
+      ask_for_gestures();
    if (access(DROP_DIR "wallpaper.off", F_OK) == 0)
       return;
    dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC), dispatch_get_main_queue(), NULL, look_at_windows);
