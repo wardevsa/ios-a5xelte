@@ -229,6 +229,54 @@ log_census(void)
    dprintf(census_fd, "log: %d lines, %ld s; error %s\n", lines, (long)(time(NULL) - start), text_of(error));
 }
 
+/*
+ * LaunchServices answers -10814 (not found) for the poster extensions: the plug-ins inside the system's frameworks
+ * are not registered, and PosterBoard has nothing to offer or to draw. On a phone that comes with DataMigration,
+ * which this image skips. Each one is registered by its URL, once; the wallpaper needs the next boot to see them.
+ */
+static int
+register_plugins_in(id workspace, const char *frameworks)
+{
+   int done = 0;
+   DIR *all = opendir(frameworks);
+   struct dirent *f, *p;
+   while (all && (f = readdir(all))) {
+      char dir[1024];
+      snprintf(dir, sizeof(dir), "%s/%s/PlugIns", frameworks, f->d_name);
+      DIR *plugins = opendir(dir);
+      while (plugins && (p = readdir(plugins))) {
+         char path[2048];
+         size_t n = strlen(p->d_name);
+         if (n < 6 || strcmp(p->d_name + n - 6, ".appex") != 0)
+            continue;
+         snprintf(path, sizeof(path), "%s/%s", dir, p->d_name);
+         void *pool = objc_autoreleasePoolPush();
+         id url = ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"),
+            nsstring(path));
+         BOOL ok = ((BOOL (*)(id, SEL, id))objc_msgSend)(workspace, sel_registerName("registerPlugin:"), url);
+         done += ok;
+         if (!ok || strstr(p->d_name, "Poster"))
+            dprintf(census_fd, "register %s: %d\n", p->d_name, ok);
+         objc_autoreleasePoolPop(pool);
+      }
+      if (plugins)
+         closedir(plugins);
+   }
+   if (all)
+      closedir(all);
+   return done;
+}
+
+static void
+register_system_plugins(id workspace)
+{
+   int done = register_plugins_in(workspace, "/System/Library/PrivateFrameworks") +
+      register_plugins_in(workspace, "/System/Library/Frameworks");
+   dprintf(census_fd, "plug-ins registered: %d\n", done);
+   BOOL synced = ((BOOL (*)(id, SEL))objc_msgSend)(workspace, sel_registerName("_LSPrivateSyncWithMobileInstallation"));
+   dprintf(census_fd, "sync with installd: %d\n", synced);
+}
+
 static void
 extension_census(void)
 {
@@ -258,6 +306,8 @@ extension_census(void)
          sel_registerName("_LSPrivateRebuildApplicationDatabasesForSystemApps:internal:user:"), YES, YES, YES);
       dprintf(census_fd, "database rebuilt: %d\n", rebuilt);
    }
+   if (workspace && access(DROP_DIR "plugins.done", F_OK) != 0)
+      register_system_plugins(workspace);
    Class records = objc_getClass("LSApplicationExtensionRecord");
    for (size_t i = 0; records && i < sizeof(known) / sizeof(known[0]); i++) {
       id error = nil;
@@ -365,8 +415,10 @@ main(void)
       }
       census_drain();
       herodrm_log("hero-run: extensions: the child ended with status %#x", census_status);
-      if (WIFEXITED(census_status) && WEXITSTATUS(census_status) == 0)
+      if (WIFEXITED(census_status) && WEXITSTATUS(census_status) == 0) {
          close(open(DROP_DIR "database.done", O_WRONLY | O_CREAT, 0644));
+         close(open(DROP_DIR "plugins.done", O_WRONLY | O_CREAT, 0644));
+      }
    }
    return 0;
 }
