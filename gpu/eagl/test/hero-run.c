@@ -256,6 +256,25 @@ extension_census(void)
       waitpid(reader, NULL, 0);
 }
 
+/* The complete lines the child has written since the last call go to the log. */
+static void
+census_drain(void)
+{
+   static off_t done;
+   char text[8192];
+   ssize_t n = pread(census_fd, text, sizeof(text) - 1, done);
+   if (n <= 0)
+      return;
+   text[n] = 0;
+   char *line = text, *end;
+   while ((end = strchr(line, '\n'))) {
+      *end = 0;
+      herodrm_log("hero-run: extensions: %s", line);
+      done += (end - line) + 1;
+      line = end + 1;
+   }
+}
+
 int
 main(void)
 {
@@ -314,18 +333,19 @@ main(void)
       herodrm_log("hero-run: test exited with %d after %.1f s", WEXITSTATUS(status),
                   (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9);
    if (census > 0) {
+      /* Line by line as they come: the phone may go to TWRP before the child ends. */
       int census_status = 0;
-      waitpid(census, &census_status, 0);
+      pid_t ended = 0;
+      while (ended == 0) {
+         ended = waitpid(census, &census_status, WNOHANG);
+         census_drain();
+         if (ended == 0)
+            sleep(3);
+      }
+      census_drain();
       herodrm_log("hero-run: extensions: the child ended with status %#x", census_status);
       if (WIFEXITED(census_status) && WEXITSTATUS(census_status) == 0)
          close(open(DROP_DIR "database.done", O_WRONLY | O_CREAT, 0644));
-      lseek(census_fd, 0, SEEK_SET);
-      FILE *c = fdopen(census_fd, "r");
-      char text[1400];
-      while (c && fgets(text, sizeof(text), c)) {
-         text[strcspn(text, "\n")] = 0;
-         herodrm_log("hero-run: extensions: %s", text);
-      }
    }
    return 0;
 }
