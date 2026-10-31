@@ -138,6 +138,9 @@ text_of(id object)
    return ((const char *(*)(id, SEL))objc_msgSend)(description, sel_registerName("UTF8String"));
 }
 
+/* A forked child has no mach ports, so no log of its own: it writes here and the parent logs it. */
+static int census_fd = -1;
+
 static void
 extension_census(void)
 {
@@ -149,26 +152,27 @@ extension_census(void)
    alarm(120);
    sleep(60);
    if (setgid(501) != 0 || setuid(501) != 0)
-      herodrm_log("hero-run: extensions: cannot become mobile");
+      dprintf(census_fd, "cannot become mobile\n");
    Class records = objc_getClass("LSApplicationExtensionRecord");
    for (size_t i = 0; records && i < sizeof(known) / sizeof(known[0]); i++) {
       id error = nil;
       id record = send_id(((id (*)(id, SEL))objc_msgSend)((id)records, sel_registerName("alloc")),
          "initWithBundleIdentifier:error:", nsstring(known[i]), &error);
-      herodrm_log("hero-run: extensions: record %s: %s; error %s", known[i], text_of(record), text_of(error));
+      dprintf(census_fd, "record %s: %s; error %s\n", known[i], text_of(record), text_of(error));
    }
    id attributes = ((id (*)(id, SEL, id, id))objc_msgSend)((id)objc_getClass("NSDictionary"),
       sel_registerName("dictionaryWithObject:forKey:"), nsstring("com.apple.posterkit.provider"),
       nsstring("NSExtensionPointName"));
    id error = nil;
    id found = send_id((id)objc_getClass("NSExtension"), "extensionsWithMatchingAttributes:error:", attributes, &error);
-   herodrm_log("hero-run: extensions: of the poster point: %s; error %s", text_of(found), text_of(error));
+   dprintf(census_fd, "of the poster point: %s; error %s\n", text_of(found), text_of(error));
 }
 
 int
 main(void)
 {
    wallpapers_for_this_screen();
+   census_fd = open(DROP_DIR "census.out", O_RDWR | O_CREAT | O_TRUNC, 0644);
    pid_t census = fork();
    if (census == 0) {
       extension_census();
@@ -221,7 +225,17 @@ main(void)
    else
       herodrm_log("hero-run: test exited with %d after %.1f s", WEXITSTATUS(status),
                   (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9);
-   if (census > 0)
-      waitpid(census, NULL, 0);
+   if (census > 0) {
+      int census_status = 0;
+      waitpid(census, &census_status, 0);
+      herodrm_log("hero-run: extensions: the child ended with status %#x", census_status);
+      lseek(census_fd, 0, SEEK_SET);
+      FILE *c = fdopen(census_fd, "r");
+      char text[1400];
+      while (c && fgets(text, sizeof(text), c)) {
+         text[strcspn(text, "\n")] = 0;
+         herodrm_log("hero-run: extensions: %s", text);
+      }
+   }
    return 0;
 }
