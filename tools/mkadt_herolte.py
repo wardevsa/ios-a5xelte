@@ -52,6 +52,16 @@ def build(canvas=(FB_WIDTH, FB_HEIGHT), dram=(DRAM_BASE, DRAM_SIZE), scale=3):
         set_prop(product, 'artwork-device-subtype', mkadt.u32(1792))
         set_prop(product, 'artwork-scale-factor', mkadt.u32(2))
         canvas = (828, 1792)
+    if scale == 8:
+        # --iphone8: 375x667 points at @2x, the panel's 16:9, 72% fewer pixels. With a home button (below) UIKit has a
+        # status bar for it; type 2 gets the red rdar:45025538 one. Boot args: sweetfb_scale=1 sweetfb_lw=750
+        # sweetfb_lh=1334 sweetfb_gpu=1.
+        set_prop(child(root, 'chosen'), 'display-scale', mkadt.u32(2))
+        product = child(root, 'product')
+        set_prop(product, 'artwork-device-subtype', mkadt.u32(1334))
+        set_prop(product, 'artwork-scale-factor', mkadt.u32(2))
+        set_prop(child(root, 'buttons'), 'home-button-type', mkadt.u32(1))
+        canvas = (750, 1334)
     if canvas == (1242, 2208):
         # --canvas 1242x2208: an iPhone 8 Plus screen, 414x736 points at @3x,
         # the panel's 16:9 with no bars. The kernel scales it to the panel
@@ -165,9 +175,11 @@ if __name__ == '__main__':
                              'vm_compression_limit=98304), 2048 panics in write_pte_fast')
     parser.add_argument('--scale2', action='store_true',
                         help='iPhone XR screen, 828x1792 @2x (needs research/ipsw-x/d22ap.adt)')
+    parser.add_argument('--iphone8', action='store_true',
+                        help='iPhone 8 screen, 750x1334 @2x, with a home button')
     args = parser.parse_args()
     canvas = tuple(int(v) for v in args.canvas.lower().split('x'))
     dram = (BANK2_BASE, min(args.bank2_mb << 20, BANK2_SIZE)) if args.bank2 else (DRAM_BASE, DRAM_SIZE)
-    blob = adt.serialize(build(canvas, dram, 2 if args.scale2 else 3))
+    blob = adt.serialize(build(canvas, dram, 8 if args.iphone8 else 2 if args.scale2 else 3))
     args.output.write_bytes(blob)
     print(f'{args.output}: {len(blob)} bytes')

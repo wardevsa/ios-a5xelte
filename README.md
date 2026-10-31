@@ -1,35 +1,41 @@
 # iOS 16 on the Samsung Galaxy S7 (SM-G930F, Exynos 8890) — `herolte` branch
 
-**Status, 2026-10-24:** Apple's XNU kernel boots on a flat Galaxy S7 and runs the
-unmodified **iPhone X iOS 16.7.16 userland** to the **home screen**: apps open
-(Settings, Safari), with touch, buttons, battery level and screen off/on. iOS
-still draws on the CPU, but the **Mali-T880 GPU now runs our own jobs**:
-triangles, textures and bilinear scaling, written from scratch after Mesa's
-Panfrost, and it can put every iOS frame on the panel (experimental).
+**Status, 2026-10-31:** Apple's XNU kernel boots on a flat Galaxy S7 and runs the
+unmodified **iPhone X iOS 16.7.16 userland** to the home screen with **GPU
+acceleration**: CoreAnimation renders on the Mali-T880 through OpenGL ES (Mesa
+Panfrost under an EAGL bridge). Apps open and load, and it is usable day to day
+apart from the gaps below. There is no Metal.
 
 | Area | State |
 | --- | --- |
 | Boot | Samsung S-Boot loads our loader from BOOT (`shim/herolte/`), which starts XNU |
-| CPU | All 8 cores: 4 Cortex-A53 + 4 Mongoose (secondaries through a trampoline below 4 GiB); UI and render threads prefer the Mongoose cores (0238) |
-| RAM | 1 GiB of the second DRAM bank for iOS (1.5/2 GiB still panic) |
-| Storage | Own Exynos UFS driver; iOS root is HFSX in USERDATA, read/write |
-| Display | Bootloader framebuffer, 1440×2560. Default: native size, parallel CPU copy (~5 ms/frame). Experimental: iPhone XR canvas (828×1792 @2x) scaled to the panel by the GPU |
-| GPU | Mali-T880 MP12: power-up, MMU, job slots, tiler, hand-assembled Midgard shaders, textures; scales a frame to the panel in 3.3 ms on 12 cores. No Metal: iOS itself does not use it yet |
-| Touch | Samsung `sec_ts` over HSI2C, powered through the APM co-processor (S2MPS16 LDO32/33) |
-| Buttons | Power (screen off/on), Home, Volume ± (GPIO) |
-| Battery | MAX77854 fuel gauge: real percentage and charging state |
-| Not working | modem, Wi-Fi, Bluetooth, audio, camera, sensors, sleep |
+| CPU | All 8 cores. Mongoose raised from the bootloader's 728 MHz to 2600 MHz (measured 2598) at Samsung's own voltage table; UI threads prefer Mongoose, busy daemons the A53s (0274). No thermal limit yet |
+| RAM | 2 GiB of the second DRAM bank |
+| Storage | Own Exynos UFS driver; iOS root is HFSX in USERDATA, read/write, with the system apps |
+| GPU | Mali-T880 MP12 at 650 MHz through EAGL → OSMesa/Panfrost → our kernel job service. `JOB_READ_FAULT` (0x42) can still stop the GPU until reboot; not seen since the resolution below, cause unknown |
+| Display | iOS draws an iPhone 8 screen, 750×1334 @2x (72% fewer pixels), and the GPU scales it to the 1440×2560 panel. About 35-38 fps when in use, slower in the heaviest frames |
+| Navigation | Physical Home button (`home-button-type` 1). Home gestures need type 2, which brings UIKit's red rdar:45025538 status bar at this size; not solved |
+| Wallpaper | A fixed picture from the drop zone, drawn from inside SpringBoard (`gpu/eagl/src/herosb.c`). PosterBoard has no providers here, so the wallpaper gallery stays empty |
+| Touch, buttons, battery | Working |
+| Not working | modem, Wi-Fi, Bluetooth, audio, camera, sensors, sleep, Face ID. Widgets mostly wait; the lock screen's clock and date overlap |
+
+What made it usable, in the order found: factory GPU and CPU rates at factory
+voltages, the apps in the root image, moving `BTAudioHALPlugin` away (it kept
+asking the absent bluetoothd; idle CPU fell from over 300% to under 25% of 800%,
+found by [syncmodz/ios-s9](https://github.com/syncmodz/ios-s9)), and the lower
+resolution. Boot arguments and how to build the ADT: `tools/mkadt_herolte.py --iphone8`
+and [HEROLTE_PROGRESS.md](HEROLTE_PROGRESS.md) (Spanish).
 
 How to try it: [docs/herolte-howto.md](docs/herolte-howto.md) (erases USERDATA;
-Apple's software is not in this repository). Device log of every step:
-[HEROLTE_PROGRESS.md](HEROLTE_PROGRESS.md) (Spanish). The S7 kernel patches are
+Apple's software is not in this repository). The S7 kernel patches are
 `xnu/patches/0200` and up; the board config is `MACHINE_CONFIG=HEROLTE`.
 
-Next: GPU acceleration of iOS itself, by putting CoreAnimation's drawing on
-the Mali (a kernel service for user-space GPU jobs first). Help is welcome,
-especially on the GPU, Wi-Fi, audio, and testing on other S7 units. Please
-open an issue with the log from `tools/herolte-log-pull.py` and a photo of
-the screen.
+Next: thermal limit, audio, Wi-Fi, more optimization. Help is welcome. Please
+open an issue with the log from `tools/herolte-log-pull.py` and a photo of the screen.
+
+Credits: Mesa/Panfrost, [HakiOS](https://github.com/) EAGL bridge (`gpu/hakios-gl`, see its NOTICE),
+Bergamota's EAGL shim (`gpu/eagl`), [ios-sweet](https://github.com/dipa-studio/ios-sweet),
+[syncmodz/ios-s9](https://github.com/syncmodz/ios-s9) and the LineageOS Exynos 8890 kernel for the hardware tables.
 
 Based on [orhunnx/ios-a5xelte](https://github.com/orhunnx/ios-a5xelte) (A5 2016)
 and its Redmi Note 10 Pro donor, documented below.

@@ -354,3 +354,15 @@ pantalla y comportamiento de iOS. Plan y mapa de hardware en
 - `sweetfb_scale=1` (0222) muestra la imagen rayada y duplicada (las
   superficies a 960x1706 tienen otro formato): queda desactivado.
 - Pendiente: nodo `/product` del ADT a partir del IPSW; root (UFS).
+
+## 2026-10-31: aceleración por GPU usable
+
+- Resolución interna de iPhone 8 (750x1334 @2x, `mkadt_herolte.py --iphone8`), escalada por la GPU al panel. La fluidez mejora mucho.
+- Boot args: `sweetfb_native=1 sweetfb_scale=1 sweetfb_lw=750 sweetfb_lh=1334 sweetfb_gpu=1 herogpu_mhz=650 herocpu_mhz=2600 herosb=1`.
+- Medido: Mongoose 2598 MHz a 1075 mV, GPU 650 MHz. En reposo 7-22 % de 800 % de CPU.
+- `hero-run` mueve `BTAudioHALPlugin` fuera de `HAL/`: `launchd` y `mediaserverd` dejan de gastar CPU. La pista es de ios-s9.
+- Fondo: imagen fija desde SpringBoard (`herosb.c`, `herosb=1`). No hay proveedores de PosterBoard, la galería sigue vacía.
+- Lista de servicios desactivados: `tools/herolte-disabled.list`, copiada como `disabled.list` a la zona de drop. Con 41 servicios SpringBoard no dibujaba: algún servicio de los otros 13 es necesario, sin identificar.
+- Gestos: con `home-button-type` 2 aparece la barra roja. Con 1 no hay barra, pero tampoco gestos. Forzar `_UIStatusBarVisualProvider_Phone` en SpringBoard lo hace cerrarse; `gestures.off` en la zona de drop deja esos ganchos apagados.
+- `JOB_READ_FAULT` (0x42): tras él ni un trabajo en memoria del kernel corre; no lo curan hard reset ni apagar el dominio G3D. No se vio desde el cambio de resolución, en pocas pruebas. Causa desconocida.
+- Falta: límite térmico, audio, Wi-Fi.
