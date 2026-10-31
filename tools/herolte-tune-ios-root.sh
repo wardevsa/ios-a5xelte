@@ -37,6 +37,13 @@ plist() {  # plist FILE KEY TYPE VALUE ...  (creates or updates entries)
     chmod 0600 "$file"
 }
 
+# WallpaperKit offers only the wallpapers that name this screen's class
+# (1440x2560 at @3x); the IPSW has none. The 375w-812h ones are given it.
+find "$root/Library/Wallpaper/Collections" -path '*375w-812h*' -name Wallpaper.plist -print0 |
+while IFS= read -r -d '' wallpaper; do
+    /usr/bin/plutil -replace logicalScreenClass -string '480w-853h@3x~iphone' "$wallpaper"
+done
+
 plist "$prefs/com.apple.migration.plist" LastSystemVersion string "$build"
 plist "$prefs/com.apple.springboard.plist" \
     BKNoWatchdogs bool YES \

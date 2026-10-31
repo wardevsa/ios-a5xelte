@@ -88,7 +88,7 @@ jobs:
             -fs "Case-sensitive Journaled HFS+" -volname IOSROOT root
           root=$(hdiutil attach -nobrowse -owners on root.sparseimage | awk -F'\t' '/\/Volumes\// {print $NF}' | tail -1)
           echo "root=$root"
-          sudo env STAGE_ALL_APPS=1 bash tools/a5xelte-stage-ios-root.sh "$os" "$sys" "$app" "$root"
+          sudo env STAGE_ALL_APPS=1 STAGE_FULL=1 bash tools/a5xelte-stage-ios-root.sh "$os" "$sys" "$app" "$root"
           build=$(/usr/libexec/PlistBuddy -c 'Print :ProductBuildVersion' ipsw/BuildManifest.plist)
           sudo bash tools/herolte-tune-ios-root.sh "$root" "$build"
           hdiutil detach "$root"; hdiutil detach "$os"; hdiutil detach "$sys"; hdiutil detach "$app"

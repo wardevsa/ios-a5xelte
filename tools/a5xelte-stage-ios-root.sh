@@ -62,8 +62,23 @@ omit=(
     '--exclude=/System/Library/OnBoardingBundles/***'
     '--exclude=/System/Library/Audio/***'
 )
+# STAGE_FULL=1 omits nothing, and the stock apps a real phone installs from
+# /private/var/staged_system_apps during DataMigration (skipped on this image)
+# become system apps in /Applications, with their widgets and extensions.
+if [[ ${STAGE_FULL:-0} == 1 ]]; then
+    omit=('--exclude=/.herolte-nothing-omitted')
+fi
 echo "Copying selected OS files"
 /usr/bin/rsync -aH --numeric-ids --extended-attributes "${app_filters[@]}" "${omit[@]}" "$os/" "$root/"
+if [[ ${STAGE_FULL:-0} == 1 ]]; then
+    for staged in "$root"/private/var/staged_system_apps/*.app; do
+        [[ -d "$staged" ]] || continue
+        name=${staged##*/}
+        rm -rf "$root/System/Library/AppPlaceholders/$name"
+        mv "$staged" "$root/Applications/$name"
+        echo "system app: $name"
+    done
+fi
 echo "Copying SystemOS and AppOS cryptexes"
 mkdir -p "$root/private/preboot/Cryptexes/OS" "$root/private/preboot/Cryptexes/App"
 /usr/bin/rsync -aH --numeric-ids --extended-attributes "$sysos/" "$root/private/preboot/Cryptexes/OS/"
