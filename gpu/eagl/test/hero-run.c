@@ -329,9 +329,52 @@ run_ls_migrator(void)
    dprintf(answer, "LS migrator: performMigration %d, %ld s\n", done, (long)(time(NULL) - start));
 }
 
+/*
+ * LaunchServices builds its database by walking the system when it finds none: HakiOS has an empty /private/var at
+ * every boot and its posters are there. Ours keeps the first one, which has none of them. Once, it goes: the next
+ * start of lsd makes it anew.
+ */
+#define LS_DB_GONE DROP_DIR "lsdb.gone"
+
+static int
+remove_ls_db_in(const char *dir, int depth)
+{
+   int removed = 0;
+   DIR *d = opendir(dir);
+   struct dirent *e;
+   while (d && (e = readdir(d))) {
+      char path[1024];
+      if (e->d_name[0] == '.' && (e->d_name[1] == 0 || e->d_name[1] == '.'))
+         continue;
+      snprintf(path, sizeof(path), "%s/%s", dir, e->d_name);
+      if (strstr(e->d_name, ".csstore")) {
+         int gone = unlink(path);
+         herodrm_log("hero-run: LS database %s: removed (%d)", path, gone);
+         removed += gone == 0;
+      } else if (e->d_type == DT_DIR && depth > 0) {
+         removed += remove_ls_db_in(path, depth - 1);
+      }
+   }
+   if (d)
+      closedir(d);
+   return removed;
+}
+
+static void
+remove_ls_db_once(void)
+{
+   if (access(LS_DB_GONE, F_OK) == 0)
+      return;
+   close(open(LS_DB_GONE, O_WRONLY | O_CREAT, 0644));
+   int removed = remove_ls_db_in("/private/var/mobile/Library/Caches", 2) + remove_ls_db_in("/private/var/db", 2) +
+      remove_ls_db_in("/private/var/containers/Data/System", 4) + remove_ls_db_in("/private/var/root/Library/Caches", 2);
+   herodrm_log("hero-run: LS database: %d files removed; the NEXT boot has it made anew", removed);
+}
+
 int
 main(void)
 {
+   remove_ls_db_once();
    wallpapers_for_this_screen();
    migration_restore();
    disable_refused_jobs();
