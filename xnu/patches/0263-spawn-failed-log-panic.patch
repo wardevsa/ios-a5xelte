@@ -1,0 +1,18 @@
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index a9f2bf5..62f690d 100644
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -4057,7 +4057,12 @@ do_fork1:
+ 	error = exec_activate_image(imgp);
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ 	if (error) {
+-		printf("SPAWN FAILED %s[%d]: %s -> %d\n", p->p_name, proc_getpid(p), imgp->ip_strings + strlen(EXECUTABLE_KEY), error);
++		/* imgp->ip_strings is gone when activation fails early: the path is read again from the caller. */
++		char herolte_failed[128] = "?";
++		size_t herolte_copied = 0;
++
++		(void)copyinstr(uap->path, herolte_failed, sizeof(herolte_failed), &herolte_copied);
++		printf("SPAWN FAILED %s[%d]: %s -> %d\n", p->p_name, proc_getpid(p), herolte_failed, error);
+ 	}
+ #endif
+ #if defined(HAS_APPLE_PAC)
