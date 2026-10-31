@@ -1,0 +1,22 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 37ddc19..aa2ab42 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -396,7 +396,7 @@ hg_clock_report(void)
+ }
+ 
+ /*
+- * Boot-arg herogpu_mhz=338 or 390: G3D_PLL is relocked at that rate, before
++ * Boot-arg herogpu_mhz=338, 390 or 419: G3D_PLL is relocked at that rate, before
+  * the GPU has any work, at the voltage the bootloader left (the PMIC is not
+  * touched, so only these small steps above its 260 MHz are accepted). Without
+  * the boot-arg nothing is written. A PLL that does not lock goes back.
+@@ -413,6 +413,8 @@ hg_clock_set(void)
+ 		m = 208;
+ 	} else if (mhz == 390) {
+ 		m = 240;
++	} else if (mhz == 419) {
++		m = 258;
+ 	} else {
+ 		printf("HEROLTE GPU: clock: herogpu_mhz=%u not accepted\n", mhz);
+ 		return;
