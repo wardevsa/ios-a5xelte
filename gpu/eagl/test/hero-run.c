@@ -432,9 +432,25 @@ remove_ls_db_once(void)
       (long)(time(NULL) - start));
 }
 
+/*
+ * BTAudioHALPlugin keeps asking the bluetoothd that heronoexec refuses, over XPC: on the S9 port that was most of
+ * launchd's and half of mediaserverd's CPU (idle 460% -> 52% without it). Out of the way, from the next boot on.
+ */
+static void
+disable_bluetooth_audio(void)
+{
+   const char *from = "/System/Library/Audio/Plug-Ins/HAL/BTAudioHALPlugin.driver";
+   if (access(from, F_OK) != 0)
+      return;
+   mkdir("/System/Library/Audio/Plug-Ins/HAL.disabled", 0755);
+   int moved = rename(from, "/System/Library/Audio/Plug-Ins/HAL.disabled/BTAudioHALPlugin.driver");
+   herodrm_log("hero-run: BTAudioHALPlugin moved away: %d", moved);
+}
+
 int
 main(void)
 {
+   disable_bluetooth_audio();
    remove_ls_db_once();
    wallpapers_for_this_screen();
    migration_restore();
