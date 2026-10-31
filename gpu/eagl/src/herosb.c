@@ -33,6 +33,7 @@ send0(id target, const char *selector)
 
 static id picture;
 static bool gestures_on;
+static bool status_bar_kept;
 static unsigned rounds;
 
 static void
@@ -71,7 +72,7 @@ look_at_windows(void *unused)
    }
    size_t count = windows ? ((size_t (*)(id, SEL))objc_msgSend)(windows, sel_registerName("count")) : 0;
    if (rounds == 1 || rounds == 6)
-      herodrm_log("herosb: round %u, %zu windows, picture %d, gestures %d", rounds, count, picture != nil, gestures_on);
+      herodrm_log("herosb: round %u, %zu windows, picture %d, gestures %d, status bar %d", rounds, count, picture != nil, gestures_on, status_bar_kept);
    for (size_t i = 0; picture && i < count; i++) {
       id window = ((id (*)(id, SEL, size_t))objc_msgSend)(windows, sel_registerName("objectAtIndex:"), i);
       const char *name = object_getClassName(window);
@@ -103,9 +104,36 @@ says_yes(id self, SEL cmd)
    return YES;
 }
 
+/*
+ * ...but told type 2, UIKit in SpringBoard falls back to the red rdar:45025538 status bar for a 750x1334 screen. There
+ * the plain phone's status bar is what it gets, as the other processes do.
+ */
+static Class (*status_bar_was)(id, SEL, id, id);
+
+static Class
+status_bar_for_screen(id self, SEL cmd, id screen, id info)
+{
+   Class chosen = status_bar_was(self, cmd, screen, info);
+   Class phone = objc_getClass("_UIStatusBarVisualProvider_Phone");
+   if (chosen == objc_getClass("_UIStatusBarVisualProvider_Fallback") && phone)
+      return phone;
+   return chosen;
+}
+
+static void
+keep_status_bar(void)
+{
+   Class provider = objc_getClass("_UIStatusBarVisualProvider_iOS");
+   Method pick = provider ? class_getClassMethod(provider, sel_registerName("visualProviderSubclassForScreen:visualProviderInfo:")) : NULL;
+   if (pick)
+      status_bar_was = (Class (*)(id, SEL, id, id))method_setImplementation(pick, (IMP)status_bar_for_screen);
+   status_bar_kept = pick != NULL;
+}
+
 static void
 ask_for_gestures(void)
 {
+   keep_status_bar();
    Class platform = objc_getClass("BSPlatform");
    Method type = platform ? class_getInstanceMethod(platform, sel_registerName("homeButtonType")) : NULL;
    if (type) {
