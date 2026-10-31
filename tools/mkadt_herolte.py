@@ -52,6 +52,13 @@ def build(canvas=(FB_WIDTH, FB_HEIGHT), dram=(DRAM_BASE, DRAM_SIZE), scale=3):
         set_prop(product, 'artwork-device-subtype', mkadt.u32(1792))
         set_prop(product, 'artwork-scale-factor', mkadt.u32(2))
         canvas = (828, 1792)
+    if canvas == (1242, 2208):
+        # --canvas 1242x2208: an iPhone 8 Plus screen, 414x736 points at @3x,
+        # the panel's 16:9 with no bars. The kernel scales it to the panel
+        # (sweetfb_scale=1 sweetfb_lw=1242 sweetfb_lh=2208 sweetfb_gpu=1).
+        product = child(root, 'product')
+        set_prop(product, 'artwork-device-subtype', mkadt.u32(2208))
+        set_prop(product, 'artwork-scale-factor', mkadt.u32(3))
     # The userland is the iPhone X IPSW (iPhone10,3 / D22AP), like the donor:
     # compatible[0] is hw.model/hw.target, model is hw.machine. The donor's
     # /buttons stays (home-button-type 2: gesture navigation, no Home key).
