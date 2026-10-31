@@ -1,0 +1,136 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index cbb7714..f93e6ea 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -1942,6 +1942,96 @@ hg_jobs(vm_offset_t pmu, int mode)
+ 	hg_cores_off();
+ }
+ 
++/*
++ * Boot-arg herocpu_mhz=1976: the Mongoose cluster, which the bootloader leaves at 675 mV (936 MHz at most by its
++ * table), at this phone's 1976 MHz. Samsung's dfsbig transition (pwrcal-dfs.c) with the numbers of this phone's ECT:
++ * voltage and EMA first, dividers raised, the cores over to BUS_PLL/2 through the switch mux, MNGS_PLL relocked (P 3
++ * M 228 S 0), back. Anything unexpected on the way leaves the clock where it is.
++ */
++#define HC_TOP_PA       0x10570000u
++#define HC_MNGS_PA      0x11800000u
++#define HC_SYSREG_PA    0x11850000u
++
++static void
++hc_mux(vm_offset_t base, uint32_t off, uint32_t src)
++{
++	hg_wr(base, off, (hg_rd(base, off) & ~(1u << 12)) | (src << 12));
++	delay(50);
++}
++
++static void
++hg_cpu_up(void)
++{
++	extern bool herolte_apm_mngs_voltage(uint8_t value);
++	static const struct {
++		uint16_t off;
++		uint8_t ratio;
++		uint8_t bits;
++	} divs[] = {
++		{ 0x400, 0, 6 }, { 0x404, 2, 4 }, { 0x424, 7, 6 }, { 0x408, 4, 4 }, { 0x41c, 7, 6 }, { 0x428, 7, 4 },
++		{ 0x434, 1, 3 }, { 0x430, 5, 3 }, { 0x40c, 3, 6 }, { 0x410, 3, 4 }, { 0x414, 7, 4 }, { 0x418, 7, 4 },
++	};
++	uint32_t mhz = 0;
++	uint8_t now = 0, set = 0;
++
++	if (!PE_parse_boot_argn("herocpu_mhz", &mhz, sizeof(mhz)) || mhz != 1976) {
++		return;
++	}
++	vm_offset_t top = ml_io_map(HC_TOP_PA, 0x1000), mngs = ml_io_map(HC_MNGS_PA, 0x1000), sysreg = ml_io_map(HC_SYSREG_PA, 0x2000);
++	if (!top || !mngs || !sysreg) {
++		return;
++	}
++	uint32_t con0 = hg_rd(mngs, 0x100);
++	printf("HEROLTE CPU: MNGS_PLL con0 %#x: M %u P %u S %u, mux %#x stat %#x, top mux %#x div %#x gate %#x\n", con0, (con0 >> 16) & 0x3ff,
++	    (con0 >> 8) & 0x3f, con0 & 7, hg_rd(mngs, 0x208), hg_rd(mngs, 0x608), hg_rd(top, 0x380), hg_rd(top, 0x4f0), hg_rd(top, 0x990));
++	for (unsigned i = 0; i < sizeof(divs) / sizeof(divs[0]); i++) {
++		printf("HEROLTE CPU: div %#x = %#x\n", divs[i].off, hg_rd(mngs, divs[i].off));
++	}
++	/* 912.5 mV = (912.5 - 300) / 6.25 = 0x62 */
++	if (!herolte_apm_pmic_read(0x1d, &now)) {
++		printf("HEROLTE CPU: cannot read vdd_mngs, left alone\n");
++		return;
++	}
++	if (now < 0x62) {
++		bool wrote = herolte_apm_mngs_voltage(0x62);
++		delay(200);
++		if (!wrote || !herolte_apm_pmic_read(0x1d, &set) || set != 0x62) {
++			printf("HEROLTE CPU: vdd_mngs %#x -> 0x62 failed (now %#x), left alone\n", now, set);
++			return;
++		}
++	}
++	hg_wr(sysreg, 0x314, 0x001091b9);       /* MNGS_EMA_CON for 900 mV and more */
++	hg_wr(sysreg, 0x1040, 0);               /* MNGS_ASSIST_CON */
++	for (unsigned i = 0; i < sizeof(divs) / sizeof(divs[0]); i++) {
++		uint32_t mask = (1u << divs[i].bits) - 1;
++		hg_wr(mngs, divs[i].off, (hg_rd(mngs, divs[i].off) & ~mask) | divs[i].ratio);
++		delay(20);
++	}
++	/* the switch: BUS_PLL / 2, 528 MHz */
++	hg_wr(top, 0x990, hg_rd(top, 0x990) | 1);
++	hg_wr(top, 0x4f0, (hg_rd(top, 0x4f0) & ~0xfu) | 1);
++	hc_mux(top, 0x380, 0);
++	hc_mux(mngs, 0x204, 1);
++	hc_mux(mngs, 0x208, 1);
++	con0 = hg_rd(mngs, 0x100);
++	con0 &= ~((0x3ffu << 16) | (0x3fu << 8) | 7u | (1u << 26));
++	con0 |= (228u << 16) | (3u << 8) | (1u << 5);
++	hg_wr(mngs, 0x000, 3 * 150);            /* MNGS_PLL_LOCK */
++	hg_wr(mngs, 0x100, con0);
++	bool locked = false;
++	for (unsigned i = 0; i < 10000 && !locked; i++) {
++		delay(1);
++		locked = (hg_rd(mngs, 0x100) >> 29) & 1;
++	}
++	if (!locked) {
++		printf("HEROLTE CPU: MNGS_PLL did not lock (%#x): the cores stay on the switch\n", hg_rd(mngs, 0x100));
++		return;
++	}
++	hc_mux(mngs, 0x208, 0);
++	hc_mux(mngs, 0x204, 0);
++	printf("HEROLTE CPU: Mongoose at 1976 MHz: vdd_mngs %#x -> 0x62, con0 %#x\n", now, hg_rd(mngs, 0x100));
++}
++
+ static void
+ hg_thread(void *arg, __unused wait_result_t wr)
+ {
+@@ -1974,8 +2064,14 @@ hg_thread(void *arg, __unused wait_result_t wr)
+ 		    apollo, 300000 + apollo * 6250u);
+ 		extern struct processor *cpu_to_processor(int cpu);
+ 		extern struct processor *thread_bind(struct processor *processor);
+-		static const int cores[] = { 0, 4 };
++		static const int cores[] = { 0, 4, 0, 4 };
+ 		for (unsigned i = 0; i < sizeof(cores) / sizeof(cores[0]); i++) {
++			if (i == 2) {
++				/* On an A53 core, with the Mongoose cluster running on its own clock. */
++				thread_bind(cpu_to_processor(0));
++				hg_msleep(1);
++				hg_cpu_up();
++			}
+ 			thread_bind(cpu_to_processor(cores[i]));
+ 			hg_msleep(1);
+ 			uint64_t passes = 100000000, count = passes, ns = 0;
+diff --git a/bsd/dev/herolte_touch.c b/bsd/dev/herolte_touch.c
+index 0e02a61..e184d5b 100644
+--- a/bsd/dev/herolte_touch.c
++++ b/bsd/dev/herolte_touch.c
+@@ -480,6 +480,14 @@ apm_pmic_write(uint8_t reg, uint8_t value)
+ 	return apm_message(0, reg, value, &r) && r == 0xau;
+ }
+ 
++/* For herolte_gpu.c: vdd_mngs only (BUCK2, 0x1d). Refused until the touch thread has started the APM. */
++bool herolte_apm_mngs_voltage(uint8_t value);
++bool
++herolte_apm_mngs_voltage(uint8_t value)
++{
++	return apm_ready && apm_pmic_write(0x1d, value);
++}
++
+ /* For herolte_gpu.c: vdd_g3d only. Refused until the touch thread has started the APM. */
+ bool herolte_apm_g3d_voltage(uint8_t value);
+ bool
