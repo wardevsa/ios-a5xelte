@@ -6,6 +6,7 @@
  * herodrm_log), since TWRP cannot read the iOS volume. The test is killed
  * after 180 s.
  */
+#include <dirent.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
@@ -16,8 +17,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define DIR "/private/var/herolte/"
-#define OUT DIR "test.out"
+#define DROP_DIR "/private/var/herolte/"
+#define OUT DROP_DIR "test.out"
 #define MAX_LINES 400
 
 extern char **environ;
@@ -26,7 +27,7 @@ void herodrm_log(const char *fmt, ...);
 static void
 load_env(void)
 {
-   FILE *f = fopen(DIR "test.env", "r");
+   FILE *f = fopen(DROP_DIR "test.env", "r");
    char line[512];
    while (f && fgets(line, sizeof(line), f)) {
       line[strcspn(line, "\r\n")] = 0;
@@ -41,16 +42,74 @@ load_env(void)
       fclose(f);
 }
 
+/*
+ * WallpaperKit keeps only the wallpapers whose Wallpaper.plist names this
+ * screen's class. Ours is 480w-853h@3x~iphone (1440x2560 at scale 3) and the
+ * image has 375w-812h, 393w-852h and 430w-932h: none is offered and PosterBoard
+ * has nothing to draw. The 375w-812h bundles are given our class, in place:
+ * the two names have the same length, so the plist's offsets still hold.
+ */
+#define SCREEN_FROM "375w-812h@3x~iphone"
+#define SCREEN_TO   "480w-853h@3x~iphone"
+#define COLLECTIONS "/Library/Wallpaper/Collections"
+
+static int
+wallpaper_class_set(const char *path)
+{
+   char data[65536];
+   int fd = open(path, O_RDWR);
+   if (fd < 0)
+      return 0;
+   ssize_t n = read(fd, data, sizeof(data));
+   int done = 0;
+   for (ssize_t i = 0; i + (ssize_t)strlen(SCREEN_FROM) <= n; i++) {
+      if (memcmp(data + i, SCREEN_FROM, strlen(SCREEN_FROM)) == 0 &&
+          pwrite(fd, SCREEN_TO, strlen(SCREEN_TO), i) == (ssize_t)strlen(SCREEN_TO))
+         done++;
+   }
+   if (done)
+      fsync(fd);
+   close(fd);
+   return done;
+}
+
+static void
+wallpapers_for_this_screen(void)
+{
+   int bundles = 0, changed = 0;
+   DIR *collections = opendir(COLLECTIONS);
+   struct dirent *c, *w;
+   while (collections && (c = readdir(collections))) {
+      char path[1024];
+      snprintf(path, sizeof(path), COLLECTIONS "/%s/Wallpapers", c->d_name);
+      DIR *wallpapers = opendir(path);
+      while (wallpapers && (w = readdir(wallpapers))) {
+         char plist[2048];
+         if (!strstr(w->d_name, "375w-812h"))
+            continue;
+         snprintf(plist, sizeof(plist), "%s/%s/Wallpaper.plist", path, w->d_name);
+         bundles++;
+         changed += wallpaper_class_set(plist) > 0;
+      }
+      if (wallpapers)
+         closedir(wallpapers);
+   }
+   if (collections)
+      closedir(collections);
+   herodrm_log("hero-run: wallpapers: %d bundles of 375w-812h, %d given our class now", bundles, changed);
+}
+
 int
 main(void)
 {
+   wallpapers_for_this_screen();
    sleep(20);
    load_env();
    posix_spawn_file_actions_t fa;
    posix_spawn_file_actions_init(&fa);
    posix_spawn_file_actions_addopen(&fa, 1, OUT, O_WRONLY | O_CREAT | O_TRUNC, 0644);
    posix_spawn_file_actions_adddup2(&fa, 1, 2);
-   char *argv[] = { DIR "test", NULL };
+   char *argv[] = { DROP_DIR "test", NULL };
    pid_t pid;
    struct timespec t0, t1;
    clock_gettime(CLOCK_MONOTONIC, &t0);
