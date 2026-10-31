@@ -12,6 +12,7 @@
 #include <objc/message.h>
 extern void *objc_autoreleasePoolPush(void);
 extern void objc_autoreleasePoolPop(void *pool);
+extern void NSSetUncaughtExceptionHandler(void (*handler)(id));
 #include <objc/runtime.h>
 #include <signal.h>
 #include <spawn.h>
@@ -157,6 +158,18 @@ plugins_census(id workspace)
    id plugins = send0(workspace, "installedPlugins");
    size_t count = plugins ? ((size_t (*)(id, SEL))objc_msgSend)(plugins, sel_registerName("count")) : 0;
    dprintf(census_fd, "plug-ins known: %zu\n", count);
+   /* That list may be only what this process may see: ask for the poster extensions by name too. */
+   static const char *const posters[] = {
+      "com.apple.WallpaperKit.CollectionsPoster",
+      "com.apple.GradientPoster.GradientPosterExtension",
+      "com.apple.PhotosUIPrivate.PhotosPosterProvider",
+   };
+   Class proxies = objc_getClass("LSPlugInKitProxy");
+   for (size_t i = 0; proxies && i < sizeof(posters) / sizeof(posters[0]); i++) {
+      id proxy = ((id (*)(id, SEL, id))objc_msgSend)((id)proxies, sel_registerName("pluginKitProxyForIdentifier:"),
+         nsstring(posters[i]));
+      dprintf(census_fd, "proxy %s: %s\n", posters[i], text_of(proxy));
+   }
    for (size_t i = 0; i < count; i++) {
       id plugin = ((id (*)(id, SEL, size_t))objc_msgSend)(plugins, sel_registerName("objectAtIndex:"), i);
       const char *name = text_of(send0(plugin, "bundleIdentifier"));
@@ -170,11 +183,19 @@ plugins_census(id workspace)
  * in the boot, the lines of those processes (and any on the subject) go into the census.
  */
 static void
+log_census_exception(id exception)
+{
+   dprintf(census_fd, "log reader: exception %s\n", text_of(exception));
+   _exit(0);
+}
+
+static void
 log_census(void)
 {
    enum { MAX_LOG_LINES = 250, MAX_SECONDS = 90 };
    alarm(280);
    sleep(170);
+   NSSetUncaughtExceptionHandler(log_census_exception);
    dlopen("/System/Library/Frameworks/OSLog.framework/OSLog", RTLD_NOW);
    Class stores = objc_getClass("OSLogStore");
    id error = nil;
