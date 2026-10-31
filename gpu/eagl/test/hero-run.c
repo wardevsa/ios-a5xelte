@@ -178,128 +178,6 @@ plugins_census(id workspace)
    }
 }
 
-/*
- * iOS's own log says why PosterBoard shows nothing and why the widgets wait, and TWRP cannot read it. As root, late
- * in the boot, the lines of those processes (and any on the subject) go into the census.
- */
-static void
-log_census_exception(id exception)
-{
-   dprintf(census_fd, "log reader: exception %s\n", text_of(exception));
-   _exit(0);
-}
-
-static void
-log_census(void)
-{
-   enum { MAX_LOG_LINES = 250, MAX_SECONDS = 90 };
-   alarm(280);
-   sleep(170);
-   NSSetUncaughtExceptionHandler(log_census_exception);
-   dlopen("/System/Library/Frameworks/OSLog.framework/OSLog", RTLD_NOW);
-   Class stores = objc_getClass("OSLogStore");
-   id error = nil;
-   id store = stores ? send_id((id)stores, "localStoreAndReturnError:", (id)&error, NULL) : nil;
-   dprintf(census_fd, "log store %s; error %s\n", text_of(store), text_of(error));
-   id entries = store ? send_id(store, "entriesEnumeratorAndReturnError:", (id)&error, NULL) : nil;
-   time_t start = time(NULL);
-   int lines = 0;
-   id entry;
-   SEL has = sel_registerName("respondsToSelector:");
-   while (entries && lines < MAX_LOG_LINES && time(NULL) - start < MAX_SECONDS) {
-      void *pool = objc_autoreleasePoolPush();
-      entry = send0(entries, "nextObject");
-      if (!entry) {
-         objc_autoreleasePoolPop(pool);
-         break;
-      }
-      if (((BOOL (*)(id, SEL, SEL))objc_msgSend)(entry, has, sel_registerName("process"))) {
-         const char *process = text_of(send0(entry, "process"));
-         const char *message = text_of(send0(entry, "composedMessage"));
-         int wanted = strcmp(process, "PosterBoard") == 0 || strcmp(process, "chronod") == 0;
-         int subject = strstr(message, "oster") || strstr(message, "idget") || strstr(message, "xtension");
-         int failing = strstr(message, "rror") || strstr(message, "ail") || strstr(message, "denied") || strstr(message, "not ");
-         if ((wanted && failing) || (subject && failing)) {
-            dprintf(census_fd, "log %s: %.240s\n", process, message);
-            lines++;
-         }
-      }
-      objc_autoreleasePoolPop(pool);
-   }
-   dprintf(census_fd, "log: %d lines, %ld s; error %s\n", lines, (long)(time(NULL) - start), text_of(error));
-}
-
-/*
- * LaunchServices answers -10814 (not found) for the poster extensions: the plug-ins inside the system's frameworks
- * are not registered, and PosterBoard has nothing to offer or to draw. On a phone that comes with DataMigration,
- * which this image skips. Each one is registered by its URL, once; the wallpaper needs the next boot to see them.
- */
-static int
-register_plugins_in(id workspace, const char *frameworks)
-{
-   int done = 0;
-   DIR *all = opendir(frameworks);
-   struct dirent *f, *p;
-   while (all && (f = readdir(all))) {
-      char dir[1024];
-      snprintf(dir, sizeof(dir), "%s/%s/PlugIns", frameworks, f->d_name);
-      DIR *plugins = opendir(dir);
-      while (plugins && (p = readdir(plugins))) {
-         char path[2048];
-         size_t n = strlen(p->d_name);
-         if (n < 6 || strcmp(p->d_name + n - 6, ".appex") != 0)
-            continue;
-         snprintf(path, sizeof(path), "%s/%s", dir, p->d_name);
-         void *pool = objc_autoreleasePoolPush();
-         id url = ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"),
-            nsstring(path));
-         BOOL ok = ((BOOL (*)(id, SEL, id))objc_msgSend)(workspace, sel_registerName("registerPlugin:"), url);
-         done += ok;
-         if (!ok || strstr(p->d_name, "Poster"))
-            dprintf(census_fd, "register %s: %d\n", p->d_name, ok);
-         objc_autoreleasePoolPop(pool);
-      }
-      if (plugins)
-         closedir(plugins);
-   }
-   if (all)
-      closedir(all);
-   return done;
-}
-
-/* What the wallpaper needs goes first, and says how long it took. */
-static void
-register_posters(id workspace)
-{
-   static const char *const paths[] = {
-      "/System/Library/PrivateFrameworks/WallpaperKit.framework/PlugIns/CollectionsPoster.appex",
-      "/System/Library/PrivateFrameworks/GradientPoster.framework/PlugIns/GradientPosterExtension.appex",
-      "/System/Library/PrivateFrameworks/EmojiPoster.framework/PlugIns/EmojiPosterExtension.appex",
-      "/System/Library/PrivateFrameworks/PhotosUIPrivate.framework/PlugIns/PhotosPosterProvider.appex",
-      "/System/Library/PrivateFrameworks/UnityPoster.framework/PlugIns/UnityPosterExtension.appex",
-      "/System/Library/PrivateFrameworks/PridePoster.framework/PlugIns/PridePosterExtension.appex",
-      "/Applications/PaperBoard.app/PlugIns/LegacyPoster.appex",
-      "/Applications/Weather.app/PlugIns/WeatherPoster.appex",
-   };
-   for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
-      time_t start = time(NULL);
-      id url = ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"),
-         nsstring(paths[i]));
-      BOOL ok = ((BOOL (*)(id, SEL, id))objc_msgSend)(workspace, sel_registerName("registerPlugin:"), url);
-      dprintf(census_fd, "register %s: %d, %ld s, exists %d\n", paths[i], ok, (long)(time(NULL) - start), access(paths[i], F_OK) == 0);
-   }
-}
-
-static void
-register_system_plugins(id workspace)
-{
-   int done = register_plugins_in(workspace, "/System/Library/PrivateFrameworks") +
-      register_plugins_in(workspace, "/System/Library/Frameworks");
-   dprintf(census_fd, "plug-ins registered: %d\n", done);
-   BOOL synced = ((BOOL (*)(id, SEL))objc_msgSend)(workspace, sel_registerName("_LSPrivateSyncWithMobileInstallation"));
-   dprintf(census_fd, "sync with installd: %d\n", synced);
-}
-
 static void
 extension_census(void)
 {
@@ -308,11 +186,6 @@ extension_census(void)
       "com.apple.GradientPoster.GradientPosterExtension",
       "com.apple.PhotosUIPrivate.PhotosPosterProvider",
    };
-   pid_t reader = fork();
-   if (reader == 0) {
-      log_census();
-      _exit(0);
-   }
    /* LaunchServices is told once of the system's bundles: DataMigration, which does it on a real phone, is skipped
     * on this image (herolte-tune-ios-root.sh). The parent marks it done when this child has lived through it. */
    int first_time = access(DROP_DIR "database.done", F_OK) != 0;
@@ -329,8 +202,6 @@ extension_census(void)
          sel_registerName("_LSPrivateRebuildApplicationDatabasesForSystemApps:internal:user:"), YES, YES, YES);
       dprintf(census_fd, "database rebuilt: %d\n", rebuilt);
    }
-   if (workspace)
-      register_posters(workspace);
    Class records = objc_getClass("LSApplicationExtensionRecord");
    for (size_t i = 0; records && i < sizeof(known) / sizeof(known[0]); i++) {
       id error = nil;
@@ -346,12 +217,6 @@ extension_census(void)
    dprintf(census_fd, "of the poster point: %s; error %s\n", text_of(found), text_of(error));
    if (workspace)
       plugins_census(workspace);
-   /* The rest takes minutes (a registration can take seconds): last, with no alarm over it. */
-   alarm(0);
-   if (workspace && access(DROP_DIR "plugins.done", F_OK) != 0)
-      register_system_plugins(workspace);
-   if (reader > 0)
-      waitpid(reader, NULL, 0);
 }
 
 /* The complete lines the child has written since the last call go to the log. */
@@ -373,10 +238,55 @@ census_drain(void)
    }
 }
 
+/*
+ * registerPlugin: does not take the poster extensions (0 after 176 s, with installd at 200%). What registers what is
+ * inside the system on a phone is DataMigration, whose 00LaunchServicesMigrator and others this image skips by
+ * having com.apple.migration.plist say it already ran. This lets it run once: the plist goes aside now, the next
+ * boot migrates, and five minutes into that boot it comes back if the migration has not written its own, since
+ * backboardd holds SpringBoard until DataMigration finishes.
+ */
+#define MIGRATION_PLIST "/private/var/mobile/Library/Preferences/com.apple.migration.plist"
+#define MIGRATION_SAVED DROP_DIR "migration.saved"
+#define MIGRATION_ASKED DROP_DIR "migration.asked"
+#define MIGRATION_RAN   DROP_DIR "migration.ran"
+
+static int migration_boot;
+
+static void
+migration_step(void)
+{
+   if (access(MIGRATION_RAN, F_OK) == 0) {
+      herodrm_log("hero-run: migration: already tried; plist %s", access(MIGRATION_PLIST, F_OK) == 0 ? "present" : "missing");
+   } else if (access(MIGRATION_ASKED, F_OK) == 0) {
+      migration_boot = 1;
+      close(open(MIGRATION_RAN, O_WRONLY | O_CREAT, 0644));
+      herodrm_log("hero-run: migration: this boot migrates");
+   } else {
+      int moved = rename(MIGRATION_PLIST, MIGRATION_SAVED);
+      close(open(MIGRATION_ASKED, O_WRONLY | O_CREAT, 0644));
+      herodrm_log("hero-run: migration: plist set aside (%d): the NEXT boot migrates", moved);
+   }
+}
+
+static void
+migration_finish(void)
+{
+   if (!migration_boot)
+      return;
+   sleep(240);
+   if (access(MIGRATION_PLIST, F_OK) == 0) {
+      herodrm_log("hero-run: migration: finished, it wrote its plist");
+   } else {
+      int back = rename(MIGRATION_SAVED, MIGRATION_PLIST);
+      herodrm_log("hero-run: migration: NOT finished after 5 min; plist put back (%d) for the next boot", back);
+   }
+}
+
 int
 main(void)
 {
    wallpapers_for_this_screen();
+   migration_step();
    census_fd = open(DROP_DIR "census.out", O_RDWR | O_CREAT | O_TRUNC, 0644);
    pid_t census = fork();
    if (census == 0) {
@@ -444,8 +354,8 @@ main(void)
       herodrm_log("hero-run: extensions: the child ended with status %#x", census_status);
       if (WIFEXITED(census_status) && WEXITSTATUS(census_status) == 0) {
          close(open(DROP_DIR "database.done", O_WRONLY | O_CREAT, 0644));
-         close(open(DROP_DIR "plugins.done", O_WRONLY | O_CREAT, 0644));
       }
    }
+   migration_finish();
    return 0;
 }
