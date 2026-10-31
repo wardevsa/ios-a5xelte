@@ -49,7 +49,7 @@ $CC -O1 -g -Wno-deprecated-declarations -fno-objc-arc -I"$HERE/src" "$HERE/test/
   -o "$OUT/eagl_ca_test" \
   -framework Foundation -framework CoreFoundation -framework CoreGraphics -framework IOSurface \
   -framework QuartzCore -framework OpenGLES
-$CC -O2 -Wall -o "$OUT/hero-run" "$HERE/test/hero-run.c" -L "$OUT/lib" -ldrm.2 \
+$CC -O2 -Wall -o "$OUT/hero-run" "$HERE/test/hero-run.c" -L "$OUT/lib" -ldrm.2 -lobjc -framework Foundation \
   -Wl,-rpath,/private/var/herolte/lib
 
 for f in "$OUT/lib/libheroeagl.dylib" "$OUT/lib/libhakiosgl.dylib" "$OUT/eagl_ca_test" "$OUT/hero-run"; do

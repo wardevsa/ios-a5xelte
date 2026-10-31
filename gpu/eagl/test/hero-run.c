@@ -8,6 +8,8 @@
  */
 #include <dirent.h>
 #include <fcntl.h>
+#include <objc/message.h>
+#include <objc/runtime.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdio.h>
@@ -90,6 +92,16 @@ wallpapers_for_this_screen(void)
          snprintf(plist, sizeof(plist), "%s/%s/Wallpaper.plist", path, w->d_name);
          bundles++;
          changed += wallpaper_class_set(plist) > 0;
+         if (bundles == 1) {
+            /* Is it ours by now (from this boot or an earlier one)? */
+            char text[65536];
+            int fd = open(plist, O_RDONLY);
+            ssize_t n = fd >= 0 ? read(fd, text, sizeof(text)) : -1;
+            int ours = n > 0 && memmem(text, (size_t)n, SCREEN_TO, strlen(SCREEN_TO)) != NULL;
+            if (fd >= 0)
+               close(fd);
+            herodrm_log("hero-run: wallpapers: %s: %zd bytes, %s", w->d_name, n, ours ? "has our class" : "does not have our class");
+         }
       }
       if (wallpapers)
          closedir(wallpapers);
@@ -99,10 +111,69 @@ wallpapers_for_this_screen(void)
    herodrm_log("hero-run: wallpapers: %d bundles of 375w-812h, %d given our class now", bundles, changed);
 }
 
+/*
+ * The "Add New Wallpaper" gallery is empty and no poster extension is ever
+ * launched. A child running as mobile, as PosterBoard does, asks the system
+ * which extensions of that point it knows, 60 s after boot, into the log.
+ */
+static id
+send_id(id target, const char *selector, id a, void *b)
+{
+   return ((id (*)(id, SEL, id, void *))objc_msgSend)(target, sel_registerName(selector), a, b);
+}
+
+static id
+nsstring(const char *text)
+{
+   return ((id (*)(id, SEL, const char *))objc_msgSend)((id)objc_getClass("NSString"),
+      sel_registerName("stringWithUTF8String:"), text);
+}
+
+static const char *
+text_of(id object)
+{
+   if (!object)
+      return "(nil)";
+   id description = ((id (*)(id, SEL))objc_msgSend)(object, sel_registerName("description"));
+   return ((const char *(*)(id, SEL))objc_msgSend)(description, sel_registerName("UTF8String"));
+}
+
+static void
+extension_census(void)
+{
+   static const char *const known[] = {
+      "com.apple.WallpaperKit.CollectionsPoster",
+      "com.apple.GradientPoster.GradientPosterExtension",
+      "com.apple.PhotosUIPrivate.PhotosPosterProvider",
+   };
+   alarm(120);
+   sleep(60);
+   if (setgid(501) != 0 || setuid(501) != 0)
+      herodrm_log("hero-run: extensions: cannot become mobile");
+   Class records = objc_getClass("LSApplicationExtensionRecord");
+   for (size_t i = 0; records && i < sizeof(known) / sizeof(known[0]); i++) {
+      id error = nil;
+      id record = send_id(((id (*)(id, SEL))objc_msgSend)((id)records, sel_registerName("alloc")),
+         "initWithBundleIdentifier:error:", nsstring(known[i]), &error);
+      herodrm_log("hero-run: extensions: record %s: %s; error %s", known[i], text_of(record), text_of(error));
+   }
+   id attributes = ((id (*)(id, SEL, id, id))objc_msgSend)((id)objc_getClass("NSDictionary"),
+      sel_registerName("dictionaryWithObject:forKey:"), nsstring("com.apple.posterkit.provider"),
+      nsstring("NSExtensionPointName"));
+   id error = nil;
+   id found = send_id((id)objc_getClass("NSExtension"), "extensionsWithMatchingAttributes:error:", attributes, &error);
+   herodrm_log("hero-run: extensions: of the poster point: %s; error %s", text_of(found), text_of(error));
+}
+
 int
 main(void)
 {
    wallpapers_for_this_screen();
+   pid_t census = fork();
+   if (census == 0) {
+      extension_census();
+      _exit(0);
+   }
    sleep(20);
    load_env();
    posix_spawn_file_actions_t fa;
@@ -150,5 +221,7 @@ main(void)
    else
       herodrm_log("hero-run: test exited with %d after %.1f s", WEXITSTATUS(status),
                   (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9);
+   if (census > 0)
+      waitpid(census, NULL, 0);
    return 0;
 }
