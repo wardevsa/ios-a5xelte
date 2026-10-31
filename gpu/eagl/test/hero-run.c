@@ -183,7 +183,7 @@ plugins_census(id workspace)
  * LaunchServices never hears of the poster extensions, which live inside frameworks: it is told of each by hand, once,
  * as root. And a wallpaper of the old kind asked of SpringBoard, which needs no poster at all.
  */
-#define POSTERS_TOLD DROP_DIR "posters1.done"
+#define POSTERS_TOLD DROP_DIR "posters2.done"
 
 static void
 tell_ls_of_posters(void)
