@@ -7,6 +7,7 @@
  * after 180 s.
  */
 #include <dirent.h>
+#include <dlfcn.h>
 #include <fcntl.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
@@ -149,10 +150,38 @@ extension_census(void)
       "com.apple.GradientPoster.GradientPosterExtension",
       "com.apple.PhotosUIPrivate.PhotosPosterProvider",
    };
-   alarm(120);
+   static const char *const apps[] = {
+      "Weather", "MobileCal", "MobileTimer", "Calculator", "MobileNotes", "Contacts", "Stocks", "Reminders",
+   };
+   /* LaunchServices is told once of the system's bundles and the staged apps: DataMigration, which does it on a
+    * real phone, is skipped on this image (herolte-tune-ios-root.sh). */
+   int first_time = access(DROP_DIR "apps.done", F_OK) != 0;
+   if (first_time)
+      close(open(DROP_DIR "apps.done", O_WRONLY | O_CREAT, 0644));
+   alarm(300);
    sleep(60);
    if (setgid(501) != 0 || setuid(501) != 0)
       dprintf(census_fd, "cannot become mobile\n");
+   dlopen("/System/Library/Frameworks/CoreServices.framework/CoreServices", RTLD_NOW);
+   id workspace = objc_getClass("LSApplicationWorkspace") ?
+      ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("LSApplicationWorkspace"), sel_registerName("defaultWorkspace")) : nil;
+   dprintf(census_fd, "workspace %s; first time %d\n", text_of(workspace), first_time);
+   if (workspace && first_time) {
+      BOOL rebuilt = ((BOOL (*)(id, SEL, BOOL, BOOL, BOOL))objc_msgSend)(workspace,
+         sel_registerName("_LSPrivateRebuildApplicationDatabasesForSystemApps:internal:user:"), YES, YES, YES);
+      dprintf(census_fd, "database rebuilt: %d\n", rebuilt);
+      for (size_t i = 0; i < sizeof(apps) / sizeof(apps[0]); i++) {
+         char path[256];
+         snprintf(path, sizeof(path), "/private/var/staged_system_apps/%s.app", apps[i]);
+         id url = ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("NSURL"),
+            sel_registerName("fileURLWithPath:"), nsstring(path));
+         id options = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("NSDictionary"), sel_registerName("dictionary"));
+         id failure = nil;
+         BOOL done = ((BOOL (*)(id, SEL, id, id, id *))objc_msgSend)(workspace,
+            sel_registerName("installApplication:withOptions:error:"), url, options, &failure);
+         dprintf(census_fd, "install %s: %d; error %s\n", apps[i], done, text_of(failure));
+      }
+   }
    Class records = objc_getClass("LSApplicationExtensionRecord");
    for (size_t i = 0; records && i < sizeof(known) / sizeof(known[0]); i++) {
       id error = nil;

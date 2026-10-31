@@ -56,3 +56,5 @@ for f in "$OUT/lib/libheroeagl.dylib" "$OUT/lib/libhakiosgl.dylib" "$OUT/eagl_ca
   codesign -s - -f "$f"
   otool -L "$f"
 done
+# hero-run asks LaunchServices and installd to register the system bundles and the staged apps.
+codesign -s - -f --entitlements "$HERE/test/hero-run.entitlements" "$OUT/hero-run"
