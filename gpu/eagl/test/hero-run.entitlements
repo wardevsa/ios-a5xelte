@@ -16,5 +16,9 @@
 	<true/>
 	<key>com.apple.private.MobileContainerManager.allowed</key>
 	<true/>
+	<key>com.apple.logging.local-store</key>
+	<true/>
+	<key>com.apple.private.logging.admin</key>
+	<true/>
 </dict>
 </plist>

@@ -10,6 +10,8 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <objc/message.h>
+extern void *objc_autoreleasePoolPush(void);
+extern void objc_autoreleasePoolPop(void *pool);
 #include <objc/runtime.h>
 #include <signal.h>
 #include <spawn.h>
@@ -142,6 +144,70 @@ text_of(id object)
 /* A forked child has no mach ports, so no log of its own: it writes here and the parent logs it. */
 static int census_fd = -1;
 
+static id
+send0(id target, const char *selector)
+{
+   return ((id (*)(id, SEL))objc_msgSend)(target, sel_registerName(selector));
+}
+
+/* What LaunchServices knows of the plug-ins the wallpaper and the widgets need. */
+static void
+plugins_census(id workspace)
+{
+   id plugins = send0(workspace, "installedPlugins");
+   size_t count = plugins ? ((size_t (*)(id, SEL))objc_msgSend)(plugins, sel_registerName("count")) : 0;
+   dprintf(census_fd, "plug-ins known: %zu\n", count);
+   for (size_t i = 0; i < count; i++) {
+      id plugin = ((id (*)(id, SEL, size_t))objc_msgSend)(plugins, sel_registerName("objectAtIndex:"), i);
+      const char *name = text_of(send0(plugin, "bundleIdentifier"));
+      if (strstr(name, "oster") || strstr(name, "idget"))
+         dprintf(census_fd, "plug-in %s\n", name);
+   }
+}
+
+/*
+ * iOS's own log says why PosterBoard shows nothing and why the widgets wait, and TWRP cannot read it. As root, late
+ * in the boot, the lines of those processes (and any on the subject) go into the census.
+ */
+static void
+log_census(void)
+{
+   enum { MAX_LOG_LINES = 250, MAX_SECONDS = 90 };
+   alarm(280);
+   sleep(170);
+   dlopen("/System/Library/Frameworks/OSLog.framework/OSLog", RTLD_NOW);
+   Class stores = objc_getClass("OSLogStore");
+   id error = nil;
+   id store = stores ? send_id((id)stores, "localStoreAndReturnError:", (id)&error, NULL) : nil;
+   dprintf(census_fd, "log store %s; error %s\n", text_of(store), text_of(error));
+   id entries = store ? send_id(store, "entriesEnumeratorAndReturnError:", (id)&error, NULL) : nil;
+   time_t start = time(NULL);
+   int lines = 0;
+   id entry;
+   SEL has = sel_registerName("respondsToSelector:");
+   while (entries && lines < MAX_LOG_LINES && time(NULL) - start < MAX_SECONDS) {
+      void *pool = objc_autoreleasePoolPush();
+      entry = send0(entries, "nextObject");
+      if (!entry) {
+         objc_autoreleasePoolPop(pool);
+         break;
+      }
+      if (((BOOL (*)(id, SEL, SEL))objc_msgSend)(entry, has, sel_registerName("process"))) {
+         const char *process = text_of(send0(entry, "process"));
+         const char *message = text_of(send0(entry, "composedMessage"));
+         int wanted = strcmp(process, "PosterBoard") == 0 || strcmp(process, "chronod") == 0;
+         int subject = strstr(message, "oster") || strstr(message, "idget") || strstr(message, "xtension");
+         int failing = strstr(message, "rror") || strstr(message, "ail") || strstr(message, "denied") || strstr(message, "not ");
+         if ((wanted && failing) || (subject && failing)) {
+            dprintf(census_fd, "log %s: %.240s\n", process, message);
+            lines++;
+         }
+      }
+      objc_autoreleasePoolPop(pool);
+   }
+   dprintf(census_fd, "log: %d lines, %ld s; error %s\n", lines, (long)(time(NULL) - start), text_of(error));
+}
+
 static void
 extension_census(void)
 {
@@ -150,6 +216,11 @@ extension_census(void)
       "com.apple.GradientPoster.GradientPosterExtension",
       "com.apple.PhotosUIPrivate.PhotosPosterProvider",
    };
+   pid_t reader = fork();
+   if (reader == 0) {
+      log_census();
+      _exit(0);
+   }
    /* LaunchServices is told once of the system's bundles: DataMigration, which does it on a real phone, is skipped
     * on this image (herolte-tune-ios-root.sh). The parent marks it done when this child has lived through it. */
    int first_time = access(DROP_DIR "database.done", F_OK) != 0;
@@ -179,6 +250,10 @@ extension_census(void)
    id error = nil;
    id found = send_id((id)objc_getClass("NSExtension"), "extensionsWithMatchingAttributes:error:", attributes, &error);
    dprintf(census_fd, "of the poster point: %s; error %s\n", text_of(found), text_of(error));
+   if (workspace)
+      plugins_census(workspace);
+   if (reader > 0)
+      waitpid(reader, NULL, 0);
 }
 
 int
