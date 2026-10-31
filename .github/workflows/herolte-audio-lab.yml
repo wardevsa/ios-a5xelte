@@ -1,0 +1,23 @@
+name: herolte-audio-lab
+
+# alab: a static aarch64 Linux tool to run in TWRP, to learn the S7's audio hardware from the working Linux stack.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [herolte]
+    paths:
+      - "tools/audio-lab/**"
+      - ".github/workflows/herolte-audio-lab.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - run: aarch64-linux-gnu-gcc -O2 -Wall -static -o alab tools/audio-lab/alab.c -lm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alab
+          path: alab
