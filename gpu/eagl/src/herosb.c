@@ -33,7 +33,7 @@ send0(id target, const char *selector)
 
 static id picture;
 static bool gestures_on;
-static bool status_bar_kept;
+static int status_bar_kept, status_bar_asked, status_bar_replaced;
 static unsigned rounds;
 
 static void
@@ -72,7 +72,7 @@ look_at_windows(void *unused)
    }
    size_t count = windows ? ((size_t (*)(id, SEL))objc_msgSend)(windows, sel_registerName("count")) : 0;
    if (rounds == 1 || rounds == 6)
-      herodrm_log("herosb: round %u, %zu windows, picture %d, gestures %d, status bar %d", rounds, count, picture != nil, gestures_on, status_bar_kept);
+      herodrm_log("herosb: round %u, %zu windows, picture %d, gestures %d, status bar hooks %d asked %d replaced %d", rounds, count, picture != nil, gestures_on, status_bar_kept, status_bar_asked, status_bar_replaced);
    for (size_t i = 0; picture && i < count; i++) {
       id window = ((id (*)(id, SEL, size_t))objc_msgSend)(windows, sel_registerName("objectAtIndex:"), i);
       const char *name = object_getClassName(window);
@@ -105,29 +105,49 @@ says_yes(id self, SEL cmd)
 }
 
 /*
- * ...but told type 2, UIKit in SpringBoard falls back to the red rdar:45025538 status bar for a 750x1334 screen. There
- * the plain phone's status bar is what it gets, as the other processes do.
+ * ...but told type 2, UIKit in SpringBoard asks each provider class in turn, none takes a 750x1334 screen and it ends on
+ * the red rdar:45025538 fallback. The plain phone's class takes any screen here, and is put in where the fallback
+ * still reaches the status bar.
  */
-static Class (*status_bar_was)(id, SEL, id, id);
-
 static Class
-status_bar_for_screen(id self, SEL cmd, id screen, id info)
+phone_takes_it(id self, SEL cmd, id screen, id info)
 {
-   Class chosen = status_bar_was(self, cmd, screen, info);
-   Class phone = objc_getClass("_UIStatusBarVisualProvider_Phone");
-   if (chosen == objc_getClass("_UIStatusBarVisualProvider_Fallback") && phone)
-      return phone;
-   return chosen;
+   status_bar_asked++;
+   return objc_getClass("_UIStatusBarVisualProvider_Phone");
+}
+
+static void (*set_provider_was)(id, SEL, Class);
+
+static void
+set_provider(id self, SEL cmd, Class provider)
+{
+   if (provider == objc_getClass("_UIStatusBarVisualProvider_Fallback")) {
+      status_bar_replaced++;
+      provider = objc_getClass("_UIStatusBarVisualProvider_Phone");
+   }
+   set_provider_was(self, cmd, provider);
 }
 
 static void
 keep_status_bar(void)
 {
-   Class provider = objc_getClass("_UIStatusBarVisualProvider_iOS");
-   Method pick = provider ? class_getClassMethod(provider, sel_registerName("visualProviderSubclassForScreen:visualProviderInfo:")) : NULL;
-   if (pick)
-      status_bar_was = (Class (*)(id, SEL, id, id))method_setImplementation(pick, (IMP)status_bar_for_screen);
-   status_bar_kept = pick != NULL;
+   static const char *const providers[] = { "_UIStatusBarVisualProvider_iOS", "_UIStatusBarVisualProvider_Phone",
+      "_UIStatusBarVisualProvider_Fallback" };
+   SEL pick = sel_registerName("visualProviderSubclassForScreen:visualProviderInfo:");
+   for (size_t i = 0; i < sizeof(providers) / sizeof(providers[0]); i++) {
+      Class provider = objc_getClass(providers[i]);
+      Method method = provider ? class_getClassMethod(provider, pick) : NULL;
+      if (method) {
+         method_setImplementation(method, (IMP)phone_takes_it);
+         status_bar_kept++;
+      }
+   }
+   Class bar = objc_getClass("_UIStatusBar");
+   Method setter = bar ? class_getInstanceMethod(bar, sel_registerName("setVisualProviderClass:")) : NULL;
+   if (setter) {
+      set_provider_was = (void (*)(id, SEL, Class))method_setImplementation(setter, (IMP)set_provider);
+      status_bar_kept += 10;
+   }
 }
 
 static void
