@@ -33,7 +33,7 @@ Apple's software is not in this repository). The S7 kernel patches are
 Next: thermal limit, audio, Wi-Fi, more optimization. Help is welcome. Please
 open an issue with the log from `tools/herolte-log-pull.py` and a photo of the screen.
 
-Credits: Mesa/Panfrost, [HakiOS](https://github.com/) EAGL bridge (`gpu/hakios-gl`, see its NOTICE),
+Credits: Mesa/Panfrost, [HakiOS](https://github.com/oosexgang/hackios-xnu-kernel) EAGL bridge (`gpu/hakios-gl`, see its NOTICE),
 Bergamota's EAGL shim (`gpu/eagl`), [ios-sweet](https://github.com/dipa-studio/ios-sweet),
 [syncmodz/ios-s9](https://github.com/syncmodz/ios-s9) and the LineageOS Exynos 8890 kernel for the hardware tables.
 
