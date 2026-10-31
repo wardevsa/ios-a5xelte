@@ -265,7 +265,8 @@ migration_restore(void)
 /*
  * The services heronoexec refuses are relaunched by launchd every ten seconds for ever, and each try costs a good
  * part of a CPU (kernel_task and xpcproxy at 100% and more). launchd's own list of disabled jobs stops that from the
- * next boot on.
+ * next boot on. DROP_DIR disabled.list, one job a line, adds to them with no new build: 41 at once left SpringBoard
+ * waiting for ever behind a black screen, so which ones are safe is found by trying.
  */
 static void
 disable_refused_jobs(void)
@@ -273,16 +274,8 @@ disable_refused_jobs(void)
    static const char *const jobs[] = {
       "com.apple.bluetoothd", "com.apple.ReportCrash", "com.apple.analyticsd", "com.apple.aggregated",
       "com.apple.homed", "com.apple.cloudd", "com.apple.searchd", "com.apple.voicemail.vmd",
-      /* and what uses the CPU here for nothing: no account, no modem, no watch, no health sensors */
-      "com.apple.healthd", "com.apple.remindd", "com.apple.nanotimekitcompaniond", "com.apple.nanoregistryd",
-      "com.apple.nanoregistrylaunchd", "com.apple.nanoprefsyncd.2", "com.apple.email.maild", "com.apple.suggestd",
-      "com.apple.siriinferenced", "com.apple.siriknowledged", "com.apple.siriactionsd", "com.apple.assistantd",
-      "com.apple.financed", "com.apple.routined", "com.apple.fitcore", "com.apple.fitnesscoachingd", "com.apple.triald",
-      "com.apple.mediaanalysisd", "com.apple.itunescloudd", "com.apple.parsecd", "com.apple.parsec-fbf",
-      "com.apple.familycircled", "com.apple.transparencyd", "com.apple.Maps.mapspushd", "com.apple.navd",
-      "com.apple.ap.adprivacyd", "com.apple.ap.promotedcontentd", "com.apple.amsengagementd", "com.apple.sociallayerd",
-      "com.apple.intelligenceplatformd", "com.apple.coreidvd", "com.apple.watchlistd", "com.apple.driverkitd",
    };
+   size_t count = sizeof(jobs) / sizeof(jobs[0]);
    mkdir("/private/var/db/com.apple.xpc.launchd", 0755);
    FILE *f = fopen("/private/var/db/com.apple.xpc.launchd/disabled.plist", "w");
    if (!f) {
@@ -290,11 +283,22 @@ disable_refused_jobs(void)
       return;
    }
    fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\">\n<dict>\n", f);
-   for (size_t i = 0; i < sizeof(jobs) / sizeof(jobs[0]); i++)
+   for (size_t i = 0; i < count; i++)
       fprintf(f, "\t<key>%s</key>\n\t<true/>\n", jobs[i]);
+   FILE *extra = fopen(DROP_DIR "disabled.list", "r");
+   char job[256];
+   while (extra && fgets(job, sizeof(job), extra)) {
+      job[strcspn(job, " \t\r\n")] = 0;
+      if (job[0] && job[0] != '#') {
+         fprintf(f, "\t<key>%s</key>\n\t<true/>\n", job);
+         count++;
+      }
+   }
+   if (extra)
+      fclose(extra);
    fputs("</dict>\n</plist>\n", f);
    fclose(f);
-   herodrm_log("hero-run: %zu jobs in launchd's disabled list", sizeof(jobs) / sizeof(jobs[0]));
+   herodrm_log("hero-run: %zu jobs in launchd's disabled list", count);
 }
 
 /* In the census child, as root, before it becomes mobile. */
@@ -332,9 +336,9 @@ run_ls_migrator(void)
 /*
  * LaunchServices builds its database by walking the system when it finds none: HakiOS has an empty /private/var at
  * every boot and its posters are there. Ours keeps the first one, which has none of them. Once, it goes: the next
- * start of lsd makes it anew.
+ * start of lsd makes it anew. Nothing says where it lives on this root, so all of /private/var is looked through.
  */
-#define LS_DB_GONE DROP_DIR "lsdb.gone"
+#define LS_DB_GONE DROP_DIR "lsdb2.gone"
 
 static int
 remove_ls_db_in(const char *dir, int depth)
@@ -344,6 +348,7 @@ remove_ls_db_in(const char *dir, int depth)
    struct dirent *e;
    while (d && (e = readdir(d))) {
       char path[1024];
+      struct stat st;
       if (e->d_name[0] == '.' && (e->d_name[1] == 0 || e->d_name[1] == '.'))
          continue;
       snprintf(path, sizeof(path), "%s/%s", dir, e->d_name);
@@ -351,7 +356,7 @@ remove_ls_db_in(const char *dir, int depth)
          int gone = unlink(path);
          herodrm_log("hero-run: LS database %s: removed (%d)", path, gone);
          removed += gone == 0;
-      } else if (e->d_type == DT_DIR && depth > 0) {
+      } else if (depth > 0 && strcmp(path, "/private/var/herolte") && lstat(path, &st) == 0 && S_ISDIR(st.st_mode)) {
          removed += remove_ls_db_in(path, depth - 1);
       }
    }
@@ -366,9 +371,10 @@ remove_ls_db_once(void)
    if (access(LS_DB_GONE, F_OK) == 0)
       return;
    close(open(LS_DB_GONE, O_WRONLY | O_CREAT, 0644));
-   int removed = remove_ls_db_in("/private/var/mobile/Library/Caches", 2) + remove_ls_db_in("/private/var/db", 2) +
-      remove_ls_db_in("/private/var/containers/Data/System", 4) + remove_ls_db_in("/private/var/root/Library/Caches", 2);
-   herodrm_log("hero-run: LS database: %d files removed; the NEXT boot has it made anew", removed);
+   time_t start = time(NULL);
+   int removed = remove_ls_db_in("/private/var", 9);
+   herodrm_log("hero-run: LS database: %d files removed in %ld s; the NEXT boot has it made anew", removed,
+      (long)(time(NULL) - start));
 }
 
 int
