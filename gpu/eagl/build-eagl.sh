@@ -56,7 +56,7 @@ $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libherosb.dylib" "$HERE/src/herosb.c" -in
   -framework CoreFoundation -lobjc -L "$OUT/lib" -ldrm.2 -Wl,-rpath,/private/var/herolte/lib
 
 $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroapp.dylib" "$HERE/src/heroapp.c" -install_name @rpath/libheroapp.dylib \
-  -framework Foundation -lobjc -L "$OUT/lib" -ldrm.2 -Wl,-rpath,/private/var/herolte/lib
+  -framework Foundation -framework UIKit -framework CoreGraphics -lobjc -L "$OUT/lib" -ldrm.2 -Wl,-rpath,/private/var/herolte/lib
 
 # The audio plug-in of mediaserverd, for hero-run to put in /System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver.
 mkdir -p "$OUT/audio"

@@ -12,6 +12,7 @@
 #include <objc/message.h>
 #include <objc/runtime.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <string.h>
 
 extern void herodrm_log(const char *format, ...);
@@ -94,9 +95,50 @@ assert_failed(id self, SEL command, SEL method, id object, id file, long line, i
    assert_original(self, command, method, object, file, line, percent, text);
 }
 
+/*
+ * PosterBoard's previews of the home screen use CARenderer with a Metal queue, and there is none: drawn into a bitmap
+ * instead (as FiiO JM21's libhakios.poster, MIT, by the same way).
+ */
+typedef struct { double x, y, w, h; } hero_rect;
+extern void UIGraphicsBeginImageContextWithOptions(struct { double w, h; } size, bool opaque, double scale);
+extern void *UIGraphicsGetCurrentContext(void);
+extern id UIGraphicsGetImageFromCurrentImageContext(void);
+extern void UIGraphicsEndImageContext(void);
+extern void CGContextTranslateCTM(void *context, double x, double y);
+
+static id
+preview_for_view(id self, SEL command, id view)
+{
+   (void)self;
+   (void)command;
+   if (view == nil)
+      return nil;
+   hero_rect bounds = ((hero_rect (*)(id, SEL))objc_msgSend)(view, sel_registerName("bounds"));
+   if (bounds.w <= 0 || bounds.h <= 0)
+      return nil;
+   UIGraphicsBeginImageContextWithOptions((struct { double w, h; }){ bounds.w, bounds.h }, false, 2.0);
+   void *context = UIGraphicsGetCurrentContext();
+   if (context != NULL) {
+      CGContextTranslateCTM(context, -bounds.x, -bounds.y);
+      id layer = ((id (*)(id, SEL))objc_msgSend)(view, sel_registerName("layer"));
+      ((void (*)(id, SEL, void *))objc_msgSend)(layer, sel_registerName("renderInContext:"), context);
+   }
+   id image = UIGraphicsGetImageFromCurrentImageContext();
+   UIGraphicsEndImageContext();
+   return image;
+}
+
 __attribute__((constructor)) static void
 install(void)
 {
+   if (strcmp(getprogname(), "PosterBoard") == 0) {
+      dlopen("/System/Library/PrivateFrameworks/PosterBoard.framework/PosterBoard", RTLD_LAZY);
+      Method preview = class_getInstanceMethod(objc_getClass("PBFHomeScreenPreviewImageBuilder"), sel_registerName("_imageForView:"));
+      if (preview != NULL) {
+         method_setImplementation(preview, (IMP)preview_for_view);
+      }
+      herodrm_log("PosterBoard: home preview in a bitmap: %d", preview != NULL);
+   }
    NSSetUncaughtExceptionHandler(uncaught);
    dlopen("/System/Library/Frameworks/OpenGLES.framework/OpenGLES", RTLD_LAZY);
    Class context = objc_getClass("EAGLContext");
