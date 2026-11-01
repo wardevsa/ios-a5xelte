@@ -243,8 +243,9 @@ extension_census(void)
       "com.apple.PhotosUIPrivate.PhotosPosterProvider",
    };
    /* LaunchServices is told once of the system's bundles: DataMigration, which does it on a real phone, is skipped
-    * on this image (herolte-tune-ios-root.sh). The parent marks it done when this child has lived through it. */
-   int first_time = access(DROP_DIR "database.done", F_OK) != 0;
+    * on this image (herolte-tune-ios-root.sh). The parent marks it done when this child has lived through it.
+    * Done again since the kernel answers AMFI's request 0x60: only now does LaunchServices know the extension points. */
+   int first_time = access(DROP_DIR "database2.done", F_OK) != 0;
    alarm(0);
    sleep(60);
    run_ls_migrator();
@@ -573,7 +574,7 @@ main(void)
       census_drain();
       herodrm_log("hero-run: extensions: the child ended with status %#x", census_status);
       if (WIFEXITED(census_status) && WEXITSTATUS(census_status) == 0) {
-         close(open(DROP_DIR "database.done", O_WRONLY | O_CREAT, 0644));
+         close(open(DROP_DIR "database2.done", O_WRONLY | O_CREAT, 0644));
       }
    }
    return 0;
