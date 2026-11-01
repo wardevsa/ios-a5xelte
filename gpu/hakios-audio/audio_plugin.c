@@ -257,6 +257,10 @@ say(const char *format, ...)
 		n = sizeof(line) - 1;
 	}
 	write(2, line, (size_t)n);
+	/* The S7: mediaserverd's standard error goes nowhere, the kernel's log is what can be read. */
+	if (sink >= 0) {
+		ioctl(sink, _IOW('r', 2, char[200]), line);
+	}
 }
 
 /* The volume control's scale: a straight line of decibels over VOLUME_RANGE_DB. */
@@ -1017,6 +1021,9 @@ do_io_operation(__unused AudioServerPlugInDriverRef driver, __unused AudioObject
 		actuator_write(buffer, frames);
 	} else if (operation == kAudioServerPlugInIOOperationWriteMix && stream == d->output) {
 		/* the kernel takes it all or leaves it: this thread must not wait */
+		if (sink < 0) {
+			sink = open(HAKIOS_AUDIO_DEVICE, O_WRONLY);     /* the S7: mediaserverd can start before the kernel has it */
+		}
 		if (sink < 0 || write(sink, buffer, (size_t)frames * HAKIOS_AUDIO_FRAME) < 0) {
 			refused += frames;
 		}
