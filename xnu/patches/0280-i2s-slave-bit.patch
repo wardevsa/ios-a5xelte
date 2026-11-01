@@ -1,0 +1,13 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index ca3ff8a..b86d5ee 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2365,7 +2365,7 @@ ha_tone(void)
+ 	hg_wr(i2s, 0x08, 1u << 15);             /* FIC_TXFLUSH */
+ 	delay(10);
+ 	hg_wr(i2s, 0x08, 0);
+-	hg_wr(i2s, 0x04, 1u << 11);             /* MOD: slave, 16 bits, TX only */
++	hg_wr(i2s, 0x04, 1u << 12);             /* MOD (Exynos5430 layout): slave, 16 bits, TX only */
+ 	hg_wr(i2s, 0x00, 1u);                   /* CON_ACTIVE */
+ 	printf("HEROLTE AUDIO: i2s con %#x mod %#x fic %#x\n", hg_rd(i2s, 0), hg_rd(i2s, 4), hg_rd(i2s, 8));
+ 	/* A table of one 440 Hz period at 48 kHz (109 samples, close enough), low level. */
