@@ -1,0 +1,196 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+index 4b44d3d..5e1f965 100644
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -87,11 +87,18 @@ herolte_noexec(const char *path)
+ 			hgl_noexec[0] = '\0';
+ 		}
+ 	}
+-	if (hgl_noexec[0] == '\0' || path == NULL) {
++	if (path == NULL) {
+ 		return false;
+ 	}
+ 	const char *base = strrchr(path, '/');
+ 	base = base ? base + 1 : path;
++	/* The watch face's poster aborts as it starts, and PosterBoard starts it again every few seconds. */
++	if (strcmp(base, "AegirPoster") == 0) {
++		return true;
++	}
++	if (hgl_noexec[0] == '\0') {
++		return false;
++	}
+ 	size_t n = strlen(base);
+ 	for (const char *t = hgl_noexec; *t;) {
+ 		const char *end = strchr(t, ',');
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 2437e08..7277ab6 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -1411,23 +1411,29 @@ hgp_mmu_flush(uint64_t va, unsigned log2_size)
+  *   0x02000000  test pages        0x04000000  the panel
+  *   0x0a000000  the scratch block 0x10000000  present slots (8 MiB each)
+  *   0x40000000..0x7fffffff  user buffers (HeroGPU), L3 tables on demand
+- * The user range has its own L2 table and L3 pool at the top of the
+- * scratch block. Idempotent; called with hg_mtx held.
++ * The user range has its own L2 table at the top of the scratch block and
++ * its own L3 pool. Idempotent; called with hg_mtx held.
+  */
+ #define HGU_L2_OFF      0x110000u
+-#define HGU_L3_OFF      0x111000u
+-#define HGU_L3_MAX      ((HG_SCR_BYTES - HGU_L3_OFF) / 0x1000u)
++/*
++ * The L3 pool has a 2 MiB block of its own, a table for each 2 MiB of the range. It was at the top of the scratch block,
++ * where the 176th table was the test block's: taking it zeroed the GPU's level-0 table and put a page's PTE in it, and from
++ * there on every job got a read fault that no reset cleared (some 350 MB of buffers in use, as widgets and posters reach).
++ */
++#define HGU_POOL_PA     0x8fc00000u
++#define HGU_L3_MAX      512u
+ #define HGU_VA_BASE     0x40000000ull
+ #define HGU_VA_END      0x80000000ull
+ #define HGU_CHUNK       0x10000ull      /* VA granule: 64 KiB */
+ #define HGU_CHUNKS      ((unsigned)((HGU_VA_END - HGU_VA_BASE) / HGU_CHUNK))
+ static int hg_up_state;                 /* 0 not tried, 1 up, -1 failed */
++static vm_offset_t hgu_pool;
+ static uint16_t hgu_l3_of[512];         /* user L2 index -> pool table + 1 */
+ static unsigned hgu_l3_used;
+ /* Chunks of the user range in use. Freed VAs are reused, lowest first: L3
+  * tables are never given back, so the range must stay compact (with VAs
+  * never reused, every 15 MB texture CoreAnimation uploads cost 8 tables for
+- * good and the 239-table pool ran out after ~480 MB of allocations). */
++ * good and the pool ran out after ~480 MB of allocations). */
+ static uint64_t hgu_used[HGU_CHUNKS / 64];
+ 
+ static bool
+@@ -1808,6 +1814,12 @@ static bool
+ hgu_set_locked(uint64_t va, const uint64_t *pages, unsigned n)
+ {
+ 	volatile uint64_t *l2 = (volatile uint64_t *)(hgp_scr + HGU_L2_OFF);
++	if (!hgu_pool) {
++		hgu_pool = ml_io_map(HGU_POOL_PA, HGU_L3_MAX * 0x1000u);
++		if (!hgu_pool) {
++			return false;
++		}
++	}
+ 	for (unsigned i = 0; i < n; i++) {
+ 		uint64_t a = va + (uint64_t)i * 0x1000;
+ 		if (a < HGU_VA_BASE || a >= HGU_VA_END) {
+@@ -1822,13 +1834,12 @@ hgu_set_locked(uint64_t va, const uint64_t *pages, unsigned n)
+ 				printf("HEROLTE GPU: user L3 pool exhausted\n");
+ 				return false;
+ 			}
+-			uint32_t table = HGU_L3_OFF + hgu_l3_used * 0x1000;
+-			hg_zero(hgp_scr + table, 0x1000);
++			uint32_t table = hgu_l3_used * 0x1000;
++			hg_zero(hgu_pool + table, 0x1000);
+ 			hgu_l3_of[l2i] = (uint16_t)(++hgu_l3_used);
+-			l2[l2i] = (HG_SCR_PA + table) | 3;
++			l2[l2i] = (HGU_POOL_PA + table) | 3;
+ 		}
+-		volatile uint64_t *l3 = (volatile uint64_t *)(hgp_scr + HGU_L3_OFF +
+-		    (hgu_l3_of[l2i] - 1u) * 0x1000);
++		volatile uint64_t *l3 = (volatile uint64_t *)(hgu_pool + (hgu_l3_of[l2i] - 1u) * 0x1000);
+ 		l3[(a >> 12) & 0x1ff] = pages ? ((pages[i] & ~0xfffull) | 0x2c1) : 0;
+ 	}
+ 	__asm__ volatile ("dsb sy" ::: "memory");
+@@ -1839,14 +1850,14 @@ hgu_set_locked(uint64_t va, const uint64_t *pages, unsigned n)
+ static uint64_t
+ hgu_pte(uint64_t va)
+ {
+-	if (va < HGU_VA_BASE || va >= HGU_VA_END || !hgp_scr) {
++	if (va < HGU_VA_BASE || va >= HGU_VA_END || !hgu_pool) {
+ 		return 0;
+ 	}
+ 	unsigned l2i = (unsigned)((va >> 21) & 0x1ff);
+ 	if (hgu_l3_of[l2i] == 0) {
+ 		return 0;
+ 	}
+-	return ((volatile uint64_t *)(hgp_scr + HGU_L3_OFF + (hgu_l3_of[l2i] - 1u) * 0x1000))[(va >> 12) & 0x1ff];
++	return ((volatile uint64_t *)(hgu_pool + (hgu_l3_of[l2i] - 1u) * 0x1000))[(va >> 12) & 0x1ff];
+ }
+ 
+ bool
+@@ -2791,7 +2802,8 @@ hg_twrp_thread(void *arg, __unused wait_result_t wr)
+ /*
+  * Boot-arg herowifi=1, the first step of Wi-Fi: the BCM4359 is on PCIe channel 0 (FSYS1), as Linux's pci-exynos.c brings it up.
+  * In its order and with its timing: the chip gets #PERST high about 20 ms before the link starts, not half a minute, and Samsung's
+- * driver tries up to ten times. The LTSSM's history says how far each try got. Nothing is written to the chip itself.
++ * driver tries up to ten times. The LTSSM's history says how far each try got. Of the chip, only its PCI configuration is
++ * written: its two windows, and through the first the identity of the backplane is read.
+  */
+ static void
+ hw_step(const char *what)
+@@ -2969,6 +2981,26 @@ hg_wifi_thread(__unused void *arg, __unused wait_result_t wr)
+ 	hg_wr(dbi, 0x91c, 0);
+ 	hg_wr(dbi, 0x908, 1u << 31);
+ 	printf("HEROLTE WIFI: chip id %#x class %#x bar0 %#x bar2 %#x\n", hg_rd(cfg, 0), hg_rd(cfg, 8), hg_rd(cfg, 0x10), hg_rd(cfg, 0x18));
++	hw_step("the chip's windows");
++	hg_wr(dbi, 0x900, 1);                                   /* outbound window 1: memory, at the same addresses */
++	hg_wr(dbi, 0x904, 0);
++	hg_wr(dbi, 0x90c, 0x1c100000u);
++	hg_wr(dbi, 0x910, 0);
++	hg_wr(dbi, 0x914, 0x1dffffffu);
++	hg_wr(dbi, 0x918, 0x1c100000u);
++	hg_wr(dbi, 0x91c, 0);
++	hg_wr(dbi, 0x908, 1u << 31);
++	hg_wr(cfg, 0x10, 0x1c100000u);                          /* BAR0: registers, 32 KiB */
++	hg_wr(cfg, 0x14, 0);
++	hg_wr(cfg, 0x18, 0x1c400000u);                          /* BAR2: the chip's memory, 4 MiB */
++	hg_wr(cfg, 0x1c, 0);
++	hg_wr(cfg, 0x04, hg_rd(cfg, 0x04) | 6u);                /* memory, bus master */
++	hg_wr(cfg, 0x80, 0x18000000u);                          /* BAR0's window: ChipCommon */
++	printf("HEROLTE WIFI: bar0 %#x bar2 %#x command %#x window %#x\n", hg_rd(cfg, 0x10), hg_rd(cfg, 0x18), hg_rd(cfg, 0x04), hg_rd(cfg, 0x80));
++	vm_offset_t regs = ml_io_map(0x1c100000u, 0x8000);
++	if (regs) {
++		printf("HEROLTE WIFI: ChipCommon chip id %#x capabilities %#x\n", hg_rd(regs, 0), hg_rd(regs, 4));
++	}
+ }
+ 
+ void
+diff --git a/bsd/dev/herolte_ufs.c b/bsd/dev/herolte_ufs.c
+index f40e842..a591abc 100644
+--- a/bsd/dev/herolte_ufs.c
++++ b/bsd/dev/herolte_ufs.c
+@@ -651,7 +651,9 @@ herolte_log_thread(__unused void *arg, __unused wait_result_t wr)
+ 		(void)tsleep(&herolte_log_chan, PZERO, "herolog", hz * 10);
+ 		/* Heartbeat: gaps between these lines show CPU starvation. */
+ 		if (++ticks % 6 == 0) {
+-			printf("HEROLTE LOG: alive %u s\n", ticks * 10);
++			extern unsigned int vm_page_free_count, vm_page_active_count, vm_page_inactive_count;
++			printf("HEROLTE LOG: alive %u s, MB free %u active %u inactive %u\n", ticks * 10, vm_page_free_count / 64,
++			    vm_page_active_count / 64, vm_page_inactive_count / 64);
+ 		}
+ 		a5xelte_log_snapshot(&ring, &rsize, &total);
+ 		if (total == flushed) {
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index daee1bc..f1e25f9 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -915,10 +915,18 @@ bool
+ AppleCLCD::gpuPresent(SweetSurface *s, int32_t sx, int32_t sy, int32_t w, int32_t h)
+ {
+ 	static uint64_t pages[SWEET_FB_GPU_MAX_PAGES];
+-	static uint32_t failures;
+-	if (failures >= 8 || s->memory == NULL) {
++	static uint32_t failures, skipped;
++	if (s->memory == NULL) {
+ 		return false;
+ 	}
++	/* After eight failures in a row the CPU copy, 100 times slower, for 300 frames; then the Mali is asked again. */
++	if (failures >= 8) {
++		if (++skipped < 300) {
++			return false;
++		}
++		skipped = 0;
++		failures = 7;
++	}
+ 	IOByteCount len = 0;
+ 	addr64_t pa0 = s->memory->getPhysicalSegment(0, &len, kIOMemoryMapperNone);
+ 	int slot = pa0 ? herolte_gpu_present_slot(s->id, pa0 & ~0xfffULL) : -1;
+@@ -948,6 +956,7 @@ AppleCLCD::gpuPresent(SweetSurface *s, int32_t sx, int32_t sy, int32_t w, int32_
+ 		failures++;
+ 		return false;
+ 	}
++	failures = 0;
+ 	return true;
+ }
+ 
