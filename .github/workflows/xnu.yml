@@ -16,7 +16,7 @@ on:
         description: make -k (collect all compile errors in one run)
         default: "true"
       runner:
-        description: GitHub runner image (empty = both macos-14 and macos-15-intel)
+        description: GitHub runner image (empty = macos-15-intel)
         default: ""
   push:
     branches: [main, herolte, codex/a5xelte-bringup]
@@ -37,14 +37,14 @@ env:
 
 jobs:
   build:
-    # A push builds on both macOS queues: the arm64 one (Xcode 15)
+    # A push builds on both macOS queues: the arm64 one (macos-14, Xcode 15)
     # left jobs unacquired for hours in Oct 2026, the Intel one did not.
     # Xcode 16's iig emits IORPC.kernelContent, which 0083 adds to this xnu.
     # Each runner uploads its own artifacts (xnu-kernel-<runner>).
     strategy:
       fail-fast: false
       matrix:
-        runner: ${{ fromJSON(inputs.runner && format('["{0}"]', inputs.runner) || '["macos-14","macos-15-intel"]') }}
+        runner: ${{ fromJSON(inputs.runner && format('["{0}"]', inputs.runner) || '["macos-15-intel"]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     steps:
