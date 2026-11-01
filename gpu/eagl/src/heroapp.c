@@ -11,6 +11,8 @@
 #include <dlfcn.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
+#include <stdarg.h>
+#include <string.h>
 
 extern void herodrm_log(const char *format, ...);
 extern void NSSetUncaughtExceptionHandler(void (*handler)(id));
@@ -49,6 +51,49 @@ no_shared_context(id self, SEL command, unsigned long api, id sharegroup)
    return no_context(self, command, api);
 }
 
+/*
+ * CoreImage's default context is CI::GLContext whatever the system has: it fills a table of OpenGL ES's functions, empty
+ * here, and calls glDisable(GL_DEPTH_TEST) through it. Every CIContext is asked for CoreImage's software renderer instead.
+ */
+static id (*ci_init_original)(id, SEL, id);
+static id ci_software_key;
+
+static id
+ci_init(id self, SEL command, id options)
+{
+   id all = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("NSMutableDictionary"), sel_registerName("dictionary"));
+   if (options != nil) {
+      ((void (*)(id, SEL, id))objc_msgSend)(all, sel_registerName("addEntriesFromDictionary:"), options);
+   }
+   id yes = ((id (*)(id, SEL, signed char))objc_msgSend)((id)objc_getClass("NSNumber"), sel_registerName("numberWithBool:"), 1);
+   ((void (*)(id, SEL, id, id))objc_msgSend)(all, sel_registerName("setObject:forKey:"), yes, ci_software_key);
+   return ci_init_original(self, command, all);
+}
+
+/*
+ * Photos asserts that its data source has one section, and with no library it has none. Only that failure is let by, as a
+ * test of what comes after it; every other goes on to the original, with its text already made.
+ */
+static void (*assert_original)(id, SEL, SEL, id, id, long, id, ...);
+
+static void
+assert_failed(id self, SEL command, SEL method, id object, id file, long line, id format, ...)
+{
+   va_list arguments;
+   va_start(arguments, format);
+   id text = ((id (*)(id, SEL, id, va_list))objc_msgSend)(
+      ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("NSString"), sel_registerName("alloc")),
+      sel_registerName("initWithFormat:arguments:"), format, arguments);
+   va_end(arguments);
+   if (strstr(text_of(text), "numberOfSections == 1") != NULL) {
+      herodrm_log("%s: assertion let by: %s", getprogname(), text_of(text));
+      return;
+   }
+   id percent = ((id (*)(id, SEL, const char *))objc_msgSend)((id)objc_getClass("NSString"),
+      sel_registerName("stringWithUTF8String:"), "%@");
+   assert_original(self, command, method, object, file, line, percent, text);
+}
+
 __attribute__((constructor)) static void
 install(void)
 {
@@ -59,5 +104,22 @@ install(void)
       method_setImplementation(class_getInstanceMethod(context, sel_registerName("initWithAPI:")), (IMP)no_context);
       method_setImplementation(class_getInstanceMethod(context, sel_registerName("initWithAPI:sharegroup:")),
                                (IMP)no_shared_context);
+   }
+   Method properties = context != Nil ? class_getInstanceMethod(context, sel_registerName("initWithAPI:properties:")) : NULL;
+   if (properties != NULL) {
+      method_setImplementation(properties, (IMP)no_shared_context);
+   }
+   void *core_image = dlopen("/System/Library/Frameworks/CoreImage.framework/CoreImage", RTLD_LAZY);
+   id *key = core_image ? dlsym(core_image, "kCIContextUseSoftwareRenderer") : NULL;
+   Method init = class_getInstanceMethod(objc_getClass("CIContext"), sel_registerName("initWithOptions:"));
+   if (key != NULL && init != NULL) {
+      ci_software_key = *key;
+      ci_init_original = (id (*)(id, SEL, id))method_setImplementation(init, (IMP)ci_init);
+   }
+   herodrm_log("%s: libheroapp: CoreImage %s", getprogname(), ci_init_original ? "in software" : "as it was");
+   Method assertion = class_getInstanceMethod(objc_getClass("NSAssertionHandler"),
+      sel_registerName("handleFailureInMethod:object:file:lineNumber:description:"));
+   if (assertion != NULL) {
+      assert_original = (void (*)(id, SEL, SEL, id, id, long, id, ...))method_setImplementation(assertion, (IMP)assert_failed);
    }
 }
