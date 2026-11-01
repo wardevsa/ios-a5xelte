@@ -61,7 +61,7 @@ $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroapp.dylib" "$HERE/src/heroapp.c" -
 # The audio plug-in of mediaserverd, for hero-run to put in /System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver.
 mkdir -p "$OUT/audio"
 $CC -O2 -w -bundle -I"$HERE/../hakios-audio" -o "$OUT/audio/HakiosAudio" "$HERE/../hakios-audio/audio_plugin.c" \
-  -framework CoreFoundation -framework CoreAudio -lm
+  -framework CoreFoundation -lm
 cp "$HERE/../hakios-audio/audio_plugin.plist" "$OUT/audio/Info.plist"
 codesign -s - -f "$OUT/audio/HakiosAudio"
 
