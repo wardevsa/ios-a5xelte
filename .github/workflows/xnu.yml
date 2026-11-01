@@ -37,7 +37,7 @@ env:
 
 jobs:
   build:
-    # A push builds on both macOS queues: the arm64 one (macos-14, Xcode 15)
+    # A push builds on both macOS queues: the arm64 one (Xcode 15)
     # left jobs unacquired for hours in Oct 2026, the Intel one did not.
     # Xcode 16's iig emits IORPC.kernelContent, which 0083 adds to this xnu.
     # Each runner uploads its own artifacts (xnu-kernel-<runner>).
