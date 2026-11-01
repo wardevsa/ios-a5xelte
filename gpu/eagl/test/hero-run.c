@@ -463,10 +463,43 @@ reduce_transparency(void)
    CFPreferencesSynchronize(CFSTR("com.apple.Accessibility"), CFSTR("mobile"), kCFPreferencesAnyHost);
 }
 
+/* The plug-in of the sound (gpu/hakios-audio) where mediaserverd looks: it loads plug-ins as it starts, so from the next boot on. */
+static void
+copy_audio_file(const char *from, const char *to, mode_t mode)
+{
+   char buffer[65536];
+   ssize_t n;
+   int in = open(from, O_RDONLY), out = in >= 0 ? open(to, O_WRONLY | O_CREAT | O_TRUNC, mode) : -1;
+   while (out >= 0 && (n = read(in, buffer, sizeof(buffer))) > 0) {
+      if (write(out, buffer, (size_t)n) != n)
+         break;
+   }
+   if (out >= 0) {
+      fchmod(out, mode);
+      close(out);
+   }
+   if (in >= 0)
+      close(in);
+   herodrm_log("hero-run: audio plug-in: %s: %s", to, out >= 0 ? "put" : "not put");
+}
+
+static void
+install_audio_plugin(void)
+{
+   struct stat from, to;
+   const char *driver = "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/HakiosAudio";
+   if (stat(DROP_DIR "audio/HakiosAudio", &from) != 0 || (stat(driver, &to) == 0 && to.st_size == from.st_size))
+      return;
+   mkdir("/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver", 0755);
+   copy_audio_file(DROP_DIR "audio/HakiosAudio", driver, 0755);
+   copy_audio_file(DROP_DIR "audio/Info.plist", "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/Info.plist", 0644);
+}
+
 int
 main(void)
 {
    disable_bluetooth_audio();
+   install_audio_plugin();
    reduce_transparency();
    remove_ls_db_once();
    wallpapers_for_this_screen();
