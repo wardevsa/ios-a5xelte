@@ -6,6 +6,7 @@
  * herodrm_log), since TWRP cannot read the iOS volume. The test is killed
  * after 180 s.
  */
+#include <CoreFoundation/CoreFoundation.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <dlfcn.h>
@@ -447,10 +448,26 @@ disable_bluetooth_audio(void)
    herodrm_log("hero-run: BTAudioHALPlugin moved away: %d", moved);
 }
 
+/*
+ * reduce.transparency in the drop zone: Settings' Reduce Transparency, whose Accessibility page crashes here (CoreImage,
+ * from MobileIcons). No blurs, the GPU's heaviest work; SpringBoard reads it at its next start, so from the next boot on.
+ */
+static void
+reduce_transparency(void)
+{
+   struct stat st;
+   if (stat("/private/var/herolte/reduce.transparency", &st) != 0)
+      return;
+   CFPreferencesSetValue(CFSTR("EnhancedBackgroundContrastEnabled"), kCFBooleanTrue, CFSTR("com.apple.Accessibility"),
+                         CFSTR("mobile"), kCFPreferencesAnyHost);
+   CFPreferencesSynchronize(CFSTR("com.apple.Accessibility"), CFSTR("mobile"), kCFPreferencesAnyHost);
+}
+
 int
 main(void)
 {
    disable_bluetooth_audio();
+   reduce_transparency();
    remove_ls_db_once();
    wallpapers_for_this_screen();
    migration_restore();

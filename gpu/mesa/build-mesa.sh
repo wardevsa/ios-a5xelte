@@ -73,7 +73,7 @@ EOF
 
 cd mesa
 [ -d build ] || meson setup build --cross-file ../ios-cross.txt \
-  --buildtype=release -Dprefix=/ \
+  --buildtype=release -Db_ndebug=true -Dprefix=/ \
   -Dgallium-drivers=softpipe,panfrost -Dvulkan-drivers= \
   -Dllvm=disabled -Dglx=disabled -Degl=disabled -Dgbm=disabled -Dplatforms= \
   -Dosmesa=true -Dopengl=true -Dgles1=disabled -Dgles2=enabled -Dshared-glapi=enabled \
