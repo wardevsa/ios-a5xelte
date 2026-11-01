@@ -490,7 +490,7 @@ install_audio_plugin(void)
    const char *driver = "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/HakiosAudio";
    int have = stat(DROP_DIR "audio/HakiosAudio", &from) == 0, there = stat(driver, &to) == 0;
    herodrm_log("hero-run: audio plug-in: drop zone %lld bytes, HAL %lld bytes", have ? (long long)from.st_size : -1, there ? (long long)to.st_size : -1);
-   if (!have || (there && to.st_size == from.st_size))
+   if (!have || (there && to.st_size == from.st_size && to.st_mtime >= from.st_mtime))
       return;
    mkdir("/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver", 0755);
    copy_audio_file(DROP_DIR "audio/HakiosAudio", driver, 0755);

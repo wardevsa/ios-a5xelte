@@ -369,3 +369,7 @@ pantalla y comportamiento de iOS. Plan y mapa de hardware en
 ## Pantalla a 60 Hz reales (0296-0297)
 
 El bootloader deja el vclk de DECON_F en el oscilador de 26 MHz (`MUX_DISP_PLL`, CMU_DISP0 +0x200, bit 12 en 0): 363 ciclos por línea, 35,8 ms por cuadro, un TE de cada tres, 20 Hz, aunque iOS dibujara 40-50 fps. Con el vclk en DISP_PLL (62,5 MHz): 14,88 ms por cuadro, período 16,74 ms (59,7 Hz), medido con el contador de líneas (DECON +0x8c). Sin relación: eclk, relojes de bus, MULTI_PKT_CNT. Los cortes horizontales siguen: un solo cuadro en memoria, reescrito mientras DECON lo lee.
+
+## Sonido en iOS (0300-0303)
+
+El I2S está en reset hasta `CON_RSTCLR` (+0x00 bit 31); sin eso una escritura traba un núcleo. MOD: OPCLK de PCLK, CDCLK de entrada, esclavo. `heroaudio=3`: `/dev/hakios-audio` antes de que arranque mediaserverd y el plug-in AudioServerPlugIn de HakiOS (`gpu/hakios-audio`, MIT) en `/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver`. El kernel alimenta el FIFO a mano, por tiempo. Probado: tono de llamada y teclado por el parlante, barra de volumen.
