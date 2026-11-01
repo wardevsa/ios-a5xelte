@@ -100,7 +100,8 @@ assert_failed(id self, SEL command, SEL method, id object, id file, long line, i
  * instead (as FiiO JM21's libhakios.poster, MIT, by the same way).
  */
 typedef struct { double x, y, w, h; } hero_rect;
-extern void UIGraphicsBeginImageContextWithOptions(struct { double w, h; } size, bool opaque, double scale);
+typedef struct { double w, h; } hero_size;
+extern void UIGraphicsBeginImageContextWithOptions(hero_size size, bool opaque, double scale);
 extern void *UIGraphicsGetCurrentContext(void);
 extern id UIGraphicsGetImageFromCurrentImageContext(void);
 extern void UIGraphicsEndImageContext(void);
@@ -116,7 +117,7 @@ preview_for_view(id self, SEL command, id view)
    hero_rect bounds = ((hero_rect (*)(id, SEL))objc_msgSend)(view, sel_registerName("bounds"));
    if (bounds.w <= 0 || bounds.h <= 0)
       return nil;
-   UIGraphicsBeginImageContextWithOptions((struct { double w, h; }){ bounds.w, bounds.h }, false, 2.0);
+   UIGraphicsBeginImageContextWithOptions((hero_size){ bounds.w, bounds.h }, false, 2.0);
    void *context = UIGraphicsGetCurrentContext();
    if (context != NULL) {
       CGContextTranslateCTM(context, -bounds.x, -bounds.y);
