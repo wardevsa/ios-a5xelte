@@ -145,6 +145,13 @@ def build(canvas=(FB_WIDTH, FB_HEIGHT), dram=(DRAM_BASE, DRAM_SIZE), scale=3):
         ('canvas-width', mkadt.u32(canvas[0])),
         ('canvas-height', mkadt.u32(canvas[1])),
     ]))
+    # launchd starts com.apple.wifid only if the device tree has a node named
+    # "wlan" (its _LimitLoadToDeviceTree); without wifid there is no Wi-Fi in
+    # Settings or the status bar. As apollo's mkadt.py (its boot 53).
+    arm_io.children.append(mkadt.node('wlan', [
+        ('device_type', mkadt.cstr('wlan')),
+        ('compatible', mkadt.cstr('herolte,bcm4359')),
+    ]))
     root.children = [n for n in root.children if n.prop('name') not in
                      (mkadt.cstr('sweet-fbcon'), mkadt.cstr('sweet-ufs'))]
     # Exynos 8890 UFSHCI (exynos8890.dtsi ufs@0x155A0000): standard HCI at
