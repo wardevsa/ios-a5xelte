@@ -236,6 +236,7 @@ struct image {
 	bool painted;                   /* something has been drawn into it (it is a target in fact, not only in name) */
 	unsigned looked;                /* ... the frame in which that memory was last looked at, */
 	uint64_t sum;                   /* ... and what it added up to */
+	unsigned cleaned;               /* (Galaxy S7 port) a shared picture: the frame its caches were last cleaned for the GPU */
 	GLenum to, internal, format, type;
 	uint32_t plane, seed;
 	GLsizei width, height;
@@ -1341,6 +1342,34 @@ drawing(struct eagl *e)
 	}
 }
 
+/*
+ * (Galaxy S7 port) A picture that is its surface's own memory (surface_shared()) is drawn into by another process -- a
+ * page of Safari's, a wallpaper, an application's layer -- with the CPU. The Mali is not IO-coherent: what that process
+ * wrote may still sit in the CPU's caches, and the GPU then reads the memory as it was before (Safari's pages black,
+ * wallpapers missing; every frame of wifi-0314w/boot-0315 said "0 textures refilled"). So, before the GPU reads it,
+ * the caches over the surface are cleaned (HeroGPU's SyncBO, as hakios_gl_surface_written() does for what the GPU
+ * wrote): when its seed has moved, and once every 30 frames for those who draw without moving it (see
+ * surface_changed()).
+ */
+static unsigned shared_cleans;
+
+static void
+shared_picture_fresh(struct eagl *e, struct image *image)
+{
+	uint32_t seed = IOSurfaceGetSeed(image->surface);
+
+	if (seed == image->seed && e->frames - image->cleaned < 30) {
+		return;
+	}
+	hakios_gl_surface_written(e->gl, IOSurfaceGetID(image->surface));
+	if (shared_cleans++ < 20) {
+		say("hakios-gl: texture %u is surface %u's memory, drawn into elsewhere (seed %u, was %u): its caches cleaned for "
+		    "the GPU\n", image->texture, IOSurfaceGetID(image->surface), seed, image->seed);
+	}
+	image->seed = seed;
+	image->cleaned = e->frames;
+}
+
 /* ---- the entries written by hand ---------------------------------------------------------------- */
 
 static void
@@ -1357,10 +1386,15 @@ my_glBindTexture(void *context, GLenum target, GLuint texture)
 	if (target == GL_TEXTURE_2D && e->unit < 8) {
 		e->bound[e->unit] = texture;
 	}
-	if (texture != 0 && e->image_count != 0 && (image = image_of(e, texture)) != NULL && !image->shared &&
-	    (!image->target ? IOSurfaceGetSeed(image->surface) != image->seed || surface_changed(e, image) :
-	    image->wrapped && !image->painted && surface_changed(e, image))) {
-		surface_to_texture(e, image);
+	if (texture != 0 && e->image_count != 0 && (image = image_of(e, texture)) != NULL) {
+		if (image->shared) {
+			if (!image->target) {
+				shared_picture_fresh(e, image);
+			}
+		} else if (!image->target ? IOSurfaceGetSeed(image->surface) != image->seed || surface_changed(e, image) :
+		    image->wrapped && !image->painted && surface_changed(e, image)) {
+			surface_to_texture(e, image);
+		}
 	}
 	EAGL_LEAVE(e, 0x30);
 }
