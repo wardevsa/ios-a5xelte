@@ -510,8 +510,22 @@ drmIoctl(int fd, unsigned long request, void *arg)
       uint64_t in = p->param, out = 0;
       if (call(SEL_PARAM, &in, 1, &out, 1))
          r = fail(EINVAL);
-      else
+      else {
+         /*
+          * No ASTC (HERO_ASTC=1 keeps it): iOS's own wallpapers come as ASTC
+          * 4x4 and stayed black, the T880 taking them without an error. Without
+          * the bits (20-23: ASTC 3D/2D, LDR/HDR) Panfrost says it has no ASTC
+          * and Mesa decodes every such picture on the CPU as it is uploaded.
+          */
+         if (p->param == DRM_PANFROST_PARAM_TEXTURE_FEATURES0) {
+            const char *a = getenv("HERO_ASTC");
+            if (!a || *a != '1') {
+               herodrm_log("texture features %#llx: ASTC hidden, Mesa decodes it", (unsigned long long)out);
+               out &= ~(0xfull << 20);
+            }
+         }
          p->value = out;
+      }
       break;
    }
    case DRM_IOCTL_PANFROST_CREATE_BO:

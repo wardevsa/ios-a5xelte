@@ -1,0 +1,84 @@
+diff --git a/iokit/Kernel/arm/SweetSurface.cpp b/iokit/Kernel/arm/SweetSurface.cpp
+index aba42b4..2b6ce2d 100644
+--- a/iokit/Kernel/arm/SweetSurface.cpp
++++ b/iokit/Kernel/arm/SweetSurface.cpp
+@@ -443,6 +443,10 @@ public:
+ 	IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments *args,
+ 	    IOExternalMethodDispatch *dispatch, OSObject *target,
+ 	    void *reference) APPLE_KEXT_OVERRIDE;
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	IOReturn externalMethodSweet(uint32_t selector, IOExternalMethodArguments *args,
++	    IOExternalMethodDispatch *dispatch, OSObject *target, void *reference);
++#endif
+ 	IOExternalTrap *getTargetAndTrapForIndex(IOService **targetP, UInt32 index) APPLE_KEXT_OVERRIDE;
+ 
+ 	IOReturn trapUseCount(void *id, void *category, void *, void *, void *, void *);
+@@ -468,6 +472,22 @@ sweet_surf_log_once(const char *what, uint32_t n)
+ 	IOLog("SWEET SURF: %s %s %u\n", name, what, n);
+ }
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++/*
++ * Safari's pages stay black (boot-0316) and nothing of WebKit's showed in the log: the creates are said only
++ * for the first 64 of the boot, the selectors once for all processes. WebKit's own processes (and Safari)
++ * are said apart: their first 160 calls, each with what it answered.
++ */
++static uint32_t sweet_surf_webkit_said;
++
++static bool
++sweet_surf_webkit(char *name, size_t size)
++{
++	proc_selfname(name, (int)size);
++	return strncmp(name, "com.apple.WebKit", 16) == 0 || strcmp(name, "MobileSafari") == 0;
++}
++#endif
++
+ bool
+ IOSurfaceRootUserClient::initWithTask(task_t owningTask, void *securityID, UInt32 type)
+ {
+@@ -775,7 +795,13 @@ IOSurfaceRootUserClient::create(IOExternalMethodArguments *args)
+ 			}
+ 		}
+ 	}
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	char who[32];
++	bool webkit = sweet_surf_webkit(who, sizeof(who)) && sweet_surf_webkit_said < 160;
++	if (ret != kIOReturnSuccess || sweet_surface_creates_logged < 64 || webkit) {
++#else
+ 	if (ret != kIOReturnSuccess || sweet_surface_creates_logged < 64) {
++#endif
+ 		char name[32];
+ 		proc_selfname(name, sizeof(name));
+ 		sweet_surface_creates_logged++;
+@@ -805,10 +831,31 @@ IOSurfaceRootUserClient::create(IOExternalMethodArguments *args)
+ 	return ret;
+ }
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++IOReturn
++IOSurfaceRootUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
++    IOExternalMethodDispatch *dispatch, OSObject *target, void *reference)
++{
++	char name[32];
++	IOReturn ret = externalMethodSweet(selector, args, dispatch, target, reference);
++	if (sweet_surf_webkit_said < 160 && sweet_surf_webkit(name, sizeof(name))) {
++		sweet_surf_webkit_said++;
++		IOLog("SWEET SURF WK: %s sel %u, scalars %u in %u out, struct %u in %u out -> 0x%x\n", name, selector,
++		    args->scalarInputCount, args->scalarOutputCount, args->structureInputSize, args->structureOutputSize, ret);
++	}
++	return ret;
++}
++
++IOReturn
++IOSurfaceRootUserClient::externalMethodSweet(uint32_t selector, IOExternalMethodArguments *args,
++    __unused IOExternalMethodDispatch *dispatch, __unused OSObject *target,
++    __unused void *reference)
++#else
+ IOReturn
+ IOSurfaceRootUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
+     __unused IOExternalMethodDispatch *dispatch, __unused OSObject *target,
+     __unused void *reference)
++#endif
+ {
+ 	uint64_t arg0 = args->scalarInputCount > 0 ? args->scalarInput[0] : 0;
+ 
