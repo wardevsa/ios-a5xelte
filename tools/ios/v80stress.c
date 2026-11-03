@@ -32,7 +32,13 @@
 #include <time.h>
 #include <unistd.h>
 
-#define ARCH ".arch armv8.5-a\n\t"
+/*
+ * The wrappers below are the only code built with these features; the
+ * compiler cannot inline them into plain-arm64 callers, so the threads' native
+ * __atomic operations stay LDAXR/STLXR (Apple clang ignores .arch in inline asm).
+ */
+#define EMU __attribute__((target("lse,rcpc,rcpc-immo,lor,pauth,flagm,altnzcv,sb,dit,ssbs"), noinline))
+#define ARCH ""
 #define NTHREADS 8
 
 static int failures, checks;
@@ -87,7 +93,7 @@ sext(uint64_t v, unsigned size)
 /* the instructions under test                                         */
 
 #define CAS(name, insn, r) \
-static uint64_t name(void *p, uint64_t expected, uint64_t desired) { \
+static EMU uint64_t name(void *p, uint64_t expected, uint64_t desired) { \
 	__asm__ volatile(ARCH insn " %" r "0, %" r "2, [%1]" \
 	    : "+r"(expected) : "r"(p), "r"(desired) : "memory"); \
 	return expected; }
@@ -99,7 +105,7 @@ CAS(casal_x, "casal", "x")
 CAS(cas_x, "cas", "x")
 
 #define LDOP(name, insn, r) \
-static uint64_t name(void *p, uint64_t operand) { \
+static EMU uint64_t name(void *p, uint64_t operand) { \
 	uint64_t old; \
 	__asm__ volatile(ARCH insn " %" r "1, %" r "0, [%2]" \
 	    : "=&r"(old) : "r"(operand), "r"(p) : "memory"); \
@@ -145,7 +151,7 @@ ldop_ref(unsigned op, unsigned size, uint64_t old, uint64_t v)
 	}
 }
 
-static void
+static EMU void
 caspal_x(uint64_t *p, uint64_t e0, uint64_t e1, uint64_t n0, uint64_t n1, uint64_t *o0, uint64_t *o1)
 {
 	register uint64_t s0 __asm__("x4") = e0, s1 __asm__("x5") = e1;
@@ -156,7 +162,7 @@ caspal_x(uint64_t *p, uint64_t e0, uint64_t e1, uint64_t n0, uint64_t n1, uint64
 	*o1 = s1;
 }
 
-static void
+static EMU void
 casp_w(uint32_t *p, uint32_t e0, uint32_t e1, uint32_t n0, uint32_t n1, uint32_t *o0, uint32_t *o1)
 {
 	register uint64_t s0 __asm__("x4") = e0, s1 __asm__("x5") = e1;
@@ -168,7 +174,7 @@ casp_w(uint32_t *p, uint32_t e0, uint32_t e1, uint32_t n0, uint32_t n1, uint32_t
 }
 
 #define LOAD(name, insn, r, off) \
-static uint64_t name(const void *p) { \
+static EMU uint64_t name(const void *p) { \
 	uint64_t v; \
 	__asm__ volatile(ARCH insn " %" r "0, [%1" off "]" : "=r"(v) : "r"(p) : "memory"); \
 	return v; }
@@ -182,13 +188,13 @@ LOAD(ldapursh_w_m2, "ldapursh", "w", ", #-2")
 LOAD(ldapursw_p8, "ldapursw", "x", ", #8")
 LOAD(ldlar_x, "ldlar", "x", "")
 
-static void
+static EMU void
 stlur_w_p4(void *p, uint64_t v)
 {
 	__asm__ volatile(ARCH "stlur %w0, [%1, #4]" : : "r"(v), "r"(p) : "memory");
 }
 
-static void
+static EMU void
 stllrh(void *p, uint64_t v)
 {
 	__asm__ volatile(ARCH "stllrh %w0, [%1]" : : "r"(v), "r"(p) : "memory");
@@ -196,7 +202,7 @@ stllrh(void *p, uint64_t v)
 
 /* flags: NZCV in bits 31..28 */
 #define FLAGOP(name, insn) \
-static uint64_t name(uint64_t nzcv, uint64_t x) { \
+static EMU uint64_t name(uint64_t nzcv, uint64_t x) { \
 	uint64_t out; \
 	__asm__ volatile(ARCH "msr nzcv, %1\n\t" insn "\n\tmrs %0, nzcv" \
 	    : "=r"(out) : "r"(nzcv), "r"(x) : "cc"); \
@@ -239,7 +245,7 @@ flag_ref(int which, uint64_t f, uint64_t x)
 }
 
 /* PAuth: nothing is signed on this CPU, so these must leave values alone */
-static uint64_t
+static EMU uint64_t
 pac_roundtrip(uint64_t ptr, uint64_t mod)
 {
 	__asm__ volatile(ARCH "pacia %0, %1\n\tautia %0, %1\n\tpacda %0, %1\n\tautda %0, %1\n\txpaci %0"
@@ -247,7 +253,7 @@ pac_roundtrip(uint64_t ptr, uint64_t mod)
 	return ptr;
 }
 
-static uint64_t
+static EMU uint64_t
 pacga_of(uint64_t a, uint64_t b)
 {
 	uint64_t d;
@@ -255,7 +261,7 @@ pacga_of(uint64_t a, uint64_t b)
 	return d;
 }
 
-static uint64_t
+static EMU uint64_t
 ldraa_at(const uint64_t *p)
 {
 	uint64_t v;
@@ -263,7 +269,7 @@ ldraa_at(const uint64_t *p)
 	return v;
 }
 
-static int
+static EMU int
 branch_auth(void)
 {
 	uint64_t a = 0, b = 0, c = 0;
@@ -275,11 +281,13 @@ branch_auth(void)
 	return (int)(a + b + c);
 }
 
-static void
+static EMU void
 misc_pstate(void)
 {
 	uint64_t dit;
-	__asm__ volatile(ARCH "msr dit, #1\n\tmrs %0, dit\n\tmsr dit, #0\n\tsb\n\tmsr ssbs, #0" : "=r"(dit) : : "memory");
+	/* msr dit, #1 / mrs DIT / msr dit, #0 by encoding: not every assembler knows the name */
+	__asm__ volatile(ARCH ".inst 0xd503415f\n\tmrs %0, s3_3_c4_c2_5\n\t.inst 0xd503405f\n\tsb\n\tmsr ssbs, #0"
+	    : "=r"(dit) : : "memory");
 	CHECK(dit == 0, "MRS DIT = %#llx (RAZ esperado)", (unsigned long long)dit);
 }
 
