@@ -87,6 +87,10 @@ def build(canvas=(FB_WIDTH, FB_HEIGHT), dram=(DRAM_BASE, DRAM_SIZE), scale=3):
     # locally administered addresses, not the phone's.
     for name, last in (('wifi0', 1), ('bluetooth0', 2), ('ethernet0', 3)):
         set_prop(chosen, f'mac-address-{name}', bytes((0x02, 0x48, 0x45, 0x52, 0x4f, last)))
+    # An sRGB screen, not the iPhone X's P3: with "P3" WebKit and PosterBoard draw
+    # into 10-bit 'w30r'/'b3a8' surfaces, which CoreAnimation over our OpenGL ES
+    # never shows (Safari's pages and the stock wallpapers black, boot-0317).
+    set_prop(child(root, 'product'), 'artwork-display-gamut', mkadt.cstr('sRGB'))
     cpus = child(root, 'cpus')
     cpu0 = child(cpus, 'cpu0')
     # S-Boot starts on the Cortex-A53 "Apollo" cluster: MPIDR 0x100..0x103
