@@ -9,7 +9,7 @@ name: ios-tools
 on:
   workflow_dispatch:
   push:
-    branches: [herolte]
+    branches: [herolte, v80emu-test]
     paths:
       - "tools/ios/**"
       - ".github/workflows/ios-tools.yml"
