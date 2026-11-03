@@ -1169,7 +1169,7 @@ new file mode 100644
 +#else
 +#include <vm/vm_shared_region.h>        /* xnu-8796 */
 +#endif
-+#include <libkern/libkern.h>
++#include <string.h>                     /* osfmk/libsa: memcpy, bzero */
 +
 +extern int task_pid(task_t task);
 +
