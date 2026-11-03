@@ -435,6 +435,40 @@ remove_ls_db_once(void)
 }
 
 /*
+ * MobileGestalt keeps its answers in a cache that outlives a change of the device tree: with /product
+ * artwork-display-gamut "sRGB" (mkadt_herolte.py) WebCore::screenSupportsExtendedColor still had the iPhone X's P3
+ * answer (its key Aixt/MEN2O2B7f+8m4TxUA), and the GPU process drew Safari's pages into 10-bit surfaces nothing shows
+ * (boot-0317s2). Once (DROP_DIR mgcache.gone marks it), the cache goes: MobileGestalt answers anew, from the NEXT boot on.
+ */
+#define MG_CACHE_GONE DROP_DIR "mgcache.gone"
+
+static void
+remove_mg_cache_once(void)
+{
+   const char *groups = "/private/var/containers/Shared/SystemGroup";
+   int removed = 0;
+   if (access(MG_CACHE_GONE, F_OK) == 0)
+      return;
+   close(open(MG_CACHE_GONE, O_WRONLY | O_CREAT, 0644));
+   DIR *d = opendir(groups);
+   struct dirent *e;
+   while (d && (e = readdir(d))) {
+      char path[1024];
+      if (e->d_name[0] == '.')
+         continue;
+      snprintf(path, sizeof(path), "%s/%s/Library/Caches/com.apple.MobileGestalt.plist", groups, e->d_name);
+      if (access(path, F_OK) == 0) {
+         int gone = unlink(path);
+         herodrm_log("hero-run: MobileGestalt cache %s: removed (%d)", path, gone);
+         removed += gone == 0;
+      }
+   }
+   if (d)
+      closedir(d);
+   herodrm_log("hero-run: MobileGestalt cache: %d removed; the NEXT boot answers anew", removed);
+}
+
+/*
  * BTAudioHALPlugin keeps asking the bluetoothd that heronoexec refuses, over XPC: on the S9 port that was most of
  * launchd's and half of mediaserverd's CPU (idle 460% -> 52% without it). Out of the way, from the next boot on.
  */
@@ -505,6 +539,7 @@ main(void)
    install_audio_plugin();
    reduce_transparency();
    remove_ls_db_once();
+   remove_mg_cache_once();
    wallpapers_for_this_screen();
    migration_restore();
    disable_refused_jobs();
