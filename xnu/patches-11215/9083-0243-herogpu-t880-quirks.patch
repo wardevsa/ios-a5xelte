@@ -1,0 +1,51 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index deae54c..baa9393 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -346,7 +346,8 @@ static bool
+ hg_run(unsigned js, const char *what)
+ {
+ 	uint32_t slot = JS_BASE(js);
+-	if (hg_rd(hg_gpu, slot + 0x60) || hg_rd(hg_gpu, slot + 0x24) & 0xff) {
++	/* JS_STATUS keeps the last fault code; only ACTIVE (0x08) is busy. */
++	if ((hg_rd(hg_gpu, slot + 0x24) & 0xff) == 0x08) {
+ 		printf("HEROLTE GPU: %s: slot %u busy\n", what, js);
+ 	}
+ 	hg_wr(hg_gpu, MMU_IRQ_CLEAR, 0xffffffffu);
+@@ -385,10 +386,14 @@ hg_run(unsigned js, const char *what)
+ 	bool ok = (jirq & (1u << js)) && !(jirq & (1u << (js + 16))) && !mirq && !(girq & 0x81);
+ 	hg_last_js_status = hg_rd(hg_gpu, slot + 0x24);
+ 	if (!ok || !hg_run_quiet) {
+-		printf("HEROLTE GPU: %s: irq=%#x mmu=%#x gpu=%#x js_status=%#x as_fault=%#x@%#x "
+-		    "exception=%#x fault=%#x:%#x gpu_fault=%#x@%#x\n", what, jirq, mirq, girq,
+-		    hg_rd(hg_gpu, slot + 0x24), hg_rd(hg_gpu, AS0 + 0x1c), hg_rd(hg_gpu, AS0 + 0x20),
+-		    hdr[0], hdr[3], hdr[2],
++		/* A client's chain is not in hg_mem: its header fields mean nothing. */
++		bool own = hg_job_cpu || hg_job_va == HG_TEST_VA;
++		printf("HEROLTE GPU: %s: irq=%#x mmu=%#x gpu=%#x js_status=%#x head=%#x%08x "
++		    "as_fault=%#x@%#x exception=%#x fault=%#x:%#x gpu_fault=%#x@%#x\n", what,
++		    jirq, mirq, girq, hg_rd(hg_gpu, slot + 0x24),
++		    hg_rd(hg_gpu, slot + 0x04), hg_rd(hg_gpu, slot + 0x00),
++		    hg_rd(hg_gpu, AS0 + 0x1c), hg_rd(hg_gpu, AS0 + 0x20),
++		    own ? hdr[0] : 0, own ? hdr[3] : 0, own ? hdr[2] : 0,
+ 		    hg_rd(hg_gpu, GPU_FAULTSTATUS), hg_rd(hg_gpu, GPU_FAULTADDR_LO));
+ 	}
+ 	hg_wr(hg_gpu, JOB_IRQ_CLEAR, 0xffffffffu);
+@@ -1050,6 +1055,17 @@ hg_bringup(void)
+ 		hg_cores_off();
+ 		return false;
+ 	}
++	/*
++	 * Linux panfrost's quirks for a T880 r2p0 (panfrost_gpu_init_quirks):
++	 * the load/store unit must accept typed attribute descriptors, or
++	 * every Mesa vertex job stops with DATA_INVALID_FAULT (0x58); the
++	 * tiler clock gate override (T76X_3953); the job throttle limit.
++	 */
++	hg_wr(hg_gpu, 0xf04, hg_rd(hg_gpu, 0xf04) | (1u << 16));       /* SC_LS_ALLOW_ATTR_TYPES */
++	hg_wr(hg_gpu, 0xf08, hg_rd(hg_gpu, 0xf08) | 1u);                /* TC_CLOCK_GATE_OVERRIDE */
++	hg_wr(hg_gpu, 0xf00, 0x3fu << 3);                               /* JM_JOB_THROTTLE_LIMIT */
++	printf("HEROLTE GPU: config jm=%#x shader=%#x tiler=%#x l2_mmu=%#x\n",
++	    hg_rd(hg_gpu, 0xf00), hg_rd(hg_gpu, 0xf04), hg_rd(hg_gpu, 0xf08), hg_rd(hg_gpu, 0xf0c));
+ 
+ 	/* Page tables: test pages and the panel, then the scratch block. */
+ 	hg_tables(true, NULL, 0);

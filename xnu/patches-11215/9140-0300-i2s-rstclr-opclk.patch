@@ -1,0 +1,36 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 6bed415..a854c6c 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2421,13 +2421,20 @@ ha_tone(void)
+ 	ok = ha_amp_write(0x3a, 0xf8) && ok;
+ 	printf("HEROLTE AUDIO: amplifier %s\n", ok ? "answered" : "DID NOT ANSWER");
+ 	ha_step("I2S");
++	hg_wr(i2s, 0x00, 1u << 31);             /* CON_RSTCLR: the block out of reset, Linux's QUIRK_NEED_RSTCLR. Until then a write stalls */
++	printf("HEROLTE AUDIO: i2s con %#x\n", hg_rd(i2s, 0));
++	ha_step("I2S flush");
+ 	hg_wr(i2s, 0x08, 1u << 15);             /* FIC_TXFLUSH */
+ 	delay(10);
+ 	hg_wr(i2s, 0x08, 0);
+ 	ha_step("I2S mode");
+-	hg_wr(i2s, 0x04, 1u << 12);             /* MOD (Exynos5430 layout): slave, 16 bits, TX only */
++	/* MOD (Exynos5430 layout), as lucky_arizona sets it: OPCLK from PCLK, CDCLK in, then slave; 16 bits, TX only */
++	hg_wr(i2s, 0x04, (3u << 30) | (1u << 22));
++	printf("HEROLTE AUDIO: i2s mod %#x\n", hg_rd(i2s, 4));
++	ha_step("I2S slave");
++	hg_wr(i2s, 0x04, (3u << 30) | (1u << 22) | (1u << 12));
+ 	ha_step("I2S active");
+-	hg_wr(i2s, 0x00, 1u);                   /* CON_ACTIVE */
++	hg_wr(i2s, 0x00, (1u << 31) | 1u);      /* CON_ACTIVE */
+ 	printf("HEROLTE AUDIO: i2s con %#x mod %#x fic %#x\n", hg_rd(i2s, 0), hg_rd(i2s, 4), hg_rd(i2s, 8));
+ 	ha_step("I2S samples");
+ 	/* A table of one 440 Hz period at 48 kHz (109 samples, close enough), low level. */
+@@ -2454,7 +2461,7 @@ ha_tone(void)
+ 		sent++;
+ 	}
+ 	printf("HEROLTE AUDIO: tone: %u frames sent, %u waits, i2s con %#x, level %#x\n", sent, stuck, hg_rd(i2s, 0), hg_rd(i2s, 8));
+-	hg_wr(i2s, 0x00, 0);
++	hg_wr(i2s, 0x00, 1u << 31);
+ 	hg_wr(ha_wdt, 0, 0);
+ }
+ 

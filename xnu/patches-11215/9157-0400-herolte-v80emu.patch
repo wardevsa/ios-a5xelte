@@ -1,0 +1,1489 @@
+diff --git a/bsd/conf/files b/bsd/conf/files
+index 9328224..dad6eb3 100644
+--- a/bsd/conf/files
++++ b/bsd/conf/files
+@@ -488,6 +488,7 @@ bsd/kern/kern_sig.c			standard
+ bsd/kern/kern_subr.c			standard
+ bsd/kern/kern_synch.c			standard
+ bsd/kern/kern_sysctl.c			standard
++bsd/kern/kern_herolte_v80emu.c		standard
+ bsd/kern/kern_newsysctl.c		standard
+ bsd/kern/kern_memorystatus.c	optional config_memorystatus
+ bsd/kern/kern_memorystatus_freeze.c	optional config_memorystatus
+diff --git a/bsd/kern/kern_herolte_v80emu.c b/bsd/kern/kern_herolte_v80emu.c
+new file mode 100644
+index 0000000..0162dd4
+--- /dev/null
++++ b/bsd/kern/kern_herolte_v80emu.c
+@@ -0,0 +1,51 @@
++/*
++ * HEROLTE: sysctl kern.v80emu - trap statistics of the ARMv8.1+ userland
++ * emulation (osfmk/arm64/herolte_v80emu.c). Read-only for everyone; writing
++ * any value as root reads and resets the counters in one step.
++ *
++ *   sysctl -b kern.v80emu > /var/tmp/v80emu.bin
++ *   (on the host) python v80stats.py v80emu.bin --cache <dyld cache dir>
++ *
++ * The binary layout is described in osfmk/arm64/herolte_v80emu.h; this file
++ * only declares the export function so that it needs no osfmk header.
++ */
++#include <stdbool.h>
++#include <sys/param.h>
++#include <sys/systm.h>
++#include <sys/sysctl.h>
++#include <sys/kauth.h>
++#include <kern/kalloc.h>
++
++extern size_t herolte_v80emu_export(void *buf, size_t buflen, bool reset);
++
++static int
++sysctl_herolte_v80emu SYSCTL_HANDLER_ARGS
++{
++#pragma unused(oidp, arg1, arg2)
++	const bool reset = req->newptr != USER_ADDR_NULL;
++	size_t len = herolte_v80emu_export(NULL, 0, false);
++	int error;
++
++	if (len == 0) {
++		return ENOENT;          /* not built for this board */
++	}
++	if (reset && !kauth_cred_issuser(kauth_cred_get())) {
++		return EPERM;
++	}
++	if (req->oldptr == USER_ADDR_NULL && !reset) {
++		return SYSCTL_OUT(req, NULL, len);
++	}
++
++	const size_t alloc = len;
++	void *buf = kalloc_data(alloc, Z_WAITOK | Z_ZERO);
++	if (buf == NULL) {
++		return ENOMEM;
++	}
++	len = herolte_v80emu_export(buf, alloc, reset);
++	error = SYSCTL_OUT(req, buf, len);
++	kfree_data(buf, alloc);
++	return error;
++}
++
++SYSCTL_PROC(_kern, OID_AUTO, v80emu, CTLTYPE_OPAQUE | CTLFLAG_RW | CTLFLAG_LOCKED | CTLFLAG_ANYBODY,
++    NULL, 0, sysctl_herolte_v80emu, "S", "HEROLTE ARMv8.1+ emulation statistics");
+diff --git a/osfmk/arm64/copyio.c b/osfmk/arm64/copyio.c
+index dc236a3..7c23d43 100644
+--- a/osfmk/arm64/copyio.c
++++ b/osfmk/arm64/copyio.c
+@@ -36,6 +36,7 @@
+ #include <san/kasan.h>
+ #include <arm/pmap.h>
+ #include <arm64/speculation.h>
++#include <arm64/herolte_v80emu.h>
+ 
+ #undef copyin
+ #undef copyout
+@@ -490,3 +491,122 @@ verify_write(const void *source, void *dst, size_t size)
+ 	return rc;
+ }
+ #endif
++
++#if HEROLTE_V80EMU
++/*
++ * HEROLTE: user memory primitives for the ARMv8.1+ emulation
++ * (herolte_v80emu.c). Same validation as copy{in,out}_atomic*: the address
++ * must be a naturally aligned user address of the current map; faults are
++ * resolved by the usual copyio recovery (vm_fault, then EFAULT).
++ */
++extern int _herolte_v80emu_cas8(const char *uaddr, uint64_t expected, uint64_t desired, uint64_t *old);
++extern int _herolte_v80emu_cas16(const char *uaddr, uint64_t expected, uint64_t desired, uint64_t *old);
++extern int _herolte_v80emu_cas32(const char *uaddr, uint64_t expected, uint64_t desired, uint64_t *old);
++extern int _herolte_v80emu_cas64(const char *uaddr, uint64_t expected, uint64_t desired, uint64_t *old);
++extern int _herolte_v80emu_casp32(const char *uaddr, uint64_t e0, uint64_t e1, uint64_t n0, uint64_t n1, uint64_t *old);
++extern int _herolte_v80emu_casp64(const char *uaddr, uint64_t e0, uint64_t e1, uint64_t n0, uint64_t n1, uint64_t *old);
++extern int _herolte_v80emu_ldar8(const char *uaddr, uint64_t *val);
++extern int _herolte_v80emu_ldar16(const char *uaddr, uint64_t *val);
++extern int _herolte_v80emu_ldar32(const char *uaddr, uint64_t *val);
++extern int _herolte_v80emu_ldar64(const char *uaddr, uint64_t *val);
++extern int _herolte_v80emu_stlr8(const char *uaddr, uint64_t val);
++extern int _herolte_v80emu_stlr16(const char *uaddr, uint64_t val);
++extern int _herolte_v80emu_stlr32(const char *uaddr, uint64_t val);
++extern int _herolte_v80emu_stlr64(const char *uaddr, uint64_t val);
++
++static int
++herolte_v80emu_prepare(user_addr_t uaddr, vm_size_t nbytes, user_addr_t *guarded)
++{
++	vm_map_t map = current_thread()->map;
++	int result = copy_validate(map, uaddr, 0, nbytes,
++	    COPYIO_OUT | COPYIO_ATOMIC | COPYIO_VALIDATE_USER_ONLY);
++	if (__improbable(result)) {
++		return result == EXDEV ? EFAULT : result;
++	}
++	*guarded = copy_ensure_address_space_spec(map, uaddr);
++	return 0;
++}
++
++int
++herolte_v80emu_user_cas(uint64_t uaddr, unsigned size, uint64_t expected, uint64_t desired, uint64_t *old)
++{
++	pmap_t pmap = current_thread()->map->pmap;
++	user_addr_t g;
++	int result = herolte_v80emu_prepare((user_addr_t)uaddr, size, &g);
++	if (__improbable(result)) {
++		return result;
++	}
++	user_access_enable(USER_ACCESS_WRITE, pmap);
++	switch (size) {
++	case 1: result = _herolte_v80emu_cas8((const char *)g, expected, desired, old); break;
++	case 2: result = _herolte_v80emu_cas16((const char *)g, expected, desired, old); break;
++	case 4: result = _herolte_v80emu_cas32((const char *)g, expected, desired, old); break;
++	default: result = _herolte_v80emu_cas64((const char *)g, expected, desired, old); break;
++	}
++	user_access_disable(USER_ACCESS_WRITE, pmap);
++	return result;
++}
++
++int
++herolte_v80emu_user_casp(uint64_t uaddr, unsigned esize, uint64_t exp0, uint64_t exp1,
++    uint64_t new0, uint64_t new1, uint64_t *old0, uint64_t *old1)
++{
++	pmap_t pmap = current_thread()->map->pmap;
++	uint64_t old[2] = { 0, 0 };
++	user_addr_t g;
++	int result = herolte_v80emu_prepare((user_addr_t)uaddr, 2 * esize, &g);
++	if (__improbable(result)) {
++		return result;
++	}
++	user_access_enable(USER_ACCESS_WRITE, pmap);
++	if (esize == 8) {
++		result = _herolte_v80emu_casp64((const char *)g, exp0, exp1, new0, new1, old);
++	} else {
++		result = _herolte_v80emu_casp32((const char *)g, exp0, exp1, new0, new1, old);
++	}
++	user_access_disable(USER_ACCESS_WRITE, pmap);
++	*old0 = old[0];
++	*old1 = old[1];
++	return result;
++}
++
++int
++herolte_v80emu_user_load(uint64_t uaddr, unsigned size, uint64_t *val)
++{
++	pmap_t pmap = current_thread()->map->pmap;
++	user_addr_t g;
++	int result = herolte_v80emu_prepare((user_addr_t)uaddr, size, &g);
++	if (__improbable(result)) {
++		return result;
++	}
++	user_access_enable(USER_ACCESS_READ, pmap);
++	switch (size) {
++	case 1: result = _herolte_v80emu_ldar8((const char *)g, val); break;
++	case 2: result = _herolte_v80emu_ldar16((const char *)g, val); break;
++	case 4: result = _herolte_v80emu_ldar32((const char *)g, val); break;
++	default: result = _herolte_v80emu_ldar64((const char *)g, val); break;
++	}
++	user_access_disable(USER_ACCESS_READ, pmap);
++	return result;
++}
++
++int
++herolte_v80emu_user_store(uint64_t uaddr, unsigned size, uint64_t val)
++{
++	pmap_t pmap = current_thread()->map->pmap;
++	user_addr_t g;
++	int result = herolte_v80emu_prepare((user_addr_t)uaddr, size, &g);
++	if (__improbable(result)) {
++		return result;
++	}
++	user_access_enable(USER_ACCESS_WRITE, pmap);
++	switch (size) {
++	case 1: result = _herolte_v80emu_stlr8((const char *)g, val); break;
++	case 2: result = _herolte_v80emu_stlr16((const char *)g, val); break;
++	case 4: result = _herolte_v80emu_stlr32((const char *)g, val); break;
++	default: result = _herolte_v80emu_stlr64((const char *)g, val); break;
++	}
++	user_access_disable(USER_ACCESS_WRITE, pmap);
++	return result;
++}
++#endif /* HEROLTE_V80EMU */
+diff --git a/osfmk/arm64/herolte_v80emu.c b/osfmk/arm64/herolte_v80emu.c
+new file mode 100644
+index 0000000..3ee874c
+--- /dev/null
++++ b/osfmk/arm64/herolte_v80emu.c
+@@ -0,0 +1,287 @@
++/*
++ * HEROLTE: kernel side of the ARMv8.1+ userland emulation.
++ *
++ * handle_uncategorized() (sleh.c) hands every 64-bit EL0 undefined
++ * instruction to herolte_v80emu_handle(). The decoder/semantics live in
++ * herolte_v80emu_core.h (host-tested against unicorn, v80emu/test/); this
++ * file supplies the register file from the saved state, the user memory
++ * primitives (copyio.c, machine_routines_asm.s), fault delivery and the trap
++ * statistics behind sysctl kern.v80emu.
++ */
++#include <arm64/herolte_v80emu.h>
++
++#if HEROLTE_V80EMU
++
++#include <arm64/herolte_v80emu_core.h>
++#include <arm64/proc_reg.h>
++#include <arm/thread.h>
++#include <kern/exception.h>
++#include <kern/misc_protos.h>
++#include <kern/startup.h>
++#include <kern/task.h>
++#include <kern/thread.h>
++#include <mach/exception_types.h>
++#include <mach/arm/exception.h>
++#include <mach/arm/thread_status.h>
++#include <mach/kern_return.h>
++#include <os/atomic_private.h>
++#if __has_include(<vm/vm_shared_region_xnu.h>)
++#include <vm/vm_shared_region_xnu.h>    /* xnu-11215 */
++#else
++#include <vm/vm_shared_region.h>        /* xnu-8796 */
++#endif
++#include <string.h>                     /* osfmk/libsa: memcpy, bzero */
++
++extern int task_pid(task_t task);
++
++TUNABLE(uint32_t, herolte_v80emu_flags, "v80emu",
++    V80EMU_FLAG_ENABLE | V80EMU_FLAG_LOG_FIRST);
++
++static const char *const v80emu_class_names[V80EMU_C_COUNT] = V80EMU_CLASS_NAMES;
++
++struct v80emu_site {
++	uint64_t pc;            /* 0 = free; claimed with cmpxchg */
++	uint64_t count;
++	uint32_t insn;
++	uint32_t cls;
++	int32_t  pid;
++};
++
++static struct v80emu_site v80emu_sites[V80EMU_NSITES];
++static struct v80emu_export_class v80emu_classes[V80EMU_C_COUNT];
++static uint64_t v80emu_dropped;
++static uint32_t v80emu_logged[V80EMU_C_COUNT];
++
++static void
++v80emu_record(uint64_t pc, uint32_t insn, enum v80emu_class cls)
++{
++	uint32_t h = (uint32_t)((pc >> 2) * 0x9E3779B1u);
++
++	for (unsigned probe = 0; probe < 32; probe++) {
++		struct v80emu_site *s = &v80emu_sites[(h + probe) & (V80EMU_NSITES - 1)];
++		uint64_t cur = os_atomic_load(&s->pc, relaxed);
++
++		if (cur == 0) {
++			if (os_atomic_cmpxchg(&s->pc, 0, pc, relaxed)) {
++				s->insn = insn;
++				s->cls = cls;
++				s->pid = task_pid(current_task());
++				os_atomic_inc(&s->count, relaxed);
++				return;
++			}
++			cur = os_atomic_load(&s->pc, relaxed);
++		}
++		if (cur == pc) {
++			os_atomic_inc(&s->count, relaxed);
++			return;
++		}
++	}
++	os_atomic_inc(&v80emu_dropped, relaxed);
++}
++
++/* ---- user memory callbacks for the core ---- */
++
++static int
++v80emu_cb_cas(void *ctx __unused, uint64_t addr, unsigned size, uint64_t expected,
++    uint64_t desired, uint64_t *old)
++{
++	return herolte_v80emu_user_cas(addr, size, expected, desired, old) ? V80EMU_MEM_FAULT : V80EMU_MEM_OK;
++}
++
++static int
++v80emu_cb_casp(void *ctx __unused, uint64_t addr, unsigned esize, uint64_t e0, uint64_t e1,
++    uint64_t n0, uint64_t n1, uint64_t *o0, uint64_t *o1)
++{
++	return herolte_v80emu_user_casp(addr, esize, e0, e1, n0, n1, o0, o1) ? V80EMU_MEM_FAULT : V80EMU_MEM_OK;
++}
++
++static int
++v80emu_cb_load(void *ctx __unused, uint64_t addr, unsigned size, uint64_t *val)
++{
++	return herolte_v80emu_user_load(addr, size, val) ? V80EMU_MEM_FAULT : V80EMU_MEM_OK;
++}
++
++static int
++v80emu_cb_store(void *ctx __unused, uint64_t addr, unsigned size, uint64_t val)
++{
++	return herolte_v80emu_user_store(addr, size, val) ? V80EMU_MEM_FAULT : V80EMU_MEM_OK;
++}
++
++static int
++v80emu_cb_load_plain(void *ctx __unused, uint64_t addr, unsigned size, uint64_t *val)
++{
++	*val = 0;
++	return copyin((user_addr_t)addr, val, size) ? V80EMU_MEM_FAULT : V80EMU_MEM_OK;
++}
++
++static uint64_t
++v80emu_cb_counter(void *ctx __unused, bool physical)
++{
++	__builtin_arm_isb(ISB_SY);
++	return physical ? __builtin_arm_rsr64("CNTPCT_EL0") : __builtin_arm_rsr64("CNTVCT_EL0");
++}
++
++static const struct v80emu_mem v80emu_user_mem = {
++	.ctx = NULL,
++	.cas = v80emu_cb_cas,
++	.casp = v80emu_cb_casp,
++	.load = v80emu_cb_load,
++	.store = v80emu_cb_store,
++	.load_plain = v80emu_cb_load_plain,
++	.read_counter = v80emu_cb_counter,
++};
++
++/* ---- trap entry ---- */
++
++bool
++herolte_v80emu_handle(arm_saved_state_t *state, uint32_t instr)
++{
++	const uint32_t flags = herolte_v80emu_flags;
++	const uint64_t pc = get_saved_state_pc(state);
++	struct v80emu_cpu cpu;
++	struct v80emu_info info;
++	enum v80emu_result r;
++
++	if (!PSR64_IS_USER64(get_saved_state_cpsr(state))) {
++		return false;
++	}
++
++	enum v80emu_class cls = v80emu_classify(instr);
++	os_atomic_inc(&v80emu_classes[cls].trapped, relaxed);
++	v80emu_record(pc, instr, cls);
++
++	if (cls == V80EMU_C_NONE || !(flags & V80EMU_FLAG_ENABLE)) {
++		os_atomic_inc(&v80emu_classes[cls].unhandled, relaxed);
++		if (flags & V80EMU_FLAG_LOG_SIGILL) {
++			printf("HEROLTE v80emu: SIGILL pid=%d pc=0x%llx insn=0x%08x\n",
++			    task_pid(current_task()), pc, instr);
++		}
++		return false;
++	}
++
++	for (unsigned n = 0; n < 31; n++) {
++		cpu.x[n] = get_saved_state_reg(state, n);
++	}
++	cpu.sp = get_saved_state_sp(state);
++	cpu.pc = pc;
++	cpu.nzcv = (uint32_t)get_saved_state_cpsr(state) & V80EMU_NZCV;
++
++	r = v80emu_step(&cpu, instr, &v80emu_user_mem,
++	    (flags & V80EMU_FLAG_SYSREG) ? V80EMU_F_SYSREG_RAZWI : 0, &info);
++
++	if ((flags & V80EMU_FLAG_LOG_FIRST) && os_atomic_inc_orig(&v80emu_logged[cls], relaxed) == 0) {
++		printf("HEROLTE v80emu: first %s pid=%d pc=0x%llx insn=0x%08x -> %d\n",
++		    v80emu_class_names[cls], task_pid(current_task()), pc, instr, r);
++	}
++
++	switch (r) {
++	case V80EMU_OK:
++		for (unsigned n = 0; n < 31; n++) {
++			set_saved_state_reg(state, n, (register_t)cpu.x[n]);
++		}
++		set_saved_state_sp(state, cpu.sp);
++		set_saved_state_cpsr(state, (get_saved_state_cpsr(state) & ~V80EMU_NZCV) | cpu.nzcv);
++		set_saved_state_pc(state, cpu.pc);
++		os_atomic_inc(&v80emu_classes[cls].emulated, relaxed);
++		return true;
++
++	case V80EMU_FAULT:
++	case V80EMU_ALIGN: {
++		/* what the access would have raised on a CPU that has the instruction */
++		mach_exception_data_type_t codes[2] = {
++			r == V80EMU_ALIGN ? EXC_ARM_DA_ALIGN : KERN_INVALID_ADDRESS,
++			(mach_exception_data_type_t)info.addr,
++		};
++		os_atomic_inc(&v80emu_classes[cls].faulted, relaxed);
++		/* sendsig() takes si_addr from the saved FAR, not from codes[1] (v80stress on the S7) */
++		set_saved_state_far(state, info.addr);
++		exception_triage(EXC_BAD_ACCESS, codes, 2);
++		__builtin_unreachable();
++	}
++
++	case V80EMU_UNHANDLED:
++	default:
++		os_atomic_inc(&v80emu_classes[cls].unhandled, relaxed);
++		return false;
++	}
++}
++
++/* ---- statistics export (sysctl kern.v80emu) ---- */
++
++size_t
++herolte_v80emu_export(void *buf, size_t buflen, bool reset)
++{
++	struct v80emu_export_header hdr = {
++		.magic = V80EMU_EXPORT_MAGIC,
++		.version = V80EMU_EXPORT_VERSION,
++		.nclasses = V80EMU_C_COUNT,
++		.flags = herolte_v80emu_flags,
++		.sites_dropped = os_atomic_load(&v80emu_dropped, relaxed),
++	};
++	uint32_t used = 0;
++
++	for (unsigned i = 0; i < V80EMU_NSITES; i++) {
++		used += os_atomic_load(&v80emu_sites[i].pc, relaxed) != 0;
++	}
++	hdr.nsites = used;
++
++	const size_t need = sizeof(hdr) + sizeof(v80emu_classes) +
++	    (size_t)used * sizeof(struct v80emu_export_site);
++	if (buf == NULL) {
++		/* sites can be added between the two calls */
++		return need + 64 * sizeof(struct v80emu_export_site);
++	}
++	if (buflen < sizeof(hdr) + sizeof(v80emu_classes)) {
++		return 0;
++	}
++
++	vm_shared_region_t sr = vm_shared_region_get(current_task());
++	if (sr != NULL) {
++		hdr.shared_region_base = sr->sr_base_address;
++		hdr.shared_region_slide = sr->sr_slide;
++		vm_shared_region_deallocate(sr);
++	}
++
++	uint8_t *p = buf;
++	size_t off = sizeof(hdr) + sizeof(v80emu_classes);
++	uint32_t written = 0;
++	memcpy(p + sizeof(hdr), v80emu_classes, sizeof(v80emu_classes));
++	for (unsigned i = 0; i < V80EMU_NSITES && off + sizeof(struct v80emu_export_site) <= buflen; i++) {
++		struct v80emu_site *s = &v80emu_sites[i];
++		struct v80emu_export_site e = {
++			.pc = os_atomic_load(&s->pc, relaxed),
++		};
++		if (e.pc == 0) {
++			continue;
++		}
++		e.count = os_atomic_load(&s->count, relaxed);
++		e.insn = s->insn;
++		e.cls = s->cls;
++		e.pid = s->pid;
++		memcpy(p + off, &e, sizeof(e));
++		off += sizeof(e);
++		written++;
++	}
++	hdr.nsites = written;
++	memcpy(p, &hdr, sizeof(hdr));
++
++	if (reset) {
++		for (unsigned i = 0; i < V80EMU_NSITES; i++) {
++			os_atomic_store(&v80emu_sites[i].count, 0, relaxed);
++			os_atomic_store(&v80emu_sites[i].pc, 0, relaxed);
++		}
++		bzero(v80emu_classes, sizeof(v80emu_classes));
++		os_atomic_store(&v80emu_dropped, 0, relaxed);
++	}
++	return off;
++}
++
++#else /* !HEROLTE_V80EMU */
++
++size_t
++herolte_v80emu_export(void *buf __unused, size_t buflen __unused, bool reset __unused)
++{
++	return 0;
++}
++
++#endif /* HEROLTE_V80EMU */
+diff --git a/osfmk/arm64/herolte_v80emu.h b/osfmk/arm64/herolte_v80emu.h
+new file mode 100644
+index 0000000..9f6aac6
+--- /dev/null
++++ b/osfmk/arm64/herolte_v80emu.h
+@@ -0,0 +1,96 @@
++/*
++ * HEROLTE: ARMv8.1+ userland emulation on ARMv8.0 (see herolte_v80emu_core.h).
++ *
++ * sleh.c calls herolte_v80emu_handle() from handle_uncategorized() for 64-bit
++ * EL0 undefined-instruction exceptions. Statistics are exported through the
++ * sysctl kern.v80emu (bsd/kern/kern_herolte_v80emu.c), format below.
++ *
++ * Boot-arg v80emu=<bits> (default 0x5):
++ *   0x1  emulate (otherwise only count and raise SIGILL as before)
++ *   0x2  unknown EL0 MRS/MSR (Apple implementation-defined registers) read
++ *        as zero / ignore writes instead of SIGILL
++ *   0x4  log the first trap of every class
++ *   0x8  log every unhandled (SIGILL) undefined instruction from EL0
++ */
++#ifndef _ARM64_HEROLTE_V80EMU_H_
++#define _ARM64_HEROLTE_V80EMU_H_
++
++#include <stdint.h>
++#include <stdbool.h>
++#include <stddef.h>
++
++#if defined(ARM64_BOARD_CONFIG_HEROLTE) || defined(ARM64_BOARD_CONFIG_A5XELTE)
++#define HEROLTE_V80EMU 1
++#else
++#define HEROLTE_V80EMU 0
++#endif
++
++#define V80EMU_FLAG_ENABLE      0x1u
++#define V80EMU_FLAG_SYSREG      0x2u
++#define V80EMU_FLAG_LOG_FIRST   0x4u
++#define V80EMU_FLAG_LOG_SIGILL  0x8u
++
++/*
++ * kern.v80emu export (little endian):
++ *   struct v80emu_export_header
++ *   struct v80emu_export_class[nclasses]
++ *   struct v80emu_export_site[nsites]       (only used slots)
++ */
++#define V80EMU_EXPORT_MAGIC     0x45303856u     /* "V80E" */
++#define V80EMU_EXPORT_VERSION   1u
++#define V80EMU_NSITES           4096u
++
++struct v80emu_export_header {
++	uint32_t magic;
++	uint32_t version;
++	uint32_t nclasses;
++	uint32_t nsites;
++	uint32_t flags;
++	uint32_t reserved;
++	uint64_t shared_region_base;    /* of the reading task */
++	uint64_t shared_region_slide;
++	uint64_t sites_dropped;         /* table full */
++};
++
++struct v80emu_export_class {
++	uint64_t trapped;
++	uint64_t emulated;
++	uint64_t faulted;               /* SIGSEGV/SIGBUS delivered */
++	uint64_t unhandled;             /* SIGILL delivered */
++};
++
++struct v80emu_export_site {
++	uint64_t pc;                    /* raw user PC of the first task that hit it */
++	uint64_t count;
++	uint32_t insn;
++	uint32_t cls;
++	int32_t  pid;                   /* first task that hit it */
++	uint32_t reserved;
++};
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#ifdef MACH_KERNEL_PRIVATE
++struct arm_saved_state;
++/* true if the instruction was emulated (or a fault was delivered); false: raise SIGILL */
++extern bool herolte_v80emu_handle(struct arm_saved_state *state, uint32_t instr);
++#endif
++
++/* bytes needed (buf == NULL) or written; reset clears counters after copying */
++extern size_t herolte_v80emu_export(void *buf, size_t buflen, bool reset);
++
++/* copyio.c: single-copy atomic user memory accesses, 0 or EFAULT/EINVAL */
++extern int herolte_v80emu_user_cas(uint64_t uaddr, unsigned size, uint64_t expected,
++    uint64_t desired, uint64_t *old);
++extern int herolte_v80emu_user_casp(uint64_t uaddr, unsigned esize, uint64_t exp0, uint64_t exp1,
++    uint64_t new0, uint64_t new1, uint64_t *old0, uint64_t *old1);
++extern int herolte_v80emu_user_load(uint64_t uaddr, unsigned size, uint64_t *val);
++extern int herolte_v80emu_user_store(uint64_t uaddr, unsigned size, uint64_t val);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* _ARM64_HEROLTE_V80EMU_H_ */
+diff --git a/osfmk/arm64/herolte_v80emu_core.h b/osfmk/arm64/herolte_v80emu_core.h
+new file mode 100644
+index 0000000..001d71e
+--- /dev/null
++++ b/osfmk/arm64/herolte_v80emu_core.h
+@@ -0,0 +1,540 @@
++/*
++ * HEROLTE (Galaxy S7, Exynos 8890 = Cortex-A53 + Mongoose M1, ARMv8.0):
++ * software emulation of the ARMv8.1+ instructions that the iOS 17/18 arm64e
++ * userland executes and this CPU does not implement.
++ *
++ *   FEAT_LSE      CAS*, CASP*, LD<op>*, ST<op>*, SWP*        (atomics)
++ *   FEAT_LRCPC    LDAPR*
++ *   FEAT_LRCPC2   LDAPUR*, LDAPURS*, STLUR*
++ *   FEAT_LOR      LDLAR*, STLLR*
++ *   FEAT_PAuth    PACxx, AUTxx, XPACx (register forms), PACGA, BRAA/BLRAA/RETAA...,
++ *                 LDRAA/LDRAB   -> as if pointers were never signed
++ *   FEAT_FlagM/2  CFINV, RMIF, SETF8, SETF16, AXFLAG, XAFLAG
++ *   FEAT_DIT/SSBS/MTE  MSR #imm, MRS/MSR (register) of DIT, SSBS, TCO -> RAZ/WI
++ *   FEAT_SB, FEAT_DPB/DPB2  SB, DC CVAP, DC CVADP -> no-op
++ *
++ * Instructions in the HINT space (PACIBSP, AUTIBSP, XPACLRI, BTI...) already
++ * execute as NOP on ARMv8.0 and never trap. FJCVTZS is handled by
++ * sweet_fjcvtzs.h (Bergamota 0141).
++ *
++ * Not emulated (counted by the glue so that they show up if hit): FP16,
++ * DotProd, FCMA, SHA512/SHA3, I8MM/BF16. In the iOS 18.6.2 cache these sit in
++ * Accelerate/VideoToolbox/corecrypto paths that are selected from the commpage
++ * CPU capabilities.
++ *
++ * This header is plain C with no kernel dependency so that the decoder and the
++ * semantics can be tested on the host against a real ARMv8.x implementation
++ * (v80emu/test/). The caller provides the register file and single-copy atomic
++ * user memory primitives; the core never touches memory directly.
++ *
++ * Memory ordering: every emulated access is performed with the strongest
++ * ordering (LDAXR/STLXR surrounded by DMB ISH in the kernel backend), which is
++ * a valid implementation of the relaxed, acquire, release and acq_rel forms.
++ */
++#ifndef _ARM64_HEROLTE_V80EMU_CORE_H_
++#define _ARM64_HEROLTE_V80EMU_CORE_H_
++
++#include <stdint.h>
++#include <stdbool.h>
++#include <stddef.h>
++
++/* Instruction classes, also the index of the per-class trap counters */
++enum v80emu_class {
++	V80EMU_C_NONE = 0,
++	V80EMU_C_CAS,
++	V80EMU_C_CASP,
++	V80EMU_C_LDOP,
++	V80EMU_C_SWP,
++	V80EMU_C_LDAPR,
++	V80EMU_C_RCPC2,
++	V80EMU_C_LOR,
++	V80EMU_C_PAC,
++	V80EMU_C_PACGA,
++	V80EMU_C_BRAUTH,
++	V80EMU_C_LDRAA,
++	V80EMU_C_FLAGM,
++	V80EMU_C_PSTATE,
++	V80EMU_C_BARRIER,
++	V80EMU_C_SYSREG,
++	V80EMU_C_COUNT
++};
++
++#define V80EMU_CLASS_NAMES { \
++	"none", "cas", "casp", "ldop", "swp", "ldapr", "rcpc2", "lor", "pac", \
++	"pacga", "brauth", "ldraa", "flagm", "pstate", "barrier", "sysreg" }
++
++enum v80emu_result {
++	V80EMU_UNHANDLED = 0,   /* not ours (or reserved encoding): raise SIGILL as usual */
++	V80EMU_OK,              /* registers and PC updated */
++	V80EMU_FAULT,           /* translation/permission fault at info->addr: SIGSEGV/SIGBUS */
++	V80EMU_ALIGN,           /* alignment fault at info->addr: SIGBUS */
++};
++
++/* return values of the memory callbacks */
++#define V80EMU_MEM_OK           0
++#define V80EMU_MEM_FAULT        1
++
++/* PSTATE.{N,Z,C,V} in their CPSR positions */
++#define V80EMU_N                (1u << 31)
++#define V80EMU_Z                (1u << 30)
++#define V80EMU_C                (1u << 29)
++#define V80EMU_V                (1u << 28)
++#define V80EMU_NZCV             (V80EMU_N | V80EMU_Z | V80EMU_C | V80EMU_V)
++
++/* v80emu_step() flags */
++#define V80EMU_F_SYSREG_RAZWI   0x1u    /* unknown EL0 MRS reads 0, MSR is ignored */
++
++struct v80emu_cpu {
++	uint64_t x[31];
++	uint64_t sp;
++	uint64_t pc;
++	uint32_t nzcv;          /* only V80EMU_NZCV bits are read or written */
++};
++
++struct v80emu_mem {
++	void *ctx;
++	/* size 1, 2, 4 or 8; addr is naturally aligned; *old gets the zero-extended value */
++	int (*cas)(void *ctx, uint64_t addr, unsigned size, uint64_t expected,
++	    uint64_t desired, uint64_t *old);
++	/* esize 4 or 8; addr aligned to 2*esize; element 0 at the lower address */
++	int (*casp)(void *ctx, uint64_t addr, unsigned esize, uint64_t exp0, uint64_t exp1,
++	    uint64_t new0, uint64_t new1, uint64_t *old0, uint64_t *old1);
++	/* single-copy atomic, naturally aligned */
++	int (*load)(void *ctx, uint64_t addr, unsigned size, uint64_t *val);
++	int (*store)(void *ctx, uint64_t addr, unsigned size, uint64_t val);
++	/* ordinary 8-byte load, any alignment (LDRAA/LDRAB) */
++	int (*load_plain)(void *ctx, uint64_t addr, unsigned size, uint64_t *val);
++	/* optional: CNTVCT_EL0 / CNTPCT_EL0 for CNTVCTSS_EL0 / CNTPCTSS_EL0 */
++	uint64_t (*read_counter)(void *ctx, bool physical);
++};
++
++struct v80emu_info {
++	enum v80emu_class cls;
++	uint64_t addr;          /* faulting address for V80EMU_FAULT / V80EMU_ALIGN */
++};
++
++/* ------------------------------------------------------------------------- */
++
++static inline uint64_t
++v80emu_mask(unsigned size)
++{
++	return size >= 8 ? ~0ULL : ((1ULL << (8 * size)) - 1);
++}
++
++static inline int64_t
++v80emu_sext(uint64_t v, unsigned bits)
++{
++	if (bits >= 64) {
++		return (int64_t)v;
++	}
++	const uint64_t m = 1ULL << (bits - 1);
++	v &= (1ULL << bits) - 1;
++	return (int64_t)((v ^ m) - m);
++}
++
++/* Xn for data registers: 31 is XZR */
++static inline uint64_t
++v80emu_xr(const struct v80emu_cpu *cpu, unsigned n)
++{
++	return n == 31 ? 0 : cpu->x[n];
++}
++
++/* Xn|SP for base registers: 31 is SP */
++static inline uint64_t
++v80emu_xsp(const struct v80emu_cpu *cpu, unsigned n)
++{
++	return n == 31 ? cpu->sp : cpu->x[n];
++}
++
++static inline void
++v80emu_xw(struct v80emu_cpu *cpu, unsigned n, uint64_t v)
++{
++	if (n != 31) {
++		cpu->x[n] = v;
++	}
++}
++
++static inline void
++v80emu_xspw(struct v80emu_cpu *cpu, unsigned n, uint64_t v)
++{
++	if (n == 31) {
++		cpu->sp = v;
++	} else {
++		cpu->x[n] = v;
++	}
++}
++
++static inline enum v80emu_result
++v80emu_memerr(struct v80emu_info *info, uint64_t addr)
++{
++	info->addr = addr;
++	return V80EMU_FAULT;
++}
++
++static inline uint64_t
++v80emu_ldop_apply(unsigned op, unsigned size, uint64_t old, uint64_t operand)
++{
++	const unsigned bits = 8 * size;
++	const uint64_t m = v80emu_mask(size);
++	uint64_t r;
++
++	old &= m;
++	operand &= m;
++	switch (op) {
++	case 0: r = old + operand; break;                                       /* ADD */
++	case 1: r = old & ~operand; break;                                      /* CLR */
++	case 2: r = old ^ operand; break;                                       /* EOR */
++	case 3: r = old | operand; break;                                       /* SET */
++	case 4: r = v80emu_sext(old, bits) > v80emu_sext(operand, bits) ? old : operand; break; /* SMAX */
++	case 5: r = v80emu_sext(old, bits) < v80emu_sext(operand, bits) ? old : operand; break; /* SMIN */
++	case 6: r = old > operand ? old : operand; break;                       /* UMAX */
++	case 7: r = old < operand ? old : operand; break;                       /* UMIN */
++	default: r = operand; break;                                            /* SWP */
++	}
++	return r & m;
++}
++
++/* splitmix64 finalizer: PACGA only needs a stable per-boot function of (Xn, Xm) */
++static inline uint64_t
++v80emu_pacga(uint64_t n, uint64_t m)
++{
++	uint64_t z = n ^ (m * 0x9E3779B97F4A7C15ULL) ^ 0xD1B54A32D192ED03ULL;
++	z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
++	z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
++	z ^= z >> 31;
++	return z & 0xFFFFFFFF00000000ULL;
++}
++
++/* sysreg operand of MRS/MSR (register): o0:op1:CRn:CRm:op2, bits [19:5] */
++#define V80EMU_SYSREG(op0, op1, crn, crm, op2) \
++	((((op0) - 2u) << 14) | ((op1) << 11) | ((crn) << 7) | ((crm) << 3) | (op2))
++#define V80EMU_SR_DIT           V80EMU_SYSREG(3, 3, 4, 2, 5)
++#define V80EMU_SR_SSBS          V80EMU_SYSREG(3, 3, 4, 2, 6)
++#define V80EMU_SR_TCO           V80EMU_SYSREG(3, 3, 4, 2, 7)
++#define V80EMU_SR_CNTPCTSS      V80EMU_SYSREG(3, 3, 14, 0, 5)
++#define V80EMU_SR_CNTVCTSS      V80EMU_SYSREG(3, 3, 14, 0, 6)
++
++/*
++ * Classify an instruction without executing it (V80EMU_C_NONE if it is not
++ * one of ours). Cheap enough to call before deciding to emulate.
++ */
++static inline enum v80emu_class
++v80emu_classify(uint32_t i)
++{
++	if ((i & 0x3F200C00u) == 0x38200000u) {         /* atomic memory operations */
++		const unsigned o3opc = (i >> 12) & 0xF;
++		if (o3opc < 8) {
++			return V80EMU_C_LDOP;
++		}
++		if (o3opc == 8) {
++			return V80EMU_C_SWP;
++		}
++		if (o3opc == 12 && ((i >> 22) & 3) == 2 && ((i >> 16) & 0x1F) == 31) {
++			return V80EMU_C_LDAPR;
++		}
++		return V80EMU_C_NONE;
++	}
++	if ((i & 0x3FA07C00u) == 0x08A07C00u) {
++		return V80EMU_C_CAS;
++	}
++	if ((i & 0xBFA07C00u) == 0x08207C00u) {
++		return V80EMU_C_CASP;
++	}
++	if ((i & 0x3FBFFC00u) == 0x089F7C00u) {
++		/* LDLAR (L=1) / STLLR (L=0): Rs = Rt2 = 11111, o0 = 0 */
++		return V80EMU_C_LOR;
++	}
++	if ((i & 0x3F200C00u) == 0x19000000u) {
++		return V80EMU_C_RCPC2;
++	}
++	if ((i & 0xFFFFC000u) == 0xDAC10000u || (i & 0xFFFFFBE0u) == 0xDAC143E0u) {
++		return V80EMU_C_PAC;                    /* PAC*, AUT*, XPACI, XPACD */
++	}
++	if ((i & 0xFFE0FC00u) == 0x9AC03000u) {
++		return V80EMU_C_PACGA;
++	}
++	if ((i & 0xFE1FF800u) == 0xD61F0800u) {
++		return V80EMU_C_BRAUTH;
++	}
++	if ((i & 0xFF200400u) == 0xF8200400u) {
++		return V80EMU_C_LDRAA;
++	}
++	if (i == 0xD500401Fu || i == 0xD500403Fu || i == 0xD500405Fu ||
++	    (i & 0xFFE07C10u) == 0xBA000400u || (i & 0xFFFFBC1Fu) == 0x3A00080Du) {
++		return V80EMU_C_FLAGM;
++	}
++	if ((i & 0xFFFFF0FFu) == 0xD503405Fu || (i & 0xFFFFF0FFu) == 0xD503403Fu ||
++	    (i & 0xFFFFF0FFu) == 0xD503409Fu) {
++		return V80EMU_C_PSTATE;                 /* MSR DIT/SSBS/TCO, #imm */
++	}
++	if (i == 0xD50330FFu || (i & 0xFFFFFFE0u) == 0xD50B7C20u || (i & 0xFFFFFFE0u) == 0xD50B7D20u) {
++		return V80EMU_C_BARRIER;                /* SB, DC CVAP, DC CVADP */
++	}
++	if ((i & 0xFFD00000u) == 0xD5100000u) {
++		return V80EMU_C_SYSREG;                 /* MRS / MSR (register), op0 = 2/3 */
++	}
++	return V80EMU_C_NONE;
++}
++
++/*
++ * Emulate one instruction. On V80EMU_OK the register file, NZCV and PC are
++ * updated; otherwise nothing is changed.
++ */
++static inline enum v80emu_result
++v80emu_step(struct v80emu_cpu *cpu, uint32_t i, const struct v80emu_mem *mem,
++    unsigned flags, struct v80emu_info *info)
++{
++	const unsigned rt = i & 0x1F;
++	const unsigned rn = (i >> 5) & 0x1F;
++	const unsigned rs = (i >> 16) & 0x1F;
++	uint64_t next_pc = cpu->pc + 4;
++
++	info->cls = v80emu_classify(i);
++	info->addr = 0;
++
++	switch (info->cls) {
++	case V80EMU_C_NONE:
++		return V80EMU_UNHANDLED;
++
++	case V80EMU_C_CAS: {
++		const unsigned size = 1u << (i >> 30);
++		const uint64_t addr = v80emu_xsp(cpu, rn);
++		const uint64_t m = v80emu_mask(size);
++		uint64_t old;
++		if (addr & (size - 1)) {
++			info->addr = addr;
++			return V80EMU_ALIGN;
++		}
++		if (mem->cas(mem->ctx, addr, size, v80emu_xr(cpu, rs) & m, v80emu_xr(cpu, rt) & m, &old)) {
++			return v80emu_memerr(info, addr);
++		}
++		v80emu_xw(cpu, rs, old & m);
++		break;
++	}
++
++	case V80EMU_C_CASP: {
++		const unsigned esize = (i & (1u << 30)) ? 8 : 4;
++		const uint64_t addr = v80emu_xsp(cpu, rn);
++		const uint64_t m = v80emu_mask(esize);
++		uint64_t o0, o1;
++		if ((rs & 1) || (rt & 1)) {
++			return V80EMU_UNHANDLED;        /* odd register pair: reserved */
++		}
++		if (addr & (2 * esize - 1)) {
++			info->addr = addr;
++			return V80EMU_ALIGN;
++		}
++		if (mem->casp(mem->ctx, addr, esize, v80emu_xr(cpu, rs) & m, v80emu_xr(cpu, rs + 1) & m,
++		    v80emu_xr(cpu, rt) & m, v80emu_xr(cpu, rt + 1) & m, &o0, &o1)) {
++			return v80emu_memerr(info, addr);
++		}
++		v80emu_xw(cpu, rs, o0 & m);
++		v80emu_xw(cpu, rs + 1, o1 & m);
++		break;
++	}
++
++	case V80EMU_C_LDOP:
++	case V80EMU_C_SWP: {
++		const unsigned size = 1u << (i >> 30);
++		const unsigned op = info->cls == V80EMU_C_SWP ? 8 : (i >> 12) & 7;
++		const uint64_t addr = v80emu_xsp(cpu, rn);
++		const uint64_t operand = v80emu_xr(cpu, rs);
++		uint64_t old, seen;
++		if (addr & (size - 1)) {
++			info->addr = addr;
++			return V80EMU_ALIGN;
++		}
++		if (mem->load(mem->ctx, addr, size, &old)) {
++			return v80emu_memerr(info, addr);
++		}
++		for (;;) {
++			const uint64_t desired = v80emu_ldop_apply(op, size, old, operand);
++			if (mem->cas(mem->ctx, addr, size, old, desired, &seen)) {
++				return v80emu_memerr(info, addr);
++			}
++			if (seen == old) {
++				break;
++			}
++			old = seen;
++		}
++		v80emu_xw(cpu, rt, old);
++		break;
++	}
++
++	case V80EMU_C_LDAPR:
++	case V80EMU_C_LOR: {
++		const unsigned size = 1u << (i >> 30);
++		const uint64_t addr = v80emu_xsp(cpu, rn);
++		const bool is_load = info->cls == V80EMU_C_LDAPR || (i & (1u << 22));
++		uint64_t v;
++		if (addr & (size - 1)) {
++			info->addr = addr;
++			return V80EMU_ALIGN;
++		}
++		if (is_load) {
++			if (mem->load(mem->ctx, addr, size, &v)) {
++				return v80emu_memerr(info, addr);
++			}
++			v80emu_xw(cpu, rt, v);
++		} else if (mem->store(mem->ctx, addr, size, v80emu_xr(cpu, rt) & v80emu_mask(size))) {
++			return v80emu_memerr(info, addr);
++		}
++		break;
++	}
++
++	case V80EMU_C_RCPC2: {
++		const unsigned sz = i >> 30;
++		const unsigned size = 1u << sz;
++		const unsigned opc = (i >> 22) & 3;
++		const uint64_t addr = v80emu_xsp(cpu, rn) + (uint64_t)v80emu_sext((i >> 12) & 0x1FF, 9);
++		uint64_t v;
++		if ((opc == 2 && sz == 3) || (opc == 3 && sz >= 2)) {
++			return V80EMU_UNHANDLED;        /* unallocated */
++		}
++		if (addr & (size - 1)) {
++			info->addr = addr;
++			return V80EMU_ALIGN;
++		}
++		if (opc == 0) {                         /* STLUR */
++			if (mem->store(mem->ctx, addr, size, v80emu_xr(cpu, rt) & v80emu_mask(size))) {
++				return v80emu_memerr(info, addr);
++			}
++			break;
++		}
++		if (mem->load(mem->ctx, addr, size, &v)) {
++			return v80emu_memerr(info, addr);
++		}
++		if (opc == 2) {                         /* LDAPURS{B,H,W} to X */
++			v = (uint64_t)v80emu_sext(v, 8 * size);
++		} else if (opc == 3) {                  /* LDAPURS{B,H} to W */
++			v = (uint64_t)v80emu_sext(v, 8 * size) & 0xFFFFFFFFULL;
++		}
++		v80emu_xw(cpu, rt, v);
++		break;
++	}
++
++	case V80EMU_C_PAC:
++		/*
++		 * Nothing is ever signed: PAC* leaves Xd unchanged, AUT* always
++		 * succeeds and XPAC* has nothing to strip. The Z forms and XPAC*
++		 * require Rn = 11111.
++		 */
++		if (((i >> 10) & 0x3F) >= 8 && rn != 31) {
++			return V80EMU_UNHANDLED;
++		}
++		break;
++
++	case V80EMU_C_PACGA: {
++		const unsigned rm = rs;
++		v80emu_xw(cpu, rt, v80emu_pacga(v80emu_xr(cpu, rn), v80emu_xsp(cpu, rm)));
++		break;
++	}
++
++	case V80EMU_C_BRAUTH: {
++		const unsigned opc = (i >> 21) & 0xF;
++		const bool z_form = (opc & 8) == 0;     /* BRAAZ/BLRAAZ/RETAA: Rm (bits 4:0) = 11111 */
++		uint64_t target;
++		if (z_form && rt != 31) {
++			return V80EMU_UNHANDLED;
++		}
++		switch (opc) {
++		case 0x0:                               /* BRAAZ, BRABZ */
++		case 0x8:                               /* BRAA, BRAB */
++			target = v80emu_xr(cpu, rn);
++			break;
++		case 0x1:                               /* BLRAAZ, BLRABZ */
++		case 0x9:                               /* BLRAA, BLRAB */
++			target = v80emu_xr(cpu, rn);
++			cpu->x[30] = cpu->pc + 4;
++			break;
++		case 0x2:                               /* RETAA, RETAB */
++			if (rn != 31) {
++				return V80EMU_UNHANDLED;
++			}
++			target = cpu->x[30];
++			break;
++		default:                                /* ERETAA/ERETAB and reserved */
++			return V80EMU_UNHANDLED;
++		}
++		next_pc = target;
++		break;
++	}
++
++	case V80EMU_C_LDRAA: {
++		const uint64_t s10 = (((i >> 22) & 1) << 9) | ((i >> 12) & 0x1FF);
++		const uint64_t addr = v80emu_xsp(cpu, rn) + ((uint64_t)v80emu_sext(s10, 10) << 3);
++		uint64_t v;
++		if (mem->load_plain(mem->ctx, addr, 8, &v)) {
++			return v80emu_memerr(info, addr);
++		}
++		if (i & (1u << 11)) {                   /* pre-indexed writeback */
++			v80emu_xspw(cpu, rn, addr);
++		}
++		v80emu_xw(cpu, rt, v);
++		break;
++	}
++
++	case V80EMU_C_FLAGM: {
++		const uint32_t f = cpu->nzcv;
++		const bool Z = f & V80EMU_Z, C = f & V80EMU_C, V = f & V80EMU_V;
++		uint32_t nf = f;
++		if (i == 0xD500401Fu) {                 /* CFINV */
++			nf = f ^ V80EMU_C;
++		} else if (i == 0xD500403Fu) {          /* XAFLAG */
++			nf = ((!C && !Z) ? V80EMU_N : 0) | ((Z && C) ? V80EMU_Z : 0) |
++			    ((C || Z) ? V80EMU_C : 0) | ((!C && Z) ? V80EMU_V : 0);
++		} else if (i == 0xD500405Fu) {          /* AXFLAG */
++			nf = ((Z || V) ? V80EMU_Z : 0) | ((C && !V) ? V80EMU_C : 0);
++		} else if ((i & 0xFFE07C10u) == 0xBA000400u) {  /* RMIF Xn, #shift, #mask */
++			const unsigned sh = (i >> 15) & 0x3F;
++			const unsigned msk = i & 0xF;
++			const uint64_t x = v80emu_xr(cpu, rn);
++			const uint64_t tmp = sh ? ((x >> sh) | (x << (64 - sh))) : x;
++			const uint32_t bits = (uint32_t)(tmp & 0xF) << 28;
++			const uint32_t sel = (uint32_t)msk << 28;
++			nf = (f & ~sel) | (bits & sel);
++		} else {                                /* SETF8 / SETF16 Wn */
++			const unsigned msb = (i & (1u << 14)) ? 15 : 7;
++			const uint64_t w = v80emu_xr(cpu, rn);
++			const bool n = (w >> msb) & 1;
++			const bool z = (w & ((2ULL << msb) - 1)) == 0;
++			const bool v = ((w >> (msb + 1)) & 1) ^ n;
++			nf = (C ? V80EMU_C : 0) | (n ? V80EMU_N : 0) | (z ? V80EMU_Z : 0) | (v ? V80EMU_V : 0);
++		}
++		cpu->nzcv = (cpu->nzcv & ~V80EMU_NZCV) | (nf & V80EMU_NZCV);
++		break;
++	}
++
++	case V80EMU_C_PSTATE:
++	case V80EMU_C_BARRIER:
++		break;
++
++	case V80EMU_C_SYSREG: {
++		const bool is_read = (i >> 21) & 1;
++		const unsigned sr = (i >> 5) & 0x7FFF;
++		if (sr == V80EMU_SR_CNTVCTSS || sr == V80EMU_SR_CNTPCTSS) {
++			if (!is_read || mem->read_counter == NULL) {
++				return V80EMU_UNHANDLED;
++			}
++			v80emu_xw(cpu, rt, mem->read_counter(mem->ctx, sr == V80EMU_SR_CNTPCTSS));
++			break;
++		}
++		if (sr != V80EMU_SR_DIT && sr != V80EMU_SR_SSBS && sr != V80EMU_SR_TCO &&
++		    !(flags & V80EMU_F_SYSREG_RAZWI)) {
++			return V80EMU_UNHANDLED;
++		}
++		if (is_read) {
++			v80emu_xw(cpu, rt, 0);
++		}
++		break;
++	}
++
++	default:
++		return V80EMU_UNHANDLED;
++	}
++
++	cpu->pc = next_pc;
++	return V80EMU_OK;
++}
++
++#endif /* _ARM64_HEROLTE_V80EMU_CORE_H_ */
+diff --git a/osfmk/arm64/machine_routines_asm.s b/osfmk/arm64/machine_routines_asm.s
+index 84a26cb..21bf042 100644
+--- a/osfmk/arm64/machine_routines_asm.s
++++ b/osfmk/arm64/machine_routines_asm.s
+@@ -736,6 +736,296 @@ LEXT(_copyout_atomic64)
+ 	POP_FRAME
+ 	ARM64_STACK_EPILOG
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE) || defined(ARM64_BOARD_CONFIG_A5XELTE)
++/*
++ * HEROLTE: user memory primitives for the ARMv8.1+ emulation
++ * (herolte_v80emu.c, wrappers in copyio.c). All of them use the strongest
++ * ordering (LDAXR/STLXR between DMB ISH), valid for every A/L variant.
++ *
++ * int _herolte_v80emu_cas{8,16,32,64}(const char *uaddr, uint64_t expected,
++ *     uint64_t desired, uint64_t *old)
++ *	expected/desired are already truncated to the access size; memory is
++ *	not written when the comparison fails.
++ */
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_cas8)
++LEXT(_herolte_v80emu_cas8)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	dmb		ish
++	COPYIO_RECOVER_RANGE 3f
++1:
++	ldaxrb	w8, [x0]
++	cmp		w8, w1
++	b.ne	2f
++	stlxrb	w9, w2, [x0]
++	cbnz	w9, 1b
++	b		3f
++2:
++	clrex
++3:
++	dmb		ish
++	str		x8, [x3]
++	mov		x8, xzr
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_cas16)
++LEXT(_herolte_v80emu_cas16)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	dmb		ish
++	COPYIO_RECOVER_RANGE 3f
++1:
++	ldaxrh	w8, [x0]
++	cmp		w8, w1
++	b.ne	2f
++	stlxrh	w9, w2, [x0]
++	cbnz	w9, 1b
++	b		3f
++2:
++	clrex
++3:
++	dmb		ish
++	str		x8, [x3]
++	mov		x8, xzr
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_cas32)
++LEXT(_herolte_v80emu_cas32)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	dmb		ish
++	COPYIO_RECOVER_RANGE 3f
++1:
++	ldaxr	w8, [x0]
++	cmp		w8, w1
++	b.ne	2f
++	stlxr	w9, w2, [x0]
++	cbnz	w9, 1b
++	b		3f
++2:
++	clrex
++3:
++	dmb		ish
++	str		x8, [x3]
++	mov		x8, xzr
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_cas64)
++LEXT(_herolte_v80emu_cas64)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	dmb		ish
++	COPYIO_RECOVER_RANGE 3f
++1:
++	ldaxr	x8, [x0]
++	cmp		x8, x1
++	b.ne	2f
++	stlxr	w9, x2, [x0]
++	cbnz	w9, 1b
++	b		3f
++2:
++	clrex
++3:
++	dmb		ish
++	str		x8, [x3]
++	mov		x8, xzr
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++/*
++ * int _herolte_v80emu_casp{32,64}(const char *uaddr, uint64_t e0, uint64_t e1,
++ *     uint64_t n0, uint64_t n1, uint64_t old[2])
++ *	A pair read by LDAXP is only single-copy atomic once the matching STLXP
++ *	succeeds, so a failed comparison stores the old pair back.
++ */
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_casp32)
++LEXT(_herolte_v80emu_casp32)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	dmb		ish
++	COPYIO_RECOVER_RANGE 3f
++1:
++	ldaxp	w8, w9, [x0]
++	cmp		w8, w1
++	ccmp	w9, w2, #0, eq
++	b.ne	2f
++	stlxp	w10, w3, w4, [x0]
++	cbnz	w10, 1b
++	b		3f
++2:
++	stlxp	w10, w8, w9, [x0]
++	cbnz	w10, 1b
++3:
++	dmb		ish
++	stp		x8, x9, [x5]
++	mov		x8, xzr
++	mov		x9, xzr
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_casp64)
++LEXT(_herolte_v80emu_casp64)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	dmb		ish
++	COPYIO_RECOVER_RANGE 3f
++1:
++	ldaxp	x8, x9, [x0]
++	cmp		x8, x1
++	ccmp	x9, x2, #0, eq
++	b.ne	2f
++	stlxp	w10, x3, x4, [x0]
++	cbnz	w10, 1b
++	b		3f
++2:
++	stlxp	w10, x8, x9, [x0]
++	cbnz	w10, 1b
++3:
++	dmb		ish
++	stp		x8, x9, [x5]
++	mov		x8, xzr
++	mov		x9, xzr
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++/*
++ * int _herolte_v80emu_ldar{8,16,32,64}(const char *uaddr, uint64_t *val)
++ * int _herolte_v80emu_stlr{8,16,32,64}(const char *uaddr, uint64_t val)
++ */
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_ldar8)
++LEXT(_herolte_v80emu_ldar8)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	COPYIO_RECOVER_RANGE 1f
++	ldarb	w8, [x0]
++1:
++	str		x8, [x1]
++	mov		x8, xzr
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_ldar16)
++LEXT(_herolte_v80emu_ldar16)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	COPYIO_RECOVER_RANGE 1f
++	ldarh	w8, [x0]
++1:
++	str		x8, [x1]
++	mov		x8, xzr
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_ldar32)
++LEXT(_herolte_v80emu_ldar32)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	COPYIO_RECOVER_RANGE 1f
++	ldar	w8, [x0]
++1:
++	str		x8, [x1]
++	mov		x8, xzr
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_ldar64)
++LEXT(_herolte_v80emu_ldar64)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	COPYIO_RECOVER_RANGE 1f
++	ldar	x8, [x0]
++1:
++	str		x8, [x1]
++	mov		x8, xzr
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_stlr8)
++LEXT(_herolte_v80emu_stlr8)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	COPYIO_RECOVER_RANGE 1f
++	stlrb	w1, [x0]
++1:
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_stlr16)
++LEXT(_herolte_v80emu_stlr16)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	COPYIO_RECOVER_RANGE 1f
++	stlrh	w1, [x0]
++1:
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_stlr32)
++LEXT(_herolte_v80emu_stlr32)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	COPYIO_RECOVER_RANGE 1f
++	stlr	w1, [x0]
++1:
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++
++	.text
++	.align 2
++	.globl EXT(_herolte_v80emu_stlr64)
++LEXT(_herolte_v80emu_stlr64)
++	ARM64_STACK_PROLOG
++	PUSH_FRAME
++	COPYIO_RECOVER_RANGE 1f
++	stlr	x1, [x0]
++1:
++	mov		x0, #0
++	POP_FRAME
++	ARM64_STACK_EPILOG
++#endif /* ARM64_BOARD_CONFIG_HEROLTE || ARM64_BOARD_CONFIG_A5XELTE */
++
+ 
+ /*
+  * int _bcopyout(const char *src, char *dst, vm_size_t len)
+diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+index 1f994ca..9b931ca 100644
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -38,6 +38,7 @@
+ #include <arm64/machine_machdep.h>
+ #include <arm64/monotonic.h>
+ #include <arm64/instructions.h>
++#include <arm64/herolte_v80emu.h>
+ #include <arm64/sweet_fjcvtzs.h>
+ 
+ #include <kern/debug.h>
+@@ -1135,6 +1136,18 @@ handle_uncategorized(arm_saved_state_t *state)
+ 
+ 	COPYIN(get_saved_state_pc(state), (char *)&instr, sizeof(instr));
+ 
++#if HEROLTE_V80EMU
++	/*
++	 * HEROLTE: ARMv8.1+ userland instructions (LSE, LRCPC, PAuth...) on this
++	 * ARMv8.0 CPU, see herolte_v80emu.c. Falls through for anything else
++	 * (DTrace probes, FJCVTZS, GDB traps); delivers SIGSEGV/SIGBUS itself
++	 * if an emulated access faults.
++	 */
++	if (herolte_v80emu_handle(state, instr)) {
++		return;
++	}
++#endif /* HEROLTE_V80EMU */
++
+ #if CONFIG_DTRACE
+ 
+ 	if (PSR64_IS_USER64(get_saved_state_cpsr(state))) {
+diff --git a/osfmk/conf/files.arm64 b/osfmk/conf/files.arm64
+index b8678c6..2df357a 100644
+--- a/osfmk/conf/files.arm64
++++ b/osfmk/conf/files.arm64
+@@ -61,6 +61,7 @@ osfmk/arm64/iofilter.c	optional nos_arm_asm
+ osfmk/arm64/gxf_exceptions.s	optional nos_arm_asm
+ osfmk/arm64/lowmem_vectors.c	standard
+ osfmk/arm64/sleh.c			standard
++osfmk/arm64/herolte_v80emu.c		standard
+ osfmk/arm64/start.s	optional nos_arm_asm config_pmap_ppl
+ osfmk/arm64/pinst.s	optional nos_arm_asm
+ osfmk/arm64/cswitch.s	optional nos_arm_asm

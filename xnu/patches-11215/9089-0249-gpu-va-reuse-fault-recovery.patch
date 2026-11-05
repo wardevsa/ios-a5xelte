@@ -1,0 +1,202 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index f16af8f..11b49ba 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -341,6 +341,62 @@ static LCK_GRP_DECLARE(hg_grp, "herolte_gpu");
+ static LCK_MTX_DECLARE(hg_mtx_store, &hg_grp);
+ #define hg_mtx (&hg_mtx_store)
+ 
++/*
++ * Linux panfrost's quirks for a T880 r2p0 (panfrost_gpu_init_quirks): the
++ * load/store unit must accept typed attribute descriptors, or every Mesa
++ * vertex job stops with DATA_INVALID_FAULT (0x58); the tiler clock gate
++ * override (T76X_3953); the job throttle limit. A soft reset clears them.
++ */
++static void
++hg_quirks(void)
++{
++	hg_wr(hg_gpu, 0xf04, hg_rd(hg_gpu, 0xf04) | (1u << 16));       /* SC_LS_ALLOW_ATTR_TYPES */
++	hg_wr(hg_gpu, 0xf08, hg_rd(hg_gpu, 0xf08) | 1u);                /* TC_CLOCK_GATE_OVERRIDE */
++	hg_wr(hg_gpu, 0xf00, 0x3fu << 3);                               /* JM_JOB_THROTTLE_LIMIT */
++}
++
++/*
++ * After a job that faulted or never finished: hard-stop whatever is still
++ * on a slot (as kbase does), and if a slot stays ACTIVE, soft-reset the GPU
++ * and bring it back (cores, quirks; hg_run programs AS0 on every job).
++ * Without this one MMU fault left the job stalled on its slot, and every
++ * later job of every client timed out behind it ("slot busy").
++ */
++static void
++hg_recover(const char *what)
++{
++	static unsigned resets;
++	for (unsigned js = 0; js < 2; js++) {
++		uint32_t slot = JS_BASE(js);
++		if ((hg_rd(hg_gpu, slot + 0x24) & 0xff) == 0x08) {
++			hg_wr(hg_gpu, slot + 0x20, 3);                  /* JS_COMMAND HARD_STOP */
++			for (unsigned i = 0; i < 1000 && (hg_rd(hg_gpu, slot + 0x24) & 0xff) == 0x08; i++) {
++				delay(10);
++			}
++		}
++	}
++	hg_wr(hg_gpu, JOB_IRQ_CLEAR, 0xffffffffu);
++	hg_wr(hg_gpu, MMU_IRQ_CLEAR, 0xffffffffu);
++	if ((hg_rd(hg_gpu, JS_BASE(0) + 0x24) & 0xff) != 0x08 &&
++	    (hg_rd(hg_gpu, JS_BASE(1) + 0x24) & 0xff) != 0x08) {
++		return;
++	}
++	hg_wr(hg_gpu, 0x024, 0xffffffffu);                      /* GPU_IRQ_CLEAR */
++	hg_wr(hg_gpu, 0x030, 1);                                /* GPU_COMMAND SOFT_RESET */
++	for (unsigned i = 0; i < 10000 && !(hg_rd(hg_gpu, GPU_IRQ_RAWSTAT) & 0x100); i++) {
++		delay(10);
++	}
++	bool done = (hg_rd(hg_gpu, GPU_IRQ_RAWSTAT) & 0x100) != 0;
++	hg_wr(hg_gpu, 0x024, 0xffffffffu);
++	uint32_t all = hg_rd(hg_gpu, SHADER_PRESENT_LO);
++	bool up = hg_power(L2_PWRON_LO, L2_READY_LO, hg_rd(hg_gpu, L2_PRESENT_LO), "L2") &&
++	    hg_power(SHADER_PWRON_LO, SHADER_READY_LO, all, "all shader cores") &&
++	    hg_power(TILER_PWRON_LO, TILER_READY_LO, hg_rd(hg_gpu, TILER_PRESENT_LO), "tiler");
++	hg_quirks();
++	printf("HEROLTE GPU: %s: GPU soft reset #%u (%s), cores %s\n", what, ++resets,
++	    done ? "done" : "timed out", up ? "back up" : "NOT up");
++}
++
+ /* Program AS0, start the job at HG_TEST_VA on slot js, wait (bounded). */
+ static bool
+ hg_run(unsigned js, const char *what)
+@@ -405,6 +461,9 @@ hg_run(unsigned js, const char *what)
+ 	}
+ 	hg_wr(hg_gpu, JOB_IRQ_CLEAR, 0xffffffffu);
+ 	hg_wr(hg_gpu, MMU_IRQ_CLEAR, 0xffffffffu);
++	if (!ok) {
++		hg_recover(what);
++	}
+ 	return ok;
+ }
+ 
+@@ -1027,10 +1086,16 @@ hgp_mmu_flush(uint64_t va, unsigned log2_size)
+ #define HGU_L3_MAX      ((HG_SCR_BYTES - HGU_L3_OFF) / 0x1000u)
+ #define HGU_VA_BASE     0x40000000ull
+ #define HGU_VA_END      0x80000000ull
++#define HGU_CHUNK       0x10000ull      /* VA granule: 64 KiB */
++#define HGU_CHUNKS      ((unsigned)((HGU_VA_END - HGU_VA_BASE) / HGU_CHUNK))
+ static int hg_up_state;                 /* 0 not tried, 1 up, -1 failed */
+ static uint16_t hgu_l3_of[512];         /* user L2 index -> pool table + 1 */
+ static unsigned hgu_l3_used;
+-static uint64_t hgu_next_va = HGU_VA_BASE;
++/* Chunks of the user range in use. Freed VAs are reused, lowest first: L3
++ * tables are never given back, so the range must stay compact (with VAs
++ * never reused, every 15 MB texture CoreAnimation uploads cost 8 tables for
++ * good and the 239-table pool ran out after ~480 MB of allocations). */
++static uint64_t hgu_used[HGU_CHUNKS / 64];
+ 
+ static bool
+ hg_bringup(void)
+@@ -1062,15 +1127,7 @@ hg_bringup(void)
+ 		hg_cores_off();
+ 		return false;
+ 	}
+-	/*
+-	 * Linux panfrost's quirks for a T880 r2p0 (panfrost_gpu_init_quirks):
+-	 * the load/store unit must accept typed attribute descriptors, or
+-	 * every Mesa vertex job stops with DATA_INVALID_FAULT (0x58); the
+-	 * tiler clock gate override (T76X_3953); the job throttle limit.
+-	 */
+-	hg_wr(hg_gpu, 0xf04, hg_rd(hg_gpu, 0xf04) | (1u << 16));       /* SC_LS_ALLOW_ATTR_TYPES */
+-	hg_wr(hg_gpu, 0xf08, hg_rd(hg_gpu, 0xf08) | 1u);                /* TC_CLOCK_GATE_OVERRIDE */
+-	hg_wr(hg_gpu, 0xf00, 0x3fu << 3);                               /* JM_JOB_THROTTLE_LIMIT */
++	hg_quirks();
+ 	printf("HEROLTE GPU: config jm=%#x shader=%#x tiler=%#x l2_mmu=%#x\n",
+ 	    hg_rd(hg_gpu, 0xf00), hg_rd(hg_gpu, 0xf04), hg_rd(hg_gpu, 0xf08), hg_rd(hg_gpu, 0xf0c));
+ 
+@@ -1349,7 +1406,7 @@ herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, uint32_t w, uint3
+ /*
+  * HeroGPU (iokit/Kernel/arm/HeroGPU.cpp): user-space GPU jobs, the kernel
+  * half of a Panfrost-style driver. Buffers get GPU VAs in the user range
+- * (64 KiB aligned, never reused yet) and are mapped noncached like
++ * (64 KiB aligned, given back by herolte_gpu_unmap) and are mapped noncached like
+  * everything else (the Mali is not IO-coherent; user mappings are
+  * write-combined). Jobs run one at a time under hg_mtx, polled.
+  */
+@@ -1375,18 +1432,42 @@ herolte_gpu_reg(uint32_t off)
+ uint64_t
+ herolte_gpu_va_alloc(uint64_t bytes)
+ {
++	unsigned n = (unsigned)((bytes + HGU_CHUNK - 1) / HGU_CHUNK);
++	uint64_t va = 0;
+ 	lck_mtx_lock(hg_mtx);
+-	uint64_t va = (hgu_next_va + 0xffff) & ~0xffffull;
+-	uint64_t end = va + ((bytes + 0xfff) & ~0xfffull);
+-	if (hg_up_state != 1 || bytes == 0 || end > HGU_VA_END) {
+-		va = 0;
+-	} else {
+-		hgu_next_va = end;
++	if (hg_up_state == 1 && n != 0 && n <= HGU_CHUNKS) {
++		unsigned run = 0;
++		for (unsigned c = 0; c < HGU_CHUNKS; c++) {
++			if (hgu_used[c / 64] & (1ull << (c % 64))) {
++				run = 0;
++			} else if (++run == n) {
++				unsigned first = c + 1 - n;
++				for (unsigned k = first; k <= c; k++) {
++					hgu_used[k / 64] |= 1ull << (k % 64);
++				}
++				va = HGU_VA_BASE + first * HGU_CHUNK;
++				break;
++			}
++		}
+ 	}
+ 	lck_mtx_unlock(hg_mtx);
+ 	return va;
+ }
+ 
++/* Give back the VA of n pages at va (herolte_gpu_unmap does it). Called with hg_mtx held. */
++static void
++hgu_va_free_locked(uint64_t va, unsigned n)
++{
++	if (va < HGU_VA_BASE || va >= HGU_VA_END || n == 0) {
++		return;
++	}
++	unsigned first = (unsigned)((va - HGU_VA_BASE) / HGU_CHUNK);
++	unsigned count = (unsigned)(((uint64_t)n * 0x1000 + HGU_CHUNK - 1) / HGU_CHUNK);
++	for (unsigned k = first; k < first + count && k < HGU_CHUNKS; k++) {
++		hgu_used[k / 64] &= ~(1ull << (k % 64));
++	}
++}
++
+ /* PTEs for n 4 KiB pages at va (pages == NULL: unmap), then an MMU flush. */
+ static bool
+ hgu_set_locked(uint64_t va, const uint64_t *pages, unsigned n)
+@@ -1434,6 +1515,7 @@ herolte_gpu_unmap(uint64_t va, unsigned n)
+ 	lck_mtx_lock(hg_mtx);
+ 	if (hg_up_state == 1) {
+ 		(void)hgu_set_locked(va, NULL, n);
++		hgu_va_free_locked(va, n);
+ 	}
+ 	lck_mtx_unlock(hg_mtx);
+ }
+diff --git a/iokit/Kernel/arm/HeroGPU.cpp b/iokit/Kernel/arm/HeroGPU.cpp
+index b07c77c..028efdc 100644
+--- a/iokit/Kernel/arm/HeroGPU.cpp
++++ b/iokit/Kernel/arm/HeroGPU.cpp
+@@ -184,6 +184,9 @@ herogpu_bo_import_surface(struct herogpu_bo *bo, uint32_t id)
+ 		IOFreeData(pa, bo->pages * sizeof(uint64_t));
+ 	}
+ 	if (!ok) {
++		if (bo->va != 0) {
++			herolte_gpu_unmap(bo->va, bo->pages);   /* and its VA */
++		}
+ 		s->release();
+ 		bo->va = 0;
+ 		bo->pages = 0;
+@@ -228,6 +231,9 @@ herogpu_bo_create(struct herogpu_bo *bo, uint64_t size)
+ 		IOFreeData(pa, bo->pages * sizeof(uint64_t));
+ 	}
+ 	if (!ok) {
++		if (bo->va != 0) {
++			herolte_gpu_unmap(bo->va, bo->pages);   /* and its VA */
++		}
+ 		OSSafeReleaseNULL(bo->mem);
+ 		bo->va = 0;
+ 	}

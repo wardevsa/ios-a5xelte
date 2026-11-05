@@ -1,0 +1,57 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index d886588..0cf8f05 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -632,7 +632,9 @@ hg_draw_triangle(uint64_t hold)
+ 	hg_wr64(scr, S_RSD + 0, (HG_SCR_VA + S_SHADER) | HG_SHADER_TAG);
+ 	hg_wr32(scr, S_RSD + 16, 2u << 16);             /* work register count 2 */
+ 	hg_wr32(scr, S_RSD + 32, 0xffffu | (7u << 24)); /* sample mask, depth ALWAYS */
+-	hg_wr32(scr, S_RSD + 36, 0xffffu);              /* stencil masks */
++	/* Stencil masks; Midgard's fixed-function alpha test must be ALWAYS
++	 * (0 = NEVER kills every fragment). */
++	hg_wr32(scr, S_RSD + 36, 0xffffu | (7u << 21));
+ 	hg_wr32(scr, S_RSD + 40, (7u << 16) | (0xffu << 8));    /* stencil front ALWAYS */
+ 	hg_wr32(scr, S_RSD + 44, (7u << 16) | (0xffu << 8));    /* stencil back */
+ 	/* Blend for RT0 (v5: right after the renderer state): enabled, src
+@@ -727,10 +729,37 @@ hg_draw_triangle(uint64_t hold)
+ 	hg_job_cpu = 0;
+ 	printf("HEROLTE GPU: DRAW: %llu us -> %s\n", hg_us_since(start),
+ 	    ok ? "A TRIANGLE ON A DARK BLUE SCREEN FOR 8 SECONDS (white or black)" : "failed");
+-	if (!ok) {
+-		volatile uint32_t *p = (volatile uint32_t *)(scr + S_POLY);
+-		printf("HEROLTE GPU: DRAW: polygon list %08x %08x %08x %08x %08x %08x %08x %08x\n",
+-		    p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
++	volatile uint32_t *p = (volatile uint32_t *)(scr + S_POLY);
++	printf("HEROLTE GPU: DRAW: polygon list %08x %08x %08x %08x %08x %08x %08x %08x\n",
++	    p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
++	/* Did the tiler bin anything? Count written words per region. */
++	unsigned nz_head = 0, nz_body = 0, nz_heap = 0, first_body = ~0u;
++	for (uint32_t o = 0; o < full; o += 4) {
++		if (*(volatile uint32_t *)(scr + S_POLY + o)) {
++			if (o < header) {
++				nz_head++;
++			} else {
++				nz_body++;
++				if (first_body == ~0u) {
++					first_body = o;
++				}
++			}
++		}
++	}
++	for (uint32_t o = 0; o < S_HEAP_BYTES; o += 4) {
++		nz_heap += *(volatile uint32_t *)(scr + S_HEAP + o) != 0;
++	}
++	printf("HEROLTE GPU: DRAW: nonzero words header=%u body=%u (first %#x) heap=%u\n",
++	    nz_head, nz_body, first_body, nz_heap);
++	/* Read back the panel inside the triangle and in the background. */
++	static const uint32_t probe[4][2] = { { 720, 1500 }, { 720, 800 }, { 400, 1850 }, { 720, 300 } };
++	for (unsigned i = 0; i < 4; i++) {
++		uint64_t pa = HG_FB_PA + (uint64_t)probe[i][1] * HG_FB_STRIDE + probe[i][0] * 4;
++		vm_offset_t pg = ml_io_map(pa & ~0xfffull, 0x1000);
++		if (pg) {
++			printf("HEROLTE GPU: DRAW: pixel (%u,%u) = %08x%s\n", probe[i][0], probe[i][1],
++			    *(volatile uint32_t *)(pg + (pa & 0xfff)), i == 3 ? " (background)" : "");
++		}
+ 	}
+ }
+ 

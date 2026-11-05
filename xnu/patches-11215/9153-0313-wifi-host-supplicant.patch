@@ -1,0 +1,1059 @@
+diff --git a/bsd/dev/herolte_wifi.c b/bsd/dev/herolte_wifi.c
+index 8c3329a..5740792 100644
+--- a/bsd/dev/herolte_wifi.c
++++ b/bsd/dev/herolte_wifi.c
+@@ -14,6 +14,7 @@
+ #include <string.h>
+ #include <sys/vnode_internal.h>
+ #include <sys/kauth.h>
++#include <sys/random.h>
+ #include <kern/kalloc.h>
+ #include <kern/clock.h>
+ #include <mach/mach_time.h>
+@@ -282,12 +283,27 @@ hw_console(uint32_t console, uint32_t *done)
+ #define HW_IOCTL_REQ    0x42000u
+ #define HW_CTRL_BUFS    0x50000u            /* 16 buffers of 8 KiB: 8 for answers, 8 for events */
+ #define HW_CTRL_BUF     8192u
++#define HW_RX_BUFS      0x80000u            /* 64 buffers of 2 KiB for frames from the chip */
++#define HW_RX_COUNT     64u
++#define HW_RX_ID        0x100u
++#define HW_TX_BUFS      0xa0000u            /* 16 of 2 KiB for frames to it */
++#define HW_TX_COUNT     16u
++#define HW_TX_ID        0x200u
++#define HW_FLOWRING     0xb0000u            /* H2D flow ring 2, the only one: 512 x 48 */
++#define HW_FLOW_ID      2u
++#define HW_FRAME        2048u
+ 
++#define MSG_FLOW_RING_CREATE    0x3
++#define MSG_FLOW_RING_CREATE_CMPLT 0x4
+ #define MSG_IOCTLPTR_REQ        0x9
+ #define MSG_IOCTLRESP_BUF_POST  0xb
+ #define MSG_IOCTL_CMPLT         0xc
+ #define MSG_EVENT_BUF_POST      0xd
+ #define MSG_WL_EVENT            0xe
++#define MSG_TX_POST             0xf
++#define MSG_TX_STATUS           0x10
++#define MSG_RXBUF_POST          0x11
++#define MSG_RX_CMPLT            0x12
+ 
+ #define WLC_UP          2
+ #define WLC_SET_INFRA   20
+@@ -296,11 +312,11 @@ hw_console(uint32_t console, uint32_t *done)
+ #define WLC_GET_RSSI    127
+ #define WLC_GET_VAR     262
+ #define WLC_SET_VAR     263
+-#define WLC_SET_WSEC_PMK 268
+ #define E_SET_SSID      0
+ #define E_LINK          16
+-#define E_PSK_SUP       46
+ #define E_ESCAN_RESULT  69
++#define ALGO_TKIP       2
++#define ALGO_AES_CCM    4
+ 
+ static vm_offset_t hw_dma;
+ static uint32_t hw_pcie2, hw_h2d_w, hw_h2d_r, hw_d2h_w, hw_d2h_r, hw_rx_off, hw_console_at, hw_console_done;
+@@ -314,6 +330,11 @@ static unsigned hw_ssids;
+ static bool hw_link, hw_keyed;
+ static int hw_joined;
+ static char hw_ssid_seen[48][33];
++static uint8_t hw_seen_group[48];               /* the group cipher of each network's RSN element, 0xff: none */
++static uint8_t hw_mac[6], hw_bssid[6];
++static uint16_t hw_rxpost_w, hw_rxcpl_r, hw_txcpl_r, hw_flow_w;
++static int hw_flow;                             /* 0 none, 1 asked for, 2 open, -1 refused */
++static uint32_t hw_tx_next, hw_tx_done, hw_rx_frames;
+ 
+ static uint16_t
+ hw_rd16(vm_offset_t base, uint32_t off)
+@@ -388,6 +409,28 @@ hw_get32be(const volatile uint8_t *p)
+ 	return ((uint32_t)p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
+ }
+ 
++static uint16_t
++hw_get16be(const volatile uint8_t *p)
++{
++	return (uint16_t)((p[0] << 8) | p[1]);
++}
++
++/* The group cipher in a scanned network's RSN element (2 TKIP, 4 CCMP), 0xff if it has none. */
++static uint8_t
++hw_bss_group(const volatile uint8_t *bss, uint32_t blen)
++{
++	uint32_t off = hw_get16(bss + 116), len = hw_get32(bss + 120);
++	if (blen < 124 || off > blen || len > blen - off) {
++		return 0xff;
++	}
++	for (uint32_t i = 0; i + 2 <= len; i += 2u + bss[off + i + 1]) {
++		if (bss[off + i] == 0x30 && bss[off + i + 1] >= 6 && i + 8 <= len) {
++			return bss[off + i + 7];
++		}
++	}
++	return 0xff;
++}
++
+ /* struct msgbuf_rx_ioctl_resp_or_event: buffer n (0-7 answers, 8-15 events) given to the chip, its pktid n + 1. */
+ static void
+ hw_fill_post(volatile uint8_t *item, void *arg)
+@@ -430,8 +473,6 @@ hw_event(const volatile uint8_t *pkt, uint16_t len)
+ 		printf("HEROLTE WIFI: event %u status %u reason %u flags %#x\n", type, status, hw_get32be(pkt + 36), flags);
+ 		if (type == E_LINK) {
+ 			hw_link = (flags & 1) != 0;
+-		} else if (type == E_PSK_SUP) {
+-			hw_keyed = status == 6;                 /* FWSUP_COMPLETED */
+ 		} else if (type == E_SET_SSID) {
+ 			hw_joined = status == 0 ? 1 : -1;
+ 		}
+@@ -464,6 +505,7 @@ hw_event(const volatile uint8_t *pkt, uint16_t len)
+ 			seen = strcmp(hw_ssid_seen[k], ssid) == 0;
+ 		}
+ 		if (!seen && hw_ssids < 48) {
++			hw_seen_group[hw_ssids] = hw_bss_group(bss, blen);
+ 			strlcpy(hw_ssid_seen[hw_ssids++], ssid, 33);
+ 			printf("HEROLTE WIFI: network \"%s\" %02x:%02x:%02x:%02x:%02x:%02x channel %u, %d dBm\n", slen ? ssid : "(hidden)",
+ 			    bss[8], bss[9], bss[10], bss[11], bss[12], bss[13], hw_get16(bss + 72) & 0xff, (int16_t)hw_get16(bss + 78));
+@@ -475,7 +517,143 @@ hw_event(const volatile uint8_t *pkt, uint16_t len)
+ 	}
+ }
+ 
+-/* What the chip has put in the control complete ring. */
++/*
++ * Frames (msgbuf.c): buffers posted to the rx ring come back full through the rx complete ring as Ethernet frames; frames
++ * out go through one flow ring, made when the access point is known. EAPOL frames wait here for the handshake, which
++ * runs outside the drain (it makes ioctls, and they drain); a DHCP answer is only noted.
++ */
++#define HW_EAPOL_SLOTS  4u
++#define HW_EAPOL_MAX    512u
++static uint8_t hw_eapol_q[HW_EAPOL_SLOTS][HW_EAPOL_MAX];
++static uint16_t hw_eapol_len[HW_EAPOL_SLOTS];
++static unsigned hw_eapol_in, hw_eapol_out;
++static uint32_t hw_dhcp_xid;
++static bool hw_dhcp_seen;
++
++/* struct msgbuf_rx_bufpost: rx buffer n to the chip */
++static void
++hw_rx_post(uint32_t n)
++{
++	volatile uint8_t *item = (volatile uint8_t *)(hw_dma + HW_RING_RXPOST + hw_rxpost_w * 32u);
++	for (unsigned i = 0; i < 32; i++) {
++		item[i] = 0;
++	}
++	item[0] = MSG_RXBUF_POST;
++	hw_put32(item + 4, HW_RX_ID + n);
++	hw_put16(item + 10, HW_FRAME);
++	hw_put32(item + 24, HW_DMA_PA + HW_RX_BUFS + n * HW_FRAME);
++	__asm__ volatile ("dsb sy" ::: "memory");
++	hw_rxpost_w = (uint16_t)((hw_rxpost_w + 1) % 1024);
++	hw_wr16(hw_tcm, hw_h2d_w + 4, hw_rxpost_w);
++	bp_wr(hw_pcie2 + 0x140, 1);
++}
++
++/* struct msgbuf_tx_flowring_create_req: to the access point, from us, TID 0 */
++static void
++hw_fill_flow(volatile uint8_t *item, __unused void *arg)
++{
++	item[0] = MSG_FLOW_RING_CREATE;
++	for (unsigned i = 0; i < 6; i++) {
++		item[8 + i] = hw_bssid[i];
++		item[14 + i] = hw_mac[i];
++	}
++	hw_put16(item + 22, HW_FLOW_ID);
++	hw_put16(item + 28, 512);
++	hw_put16(item + 30, 48);
++	hw_put32(item + 32, HW_DMA_PA + HW_FLOWRING);
++}
++
++/* struct msgbuf_tx_msghdr: an Ethernet frame through the flow ring, its header in the message, the rest by address */
++static bool
++hw_tx(const uint8_t *frame, uint32_t len)
++{
++	if (hw_flow != 2 || len < 14 || len > HW_FRAME) {
++		return false;
++	}
++	uint16_t next = (uint16_t)((hw_flow_w + 1) % 512);
++	if (next == hw_rd16(hw_tcm, hw_h2d_r + HW_FLOW_ID * 4)) {
++		printf("HEROLTE WIFI: the flow ring is full\n");
++		return false;
++	}
++	uint32_t n = hw_tx_next++ % HW_TX_COUNT;
++	volatile uint8_t *buf = (volatile uint8_t *)(hw_dma + HW_TX_BUFS + n * HW_FRAME);
++	for (uint32_t i = 0; i < len; i++) {
++		buf[i] = frame[i];
++	}
++	volatile uint8_t *item = (volatile uint8_t *)(hw_dma + HW_FLOWRING + hw_flow_w * 48u);
++	for (unsigned i = 0; i < 48; i++) {
++		item[i] = 0;
++	}
++	item[0] = MSG_TX_POST;
++	hw_put32(item + 4, HW_TX_ID + n);
++	for (unsigned i = 0; i < 14; i++) {
++		item[8 + i] = frame[i];
++	}
++	item[22] = 1;                                           /* 802.3, priority 0 */
++	item[23] = 1;
++	hw_put32(item + 32, HW_DMA_PA + HW_TX_BUFS + n * HW_FRAME + 14);
++	hw_put16(item + 42, (uint16_t)(len - 14));
++	__asm__ volatile ("dsb sy" ::: "memory");
++	hw_flow_w = next;
++	hw_wr16(hw_tcm, hw_h2d_w + HW_FLOW_ID * 4, hw_flow_w);
++	bp_wr(hw_pcie2 + 0x140, 1);
++	return true;
++}
++
++static void
++hw_frame(const volatile uint8_t *f, uint32_t len)
++{
++	if (len < 14) {
++		return;
++	}
++	hw_rx_frames++;
++	uint16_t type = hw_get16be(f + 12);
++	if (type == 0x888e) {
++		if (len <= HW_EAPOL_MAX && hw_eapol_in - hw_eapol_out < HW_EAPOL_SLOTS) {
++			unsigned slot = hw_eapol_in % HW_EAPOL_SLOTS;
++			for (uint32_t i = 0; i < len; i++) {
++				hw_eapol_q[slot][i] = f[i];
++			}
++			hw_eapol_len[slot] = (uint16_t)len;
++			hw_eapol_in++;
++		}
++		return;
++	}
++	if (type != 0x0800 || len < 14 + 20 + 8 + 240 || f[14 + 9] != 17) {
++		return;
++	}
++	uint32_t ihl = (f[14] & 0xfu) * 4, at = 14 + ihl + 8;
++	const volatile uint8_t *udp = f + 14 + ihl, *b = udp + 8;
++	if (at + 240 > len || hw_get16be(udp + 2) != 68 || b[0] != 2 || hw_get32be(b + 4) != hw_dhcp_xid) {
++		return;
++	}
++	unsigned kind = 0;
++	uint8_t server[4] = { 0, 0, 0, 0 };
++	for (uint32_t i = 240; at + i + 2 <= len && b[i] != 255;) {
++		if (b[i] == 0) {
++			i++;
++			continue;
++		}
++		uint32_t olen = b[i + 1];
++		if (at + i + 2 + olen > len) {
++			break;
++		}
++		if (b[i] == 53 && olen >= 1) {
++			kind = b[i + 2];
++		} else if (b[i] == 54 && olen >= 4) {
++			for (unsigned k = 0; k < 4; k++) {
++				server[k] = b[i + 2 + k];
++			}
++		}
++		i += 2 + olen;
++	}
++	printf("HEROLTE WIFI: DHCP %s: %u.%u.%u.%u for us, from %u.%u.%u.%u, sent to %s\n", kind == 2 ? "OFFER" : "answer",
++	    b[16], b[17], b[18], b[19], server[0], server[1], server[2], server[3],
++	    f[0] == 0xff ? "everyone (the group key works)" : "us alone");
++	hw_dhcp_seen = true;
++}
++
++/* What the chip has put in the completion rings: control, then frames sent and frames come. */
+ static void
+ hw_drain(void)
+ {
+@@ -484,6 +662,12 @@ hw_drain(void)
+ 		const volatile uint8_t *m = (const volatile uint8_t *)(hw_dma + HW_RING_CTRLCPL + hw_cpl_r * 24u + hw_rx_off);
+ 		uint32_t id = hw_get32(m + 4);
+ 		switch (m[0]) {
++		case MSG_FLOW_RING_CREATE_CMPLT:
++			hw_flow = hw_get16(m + 8) == 0 ? 2 : -1;
++			if (hw_flow < 0) {
++				printf("HEROLTE WIFI: flow ring %u refused, status %d\n", hw_get16(m + 10), (int16_t)hw_get16(m + 8));
++			}
++			break;
+ 		case MSG_IOCTL_CMPLT:
+ 			hw_resp_status = (int16_t)hw_get16(m + 8);
+ 			hw_resp_len = hw_get16(m + 12);
+@@ -506,6 +690,34 @@ hw_drain(void)
+ 		hw_wr16(hw_tcm, hw_d2h_r, hw_cpl_r);
+ 		w = hw_rd16(hw_tcm, hw_d2h_w);
+ 	}
++	w = hw_rd16(hw_tcm, hw_d2h_w + 4);
++	while (hw_txcpl_r != w && w < 1024) {
++		const volatile uint8_t *m = (const volatile uint8_t *)(hw_dma + HW_RING_TXCPL + hw_txcpl_r * 16u + hw_rx_off);
++		if (m[0] == MSG_TX_STATUS) {
++			hw_tx_done++;
++			if (hw_get16(m + 8) != 0) {
++				printf("HEROLTE WIFI: frame %#x not sent, status %d\n", hw_get32(m + 4), (int16_t)hw_get16(m + 8));
++			}
++		}
++		hw_txcpl_r = (uint16_t)((hw_txcpl_r + 1) % 1024);
++		hw_wr16(hw_tcm, hw_d2h_r + 4, hw_txcpl_r);
++		w = hw_rd16(hw_tcm, hw_d2h_w + 4);
++	}
++	w = hw_rd16(hw_tcm, hw_d2h_w + 8);
++	while (hw_rxcpl_r != w && w < 1024) {
++		const volatile uint8_t *m = (const volatile uint8_t *)(hw_dma + HW_RING_RXCPL + hw_rxcpl_r * 32u + hw_rx_off);
++		uint32_t id = hw_get32(m + 4);
++		if (m[0] == MSG_RX_CMPLT && id >= HW_RX_ID && id < HW_RX_ID + HW_RX_COUNT) {
++			uint32_t off = hw_get16(m + 16) ? hw_get16(m + 16) : hw_rx_off, len = hw_get16(m + 14);
++			if (!(hw_get16(m + 18) & 2) && off + len <= HW_FRAME) {        /* not 802.11 */
++				hw_frame((const volatile uint8_t *)(hw_dma + HW_RX_BUFS + (id - HW_RX_ID) * HW_FRAME + off), len);
++			}
++			hw_rx_post(id - HW_RX_ID);
++		}
++		hw_rxcpl_r = (uint16_t)((hw_rxcpl_r + 1) % 1024);
++		hw_wr16(hw_tcm, hw_d2h_r + 8, hw_rxcpl_r);
++		w = hw_rd16(hw_tcm, hw_d2h_w + 8);
++	}
+ 	hw_console(hw_console_at, &hw_console_done);
+ }
+ 
+@@ -561,8 +773,613 @@ hw_setint(const char *name, uint32_t v)
+ }
+ 
+ /*
+- * brcmf_cfg80211_connect() with the firmware's own supplicant: WPA2-PSK, AES. The network is in the drop zone's
+- * wifi/network.txt, its name on the first line and its passphrase on the second; the passphrase is not logged.
++ * Fourth step, WPA2. Samsung's firmware has no supplicant of its own (sup_wpa answers -23, BCME_UNSUPPORTED: Android runs
++ * wpa_supplicant), so the 4-way handshake is ours, as wpa_supplicant's (IEEE 802.11-2016 12.7.6), and the keys go to the
++ * firmware as "wsec_key" (brcmfmac's cfg80211.c). The kernel has no SHA-1 or AES of its own: SHA-1 (FIPS 180-4), HMAC,
++ * PBKDF2 for the PMK, the PRF for the PTK and the AES key unwrap of the group key (RFC 3394) are here, each checked once
++ * against a known answer.
++ */
++struct hw_sha1 {
++	uint32_t h[5];
++	uint8_t block[64];
++	uint32_t used;
++	uint64_t bytes;
++};
++
++#define HW_ROL(x, n)    (((x) << (n)) | ((x) >> (32 - (n))))
++
++static void
++hw_sha1_block(uint32_t h[5], const uint8_t *p)
++{
++	uint32_t w[80], a = h[0], b = h[1], c = h[2], d = h[3], e = h[4];
++	for (unsigned i = 0; i < 16; i++) {
++		w[i] = hw_get32be(p + 4 * i);
++	}
++	for (unsigned i = 16; i < 80; i++) {
++		uint32_t x = w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16];
++		w[i] = HW_ROL(x, 1);
++	}
++	for (unsigned i = 0; i < 80; i++) {
++		uint32_t f, k;
++		if (i < 20) {
++			f = (b & c) | (~b & d);
++			k = 0x5a827999u;
++		} else if (i < 40) {
++			f = b ^ c ^ d;
++			k = 0x6ed9eba1u;
++		} else if (i < 60) {
++			f = (b & c) | (b & d) | (c & d);
++			k = 0x8f1bbcdcu;
++		} else {
++			f = b ^ c ^ d;
++			k = 0xca62c1d6u;
++		}
++		uint32_t t = HW_ROL(a, 5) + f + e + k + w[i];
++		e = d;
++		d = c;
++		c = HW_ROL(b, 30);
++		b = a;
++		a = t;
++	}
++	h[0] += a;
++	h[1] += b;
++	h[2] += c;
++	h[3] += d;
++	h[4] += e;
++}
++
++static void
++hw_sha1_init(struct hw_sha1 *s)
++{
++	static const uint32_t start[5] = { 0x67452301u, 0xefcdab89u, 0x98badcfeu, 0x10325476u, 0xc3d2e1f0u };
++	memcpy(s->h, start, sizeof(start));
++	s->used = 0;
++	s->bytes = 0;
++}
++
++static void
++hw_sha1_update(struct hw_sha1 *s, const void *data, size_t len)
++{
++	const uint8_t *p = data;
++	s->bytes += len;
++	while (len > 0) {
++		size_t n = 64 - s->used < len ? 64 - s->used : len;
++		memcpy(s->block + s->used, p, n);
++		s->used += (uint32_t)n;
++		p += n;
++		len -= n;
++		if (s->used == 64) {
++			hw_sha1_block(s->h, s->block);
++			s->used = 0;
++		}
++	}
++}
++
++static void
++hw_sha1_final(struct hw_sha1 *s, uint8_t out[20])
++{
++	uint64_t bits = s->bytes * 8;
++	uint8_t pad = 0x80, zero = 0, len[8];
++	hw_sha1_update(s, &pad, 1);
++	while (s->used != 56) {
++		hw_sha1_update(s, &zero, 1);
++	}
++	for (unsigned i = 0; i < 8; i++) {
++		len[i] = (uint8_t)(bits >> (56 - 8 * i));
++	}
++	hw_sha1_update(s, len, 8);
++	for (unsigned i = 0; i < 20; i++) {
++		out[i] = (uint8_t)(s->h[i / 4] >> (24 - 8 * (i % 4)));
++	}
++}
++
++/* HMAC-SHA1 in two halves: the key's pads hashed once, the message into in, then hw_hmac_finish(). */
++struct hw_hmac {
++	struct hw_sha1 in, out;
++};
++
++static void
++hw_hmac_start(struct hw_hmac *m, const void *key, size_t len)
++{
++	uint8_t k[64] = { 0 }, pad[64];
++	if (len > 64) {
++		struct hw_sha1 s;
++		hw_sha1_init(&s);
++		hw_sha1_update(&s, key, len);
++		hw_sha1_final(&s, k);
++	} else {
++		memcpy(k, key, len);
++	}
++	for (unsigned i = 0; i < 64; i++) {
++		pad[i] = (uint8_t)(k[i] ^ 0x36);
++	}
++	hw_sha1_init(&m->in);
++	hw_sha1_update(&m->in, pad, 64);
++	for (unsigned i = 0; i < 64; i++) {
++		pad[i] = (uint8_t)(k[i] ^ 0x5c);
++	}
++	hw_sha1_init(&m->out);
++	hw_sha1_update(&m->out, pad, 64);
++	memset(k, 0, sizeof(k));
++	memset(pad, 0, sizeof(pad));
++}
++
++static void
++hw_hmac_finish(struct hw_hmac *m, uint8_t out[20])
++{
++	uint8_t inner[20];
++	hw_sha1_final(&m->in, inner);
++	hw_sha1_update(&m->out, inner, 20);
++	hw_sha1_final(&m->out, out);
++}
++
++/* PBKDF2-HMAC-SHA1 of the passphrase, salted with the network's name, 4096 rounds, 32 bytes: the PMK. */
++static void
++hw_pmk(const char *pass, size_t plen, const char *ssid, size_t slen, uint8_t pmk[32])
++{
++	struct hw_hmac base, m;
++	hw_hmac_start(&base, pass, plen);
++	for (uint8_t block = 1; block <= 2; block++) {
++		uint8_t u[20], t[20], count[4] = { 0, 0, 0, block };
++		m = base;
++		hw_sha1_update(&m.in, ssid, slen);
++		hw_sha1_update(&m.in, count, 4);
++		hw_hmac_finish(&m, u);
++		memcpy(t, u, 20);
++		for (unsigned round = 1; round < 4096; round++) {
++			m = base;
++			hw_sha1_update(&m.in, u, 20);
++			hw_hmac_finish(&m, u);
++			for (unsigned i = 0; i < 20; i++) {
++				t[i] ^= u[i];
++			}
++		}
++		memcpy(pmk + 20 * (block - 1), t, block == 1 ? 20 : 12);
++		memset(t, 0, sizeof(t));
++		memset(u, 0, sizeof(u));
++	}
++	memset(&base, 0, sizeof(base));
++	memset(&m, 0, sizeof(m));
++}
++
++/* AES-128 decryption, byte by byte; the S-box made from its definition (the inverse in GF(2^8), then the affine map). */
++static uint8_t hw_sbox[256], hw_isbox[256];
++
++#define HW_ROL8(x, n)   ((uint8_t)(((x) << (n)) | ((x) >> (8 - (n)))))
++
++static uint8_t
++hw_xtime(uint8_t x)
++{
++	return (uint8_t)((x << 1) ^ ((x & 0x80) ? 0x1b : 0));
++}
++
++static uint8_t
++hw_gmul(uint8_t a, uint8_t b)
++{
++	uint8_t p = 0;
++	while (b) {
++		if (b & 1) {
++			p ^= a;
++		}
++		a = hw_xtime(a);
++		b >>= 1;
++	}
++	return p;
++}
++
++static void
++hw_aes_tables(void)
++{
++	uint8_t p = 1, q = 1;
++	if (hw_sbox[0] == 0x63) {
++		return;
++	}
++	do {
++		p = (uint8_t)(p ^ (uint8_t)(p << 1) ^ ((p & 0x80) ? 0x1b : 0));
++		q = (uint8_t)(q ^ (uint8_t)(q << 1));
++		q = (uint8_t)(q ^ (uint8_t)(q << 2));
++		q = (uint8_t)(q ^ (uint8_t)(q << 4));
++		if (q & 0x80) {
++			q ^= 0x09;
++		}
++		hw_sbox[p] = (uint8_t)(q ^ HW_ROL8(q, 1) ^ HW_ROL8(q, 2) ^ HW_ROL8(q, 3) ^ HW_ROL8(q, 4) ^ 0x63);
++	} while (p != 1);
++	hw_sbox[0] = 0x63;
++	for (unsigned i = 0; i < 256; i++) {
++		hw_isbox[hw_sbox[i]] = (uint8_t)i;
++	}
++}
++
++static void
++hw_aes_expand(const uint8_t key[16], uint8_t rk[176])
++{
++	uint8_t rcon = 1;
++	memcpy(rk, key, 16);
++	for (unsigned i = 16; i < 176; i += 4) {
++		uint8_t t[4] = { rk[i - 4], rk[i - 3], rk[i - 2], rk[i - 1] };
++		if (i % 16 == 0) {
++			uint8_t x = t[0];
++			t[0] = (uint8_t)(hw_sbox[t[1]] ^ rcon);
++			t[1] = hw_sbox[t[2]];
++			t[2] = hw_sbox[t[3]];
++			t[3] = hw_sbox[x];
++			rcon = hw_xtime(rcon);
++		}
++		for (unsigned k = 0; k < 4; k++) {
++			rk[i + k] = (uint8_t)(rk[i - 16 + k] ^ t[k]);
++		}
++	}
++}
++
++static void
++hw_aes_decrypt(const uint8_t rk[176], uint8_t s[16])
++{
++	uint8_t t[16];
++	for (unsigned i = 0; i < 16; i++) {
++		s[i] ^= rk[160 + i];
++	}
++	for (unsigned round = 9;; round--) {
++		for (unsigned r = 0; r < 4; r++) {              /* InvShiftRows */
++			for (unsigned c = 0; c < 4; c++) {
++				t[r + 4 * c] = s[r + 4 * ((c + 4 - r) % 4)];
++			}
++		}
++		for (unsigned i = 0; i < 16; i++) {             /* InvSubBytes, AddRoundKey */
++			s[i] = (uint8_t)(hw_isbox[t[i]] ^ rk[16 * round + i]);
++		}
++		if (round == 0) {
++			break;
++		}
++		for (unsigned c = 0; c < 4; c++) {              /* InvMixColumns */
++			uint8_t a0 = s[4 * c], a1 = s[4 * c + 1], a2 = s[4 * c + 2], a3 = s[4 * c + 3];
++			s[4 * c] = (uint8_t)(hw_gmul(a0, 14) ^ hw_gmul(a1, 11) ^ hw_gmul(a2, 13) ^ hw_gmul(a3, 9));
++			s[4 * c + 1] = (uint8_t)(hw_gmul(a0, 9) ^ hw_gmul(a1, 14) ^ hw_gmul(a2, 11) ^ hw_gmul(a3, 13));
++			s[4 * c + 2] = (uint8_t)(hw_gmul(a0, 13) ^ hw_gmul(a1, 9) ^ hw_gmul(a2, 14) ^ hw_gmul(a3, 11));
++			s[4 * c + 3] = (uint8_t)(hw_gmul(a0, 11) ^ hw_gmul(a1, 13) ^ hw_gmul(a2, 9) ^ hw_gmul(a3, 14));
++		}
++	}
++}
++
++/* RFC 3394: len bytes wrapped (a multiple of 8, at least 24) into len - 8 at out; false if the check value is wrong. */
++static bool
++hw_unwrap(const uint8_t kek[16], const uint8_t *in, uint32_t len, uint8_t *out)
++{
++	uint8_t a[8], b[16], rk[176];
++	uint32_t n = len / 8 - 1;
++	bool ok = true;
++	hw_aes_tables();
++	hw_aes_expand(kek, rk);
++	memcpy(a, in, 8);
++	memcpy(out, in + 8, len - 8);
++	for (unsigned j = 6; j-- > 0;) {
++		for (uint32_t i = n; i >= 1; i--) {
++			uint64_t t = (uint64_t)n * j + i;
++			memcpy(b, a, 8);
++			for (unsigned k = 0; k < 8; k++) {
++				b[7 - k] ^= (uint8_t)(t >> (8 * k));
++			}
++			memcpy(b + 8, out + 8 * (i - 1), 8);
++			hw_aes_decrypt(rk, b);
++			memcpy(a, b, 8);
++			memcpy(out + 8 * (i - 1), b + 8, 8);
++		}
++	}
++	for (unsigned k = 0; k < 8; k++) {
++		ok = ok && a[k] == 0xa6;
++	}
++	memset(rk, 0, sizeof(rk));
++	memset(b, 0, sizeof(b));
++	return ok;
++}
++
++/* IEEE 802.11-2016 J.4.2 (PBKDF2) and RFC 3394 4.1 (the unwrap) */
++static bool
++hw_crypto_check(void)
++{
++	static const uint8_t psk[8] = { 0xf4, 0x2c, 0x6f, 0xc5, 0x2d, 0xf0, 0xeb, 0xef };
++	static const uint8_t wrapped[24] = { 0x1f, 0xa6, 0x8b, 0x0a, 0x81, 0x12, 0xb4, 0x47, 0xae, 0xf3, 0x4b, 0xd8,
++		                             0xfb, 0x5a, 0x7b, 0x82, 0x9d, 0x3e, 0x86, 0x23, 0x71, 0xd2, 0xcf, 0xe5 };
++	uint8_t kek[16], key[16], pmk[32];
++	bool unwrap, pbkdf2;
++	for (unsigned i = 0; i < 16; i++) {
++		kek[i] = (uint8_t)i;
++	}
++	unwrap = hw_unwrap(kek, wrapped, sizeof(wrapped), key);
++	for (unsigned i = 0; i < 16; i++) {
++		unwrap = unwrap && key[i] == (uint8_t)(i * 0x11);
++	}
++	hw_pmk("password", 8, "IEEE", 4, pmk);
++	pbkdf2 = memcmp(pmk, psk, sizeof(psk)) == 0;
++	printf("HEROLTE WIFI: crypto check: PBKDF2 %s, AES key unwrap %s\n", pbkdf2 ? "ok" : "WRONG", unwrap ? "ok" : "WRONG");
++	return pbkdf2 && unwrap;
++}
++
++static uint8_t hw_pmk_key[32], hw_ptk[48], hw_anonce[32], hw_snonce[32], hw_replay[8], hw_rsn[22];
++static uint8_t hw_gtk[32], hw_gtk_rsc[6], hw_group;
++static uint32_t hw_gtk_len, hw_gtk_id, hw_install_after;
++static bool hw_have_ptk;
++static int hw_install;                          /* 1: PTK and GTK once the 4th message has left, 2: the GTK alone */
++static uint64_t hw_install_since;
++
++/* The PRF of 802.11 with SHA-1, 384 bits: KCK, KEK and TK. */
++static void
++hw_derive_ptk(void)
++{
++	static const char label[] = "Pairwise key expansion";
++	uint8_t data[76], out[20];
++	bool mac_first = memcmp(hw_bssid, hw_mac, 6) < 0, nonce_first = memcmp(hw_anonce, hw_snonce, 32) < 0;
++	memcpy(data, mac_first ? hw_bssid : hw_mac, 6);
++	memcpy(data + 6, mac_first ? hw_mac : hw_bssid, 6);
++	memcpy(data + 12, nonce_first ? hw_anonce : hw_snonce, 32);
++	memcpy(data + 44, nonce_first ? hw_snonce : hw_anonce, 32);
++	for (uint8_t i = 0; i < 3; i++) {
++		struct hw_hmac m;
++		hw_hmac_start(&m, hw_pmk_key, 32);
++		hw_sha1_update(&m.in, label, sizeof(label));    /* with its terminating zero, the PRF's separator */
++		hw_sha1_update(&m.in, data, sizeof(data));
++		hw_sha1_update(&m.in, &i, 1);
++		hw_hmac_finish(&m, out);
++		memcpy(hw_ptk + 20 * i, out, i < 2 ? 20 : 8);
++	}
++	memset(out, 0, sizeof(out));
++}
++
++static bool
++hw_flow_open(void)
++{
++	if (hw_flow == 2) {
++		return true;
++	}
++	hw_wr16(hw_tcm, hw_h2d_w + HW_FLOW_ID * 4, 0);
++	hw_wr16(hw_tcm, hw_h2d_r + HW_FLOW_ID * 4, 0);
++	hw_flow_w = 0;
++	hw_flow = 1;
++	if (!hw_submit(hw_fill_flow, NULL)) {
++		return false;
++	}
++	for (unsigned t = 0; t < 400 && hw_flow == 1; t++) {
++		IOSleep(5);
++		hw_drain();
++	}
++	printf("HEROLTE WIFI: flow ring %u: %s\n", HW_FLOW_ID, hw_flow == 2 ? "open" : hw_flow == 1 ? "no answer" : "refused");
++	return hw_flow == 2;
++}
++
++/* An EAPOL-Key frame to the access point, its MIC made with the KCK. */
++static void
++hw_eapol_send(uint16_t info, const uint8_t *nonce, const uint8_t *data, uint16_t dlen)
++{
++	uint8_t f[14 + 99 + sizeof(hw_rsn)] = { 0 }, mic[20];
++	uint8_t *e = f + 14;
++	uint16_t body = (uint16_t)(95 + dlen);
++	struct hw_hmac m;
++	memcpy(f, hw_bssid, 6);
++	memcpy(f + 6, hw_mac, 6);
++	f[12] = 0x88;
++	f[13] = 0x8e;
++	e[0] = 1;                                               /* 802.1X-2001, as wpa_supplicant */
++	e[1] = 3;                                               /* EAPOL-Key */
++	e[2] = (uint8_t)(body >> 8);
++	e[3] = (uint8_t)body;
++	e[4] = 2;                                               /* RSN */
++	e[5] = (uint8_t)(info >> 8);
++	e[6] = (uint8_t)info;
++	memcpy(e + 9, hw_replay, 8);
++	if (nonce) {
++		memcpy(e + 17, nonce, 32);
++	}
++	e[97] = (uint8_t)(dlen >> 8);
++	e[98] = (uint8_t)dlen;
++	if (dlen) {
++		memcpy(e + 99, data, dlen);
++	}
++	hw_hmac_start(&m, hw_ptk, 16);
++	hw_sha1_update(&m.in, e, 4u + body);
++	hw_hmac_finish(&m, mic);
++	memcpy(e + 81, mic, 16);
++	if (!hw_tx(f, 14u + 4u + body)) {
++		printf("HEROLTE WIFI: EAPOL frame not sent\n");
++	}
++}
++
++/* One EAPOL-Key frame from the access point: messages 1 and 3 of the 4-way handshake, or 1 of the group key's. */
++static void
++hw_eapol(const uint8_t *f, uint32_t len)
++{
++	static uint8_t copy[HW_EAPOL_MAX];
++	const uint8_t *e = f + 14;
++	uint8_t kd[256], mic[20];
++	uint32_t kdlen = 0;
++	if (len < 14 + 99 || e[1] != 3 || e[4] != 2) {
++		return;
++	}
++	uint32_t elen = 4u + hw_get16be(e + 2);
++	uint16_t info = hw_get16be(e + 5), dlen = hw_get16be(e + 97);
++	bool pairwise = (info & 0x8) != 0;
++	if (14 + elen > len || 99u + dlen > elen) {
++		printf("HEROLTE WIFI: an EAPOL-Key frame shorter than it says\n");
++		return;
++	}
++	if ((info & 7) != 2) {
++		printf("HEROLTE WIFI: EAPOL-Key descriptor version %u, not 2 (HMAC-SHA1 and AES)\n", info & 7);
++		return;
++	}
++	if (!(info & 0x80)) {                                   /* not from the authenticator */
++		return;
++	}
++	if (pairwise && !(info & 0x100)) {                      /* message 1: a fresh start */
++		memcpy(hw_bssid, f + 6, 6);
++		memcpy(hw_anonce, e + 17, 32);
++		memcpy(hw_replay, e + 9, 8);
++		read_random(hw_snonce, sizeof(hw_snonce));
++		hw_derive_ptk();
++		hw_have_ptk = true;
++		hw_install = 0;
++		if (hw_flow_open()) {
++			hw_eapol_send(0x010a, hw_snonce, hw_rsn, sizeof(hw_rsn));    /* pairwise, MIC; our RSN element */
++			printf("HEROLTE WIFI: handshake 1/4 from %02x:%02x:%02x:%02x:%02x:%02x, 2/4 sent\n",
++			    hw_bssid[0], hw_bssid[1], hw_bssid[2], hw_bssid[3], hw_bssid[4], hw_bssid[5]);
++		}
++		return;
++	}
++	if (!(info & 0x100) || !hw_have_ptk) {
++		return;
++	}
++	if (memcmp(e + 9, hw_replay, 8) <= 0) {
++		printf("HEROLTE WIFI: EAPOL-Key with an old replay counter, dropped\n");
++		return;
++	}
++	memcpy(copy, e, elen);
++	memset(copy + 81, 0, 16);
++	struct hw_hmac m;
++	hw_hmac_start(&m, hw_ptk, 16);
++	hw_sha1_update(&m.in, copy, elen);
++	hw_hmac_finish(&m, mic);
++	if (memcmp(mic, e + 81, 16) != 0) {
++		printf("HEROLTE WIFI: handshake %s: the MIC does not match (a wrong passphrase?)\n", pairwise ? "3/4" : "group 1/2");
++		return;
++	}
++	memcpy(hw_replay, e + 9, 8);
++	if (pairwise && memcmp(e + 17, hw_anonce, 32) != 0) {
++		printf("HEROLTE WIFI: handshake 3/4 with another ANonce, dropped\n");
++		return;
++	}
++	if (info & 0x1000) {                                    /* the key data, wrapped with the KEK */
++		if (dlen < 24 || dlen % 8 || dlen - 8u > sizeof(kd) || !hw_unwrap(hw_ptk + 16, e + 99, dlen, kd)) {
++			printf("HEROLTE WIFI: the key data (%u bytes) does not unwrap\n", dlen);
++			return;
++		}
++		kdlen = dlen - 8u;
++	}
++	hw_gtk_len = 0;
++	for (uint32_t i = 0; i + 2 <= kdlen && i + 2u + kd[i + 1] <= kdlen; i += 2u + kd[i + 1]) {
++		const uint8_t *k = kd + i;
++		/* the GTK KDE: 00-0f-ac:1, the key's index, a reserved byte, the key */
++		if (k[0] == 0xdd && k[1] >= 6 + 16 && k[1] - 6u <= sizeof(hw_gtk) && k[2] == 0x00 && k[3] == 0x0f && k[4] == 0xac && k[5] == 1) {
++			hw_gtk_id = k[6] & 3u;
++			hw_gtk_len = k[1] - 6u;
++			memcpy(hw_gtk, k + 8, hw_gtk_len);
++		}
++	}
++	memset(kd, 0, sizeof(kd));
++	memcpy(hw_gtk_rsc, e + 65, 6);
++	if (pairwise) {
++		hw_eapol_send(0x030a, NULL, NULL, 0);           /* pairwise, MIC, secure */
++		hw_install = 1;
++	} else {
++		hw_eapol_send(0x0302, NULL, NULL, 0);           /* MIC, secure */
++		hw_install = 2;
++	}
++	hw_install_after = hw_tx_next;
++	hw_install_since = mach_absolute_time();
++	printf("HEROLTE WIFI: handshake %s, group key %u of %u bytes; %s sent\n", pairwise ? "3/4" : "group 1/2", hw_gtk_id, hw_gtk_len,
++	    pairwise ? "4/4" : "group 2/2");
++}
++
++/* struct brcmf_wsec_key_le, as "wsec_key": a pairwise key for the access point's address, or a group key with its RSC */
++static int
++hw_key(uint32_t index, const uint8_t *key, uint32_t len, const uint8_t *ea, const uint8_t *rsc, uint32_t algo)
++{
++	uint8_t k[164] = { 0 };
++	hw_put32(k, index);
++	hw_put32(k + 4, len);
++	memcpy(k + 8, key, len);
++	if (algo == ALGO_TKIP && len == 32) {                   /* brcmfmac swaps the MIC keys of a station */
++		uint8_t x[8];
++		memcpy(x, k + 8 + 24, 8);
++		memcpy(k + 8 + 24, k + 8 + 16, 8);
++		memcpy(k + 8 + 16, x, 8);
++	}
++	hw_put32(k + 112, algo);
++	hw_put32(k + 116, ea ? 0 : 2);                          /* BRCMF_PRIMARY_KEY for the group's */
++	if (rsc) {
++		hw_put32(k + 132, 1);
++		hw_put32(k + 140, ((uint32_t)rsc[5] << 24) | ((uint32_t)rsc[4] << 16) | ((uint32_t)rsc[3] << 8) | rsc[2]);
++		hw_put16(k + 144, (uint16_t)((rsc[1] << 8) | rsc[0]));
++	}
++	if (ea) {
++		memcpy(k + 156, ea, 6);
++	}
++	int err = hw_ioctl(WLC_SET_VAR, "wsec_key", k, sizeof(k), NULL, 0);
++	memset(k, 0, sizeof(k));
++	volatile uint8_t *req = (volatile uint8_t *)(hw_dma + HW_IOCTL_REQ);
++	for (unsigned i = 0; i < 9 + sizeof(k); i++) {
++		req[i] = 0;
++	}
++	return err;
++}
++
++/* The keys of the last handshake, once its last message has left (so it does not go out encrypted), or after 300 ms. */
++static void
++hw_keys(void)
++{
++	uint64_t ns = 0;
++	if (hw_install == 0) {
++		return;
++	}
++	absolutetime_to_nanoseconds(mach_absolute_time() - hw_install_since, &ns);
++	if (hw_tx_done < hw_install_after && ns < 300000000ull) {
++		return;
++	}
++	int ptk = 0, gtk = -1;
++	if (hw_install == 1) {
++		ptk = hw_key(0, hw_ptk + 32, 16, hw_bssid, NULL, ALGO_AES_CCM);
++	}
++	if (hw_gtk_len) {
++		gtk = hw_key(hw_gtk_id, hw_gtk, hw_gtk_len, NULL, hw_gtk_rsc, hw_group == 2 ? ALGO_TKIP : ALGO_AES_CCM);
++	}
++	printf("HEROLTE WIFI: keys: pairwise %d, group %d (index %u)%s\n", ptk, gtk, hw_gtk_id, hw_tx_done < hw_install_after ? ", the last frame not confirmed sent" : "");
++	if (hw_install == 1 && ptk == 0 && gtk == 0) {
++		hw_keyed = true;
++	}
++	hw_install = 0;
++}
++
++/* A DHCP DISCOVER to everyone, answers asked to everyone too: what comes back proves both keys. */
++static void
++hw_dhcp_discover(void)
++{
++	static const uint8_t options[] = { 0x63, 0x82, 0x53, 0x63, 53, 1, 1, 55, 3, 1, 3, 6, 255 };
++	static uint8_t f[14 + 20 + 8 + 300];
++	uint8_t *ip = f + 14, *udp = ip + 20, *b = udp + 8;
++	uint32_t sum = 0;
++	memset(f, 0, sizeof(f));
++	memset(f, 0xff, 6);
++	memcpy(f + 6, hw_mac, 6);
++	f[12] = 0x08;
++	ip[0] = 0x45;
++	ip[2] = (uint8_t)((20 + 8 + 300) >> 8);
++	ip[3] = (uint8_t)(20 + 8 + 300);
++	ip[8] = 64;
++	ip[9] = 17;
++	memset(ip + 16, 0xff, 4);
++	for (unsigned i = 0; i < 20; i += 2) {
++		sum += ((uint32_t)ip[i] << 8) | ip[i + 1];
++	}
++	while (sum >> 16) {
++		sum = (sum & 0xffff) + (sum >> 16);
++	}
++	ip[10] = (uint8_t)(~sum >> 8);
++	ip[11] = (uint8_t)~sum;
++	udp[1] = 68;
++	udp[3] = 67;
++	udp[4] = (uint8_t)((8 + 300) >> 8);
++	udp[5] = (uint8_t)(8 + 300);
++	b[0] = 1;
++	b[1] = 1;
++	b[2] = 6;
++	read_random(&hw_dhcp_xid, sizeof(hw_dhcp_xid));
++	hw_put32(b + 4, __builtin_bswap32(hw_dhcp_xid));        /* as hw_get32be() will read it back */
++	b[10] = 0x80;                                           /* answer to everyone */
++	memcpy(b + 28, hw_mac, 6);
++	memcpy(b + 236, options, sizeof(options));
++	hw_dhcp_seen = false;
++	printf("HEROLTE WIFI: DHCP DISCOVER %s\n", hw_tx(f, sizeof(f)) ? "sent" : "not sent");
++}
++
++/*
++ * brcmf_cfg80211_connect() for wpa_supplicant: WPA2-PSK with our RSN element, the handshake ours. The network is in the
++ * drop zone's wifi/network.txt, its name on the first line and its passphrase on the second; the passphrase is not logged.
+  */
+ static void
+ hw_join(void)
+@@ -594,34 +1411,43 @@ hw_join(void)
+ 		return;
+ 	}
+ 	printf("HEROLTE WIFI: joining \"%s\", a passphrase of %zu characters\n", line[0], plen);
++	if (!hw_crypto_check()) {
++		memset(text, 0, sizeof(text));
++		return;
++	}
++
++	/* the group cipher the scan saw; the RSN element is the one of the association request and of message 2 */
++	uint8_t group = 0xff;
++	bool seen = false;
++	for (unsigned k = 0; k < hw_ssids && !seen; k++) {
++		if ((seen = strcmp(hw_ssid_seen[k], line[0]) == 0)) {
++			group = hw_seen_group[k];
++		}
++	}
++	hw_group = group == 2 ? 2 : 4;
++	static const uint8_t rsn[sizeof(hw_rsn)] = { 0x30, 20, 1, 0, 0x00, 0x0f, 0xac, 4, 1, 0, 0x00, 0x0f, 0xac, 4, 1, 0, 0x00, 0x0f, 0xac, 2, 0, 0 };
++	memcpy(hw_rsn, rsn, sizeof(rsn));
++	hw_rsn[7] = hw_group;
++	printf("HEROLTE WIFI: %s; group cipher %u (2 TKIP, 4 CCMP, 255 no RSN element), using %u\n", seen ? "seen by the scan" : "not seen by the scan",
++	    group, hw_group);
++
++	uint64_t t0 = mach_absolute_time(), ns = 0;
++	hw_pmk(line[1], plen, line[0], slen, hw_pmk_key);
++	absolutetime_to_nanoseconds(mach_absolute_time() - t0, &ns);
++	printf("HEROLTE WIFI: PMK made in %llu ms\n", ns / 1000000);
+ 
+-	uint32_t one = 1, sup = 0;
++	uint32_t one = 1;
++	int ie = hw_ioctl(WLC_SET_VAR, "wpaie", hw_rsn, sizeof(hw_rsn), NULL, 0);
+ 	int infra = hw_ioctl(WLC_SET_INFRA, NULL, &one, 4, NULL, 0);
+ 	int wpa = hw_setint("wpa_auth", 0x80);                 /* WPA2_AUTH_PSK */
+ 	int auth = hw_setint("auth", 0);                        /* open */
+-	int wsec = hw_setint("wsec", 4);                        /* AES */
++	int wsec = hw_setint("wsec", hw_group == 2 ? 6 : 4);    /* AES, and TKIP for the group */
+ 	int mfp = hw_setint("mfp", 0);
+-	int sup_get = hw_ioctl(WLC_GET_VAR, "sup_wpa", NULL, 0, &sup, 4);
+-	int sup_set = hw_setint("sup_wpa", 1);
+-	printf("HEROLTE WIFI: infra %d, wpa_auth %d, auth %d, wsec %d, mfp %d, sup_wpa %d (was %u) set %d\n", infra, wpa, auth, wsec, mfp,
+-	    sup_get, sup, sup_set);
+-
+-	/* brcmf_wsec_pmk_le with BRCMF_WSEC_PASSPHRASE: the firmware derives the PMK */
+-	uint8_t pmk[2 + 2 + 65] = { 0 };
+-	uint16_t klen = (uint16_t)plen, kflags = 1;
+-	memcpy(pmk, &klen, 2);
+-	memcpy(pmk + 2, &kflags, 2);
+-	memcpy(pmk + 4, line[1], plen);
+-	int pmk_err = hw_ioctl(WLC_SET_WSEC_PMK, NULL, pmk, sizeof(pmk), NULL, 0);
+-	memset(pmk, 0, sizeof(pmk));
+-	volatile uint8_t *req = (volatile uint8_t *)(hw_dma + HW_IOCTL_REQ);
+-	for (unsigned i = 0; i < sizeof(pmk); i++) {
+-		req[i] = 0;
+-	}
++	printf("HEROLTE WIFI: wpaie %d, infra %d, wpa_auth %d, auth %d, wsec %d, mfp %d\n", ie, infra, wpa, auth, wsec, mfp);
+ 
+ 	uint8_t mask[16] = { 0 };
+ 	int err = hw_ioctl(WLC_GET_VAR, "event_msgs", NULL, 0, mask, sizeof(mask));
+-	static const uint8_t wanted[] = { 0, 1, 3, 5, 6, 7, 12, 16, 46, E_ESCAN_RESULT };
++	static const uint8_t wanted[] = { 0, 1, 3, 5, 6, 7, 12, 16, E_ESCAN_RESULT };
+ 	for (unsigned i = 0; i < sizeof(wanted); i++) {
+ 		mask[wanted[i] / 8] = (uint8_t)(mask[wanted[i] / 8] | (1u << (wanted[i] % 8)));
+ 	}
+@@ -632,18 +1458,23 @@ hw_join(void)
+ 	uint32_t sl = (uint32_t)slen;
+ 	memcpy(join_params, &sl, 4);
+ 	memcpy(join_params + 4, line[0], slen);
+-	hw_link = hw_keyed = false;
++	hw_link = hw_keyed = hw_have_ptk = false;
+ 	hw_joined = 0;
++	hw_install = 0;
+ 	int ssid_err = hw_ioctl(WLC_SET_SSID, NULL, join_params, sizeof(join_params), NULL, 0);
+-	printf("HEROLTE WIFI: pmk %d, event_msgs %d/%d, set_ssid %d\n", pmk_err, err, mask_err, ssid_err);
++	printf("HEROLTE WIFI: event_msgs %d/%d, set_ssid %d\n", err, mask_err, ssid_err);
+ 	memset(text, 0, sizeof(text));
+ 
+-	uint64_t t0 = mach_absolute_time();
++	t0 = mach_absolute_time();
+ 	for (unsigned t = 0; t < 3000 && !(hw_link && hw_keyed) && hw_joined >= 0; t++) {
+ 		IOSleep(10);
+ 		hw_drain();
++		for (; hw_eapol_out != hw_eapol_in; hw_eapol_out++) {
++			unsigned slot = hw_eapol_out % HW_EAPOL_SLOTS;
++			hw_eapol(hw_eapol_q[slot], hw_eapol_len[slot]);
++		}
++		hw_keys();
+ 	}
+-	uint64_t ns = 0;
+ 	absolutetime_to_nanoseconds(mach_absolute_time() - t0, &ns);
+ 	if (hw_link && hw_keyed) {
+ 		uint8_t rssi[12] = { 0 }, bssid[6] = { 0 };
+@@ -651,9 +1482,18 @@ hw_join(void)
+ 		hw_ioctl(WLC_GET_BSSID, NULL, NULL, 0, bssid, sizeof(bssid));
+ 		printf("HEROLTE WIFI: CONNECTED with WPA2 in %llu ms: %02x:%02x:%02x:%02x:%02x:%02x, %d dBm\n", ns / 1000000,
+ 		    bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], (int32_t)hw_get32(rssi));
++		hw_dhcp_discover();
++		for (unsigned t = 0; t < 500 && !hw_dhcp_seen; t++) {
++			IOSleep(10);
++			hw_drain();
++		}
++		printf("HEROLTE WIFI: %s; %u frames came, %u of %u sent\n", hw_dhcp_seen ? "the network answers" : "no DHCP answer in 5 s",
++		    hw_rx_frames, hw_tx_done, hw_tx_next);
+ 	} else {
+-		printf("HEROLTE WIFI: not connected after %llu ms: link %d, keys %d, join %d\n", ns / 1000000, hw_link, hw_keyed, hw_joined);
++		printf("HEROLTE WIFI: not connected after %llu ms: link %d, keys %d, join %d; %u frames came, %u of %u sent\n", ns / 1000000,
++		    hw_link, hw_keyed, hw_joined, hw_rx_frames, hw_tx_done, hw_tx_next);
+ 	}
++	memset(hw_pmk_key, 0, sizeof(hw_pmk_key));
+ }
+ 
+ static void
+@@ -664,7 +1504,7 @@ hw_msgbuf(uint32_t shared, uint32_t ramsize, const uint8_t *clm, uint32_t clm_le
+ 		printf("HEROLTE WIFI: no mapping for the rings\n");
+ 		return;
+ 	}
+-	for (uint32_t i = 0; i < HW_CTRL_BUFS + 16 * HW_CTRL_BUF; i += 8) {
++	for (uint32_t i = 0; i < HW_DMA_BYTES; i += 8) {
+ 		*(volatile uint64_t *)(hw_dma + i) = 0;
+ 	}
+ 	uint32_t info = hw_rd(hw_tcm, shared + 48);
+@@ -702,10 +1542,16 @@ hw_msgbuf(uint32_t shared, uint32_t ramsize, const uint8_t *clm, uint32_t clm_le
+ 	for (uint32_t n = 0; n < 16; n++) {
+ 		hw_submit(hw_fill_post, (void *)(uintptr_t)n);
+ 	}
++	uint32_t rx_most = hw_rd16(hw_tcm, shared + 34), rx = rx_most && rx_most < HW_RX_COUNT ? rx_most : HW_RX_COUNT;
++	for (uint32_t n = 0; n < rx; n++) {
++		hw_rx_post(n);
++	}
++	printf("HEROLTE WIFI: %u rx buffers posted (the firmware takes up to %u)\n", rx, rx_most);
+ 
+ 	uint8_t mac[6] = { 0 };
+ 	int err = hw_ioctl(WLC_GET_VAR, "cur_etheraddr", NULL, 0, mac, 6);
+ 	printf("HEROLTE WIFI: cur_etheraddr: %d, %02x:%02x:%02x:%02x:%02x:%02x\n", err, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
++	memcpy(hw_mac, mac, 6);
+ 	char ver[128] = { 0 };
+ 	err = hw_ioctl(WLC_GET_VAR, "ver", NULL, 0, ver, sizeof(ver) - 1);
+ 	for (unsigned i = 0; i < sizeof(ver); i++) {

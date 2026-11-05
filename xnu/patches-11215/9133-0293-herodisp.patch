@@ -1,0 +1,98 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 9a64905..7045f66 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2519,6 +2519,32 @@ hg_audio_thread(void *arg, __unused wait_result_t wr)
+  * CON0: M in bits 25:16, P in 13:8, S in 2:0, rate = 26 MHz * M / (P * 2^S).
+  */
+ static void
++hg_decon_measure(vm_offset_t decon, const char *when)
++{
++	uint64_t start = mach_absolute_time(), now = start, rise = 0, first = 0, period = 0, active = 0, began = 0;
++	uint32_t top = 0, frames = 0, last = 0;
++	while (now - start < 26000000u / 5u) {  /* 200 ms */
++		uint32_t line = hg_rd(decon, 0x8c) & 0xffff;
++		now = mach_absolute_time();
++		top = line > top ? line : top;
++		if (line != 0 && last == 0) {
++			began = now;
++			if (rise) {
++				period = now - rise;
++			} else {
++				first = now;
++			}
++			rise = now;
++			frames++;
++		} else if (line == 0 && last != 0) {
++			active = now - began;
++		}
++		last = line;
++	}
++	printf("HEROLTE DECON: %s: %u frames in 200 ms, period %llu us, reading %llu us, top line %u, span %llu us\n", when, frames,
++	    period / 26, active / 26, top, (rise - first) / 26);
++}
++static void
+ hg_bus_thread(__unused void *arg, __unused wait_result_t wr)
+ {
+ 	static const struct { const char *name; uint32_t base, con0; } plls[] = {
+@@ -2527,38 +2553,30 @@ hg_bus_thread(__unused void *arg, __unused wait_result_t wr)
+ 	};
+ 	hg_msleep(30000);
+ 	/*
+-	 * DECON_F, read only: the panel takes a frame in command mode, on its TE pulse. The line counter says when it reads our
+-	 * memory: how often (the real refresh), and for how long (a copy into that memory then is what tears).
++	 * The panel takes a frame in command mode on its TE pulse, 60 times a second, but DECON_F as the bootloader leaves it
++	 * reads a frame in 35.8 ms: one TE in three, 20 Hz. Boot-arg herodisp=N: its clocks up, one step at a time and measured.
+ 	 */
+-	vm_offset_t decon = ml_io_map(0x13960000u, 0x1000);
+-	for (unsigned round = 0; decon && round < 6; round++) {
+-		uint64_t start = mach_absolute_time(), now = start, rise = 0, first = 0, period = 0, active = 0, began = 0;
+-		uint32_t top = 0, frames = 0, last = 0;
+-		while (now - start < 26000000u / 5u) {  /* 200 ms */
+-			uint32_t line = hg_rd(decon, 0x8c) & 0xffff;
+-			now = mach_absolute_time();
+-			top = line > top ? line : top;
+-			if (line != 0 && last == 0) {
+-				began = now;
+-				if (rise) {
+-					period = now - rise;
+-				} else {
+-					first = now;
+-				}
+-				rise = now;
+-				frames++;
+-			} else if (line == 0 && last != 0) {
+-				active = now - began;
+-			}
+-			last = line;
+-		}
+-		printf("HEROLTE DECON: %u frames in 200 ms, period %llu us, reading %llu us, top line %u; span %llu us\n", frames,
+-		    period / 26, active / 26, top, (rise - first) / 26);
+-		printf("HEROLTE DECON: control %#x update %#x trig %#x\n", hg_rd(decon, 0), hg_rd(decon, 0x60), hg_rd(decon, 0x70));
+-		for (unsigned w = 0; w < 8 && round == 0; w++) {
+-			printf("HEROLTE DECON: window %u control %#x end %#x\n", w, hg_rd(decon, 0x130 + w * 0x20), hg_rd(decon, 0x138 + w * 0x20));
++	vm_offset_t decon = ml_io_map(0x13960000u, 0x1000), top = ml_io_map(0x10570000u, 0x1000), disp0 = ml_io_map(0x13ad0000u, 0x1000);
++	uint32_t steps = 0;
++	PE_parse_boot_argn("herodisp", &steps, sizeof(steps));
++	if (decon && top && disp0) {
++		printf("HEROLTE DISP: top mux %#x %#x %#x %#x div %#x %#x %#x %#x\n", hg_rd(top, 0x26c), hg_rd(top, 0x270), hg_rd(top, 0x2f4), hg_rd(top, 0x2f8),
++		    hg_rd(top, 0x3cc), hg_rd(top, 0x3d0), hg_rd(top, 0x454), hg_rd(top, 0x458));
++		printf("HEROLTE DISP: disp0 pll %#x mux %#x %#x %#x %#x div %#x %#x\n", hg_rd(disp0, 0x100), hg_rd(disp0, 0x20c), hg_rd(disp0, 0x210), hg_rd(disp0, 0x25c),
++		    hg_rd(disp0, 0x260), hg_rd(disp0, 0x404), hg_rd(disp0, 0x408));
++		printf("HEROLTE DISP: decon vclk %#x eclk %#x path %#x\n", hg_rd(decon, 0xf4), hg_rd(decon, 0xf8), hg_rd(decon, 0x230));
++		hg_decon_measure(decon, "as found");
++		static const struct { const char *name; uint32_t reg; } ups[] = {
++			{ "bus clock 0", 0x3cc }, { "bus clock 1", 0x3d0 }, { "vclk", 0x458 }, { "eclk", 0x454 },
++		};
++		for (unsigned u = 0; u < steps && u < sizeof(ups) / sizeof(ups[0]); u++) {
++			uint32_t was = hg_rd(top, ups[u].reg), div = was & 0xf;
++			printf("HEROLTE DISP: %s: div %u to %u\n", ups[u].name, div, (div + 1) / 2 ? (div + 1) / 2 - 1 : 0);
++			hg_msleep(11000);
++			hg_wr(top, ups[u].reg, (was & ~0xfu) | ((div + 1) / 2 ? (div + 1) / 2 - 1 : 0));
++			hg_msleep(1000);
++			hg_decon_measure(decon, ups[u].name);
+ 		}
+-		hg_msleep(20000);
+ 	}
+ 	for (unsigned i = 0; i < sizeof(plls) / sizeof(plls[0]); i++) {
+ 		vm_offset_t cmu = ml_io_map(plls[i].base, 0x1000);

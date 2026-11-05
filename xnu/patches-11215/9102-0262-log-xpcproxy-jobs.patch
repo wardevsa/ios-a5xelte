@@ -1,0 +1,30 @@
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index 42eead8..b62bdbd 100644
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -4336,6 +4336,11 @@ do_fork1:
+ 	 * as 0 and pretends the call succeeded.
+ 	 */
+ 	error = exec_activate_image(imgp);
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	if (error) {
++		printf("SPAWN FAILED %s[%d]: %s -> %d\n", p->p_name, proc_getpid(p), imgp->ip_strings + strlen(EXECUTABLE_KEY), error);
++	}
++#endif
+ #if defined(HAS_APPLE_PAC)
+ 	const uint8_t disable_user_jop = imgp->ip_flags & IMGPF_NOJOP ? TRUE : FALSE;
+ 	ml_task_set_jop_pid_from_shared_region(new_task, disable_user_jop);
+@@ -6096,6 +6101,13 @@ exec_extract_strings(struct image_params *imgp)
+ 	{
+ 		extern int herolte_gl_env(const char *path, int pid, const char **extra, int max);
+ 		const char *extra[4];
++		const char *herolte_path = imgp->ip_strings + strlen(EXECUTABLE_KEY);
++		size_t herolte_len = strlen(herolte_path);
++		/* Which launchd job a xpcproxy is for: its second argument, to match with its EXIT line. */
++		if (herolte_len >= 9 && strcmp(herolte_path + herolte_len - 9, "/xpcproxy") == 0 && imgp->ip_argc >= 2) {
++			printf("XPC[%d] %s\n", proc_getpid(vfs_context_proc(imgp->ip_vfs_context)),
++			    imgp->ip_startargv + strlen(imgp->ip_startargv) + 1);
++		}
+ 		/* posix_spawn runs this on the parent's thread: the new process is the context's. */
+ 		int n = herolte_gl_env(imgp->ip_strings + strlen(EXECUTABLE_KEY),
+ 		    proc_getpid(vfs_context_proc(imgp->ip_vfs_context)), extra, 4);

@@ -1,0 +1,83 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+index c743b77..129160f 100644
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -49,11 +49,19 @@ static int hgl_launches;
+ static int hgl_pid = -1;        /* the backboardd that got the shim */
+ static int hgl_sb_pid = -1;     /* the SpringBoard that got libherosb */
+ static int hgl_sb_launches;
++#define HGL_APP_LIB     "/private/var/herolte/lib/libheroapp.dylib"
++#define HGL_APP_PIDS    64
++static int hgl_app_pids[HGL_APP_PIDS];  /* the latest applications that got libheroapp */
++static unsigned hgl_app_next;
+ 
+ uint64_t
+ herolte_gl_dyld_flags(void)
+ {
+-	if ((hgl_pid < 0 || proc_selfpid() != hgl_pid) && (hgl_sb_pid < 0 || proc_selfpid() != hgl_sb_pid)) {
++	bool app = false;
++	for (unsigned i = 0; i < HGL_APP_PIDS; i++) {
++		app = app || hgl_app_pids[i] == proc_selfpid();
++	}
++	if (!app && (hgl_pid < 0 || proc_selfpid() != hgl_pid) && (hgl_sb_pid < 0 || proc_selfpid() != hgl_sb_pid)) {
+ 		return 0;
+ 	}
+ 	return AMFI_DYLD_OUTPUT_ALLOW_AT_PATH | AMFI_DYLD_OUTPUT_ALLOW_PATH_VARS |
+@@ -130,6 +138,16 @@ herolte_gl_env(const char *path, int pid, const char **extra, int max)
+ 			return 1;
+ 		}
+ 	}
++	/* libheroapp.dylib in the drop zone goes into every application: their last words, and no OpenGL ES that jumps to 0. */
++	if (path != NULL && strstr(path, "/Applications/") != NULL && max >= 1) {
++		vnode_t appvp = NULLVP;
++		if (vnode_lookup(HGL_APP_LIB, 0, &appvp, vfs_context_kernel()) == 0) {
++			vnode_put(appvp);
++			hgl_app_pids[hgl_app_next++ % HGL_APP_PIDS] = pid;
++			extra[0] = "DYLD_INSERT_LIBRARIES=" HGL_APP_LIB;
++			return 1;
++		}
++	}
+ 	if (hgl_mode == 0 || path == NULL || strcmp(path, HGL_TARGET) != 0 || max < 3) {
+ 		return 0;
+ 	}
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index 9f44e6a..6154a7e 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -124,6 +124,8 @@ class AppleCLCD : public IOMobileFramebuffer {
+ 	uint64_t            fVsyncNext;     /* the tick due, mach time: ticks are 60 Hz apart however long one takes */
+ 	uint64_t            fVsyncMissed;   /* ticks passed over: one took longer than the period */
+ 	void rearmVsync(IOTimerEventSource *sender);
++	uint64_t            fLastShown;     /* the tick the last frame went to the panel at */
++	uint32_t            fGaps[4];       /* frames shown 1, 2, 3, 4 to 30 ticks after the one before: what judder is */
+ 
+ 	static void vsyncFired(OSObject *owner, IOTimerEventSource *sender);
+ 
+@@ -419,6 +421,11 @@ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+ 		uint64_t before = fb->fPerfLog ? mach_absolute_time() : 0;
+ #endif
+ 		uint64_t bytes = fb->present(rec);
++		uint64_t gap = count - fb->fLastShown;
++		if (gap >= 1 && gap <= 30) {
++			fb->fGaps[gap >= 4 ? 3 : gap - 1]++;
++		}
++		fb->fLastShown = count;
+ #if defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 		if (fb->fPerfLog) {
+ 			uint64_t ns = 0;
+@@ -444,11 +451,13 @@ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+ 		absolutetime_to_nanoseconds(finished - fb->fPerfWindowStart, &elapsedNS);
+ 		if (fb->fPerfFrames != 0 && elapsedNS != 0) {
+ 			uint64_t fpsTenths = fb->fPerfFrames * 10000000000ULL / elapsedNS;
+-			IOLog("A5XELTE FB: frames=%llu elapsed_ms=%llu fps=%llu.%llu bytes=%llu avg_copy_us=%llu max_copy_us=%llu missed=%llu\n",
++			IOLog("A5XELTE FB: frames=%llu elapsed_ms=%llu fps=%llu.%llu bytes=%llu avg_copy_us=%llu max_copy_us=%llu missed=%llu gaps=%u/%u/%u/%u\n",
+ 			    fb->fPerfFrames, elapsedNS / 1000000, fpsTenths / 10,
+ 			    fpsTenths % 10, fb->fPerfBytes,
+-			    fb->fPerfNS / fb->fPerfFrames / 1000, fb->fPerfMaxNS / 1000, fb->fVsyncMissed);
++			    fb->fPerfNS / fb->fPerfFrames / 1000, fb->fPerfMaxNS / 1000, fb->fVsyncMissed,
++			    fb->fGaps[0], fb->fGaps[1], fb->fGaps[2], fb->fGaps[3]);
+ 		}
++		bzero(fb->fGaps, sizeof(fb->fGaps));
+ 		fb->fPerfFrames = fb->fPerfBytes = fb->fPerfNS = fb->fPerfMaxNS = 0;
+ 		fb->fPerfWindowStart = finished;
+ 	}

@@ -1,0 +1,12 @@
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index d749c26..823f9c3 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -342,6 +342,7 @@ AppleCLCD::start(IOService *provider)
+  * came on top of the period, ticks were 18-19.5 ms apart (51-55 Hz, unevenly), and CoreAnimation's 60 Hz frames beat
+  * against them. A tick too late is passed over, so that the ones after it are on time.
+  */
++void
+ AppleCLCD::rearmVsync(IOTimerEventSource *sender)
+ {
+ 	uint64_t period, now = mach_absolute_time();

@@ -1,0 +1,26 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index d3348e7..8cdb635 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2241,6 +2241,7 @@ ha_read(uint32_t reg, uint16_t *value)
+ #include <sys/conf.h>
+ #include <sys/errno.h>
+ #include <sys/ioccom.h>
++#include <sys/proc.h>
+ #include <sys/uio.h>
+ #include "herolte_audio_table.h"
+ 
+@@ -2391,9 +2392,11 @@ static uint64_t ha_ring_lost, ha_ring_short;
+ static vm_offset_t ha_i2s;
+ 
+ static int
+-ha_dev_open(__unused dev_t dev, __unused int flags, __unused int devtype, struct proc *p)
++ha_dev_open(__unused dev_t dev, __unused int flags, __unused int devtype, __unused struct proc *p)
+ {
+-	printf("HEROLTE AUDIO: /dev/hakios-audio opened by %s\n", proc_name_address(p));
++	char name[32];
++	proc_selfname(name, sizeof(name));
++	printf("HEROLTE AUDIO: /dev/hakios-audio opened by %s\n", name);
+ 	return 0;
+ }
+ 

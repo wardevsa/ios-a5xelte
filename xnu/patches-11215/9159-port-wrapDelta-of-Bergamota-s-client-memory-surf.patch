@@ -1,0 +1,45 @@
+diff --git a/iokit/Kernel/arm/HeroGPU.cpp b/iokit/Kernel/arm/HeroGPU.cpp
+index 3ba3cb8..3309a9e 100644
+--- a/iokit/Kernel/arm/HeroGPU.cpp
++++ b/iokit/Kernel/arm/HeroGPU.cpp
+@@ -165,7 +165,8 @@ herogpu_bo_import_surface(struct herogpu_bo *bo, uint32_t id)
+ 		OSSafeReleaseNULL(s);
+ 		return false;
+ 	}
+-	uint64_t size = ((uint64_t)s->allocSize + 0xfff) & ~0xfffull;
++	/* wrapped client memory starts wrapDelta bytes into its first page (SweetSurface) */
++	uint64_t size = ((uint64_t)s->allocSize + s->wrapDelta + 0xfff) & ~0xfffull;
+ 	if (size > s->memory->getLength() || size > HEROGPU_MAX_BO_BYTES) {
+ 		s->release();
+ 		return false;
+@@ -447,7 +448,7 @@ HeroGPUUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *
+ 			out[4] = s->width;
+ 			out[5] = s->height;
+ 			out[6] = s->pixelFormat;
+-			out[7] = s->offset;
++			out[7] = s->offset + s->wrapDelta;
+ 			out[8] = s->planeCount;
+ 			outCount = 9;
+ 		}
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index a327798..d07f460 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -867,7 +867,7 @@ AppleCLCD::present(const uint8_t *rec)
+ 		uint64_t last = (uint64_t)s->offset + (uint64_t)(sy + h - 1) * s->bytesPerRow +
+ 		    (uint64_t)(sx + w) * 4;
+ 		if (w <= 0 || h <= 0 || s->elementWidth != 1 || s->elementHeight != 1 ||
+-		    s->memory == NULL || last > s->memory->getLength()) {
++		    s->memory == NULL || last + s->wrapDelta > s->memory->getLength()) {
+ 			src = 0;
+ 		}
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+@@ -952,7 +952,7 @@ AppleCLCD::gpuPresent(SweetSurface *s, int32_t sx, int32_t sy, int32_t w, int32_
+ 		__asm__ volatile ("dc cvac, %0" : : "r" (p) : "memory");
+ 	}
+ 	__asm__ volatile ("dsb sy" ::: "memory");
+-	if (!herolte_gpu_present_draw(slot, (uint32_t)off, s->bytesPerRow, (uint32_t)w, (uint32_t)h)) {
++	if (!herolte_gpu_present_draw(slot, (uint32_t)(off + s->wrapDelta), s->bytesPerRow, (uint32_t)w, (uint32_t)h)) {
+ 		failures++;
+ 		return false;
+ 	}

@@ -1,0 +1,81 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index aa2ab42..2c02291 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -478,6 +478,66 @@ hg_read_fault_report(void)
+ 	    top ? hg_rd(top, 0x1e0) : 0);
+ }
+ 
++/*
++ * A soft reset does not clear these read faults: within a few jobs the walks of
++ * the page tables fail too, as if the GPU's path to memory were gone. The next
++ * thing that can clear it is what Linux does between uses, the whole G3D power
++ * domain off and on. CMU_G3D is in that domain: its muxes, dividers and gates
++ * are put back before anything touches the GPU. Boot-arg herogpu_pdcycle=0: never.
++ */
++#define HG_PD_CYCLES_MAX        3
++
++static bool
++hg_power_cycle(void)
++{
++	static const uint16_t cmu_regs[] = {
++		0x200, 0x204, 0x20c, 0x210, 0x214, 0x400, 0x404, 0x408, 0x40c,
++		0x600, 0x604, 0x60c, 0x610, 0x614, 0x800, 0x804, 0x900, 0xa00,
++	};
++	static vm_offset_t pmu, cmu;
++	static unsigned cycles;
++	uint32_t saved[sizeof(cmu_regs) / sizeof(cmu_regs[0])];
++	int enabled = 1;
++
++	PE_parse_boot_argn("herogpu_pdcycle", &enabled, sizeof(enabled));
++	if (!enabled || cycles >= HG_PD_CYCLES_MAX) {
++		return false;
++	}
++	cycles++;
++	if (!pmu) {
++		pmu = ml_io_map(HG_PMU_PA, 0x8000);
++		cmu = ml_io_map(HG_CMU_PA, 0x1000);
++	}
++	if (!pmu || !cmu) {
++		return false;
++	}
++	for (unsigned i = 0; i < sizeof(cmu_regs) / sizeof(cmu_regs[0]); i++) {
++		saved[i] = hg_rd(cmu, cmu_regs[i]);
++	}
++	hg_cores_off();
++	hg_wr(pmu, HG_PMU_G3D_CONF, 0);
++	bool off = false;
++	for (unsigned i = 0; i < 10000 && !off; i++) {
++		delay(10);
++		off = (hg_rd(pmu, HG_PMU_G3D_STAT) & 0xf) == 0;
++	}
++	hg_wr(pmu, HG_PMU_G3D_CONF, 0xf);
++	bool on = false;
++	for (unsigned i = 0; i < 10000 && !on; i++) {
++		delay(10);
++		on = (hg_rd(pmu, HG_PMU_G3D_STAT) & 0xf) == 0xf;
++	}
++	printf("HEROLTE GPU: power domain cycle %u: off %d, on %d, status %#x\n", cycles, off, on, hg_rd(pmu, HG_PMU_G3D_STAT));
++	if (!on) {
++		return false;
++	}
++	for (unsigned i = 0; i < sizeof(cmu_regs) / sizeof(cmu_regs[0]); i++) {
++		hg_wr(cmu, cmu_regs[i], saved[i]);
++	}
++	delay(100);
++	return true;
++}
++
+ static void
+ hg_recover(const char *what)
+ {
+@@ -510,6 +570,9 @@ hg_recover(const char *what)
+ 	    (hg_rd(hg_gpu, JS_BASE(1) + 0x24) & 0xff) != 0x08) {
+ 		return;
+ 	}
++	if (read_fault && hg_read_faults == 8) {
++		hg_power_cycle();
++	}
+ 	hg_wr(hg_gpu, 0x024, 0xffffffffu);                      /* GPU_IRQ_CLEAR */
+ 	hg_wr(hg_gpu, 0x030, 1);                                /* GPU_COMMAND SOFT_RESET */
+ 	for (unsigned i = 0; i < 10000 && !(hg_rd(hg_gpu, GPU_IRQ_RAWSTAT) & 0x100); i++) {
