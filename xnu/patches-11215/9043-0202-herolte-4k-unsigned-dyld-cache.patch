@@ -1,0 +1,51 @@
+diff --git a/bsd/kern/ubc_subr.c b/bsd/kern/ubc_subr.c
+index 957b4c8..06d77b2 100644
+--- a/bsd/kern/ubc_subr.c
++++ b/bsd/kern/ubc_subr.c
+@@ -366,7 +366,12 @@ cs_validate_codedirectory(const CS_CodeDirectory *cd, size_t length)
+ 	if (ntohl(cd->magic) != CSMAGIC_CODEDIRECTORY) {
+ 		return EBADEXEC;
+ 	}
+-	if ((cd->pageSize != PAGE_SHIFT_4K) && (cd->pageSize != PAGE_SHIFT)) {
++	if ((cd->pageSize != PAGE_SHIFT_4K) && (cd->pageSize != PAGE_SHIFT)
++#if defined(ARM64_BOARD_CONFIG_A5XELTE)
++	    /* Accept the 16 KiB iOS signatures as metadata on 4 KiB pages. */
++	    && (cd->pageSize != 14)
++#endif
++	    ) {
+ 		printf("disallowing unsupported code signature page shift: %u\n", cd->pageSize);
+ 		return EBADEXEC;
+ 	}
+@@ -6089,6 +6094,12 @@ cs_validate_page(
+ 	*tainted_p = VMP_CS_ALL_FALSE;
+ 	*nx_p = VMP_CS_ALL_FALSE;
+ 
++#if defined(ARM64_BOARD_CONFIG_A5XELTE)
++	/* 16 KiB hash units cannot be checked from one 4 KiB VM page; the
++	 * lab boot leaves pages unvalidated (cs_enforcement_disable=1). */
++	return;
++#endif
++
+ 	for (offset_in_page = 0;
+ 	    offset_in_page < PAGE_SIZE;
+ 	    /* offset_in_page updated based on bytes processed */) {
+diff --git a/osfmk/vm/vm_shared_region.c b/osfmk/vm/vm_shared_region.c
+index c7bc8a9..e64a9a6 100644
+--- a/osfmk/vm/vm_shared_region.c
++++ b/osfmk/vm/vm_shared_region.c
+@@ -823,10 +823,15 @@ vm_shared_region_create(
+ 		goto done;
+ 	}
+ 
++#if defined(ARM64_BOARD_CONFIG_A5XELTE)
++	/* Lab bring-up: the 16 KiB-signed iOS cache runs on 4 KiB VM pages. */
++	vm_map_cs_enforcement_set(sub_map, false);
++#else
+ 	/* shared regions should always enforce code-signing */
+ 	vm_map_cs_enforcement_set(sub_map, true);
+ 	assert(vm_map_cs_enforcement(sub_map));
+ 	assert(pmap_get_vm_map_cs_enforced(vm_map_pmap(sub_map)));
++#endif
+ 
+ 	assert(!sub_map->disable_vmentry_reuse);
+ 	sub_map->is_nested_map = TRUE;

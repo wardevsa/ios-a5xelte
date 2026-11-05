@@ -1,0 +1,484 @@
+diff --git a/bsd/conf/files b/bsd/conf/files
+index 3b3be24..71c6f02 100644
+--- a/bsd/conf/files
++++ b/bsd/conf/files
+@@ -107,6 +107,8 @@ bsd/dev/random/randomdev.c		standard
+ bsd/dev/memdev.c			standard
+ bsd/dev/sweet_ufs.c			standard
+ bsd/dev/a5xelte_emmc.c			standard
++bsd/dev/a5xelte_keys.c			standard
++bsd/dev/a5xelte_touch.c			standard
+ bsd/dev/sweet_sample.c			standard
+ bsd/dev/sweet_keys.c			standard
+ bsd/dev/sweet_touch.c			standard
+diff --git a/bsd/dev/a5xelte_keys.c b/bsd/dev/a5xelte_keys.c
+new file mode 100644
+index 0000000..3ba2fd4
+--- /dev/null
++++ b/bsd/dev/a5xelte_keys.c
+@@ -0,0 +1,110 @@
++/*
++ * Exynos7580 ALIVE GPIO keys for the SM-A510F.
++ *
++ * The working Linux device tree locates Power/Volume Up/Volume Down/Home at
++ * GPA2 pins 7/0/1/5, all active low.  Poll only GPA2DAT; boot firmware owns
++ * the pin mux and pull-ups.  No ALIVE or interrupt-controller writes occur.
++ */
++#if defined(ARM64_BOARD_CONFIG_A5XELTE)
++#include <sys/param.h>
++#include <sys/systm.h>
++#include <kern/clock.h>
++#include <kern/thread.h>
++#include <kern/sched_prim.h>
++#include <machine/machine_routines.h>
++#include <pexpert/pexpert.h>
++
++extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
++extern void sweet_hid_key(int key, int down);
++
++#define A5_ALIVE_PA 0x139b0000u
++#define A5_GPA2_CON 0x40u
++#define A5_GPA2_DAT 0x44u
++#define A5_GPA2_PUD 0x48u
++
++static vm_offset_t a5_alive;
++static int a5_keys_sleep;
++static bool a5_keys_started;
++
++static uint32_t
++a5_keys_read(uint32_t offset)
++{
++	uint32_t value = *(volatile uint32_t *)(a5_alive + offset);
++	__asm__ volatile("dmb oshld" ::: "memory");
++	return value;
++}
++
++static void
++a5_keys_wait(void)
++{
++	uint64_t deadline;
++	clock_interval_to_deadline(10, NSEC_PER_MSEC, &deadline);
++	(void)assert_wait_deadline(&a5_keys_sleep, THREAD_UNINT, deadline);
++	thread_block(THREAD_CONTINUE_NULL);
++}
++
++static void
++a5_keys_thread(void *arg, wait_result_t result)
++{
++	static const uint8_t pins[4] = {7, 0, 1, 5};
++	uint8_t stable = (uint8_t)a5_keys_read(A5_GPA2_DAT);
++	uint8_t previous = stable;
++	unsigned repeated = 0;
++	(void)arg;
++	(void)result;
++	for (;;) {
++		uint8_t sample = (uint8_t)a5_keys_read(A5_GPA2_DAT);
++		if (sample == previous) {
++			if (repeated < 2) {
++				repeated++;
++			}
++		} else {
++			previous = sample;
++			repeated = 0;
++		}
++		if (repeated == 2 && stable != sample) {
++			for (unsigned key = 0; key < 4; key++) {
++				uint8_t bit = 1u << pins[key];
++				if ((stable ^ sample) & bit) {
++					int down = !(sample & bit);
++					printf("A5XELTE KEYS: key=%u down=%d gpio=%#x\n",
++					    key, down, sample);
++					sweet_hid_key((int)key, down);
++				}
++			}
++			stable = sample;
++		}
++		a5_keys_wait();
++	}
++}
++
++void
++a5xelte_keys_init(void)
++{
++	thread_t thread;
++	int enabled = 1;
++	if (a5_keys_started) {
++		return;
++	}
++	a5_keys_started = true;
++	(void)PE_parse_boot_argn("a5keys", &enabled, sizeof(enabled));
++	if (!enabled) {
++		printf("A5XELTE KEYS: disabled\n");
++		return;
++	}
++	a5_alive = ml_io_map(A5_ALIVE_PA, 0x1000);
++	if (!a5_alive) {
++		printf("A5XELTE KEYS: ALIVE mapping failed\n");
++		return;
++	}
++	printf("A5XELTE KEYS: GPA2 con=%#x dat=%#x pud=%#x (read only)\n",
++	    a5_keys_read(A5_GPA2_CON), a5_keys_read(A5_GPA2_DAT),
++	    a5_keys_read(A5_GPA2_PUD));
++	kern_return_t kr = kernel_thread_start(a5_keys_thread, NULL, &thread);
++	if (kr == KERN_SUCCESS) {
++		thread_deallocate(thread);
++	} else {
++		printf("A5XELTE KEYS: thread start failed %d\n", kr);
++	}
++}
++#endif
+diff --git a/bsd/dev/a5xelte_touch.c b/bsd/dev/a5xelte_touch.c
+new file mode 100644
+index 0000000..e46d739
+--- /dev/null
++++ b/bsd/dev/a5xelte_touch.c
+@@ -0,0 +1,58 @@
++/*
++ * Read-only Exynos7580 ZT7538 bring-up probe.  The working native Linux
++ * port uses I2C2 at 0x13850000, GPC3-0/1, GPA1-1 and S2MPU03 LDO33.
++ * Keep this first XNU probe out of the PMIC and touchscreen register files:
++ * their controller clocks and power sequencing need a separate device test.
++ */
++#if defined(ARM64_BOARD_CONFIG_A5XELTE)
++#include <sys/param.h>
++#include <sys/systm.h>
++#include <machine/machine_routines.h>
++#include <pexpert/pexpert.h>
++
++extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
++
++static uint32_t
++a5touch_read(vm_offset_t base, uint32_t offset)
++{
++	uint32_t value = *(volatile uint32_t *)(base + offset);
++	__asm__ volatile("dmb oshld" ::: "memory");
++	return value;
++}
++
++void
++a5xelte_touch_probe(void)
++{
++	int enabled = 1;
++	(void)PE_parse_boot_argn("a5touchprobe", &enabled, sizeof(enabled));
++	if (!enabled) {
++		return;
++	}
++	vm_offset_t alive = ml_io_map(0x139b0000, 0x1000);
++	vm_offset_t nfc = ml_io_map(0x138c0000, 0x1000);
++	vm_offset_t mifpins = ml_io_map(0x104e0000, 0x1000);
++	vm_offset_t peri = ml_io_map(0x139f0000, 0x1000);
++	vm_offset_t mif = ml_io_map(0x10430000, 0x1000);
++	if (!alive || !nfc || !mifpins || !peri || !mif) {
++		printf("A5XELTE TOUCH: probe MMIO mapping failed\n");
++		return;
++	}
++	uint32_t pclk = a5touch_read(peri, 0x904);
++	uint32_t mifclk = a5touch_read(mif, 0x900);
++	printf("A5XELTE TOUCH: INT GPA1 con=%#x dat=%#x; GPC3 con=%#x dat=%#x pud=%#x\n",
++	    a5touch_read(alive, 0x20), a5touch_read(alive, 0x24),
++	    a5touch_read(nfc, 0), a5touch_read(nfc, 4), a5touch_read(nfc, 8));
++	printf("A5XELTE TOUCH: I2C2 gate=%d MIF HSI2C3 gate=%d GPM0 con=%#x dat=%#x pud=%#x\n",
++	    !!(pclk & (1u << 9)), !!(mifclk & (1u << 27)),
++	    a5touch_read(mifpins, 0), a5touch_read(mifpins, 4),
++	    a5touch_read(mifpins, 8));
++	if (pclk & (1u << 9)) {
++		vm_offset_t i2c = ml_io_map(0x13850000, 0x1000);
++		if (i2c) {
++			printf("A5XELTE TOUCH: I2C2 con=%#x stat=%#x add=%#x lc=%#x (read only)\n",
++			    a5touch_read(i2c, 0), a5touch_read(i2c, 4),
++			    a5touch_read(i2c, 8), a5touch_read(i2c, 0x10));
++		}
++	}
++}
++#endif
+diff --git a/bsd/kern/kern_core.c b/bsd/kern/kern_core.c
+index 983fa48..bfc4976 100644
+--- a/bsd/kern/kern_core.c
++++ b/bsd/kern/kern_core.c
+@@ -117,11 +117,11 @@ kern_return_t thread_getstatus(thread_t act, int flavor,
+     thread_state_t tstate, mach_msg_type_number_t *count);
+ void task_act_iterate_wth_args(task_t, void (*)(thread_t, void *), void *);
+ 
+-#if defined(SECURE_KERNEL) || defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(SECURE_KERNEL) || defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+ /*
+- * SWEET: off by default (sysctl kern.coredump=1 enables it). A crashing iOS
++ * iOS donor boards: off by default (sysctl kern.coredump=1 enables it). A crashing iOS
+  * daemon maps the whole shared region, so one core is gigabytes on the root
+- * volume and takes minutes on the phone's UFS.
++ * volume and takes minutes on phone storage.
+  */
+ __XNU_PRIVATE_EXTERN int do_coredump = 0;       /* default: don't dump cores */
+ #else
+diff --git a/bsd/kern/kern_proc.c b/bsd/kern/kern_proc.c
+index caccf1c..0376f75 100644
+--- a/bsd/kern/kern_proc.c
++++ b/bsd/kern/kern_proc.c
+@@ -6204,7 +6204,7 @@ out:
+ 	return error;
+ }
+ 
+-#if !XNU_TARGET_OS_OSX || defined(ARM64_BOARD_CONFIG_SWEET)
++#if !XNU_TARGET_OS_OSX || defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+ /*
+  * SWEET runs the iOS userland on the macOS config: SpringBoard calls pid_hibernate
+  * when an app leaves the foreground, and nosys (SIGSYS) killed it. Without
+@@ -6233,7 +6233,7 @@ pid_hibernate(struct proc *p __unused, struct pid_hibernate_args *args, int *ret
+ 	if (pid != -2) {
+ 		os_log(OS_LOG_DEFAULT, "%s: pid %d not supported when freezer is disabled.",
+ 		    __func__, pid);
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 		error = 0;
+ #else
+ 		error = ENOTSUP;
+diff --git a/bsd/kern/syscalls.master b/bsd/kern/syscalls.master
+index a7207ea..fcec0fb 100644
+--- a/bsd/kern/syscalls.master
++++ b/bsd/kern/syscalls.master
+@@ -650,7 +650,7 @@
+ 432	AUE_NULL	ALL	{ int audit_session_port(au_asid_t asid, user_addr_t portnamep); }
+ 433	AUE_NULL	ALL	{ int pid_suspend(int pid); }
+ 434	AUE_NULL	ALL	{ int pid_resume(int pid); }
+-#if CONFIG_EMBEDDED || defined(ARM64_BOARD_CONFIG_SWEET)
++#if CONFIG_EMBEDDED || defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 435	AUE_NULL	ALL	{ int pid_hibernate(int pid); }
+ #else
+ 435     AUE_NULL        ALL     { int nosys(void); }
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index a2daa87..356ff51 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -555,6 +555,13 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
+ 	case kSweetFBRequestPowerChange:
+ 		if (args->scalarInputCount >= 1) {
+ 			bool off = args->scalarInput[0] == 0;
++#if defined(ARM64_BOARD_CONFIG_A5XELTE)
++			int keep_on = 0;
++			if (off && PE_parse_boot_argn("a5fb_keep_on", &keep_on, sizeof(keep_on)) && keep_on) {
++				IOLog("A5XELTE FB: display-off request ignored (a5fb_keep_on)\n");
++				break;
++			}
++#endif
+ 			IOLockLock(fFB->fLock);
+ 			if (off != fFB->fPowerOff) {
+ 				fFB->fPowerOff = off;
+diff --git a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/SweetHID.cpp
+index b61b782..b1094e9 100644
+--- a/iokit/Kernel/arm/hid/SweetHID.cpp
++++ b/iokit/Kernel/arm/hid/SweetHID.cpp
+@@ -21,30 +21,6 @@
+ #include <IOKit/IOTimerEventSource.h>
+ #include <libkern/c++/OSArray.h>
+ #include <pexpert/pexpert.h>
+-#include <pexpert/device_tree.h>
+-
+-/*
+- * Presented (logical) display size: ADT /arm-io/disp0 canvas-width/height
+- * (tools/mkadt.py; 1125x2436 = iPhone X @3x, 750x1624 = the same 375x812
+- * points @2x, 2.25x fewer pixels for CoreAnimation's CPU renderer).
+- * AppleCLCD and SweetHIDTouch must agree on it.
+- */
+-static void
+-sweet_canvas_size(int *w, int *h)
+-{
+-	DTEntry e;
+-	void const *p;
+-	unsigned int sz;
+-	if (SecureDTLookupEntry(NULL, "/arm-io/disp0", &e) != kSuccess) {
+-		return;
+-	}
+-	if (SecureDTGetProperty(e, "canvas-width", &p, &sz) == kSuccess && sz == 4 && *(const uint32_t *)p) {
+-		*w = (int)*(const uint32_t *)p;
+-	}
+-	if (SecureDTGetProperty(e, "canvas-height", &p, &sz) == kSuccess && sz == 4 && *(const uint32_t *)p) {
+-		*h = (int)*(const uint32_t *)p;
+-	}
+-}
+ 
+ #include "IOHIDEventService.h"
+ #include "IOHIDEventServiceUserClient.h"
+@@ -380,12 +356,6 @@ OSDefineMetaClassAndStructors(SweetHIDButtons, IOHIDEventService);
+  * app-switcher gesture.
+  */
+ #define SWEET_TOUCH_EDGE_PX 48
+-/*
+- * The bottom edge (home / app-switcher swipe) gets a wider band, about the
+- * iPhone X home-indicator area: our first sample of a fast flick arrives
+- * several ms after touch-down, when the finger has already left 48 px.
+- */
+-#define SWEET_TOUCH_EDGE_BOTTOM_PX 110
+ class SweetHIDTouch : public IOHIDEventService {
+ 	OSDeclareDefaultStructors(SweetHIDTouch);
+ public:
+@@ -398,8 +368,6 @@ protected:
+ private:
+ 	IOLock *fLock;
+ 	int fLogicalW, fLogicalH, fOffX, fOffY;
+-	int fPanelW, fPanelH;
+-	int fScale, fScaleXNum, fScaleXDen, fScaleYNum, fScaleYDen, fPadX, fPadY;
+ 	bool fDown[SWEET_TOUCH_FINGERS];
+ 	bool fEdge[SWEET_TOUCH_FINGERS];
+ 	IOFixed fX[SWEET_TOUCH_FINGERS];
+@@ -465,49 +433,25 @@ SweetHIDTouch::start(IOService *provider)
+ 		return false;
+ 	}
+ 	int native = 0;
+-	PE_Video video;
+ 	PE_parse_boot_argn("sweetfb_native", &native, sizeof(native));
+-	/* Touch coordinates are panel pixels: sweet 1080x2400, beryllium 1080x2246. */
+-	PE_current_console(&video);
+-	fPanelW = video.v_width ? (int)video.v_width : 1080;
+-	fPanelH = video.v_height ? (int)video.v_height : 2400;
+-	int canvasW = 1125, canvasH = 2436;
+-	sweet_canvas_size(&canvasW, &canvasH);
+-	fLogicalW = native ? fPanelW : canvasW;
+-	fLogicalH = native ? fPanelH : canvasH;
+-	fOffX = (fLogicalW - fPanelW) / 2;
+-	fOffY = (fLogicalH - fPanelH) / 2;
+-	/* Same mapping as AppleCLCD (sweetfb_scale, SweetFramebuffer.cpp). */
+-	fScale = 0;
+-	PE_parse_boot_argn("sweetfb_scale", &fScale, sizeof(fScale));
+-	if (native || fScale > 2) {
+-		fScale = 0;
+-	}
+-	if (!native && fScale == 0 && (fLogicalW < fPanelW || fLogicalH < fPanelH)) {
+-		fScale = 1;     /* as AppleCLCD: a smaller canvas is scaled up */
+-	}
+-	if (fScale == 1) {
+-		if ((int64_t)fPanelH * fLogicalW <= (int64_t)fPanelW * fLogicalH) {
+-			fScaleXNum = fScaleYNum = fPanelH;
+-			fScaleXDen = fScaleYDen = fLogicalH;
+-		} else {
+-			fScaleXNum = fScaleYNum = fPanelW;
+-			fScaleXDen = fScaleYDen = fLogicalW;
+-		}
+-	} else if (fScale == 2) {
+-		fScaleXNum = fPanelW;
+-		fScaleXDen = fLogicalW;
+-		fScaleYNum = fPanelH;
+-		fScaleYDen = fLogicalH;
+-	}
+-	if (fScale != 0) {
+-		fPadX = (int)(fPanelW - (int64_t)fLogicalW * fScaleXNum / fScaleXDen) / 2;
+-		fPadY = (int)(fPanelH - (int64_t)fLogicalH * fScaleYNum / fScaleYDen) / 2;
+-	}
++#if defined(ARM64_BOARD_CONFIG_A5XELTE)
++	fLogicalW = 1080;
++	fLogicalH = 1920;
++	fOffX = fOffY = 0;
++#else
++	fLogicalW = native ? 1080 : 1125;
++	fLogicalH = native ? 2400 : 2436;
++	fOffX = (fLogicalW - 1080) / 2;
++	fOffY = (fLogicalH - 2400) / 2;
++#endif
+ 	/* The digitizer covers the main display (backboardd maps it 1:1). */
+ 	setProperty("DisplayIntegrated", kOSBooleanTrue);
+ 	setProperty("SurfaceWidth", (unsigned long long)(68 << 16), 32);	/* mm, 16.16 */
++#if defined(ARM64_BOARD_CONFIG_A5XELTE)
++	setProperty("SurfaceHeight", (unsigned long long)(121 << 16), 32);
++#else
+ 	setProperty("SurfaceHeight", (unsigned long long)(151 << 16), 32);
++#endif
+ 	gSweetTouch = this;
+ 	registerService();
+ 	IOLog("SWEET HID: touch registered\n");
+@@ -524,33 +468,22 @@ SweetHIDTouch::touch(int finger, bool down, int x, int y)
+ 	if (finger < 0 || finger >= SWEET_TOUCH_FINGERS) {
+ 		return;
+ 	}
+-	x = x < 0 ? 0 : (x > fPanelW - 1 ? fPanelW - 1 : x);
+-	y = y < 0 ? 0 : (y > fPanelH - 1 ? fPanelH - 1 : y);
++	x = x < 0 ? 0 : (x > 1079 ? 1079 : x);
++	y = y < 0 ? 0 : (y >= fLogicalH ? fLogicalH - 1 : y);
+ 
+ 	IOLockLock(fLock);
+ 	bool was = fDown[finger];
+ 	/* Panel pixels -> the presented 1125x2436 display (SweetFramebuffer.cpp). */
+-	IOFixed nx, ny;
+-	if (fScale != 0) {
+-		/* inverse of AppleCLCD::presentScaled: panel -> logical, normalised */
+-		int64_t lx = (int64_t)(x - fPadX) * fScaleXDen / fScaleXNum;
+-		int64_t ly = (int64_t)(y - fPadY) * fScaleYDen / fScaleYNum;
+-		lx = lx < 0 ? 0 : (lx >= fLogicalW ? fLogicalW - 1 : lx);
+-		ly = ly < 0 ? 0 : (ly >= fLogicalH ? fLogicalH - 1 : ly);
+-		nx = (IOFixed)((lx << 16) / fLogicalW);
+-		ny = (IOFixed)((ly << 16) / fLogicalH);
+-	} else {
+-		nx = (IOFixed)(((int64_t)(x + fOffX) << 16) / fLogicalW);
+-		ny = (IOFixed)(((int64_t)(y + fOffY) << 16) / fLogicalH);
+-	}
++	IOFixed nx = (IOFixed)(((int64_t)(x + fOffX) << 16) / fLogicalW);
++	IOFixed ny = (IOFixed)(((int64_t)(y + fOffY) << 16) / fLogicalH);
+ 	bool moved = down && (nx != fX[finger] || ny != fY[finger]);
+ 	if (was == down && !moved) {
+ 		IOLockUnlock(fLock);
+ 		return;
+ 	}
+ 	if (!was && down) {
+-		fEdge[finger] = x < SWEET_TOUCH_EDGE_PX || x > fPanelW - 1 - SWEET_TOUCH_EDGE_PX ||
+-		    y < SWEET_TOUCH_EDGE_PX || y > fPanelH - 1 - SWEET_TOUCH_EDGE_BOTTOM_PX;
++		fEdge[finger] = x < SWEET_TOUCH_EDGE_PX || x > 1079 - SWEET_TOUCH_EDGE_PX ||
++		    y < SWEET_TOUCH_EDGE_PX || y > fLogicalH - 1 - SWEET_TOUCH_EDGE_PX;
+ 	}
+ 
+ 	collection = IOHIDEvent::digitizerEvent(now, 0, kIOHIDDigitizerTransducerTypeHand, false, 0, 0, 0);
+@@ -607,14 +540,7 @@ SweetHIDTouch::touch(int finger, bool down, int x, int y)
+ 	collection->setIntegerValue(kIOHIDEventFieldDigitizerButtonMask, any ? 1 : 0);
+ 	IOLockUnlock(fLock);
+ 
+-	/* Per-touch lines flood the screen console: boot-arg sweethidlog=1 */
+-	static int touch_log = -1;
+-	if (touch_log < 0) {
+-		int on = 0;
+-		PE_parse_boot_argn("sweethidlog", &on, sizeof(on));
+-		touch_log = on ? 1 : 0;
+-	}
+-	if (touch_log && was != down) {
++	if (was != down) {
+ 		IOLog("SWEET HID: touch %d %s at %d,%d%s\n", finger, down ? "down" : "up", x, y,
+ 		    fEdge[finger] ? " edge" : "");
+ 	}
+diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+index c1a65e3..fc3decf 100644
+--- a/iokit/KernelConfigTables.cpp
++++ b/iokit/KernelConfigTables.cpp
+@@ -79,7 +79,6 @@ const char * gIOKernelConfigTables =
+     "     'IONameMatch'     = 'sweet,display';"
+ #endif
+     "   },"
+-#if !defined(ARM64_BOARD_CONFIG_A5XELTE)
+     "   {"
+     "     'IOClass'         = SweetHIDButtons;"
+     "     'IOProviderClass' = IOResources;"
+@@ -90,6 +89,7 @@ const char * gIOKernelConfigTables =
+     "     'IOProviderClass' = IOResources;"
+     "     'IOMatchCategory' = SweetHIDTouch;"
+     "   },"
++#if !defined(ARM64_BOARD_CONFIG_A5XELTE)
+     "   {"
+     "     'IOClass'         = SweetBattery;"
+     "     'IOProviderClass' = IOResources;"
+diff --git a/iokit/bsddev/IOKitBSDInit.cpp b/iokit/bsddev/IOKitBSDInit.cpp
+index 2f825c1..7de7697 100644
+--- a/iokit/bsddev/IOKitBSDInit.cpp
++++ b/iokit/bsddev/IOKitBSDInit.cpp
+@@ -72,6 +72,8 @@ extern int IODTGetDefault(const char *key, void *infoAddr, unsigned int infoSize
+ extern boolean_t cpuid_vmm_present(void);
+ #if defined(ARM64_BOARD_CONFIG_A5XELTE)
+ extern void a5xelte_emmc_probe(void);
++extern void a5xelte_keys_init(void);
++extern void a5xelte_touch_probe(void);
+ #endif
+ 
+ #define ROUNDUP(a, b) (((a) + ((b) - 1)) & (~((b) - 1)))
+@@ -800,6 +802,8 @@ IOFindBSDRoot( char * rootName, unsigned int rootNameSize,
+ 	}
+ 
+ #if defined(ARM64_BOARD_CONFIG_A5XELTE)
++	a5xelte_keys_init();
++	a5xelte_touch_probe();
+ 	{
+ 	uint32_t emmcprobe = 0;
+ 	PE_parse_boot_argn("emmcprobe", &emmcprobe, sizeof(emmcprobe));

@@ -1,0 +1,34 @@
+diff --git a/bsd/dev/sweet_sample.c b/bsd/dev/sweet_sample.c
+index b40eccd..1b57aeb 100644
+--- a/bsd/dev/sweet_sample.c
++++ b/bsd/dev/sweet_sample.c
+@@ -1,3 +1,4 @@
++#if defined(ARM64_BOARD_CONFIG_SWEET)
+ /*
+  * SWEET process sampler: where is a daemon stuck?
+  *
+@@ -86,3 +87,5 @@ sweet_sample_start(void)
+ 		thread_deallocate(thread);
+ 	}
+ }
++
++#endif /* ARM64_BOARD_CONFIG_SWEET */
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index 1a16f3f..03f6d85 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -119,7 +119,7 @@ static void sweet_hold_release(SweetSurface **set);
+ static uint32_t get32(const uint8_t *p, uint32_t off);
+ static uint64_t sweet_abs_us(uint64_t abs);
+ 
+-#if defined(SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET)
+ #include <IOKit/IOService.h>
+ #include <IOKit/IOUserClient.h>
+ #include <IOKit/IOKitKeys.h>
+@@ -3622,4 +3622,4 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
+ 	}
+ 	return ret;
+ }
+-#endif /* SWEET */
++#endif /* ARM64_BOARD_CONFIG_SWEET */
