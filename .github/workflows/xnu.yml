@@ -158,8 +158,17 @@ jobs:
           hits += [l for l in clean if pat.search(l) and l not in hits and 'Skipping patch' not in l
                    and 'already exists in working directory' not in l and 'patch does not apply' not in l]
           esc = lambda s: s.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
-          for l in hits[:9]:
+          for l in hits[:8]:
               print('::error title=build::' + esc(l[:900]))
+          # Every distinct compile error in one annotation (a step shows at most 10).
+          seen, allerr = set(), []
+          for l in clean:
+              m = re.search(r'([^\s:]+\.(?:c|cpp|h|s|S)):(\d+):\d+: (?:fatal )?error: (.*)', l)
+              if m and (m.group(1), m.group(3)) not in seen:
+                  seen.add((m.group(1), m.group(3)))
+                  allerr.append(f'{m.group(1).split("/dxb/xnu/")[-1]}:{m.group(2)}: {m.group(3)[:200]}')
+          if allerr:
+              print('::error title=all compile errors (' + str(len(allerr)) + ')::' + esc('\n'.join(allerr)[:30000]))
           tail = '\n'.join(l[:300] for l in clean[-60:])
           print('::error title=build log tail::' + esc(tail[-30000:]))
           PY
