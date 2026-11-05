@@ -9,6 +9,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <objc/message.h>
@@ -52,14 +53,53 @@ load_env(void)
 
 /*
  * WallpaperKit keeps only the wallpapers whose Wallpaper.plist names this
- * screen's class. Ours is 480w-853h@3x~iphone (1440x2560 at scale 3) and the
- * image has 375w-812h, 393w-852h and 430w-932h: none is offered and PosterBoard
- * has nothing to draw. The 375w-812h bundles are given our class, in place:
- * the two names have the same length, so the plist's offsets still hold.
+ * screen's class, and the image has 375w-812h, 393w-852h and 430w-932h: none
+ * is offered and PosterBoard has nothing to draw. The 375w-812h bundles are
+ * given our class, in place: every class here is 19 characters, so the
+ * plist's offsets still hold.
+ *
+ * Our class follows the screen iOS is given (sweetfb_lw/sweetfb_lh with
+ * sweetfb_scale=1, mkadt_herolte.py): 750x1334 (--iphone8) is
+ * 375w-667h@2x~iphone. It used to be 480w-853h@3x~iphone always (the panel at
+ * scale 3), and since the iPhone 8 screen no wallpaper matched it: black. A
+ * bundle given an earlier class is given the current one.
  */
 #define SCREEN_FROM "375w-812h@3x~iphone"
-#define SCREEN_TO   "480w-853h@3x~iphone"
+#define SCREEN_NATIVE "480w-853h@3x~iphone"
 #define COLLECTIONS "/Library/Wallpaper/Collections"
+
+static const char *const screen_classes[] = {
+   SCREEN_FROM, SCREEN_NATIVE, "375w-667h@2x~iphone", "414w-896h@2x~iphone", "414w-736h@3x~iphone",
+};
+static const char *screen_to = SCREEN_NATIVE;
+
+static long
+boot_arg(const char *args, const char *name)
+{
+   size_t length = strlen(name);
+   for (const char *at = args; (at = strstr(at, name)) != NULL; at += length) {
+      if ((at == args || at[-1] == ' ') && at[length] == '=')
+         return strtol(at + length + 1, NULL, 0);
+   }
+   return -1;
+}
+
+static void
+screen_class_pick(void)
+{
+   char args[1024] = "";
+   size_t size = sizeof(args) - 1;
+   if (sysctlbyname("kern.bootargs", args, &size, NULL, 0) != 0)
+      args[0] = 0;
+   long scaled = boot_arg(args, "sweetfb_scale"), w = boot_arg(args, "sweetfb_lw"), h = boot_arg(args, "sweetfb_lh");
+   if (scaled > 0 && w == 750 && h == 1334)
+      screen_to = "375w-667h@2x~iphone";
+   else if (scaled > 0 && w == 828 && h == 1792)
+      screen_to = "414w-896h@2x~iphone";
+   else if (scaled > 0 && w == 1242 && h == 2208)
+      screen_to = "414w-736h@3x~iphone";
+   herodrm_log("hero-run: wallpapers: screen %ldx%ld (scaled %ld): class %s", w, h, scaled, screen_to);
+}
 
 static int
 wallpaper_class_set(const char *path)
@@ -70,10 +110,16 @@ wallpaper_class_set(const char *path)
       return 0;
    ssize_t n = read(fd, data, sizeof(data));
    int done = 0;
-   for (ssize_t i = 0; i + (ssize_t)strlen(SCREEN_FROM) <= n; i++) {
-      if (memcmp(data + i, SCREEN_FROM, strlen(SCREEN_FROM)) == 0 &&
-          pwrite(fd, SCREEN_TO, strlen(SCREEN_TO), i) == (ssize_t)strlen(SCREEN_TO))
-         done++;
+   size_t length = strlen(screen_to);
+   for (ssize_t i = 0; i + (ssize_t)length <= n; i++) {
+      for (size_t k = 0; k < sizeof(screen_classes) / sizeof(screen_classes[0]); k++) {
+         if (screen_classes[k] != screen_to && strcmp(screen_classes[k], screen_to) != 0 &&
+             memcmp(data + i, screen_classes[k], length) == 0 &&
+             pwrite(fd, screen_to, length, i) == (ssize_t)length) {
+            done++;
+            break;
+         }
+      }
    }
    if (done)
       fsync(fd);
@@ -85,6 +131,7 @@ static void
 wallpapers_for_this_screen(void)
 {
    int bundles = 0, changed = 0;
+   screen_class_pick();
    DIR *collections = opendir(COLLECTIONS);
    struct dirent *c, *w;
    while (collections && (c = readdir(collections))) {
@@ -103,7 +150,7 @@ wallpapers_for_this_screen(void)
             char text[65536];
             int fd = open(plist, O_RDONLY);
             ssize_t n = fd >= 0 ? read(fd, text, sizeof(text)) : -1;
-            int ours = n > 0 && memmem(text, (size_t)n, SCREEN_TO, strlen(SCREEN_TO)) != NULL;
+            int ours = n > 0 && memmem(text, (size_t)n, screen_to, strlen(screen_to)) != NULL;
             if (fd >= 0)
                close(fd);
             herodrm_log("hero-run: wallpapers: %s: %zd bytes, %s", w->d_name, n, ours ? "has our class" : "does not have our class");
