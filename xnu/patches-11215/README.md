@@ -1,0 +1,1 @@
+xnu-11215 (iOS 18) series for HEROLTE: Bergamota's xnu/patches-11215 (ry-diffusion/Bergamota) with its staging scripts widened to A5XELTE and HEROLTE, then the herolte port on top (9NNN-*.patch). Built by the xnu workflow on branch herolte-ios18 (MACOS_VERSION 15.3).
