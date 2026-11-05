@@ -19,9 +19,10 @@ on:
         description: GitHub runner image (empty = macos-15-intel)
         default: ""
   push:
-    branches: [main, herolte, codex/a5xelte-bringup]
+    branches: [main, herolte, codex/a5xelte-bringup, herolte-ios18]
     paths:
       - "xnu/patches/**"
+      - "xnu/patches-11215/**"
       - ".github/workflows/xnu.yml"
 
 concurrency:
@@ -31,7 +32,8 @@ concurrency:
 env:
   DXB_REPO: https://github.com/blacktop/darwin-xnu-build
   DXB_SHA: 663906528d1cd5ea8fde7de6f16de73db9511549
-  MACOS_VERSION: ${{ inputs.macos_version || '13.5' }}
+  # herolte-ios18: xnu-11215 (macOS 15.3, iOS 18); everything else xnu-8796 (13.5, iOS 16)
+  MACOS_VERSION: ${{ inputs.macos_version || (github.ref_name == 'herolte-ios18' && '15.3' || '13.5') }}
   KERNEL_CONFIG: ${{ inputs.kernel_config || 'DEVELOPMENT' }}
   MACHINE_CONFIG: ${{ inputs.machine_config || 'HEROLTE' }}
 
@@ -55,8 +57,29 @@ jobs:
           git init -q dxb
           git -C dxb fetch -q --depth 1 "$DXB_REPO" "$DXB_SHA"
           git -C dxb checkout -q FETCH_HEAD
-          # 12.5-14.3 use the top-level patches dir; ours go next to blacktop's
-          cp xnu/patches/*.patch xnu/patches/*.sh dxb/patches/
+          if [[ "$MACOS_VERSION" == 15.* ]]; then
+            # xnu-11215 (iOS 18): Bergamota's series and the herolte port on top (9NNN-*,
+            # port11215/ in the v80emu work). dxb applies patches/15.0/*.sh, then
+            # patches/15.0/*.patch in name order: its own first, ours ("sweet-") after.
+            for f in xnu/patches-11215/*.patch xnu/patches-11215/*.sh; do
+              [ -e "$f" ] || continue
+              cp "$f" "dxb/patches/15.0/sweet-$(basename "$f")"
+            done
+            PDIR=dxb/patches/15.0
+            # dxb only warns when a patch does not apply; one of ours must not be skipped silently.
+            python3 - <<'PY'
+          p = 'dxb/build.sh'
+          s = open(p).read()
+          needle = '                warning "Skipping patch ${PATCH} (already upstream, previously applied, or malformed): ${APPLY_CHECK}"\n'
+          assert needle in s, 'build.sh patches() layout changed; update the fatal-patch hook'
+          s = s.replace(needle, needle + '                case "$(basename "${PATCH}")" in sweet-*) error "our patch does not apply: ${PATCH}"; exit 1 ;; esac\n')
+          open(p, 'w').write(s)
+          PY
+          else
+            # 12.5-14.3 use the top-level patches dir; ours go next to blacktop's
+            cp xnu/patches/*.patch xnu/patches/*.sh dxb/patches/
+            PDIR=dxb/patches
+          fi
           # libfirehose_kernel is built arm64e-only; these kernels are plain arm64.
           # Cortex-A53 boards (A5XELTE, HEROLTE) also need it without ARMv8.1
           # LSE atomics: same flags as tools/a5xelte-build-firehose.sh.
@@ -75,7 +98,7 @@ jobs:
           path.write_text(text.replace(old, new))
           print('firehose:', new)
           PY
-          ls dxb/patches
+          ls "$PDIR"
 
       - name: Deps
         run: |
@@ -85,9 +108,15 @@ jobs:
           sudo chmod +x /usr/local/bin/xcodes
           sw_vers
           ls -d /Applications/Xcode*.app
-          # Prefer an Xcode 15.x (iig ABI above); otherwise the oldest one.
-          XC=$(ls -d /Applications/Xcode_15*.app 2>/dev/null | sort -V | tail -1)
-          [ -n "$XC" ] || XC=$(ls -d /Applications/Xcode_*.app | sort -V | head -1)
+          if [[ "$MACOS_VERSION" == 15.* ]]; then
+            # xnu-11215: Xcode 16.2, as Bergamota builds it
+            XC=$(ls -d /Applications/Xcode_16.2*.app 2>/dev/null | sort -V | tail -1)
+            [ -n "$XC" ] || XC=$(ls -d /Applications/Xcode_16.*.app | sort -V | head -1)
+          else
+            # Prefer an Xcode 15.x (iig ABI above); otherwise the oldest one.
+            XC=$(ls -d /Applications/Xcode_15*.app 2>/dev/null | sort -V | tail -1)
+            [ -n "$XC" ] || XC=$(ls -d /Applications/Xcode_*.app | sort -V | head -1)
+          fi
           echo "DEVELOPER_DIR=$XC/Contents/Developer" >> "$GITHUB_ENV"
           sudo xcode-select -s "$XC"
           xcodebuild -version
