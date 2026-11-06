@@ -8,6 +8,9 @@
  */
 #include <CoreFoundation/CoreFoundation.h>
 #include <dirent.h>
+#include <errno.h>
+#include <pthread.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <dlfcn.h>
@@ -588,9 +591,69 @@ install_audio_plugin(void)
    copy_audio_file(DROP_DIR "audio/Info.plist", "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/Info.plist", 0644);
 }
 
+/*
+ * Widgets in the background (boot-0319): CalendarWidgetExtension takes two cores for the whole session, GeneralMapsWidget
+ * and symptomsd one or two each, and with everything at 1000-1400% of 800% backboardd and SpringBoard miss frames
+ * (4-35 fps, the stutters). Refusing CalendarWidgetExtension was worse (0315: SpringBoard kept asking for it). So they
+ * run, as Darwin background: lowest priority and throttled I/O, the CPU first for whatever draws the screen. Every 5 s,
+ * for the processes started since. DROP_DIR widgets.fg turns it off.
+ */
+#ifndef PRIO_DARWIN_PROCESS
+#define PRIO_DARWIN_PROCESS 4
+#endif
+#ifndef PRIO_DARWIN_BG
+#define PRIO_DARWIN_BG 0x1000
+#endif
+int proc_listallpids(void *buffer, int buffersize);
+int proc_name(int pid, void *buffer, uint32_t buffersize);
+
+static int
+to_background(const char *name)
+{
+   /* proc_name is the first 16 characters: "GeneralMapsWidge", "CalendarWidgetEx" */
+   static const char *const parts[] = { "Widge", "symptomsd", "NewsToday", "chronod" };
+   for (size_t i = 0; i < sizeof(parts) / sizeof(parts[0]); i++) {
+      if (strstr(name, parts[i]))
+         return 1;
+   }
+   return 0;
+}
+
+static void *
+widgets_to_background(void *unused)
+{
+   static int done[512];
+   static unsigned ndone;
+   (void)unused;
+   if (access(DROP_DIR "widgets.fg", F_OK) == 0)
+      return NULL;
+   for (;;) {
+      int pids[2048];
+      int n = proc_listallpids(pids, sizeof(pids));
+      for (int i = 0; i < n && i < 2048; i++) {
+         char name[64] = "";
+         int seen = 0;
+         for (unsigned k = 0; k < ndone && !seen; k++)
+            seen = done[k] == pids[i];
+         if (seen || pids[i] <= 1 || proc_name(pids[i], name, sizeof(name)) <= 0 || !to_background(name))
+            continue;
+         int err = setpriority(PRIO_DARWIN_PROCESS, pids[i], PRIO_DARWIN_BG);
+         herodrm_log("hero-run: %s (pid %d) to the background: %s", name, pids[i], err == 0 ? "ok" : strerror(errno));
+         if (ndone < 512)
+            done[ndone++] = pids[i];
+         else
+            done[(unsigned)pids[i] % 512] = pids[i];
+      }
+      sleep(5);
+   }
+}
+
 int
 main(void)
 {
+   /* (a thread: a forked child has no mach ports for herodrm_log) */
+   pthread_t widgets;
+   int widgets_on = pthread_create(&widgets, NULL, widgets_to_background, NULL) == 0;
    disable_bluetooth_audio();
    install_audio_plugin();
    reduce_transparency();
@@ -668,5 +731,7 @@ main(void)
          close(open(DROP_DIR "database2.done", O_WRONLY | O_CREAT, 0644));
       }
    }
+   if (widgets_on)
+      pthread_join(widgets, NULL);      /* (for as long as the phone runs, unless widgets.fg) */
    return 0;
 }
