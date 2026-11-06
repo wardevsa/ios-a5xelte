@@ -111,14 +111,23 @@ wallpaper_class_set(const char *path)
    ssize_t n = read(fd, data, sizeof(data));
    int done = 0;
    size_t length = strlen(screen_to);
+   /*
+    * Only the class itself, a string of its own: in a binary plist its object is 0x5f 0x10 0x13 and the 19 bytes, in
+    * XML <string>...</string>. The same 19 characters inside a longer string are a file's name in the bundle
+    * ("7420.Clownfish_Background-375w-812h@3x~iphone.ca"), and the files keep the IPSW's 375w-812h@3x: rewriting them
+    * made CollectionsPoster abort ("Background animation asset does not exist", boot-0319), so the iOS 16 wallpapers
+    * were black. Names an earlier hero-run rewrote get the IPSW's back.
+    */
    for (ssize_t i = 0; i + (ssize_t)length <= n; i++) {
       for (size_t k = 0; k < sizeof(screen_classes) / sizeof(screen_classes[0]); k++) {
-         if (screen_classes[k] != screen_to && strcmp(screen_classes[k], screen_to) != 0 &&
-             memcmp(data + i, screen_classes[k], length) == 0 &&
-             pwrite(fd, screen_to, length, i) == (ssize_t)length) {
+         if (memcmp(data + i, screen_classes[k], length) != 0)
+            continue;
+         int whole = (i >= 3 && (unsigned char)data[i - 3] == 0x5f && data[i - 2] == 0x10 && data[i - 1] == (char)length) ||
+            (i >= 1 && data[i - 1] == '>' && i + (ssize_t)length < n && data[i + length] == '<');
+         const char *want = whole ? screen_to : SCREEN_FROM;
+         if (strcmp(screen_classes[k], want) != 0 && pwrite(fd, want, length, i) == (ssize_t)length)
             done++;
-            break;
-         }
+         break;
       }
    }
    if (done)
