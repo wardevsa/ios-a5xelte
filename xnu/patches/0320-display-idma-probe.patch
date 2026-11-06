@@ -1,0 +1,37 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2566,6 +2566,32 @@ hg_bus_thread(__unused void *arg, __unused wait_result_t wr)
+ 		hg_decon_measure(decon, "as found");
+-		for (unsigned o = 0; o < 0x120; o += 0x20) {
++		for (unsigned o = 0; o < 0x240; o += 0x20) {
+ 			printf("HEROLTE DISP: decon +%#x: %#x %#x %#x %#x %#x %#x %#x %#x\n", o, hg_rd(decon, o), hg_rd(decon, o + 4), hg_rd(decon, o + 8), hg_rd(decon, o + 12),
+ 			    hg_rd(decon, o + 16), hg_rd(decon, o + 20), hg_rd(decon, o + 24), hg_rd(decon, o + 28));
+ 		}
++		/*
++		 * Read only: which IDMA channel each enabled window takes its pixels from (WIN_CONTROL 0x130 + 0x20 w, CHMAP in
++		 * bits 14:12; Samsung's decon_get_win_channel) and where that channel reads (BASE_ADDR_Y 0x74.., shadow 0xb74).
++		 * Only the channels of enabled windows are read: a gated block's registers are an external abort.
++		 */
++		static const uint32_t idma[8] = {
++			0x13952000u /* G1 */, 0x13e01000u /* G2 */, 0x13e02000u /* G3 */, 0x13953000u /* VG0 */,
++			0x13954000u /* VG1 */, 0x13e03000u /* VGR0 */, 0x13e04000u /* VGR1 */, 0x13951000u /* G0 */,
++		};
++		for (unsigned w = 0; w < 8; w++) {
++			uint32_t wc = hg_rd(decon, 0x130 + w * 0x20);
++			if (!(wc & 1u)) {
++				continue;
++			}
++			unsigned ch = (wc >> 12) & 7u;
++			vm_offset_t dma = ml_io_map(idma[ch], 0x1000);
++			printf("HEROLTE DISP: window %u control %#x start %#x end %#x: channel %u at %#x\n", w, wc,
++			    hg_rd(decon, 0x134 + w * 0x20), hg_rd(decon, 0x138 + w * 0x20), ch, idma[ch]);
++			for (unsigned o = 0; dma && o < 0x30; o += 0x10) {
++				printf("HEROLTE DISP: idma +%#x: %#x %#x %#x %#x\n", o, hg_rd(dma, o), hg_rd(dma, o + 4), hg_rd(dma, o + 8), hg_rd(dma, o + 12));
++			}
++			if (dma) {
++				printf("HEROLTE DISP: idma base con %#x y %#x %#x %#x %#x shadow %#x\n", hg_rd(dma, 0x70), hg_rd(dma, 0x74),
++				    hg_rd(dma, 0x78), hg_rd(dma, 0x7c), hg_rd(dma, 0x80), hg_rd(dma, 0xb74));
++			}
++		}
+ 		vm_offset_t dsim = ml_io_map(0x13900000u, 0x1000);
