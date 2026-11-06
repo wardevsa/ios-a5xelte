@@ -611,7 +611,11 @@ static int
 to_background(const char *name)
 {
    /* proc_name is the first 16 characters: "GeneralMapsWidge", "CalendarWidgetEx" */
-   static const char *const parts[] = { "Widge", "symptomsd", "NewsToday", "chronod" };
+   /* boot-0320: after the widgets, these took 1-2 cores each (dasd up to 195%, duetexpertd 120%, geod 107%) */
+   static const char *const parts[] = {
+      "Widge", "symptomsd", "NewsToday", "chronod", "dasd", "duetexpertd", "geod", "coreduetd", "Spotlight",
+      "mobileassetd", "nsurlsessiond", "pkd", "trustd", "suggestd", "routined", "contextstored", "biomed",
+   };
    for (size_t i = 0; i < sizeof(parts) / sizeof(parts[0]); i++) {
       if (strstr(name, parts[i]))
          return 1;
@@ -651,9 +655,6 @@ widgets_to_background(void *unused)
 int
 main(void)
 {
-   /* (a thread: a forked child has no mach ports for herodrm_log) */
-   pthread_t widgets;
-   int widgets_on = pthread_create(&widgets, NULL, widgets_to_background, NULL) == 0;
    disable_bluetooth_audio();
    install_audio_plugin();
    reduce_transparency();
@@ -668,6 +669,12 @@ main(void)
       extension_census();
       _exit(0);
    }
+   /*
+    * A thread (a forked child has no mach ports for herodrm_log), and only after the fork: with a second thread alive
+    * the census child aborted in +[LSRecord initialize] (objc's fork safety, boot-0320).
+    */
+   pthread_t widgets;
+   int widgets_on = pthread_create(&widgets, NULL, widgets_to_background, NULL) == 0;
    sleep(20);
    load_env();
    posix_spawn_file_actions_t fa;
