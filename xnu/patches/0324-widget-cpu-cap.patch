@@ -1,0 +1,57 @@
+diff --git a/bsd/dev/sweet_sample.c b/bsd/dev/sweet_sample.c
+index 026217a..ba42c35 100644
+--- a/bsd/dev/sweet_sample.c
++++ b/bsd/dev/sweet_sample.c
+@@ -100,6 +100,42 @@ static struct { int pid; uint64_t abs; char name[20]; uint64_t delta; } sweet_to
+ static unsigned sweet_top_n;
+ static uint64_t sweet_top_gen;
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++/*
++ * WidgetKit extensions with a CPU limit of their own (boot-arg herowidgetcap=N percent of one core, default 30, 0 off).
++ * CalendarWidgetExtension re-evaluated its SwiftUI graph without end (AttributeGraph AGGraphGetValue in every sample,
++ * boot-cal): two cores at 100% for the whole session, the phone's heat, and the cores the window server needed.
++ * Refusing it was worse (0315: SpringBoard kept asking for it) and PRIO_DARWIN_BG did nothing while cores were idle
++ * (hero-run, boot-0323t: still 199%). XNU's own task-wide CPU limit (proc_set_task_ruse_cpu, THROTTLE: the task's
++ * threads block once the share of each second is spent) lets it run and draw, at a fixed cost.
++ */
++#define HERO_RUSE_THROTTLE 0x01         /* TASK_POLICY_RESOURCE_ATTRIBUTE_THROTTLE, osfmk/kern/policy_internal.h */
++extern int proc_set_task_ruse_cpu(task_t task, uint16_t policy, uint8_t percentage, uint64_t interval, uint64_t deadline,
++    int cpumon_entitled);
++
++static void
++sweet_top_cap(task_t task, const char *name)
++{
++	static int percent = -1;
++	static unsigned told;
++	if (percent < 0) {
++		percent = 30;
++		PE_parse_boot_argn("herowidgetcap", &percent, sizeof(percent));
++	}
++	bool widget = false;
++	for (const char *c = name; *c != '\0' && !widget; c++) {
++		widget = strncmp(c, "Widge", 5) == 0;
++	}
++	if (percent <= 0 || percent > 100 || !widget) {
++		return;
++	}
++	int err = proc_set_task_ruse_cpu(task, HERO_RUSE_THROTTLE, (uint8_t)percent, 0, 0, 1);
++	if (told++ < 24) {
++		printf("HEROLTE CAP: %s limited to %d%% of a core: %d\n", name, percent, err);
++	}
++}
++#endif
++
+ static int
+ sweet_top_proc(proc_t p, __unused void *arg)
+ {
+@@ -126,6 +162,9 @@ sweet_top_proc(proc_t p, __unused void *arg)
+ 		sweet_top[i].pid = pid;
+ 		sweet_top[i].abs = abs;         /* first sight: no delta yet */
+ 		proc_name(pid, sweet_top[i].name, sizeof(sweet_top[i].name));
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		sweet_top_cap(task, sweet_top[i].name);
++#endif
+ 	}
+ 	sweet_top[i].delta = abs > sweet_top[i].abs ? abs - sweet_top[i].abs : 0;
+ 	sweet_top[i].abs = abs;
