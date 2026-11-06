@@ -1,0 +1,19 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+index 98bc6bf..24f37cf 100644
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -96,6 +96,14 @@ herolte_noexec(const char *path)
+ 	if (strcmp(base, "AegirPoster") == 0) {
+ 		return true;
+ 	}
++	/*
++	 * The speech synthesizers' audio units abort as PlugInKit starts them (an Objective-C exception out of its
++	 * plug-in set-up) and are started again all session: 54 crashes in boot-0323, each a process launch.
++	 */
++	if (strcmp(base, "SiriTTSSynthesizerAU") == 0 || strcmp(base, "KonaSynthesizer") == 0 ||
++	    strcmp(base, "MacinTalkAUSP") == 0) {
++		return true;
++	}
+ 	if (hgl_noexec[0] == '\0') {
+ 		return false;
+ 	}
