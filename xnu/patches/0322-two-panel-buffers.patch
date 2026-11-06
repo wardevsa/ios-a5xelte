@@ -1,0 +1,213 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index f7d9fe1..7a11f80 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -28,6 +28,8 @@ void herolte_gpu_probe(void);
+ int herolte_gpu_present_slot(uint32_t id, uint64_t first_pa);
+ int herolte_gpu_present_map(uint32_t id, const uint64_t *pages, unsigned n);
+ bool herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h);
++bool herolte_fb_two_buffers(void);
++void herolte_fb_primary(void);
+ /* User-space GPU jobs, for iokit/Kernel/arm/HeroGPU.cpp. */
+ bool herolte_gpu_up(void);
+ uint32_t herolte_gpu_reg(uint32_t off);
+@@ -1658,6 +1660,119 @@ hgp_map_locked(uint32_t id, const uint64_t *pages, unsigned n)
+ 	return (int)s;
+ }
+ 
++/*
++ * Two panel buffers (boot-arg herofb2, default 1; idea from Scion's fb_zc on the Galaxy S9). S-Boot leaves DECON_F's
++ * window 0 on IDMA channel G1 (0x13952000), reading 0xe2a00000 (boot-0320). With that one buffer every GPU-drawn frame
++ * was written while the panel read it: the tears, and showFired waited for the 1.9 ms between readings. Now the Mali
++ * draws into the buffer that is not shown and G1 is pointed at it (VG_BASE_ADDR_Y(0) at 0x74, VG_PINGPONG_UPDATE at 0x1c,
++ * as Samsung's vpp_reg_set_in_buf_addr); the IDMA takes the new address when its next frame begins, and the shadow at
++ * 0xb74 says which one it reads. The second buffer is 16 MiB of the first DRAM bank outside XNU's RAM, below 4 GiB for
++ * the IDMA's 32-bit address. A read error of the IDMA (VG_IRQ bit 19) or a flip that is never taken: back to the one
++ * buffer for good.
++ */
++#define HG_FB2_PA       0x91000000ull
++#define HG_PANEL2_VA    0x06000000ull
++#define HGP_FB2_L3_OFF  0x120000u       /* 8 L3 tables in the scratch block, after the user L2 */
++#define HG_IDMA_G1_PA   0x13952000u
++#define HG_DECON_F_PA   0x13960000u
++static vm_offset_t hfb_idma;
++static int hfb_state;                   /* 0 not tried, 1 two buffers, -1 one */
++static uint64_t hfb_flips;
++
++static void
++hfb_give_up(const char *why)
++{
++	hfb_state = -1;
++	if (hfb_idma && hg_rd(hfb_idma, 0xb74) != (uint32_t)HG_FB_PA) {
++		hg_wr(hfb_idma, 0x74, (uint32_t)HG_FB_PA);
++		hg_wr(hfb_idma, 0x1c, 1);
++	}
++	printf("HEROLTE FB2: one buffer from now on: %s (after %llu flips)\n", why, hfb_flips);
++}
++
++/* The flip asked for last has been taken (bounded: two refreshes), and the IDMA read it without error. */
++static bool
++hfb_settled(void)
++{
++	unsigned us = 0;
++	while ((hg_rd(hfb_idma, 0x1c) & 1) && us < 40000) {
++		delay(20);
++		us += 20;
++	}
++	uint32_t irq = hg_rd(hfb_idma, 0x04);
++	if (irq & (1u << 19)) {
++		hg_wr(hfb_idma, 0x04, 1u << 19);
++		hfb_give_up("IDMA read error");
++		return false;
++	}
++	if (hg_rd(hfb_idma, 0x1c) & 1) {
++		hfb_give_up("flip not taken in 40 ms");
++		return false;
++	}
++	return true;
++}
++
++static void
++hfb_setup_locked(void)
++{
++	uint32_t on = 1;
++	PE_parse_boot_argn("herofb2", &on, sizeof(on));
++	hfb_state = -1;
++	if (!on) {
++		return;
++	}
++	vm_offset_t decon = ml_io_map(HG_DECON_F_PA, 0x1000);
++	uint32_t wc = decon ? hg_rd(decon, 0x130) : 0;
++	if (!(wc & 1) || ((wc >> 12) & 7) != 0) {
++		printf("HEROLTE FB2: window 0 control %#x is not on channel G1; one buffer\n", wc);
++		return;
++	}
++	hfb_idma = ml_io_map(HG_IDMA_G1_PA, 0x1000);
++	if (!hfb_idma || hg_rd(hfb_idma, 0xb74) != (uint32_t)HG_FB_PA || hg_rd(hfb_idma, 0x10) != ((HG_PANEL_H << 16) | HG_PANEL_W)) {
++		printf("HEROLTE FB2: G1 reads %#x, size %#x: not the panel as S-Boot left it; one buffer\n",
++		    hfb_idma ? hg_rd(hfb_idma, 0xb74) : 0, hfb_idma ? hg_rd(hfb_idma, 0x10) : 0);
++		return;
++	}
++	volatile uint64_t *l2t = (volatile uint64_t *)(hg_mem + 0x2000);
++	unsigned pages = (HG_PANEL_BYTES + 0xfff) / 0x1000;
++	hg_zero(hgp_scr + HGP_FB2_L3_OFF, 8 * 0x1000);
++	for (unsigned t = 0; t * 512 < pages; t++) {
++		uint32_t table = HGP_FB2_L3_OFF + t * 0x1000;
++		volatile uint64_t *l3 = (volatile uint64_t *)(hgp_scr + table);
++		for (unsigned i = 0; i < 512 && t * 512 + i < pages; i++) {
++			l3[i] = (HG_FB2_PA + (uint64_t)(t * 512 + i) * 0x1000) | 0x2c1;
++		}
++		l2t[((HG_PANEL2_VA >> 21) & 0x1ff) + t] = (HG_SCR_PA + table) | 3;
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++	if (!hgp_mmu_flush(HG_PANEL2_VA, 24)) {
++		printf("HEROLTE FB2: MMU flush timeout; one buffer\n");
++		return;
++	}
++	hg_wr(hfb_idma, 0x04, 1u << 19);        /* a stale read error is not ours */
++	hfb_state = 1;
++	printf("HEROLTE FB2: two buffers, %#llx and %#llx (GPU VA %#llx), on IDMA G1\n", HG_FB_PA, HG_FB2_PA, HG_PANEL2_VA);
++}
++
++/* For the CPU's writes into the first buffer (SweetFramebuffer.cpp): that one shown again first. */
++void
++herolte_fb_primary(void)
++{
++	lck_mtx_lock(hg_mtx);
++	if (hfb_state == 1 && hfb_settled() && hg_rd(hfb_idma, 0xb74) != (uint32_t)HG_FB_PA) {
++		hg_wr(hfb_idma, 0x74, (uint32_t)HG_FB_PA);
++		hg_wr(hfb_idma, 0x1c, 1);
++		(void)hfb_settled();
++	}
++	lck_mtx_unlock(hg_mtx);
++}
++
++bool
++herolte_fb_two_buffers(void)
++{
++	return hfb_state == 1;
++}
++
+ /*
+  * Draw the w x h rect at byte offset off (row stride bytes) of the surface
+  * in slot s to the whole panel, scaled, bilinear. The caller has cleaned
+@@ -1703,6 +1818,16 @@ hgp_draw_locked(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h)
+ 		hg_wr32(scr, S_TILER_JOB + i * 4, 0);
+ 		hg_wr32(scr, S_FRAG_JOB + i * 4, 0);
+ 	}
++	/* Into the buffer that is not shown (herofb2), once the last flip has been taken. */
++	if (hfb_state == 0) {
++		hfb_setup_locked();
++	}
++	uint64_t target_pa = HG_FB_PA, target_va = HG_PANEL_VA;
++	if (hfb_state == 1 && hfb_settled() && hg_rd(hfb_idma, 0xb74) == (uint32_t)HG_FB_PA) {
++		target_pa = HG_FB2_PA;
++		target_va = HG_PANEL2_VA;
++	}
++	hg_wr64(scr, S_FBD + 128 + 32, target_va);
+ 	__asm__ volatile ("dsb sy" ::: "memory");
+ 
+ 	hg_run_quiet = true;
+@@ -1719,6 +1844,13 @@ hgp_draw_locked(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h)
+ 	hg_job_cpu = 0;
+ 	hg_affinity = 1;
+ 	hg_run_quiet = false;
++	if (ok && hfb_state == 1 && hg_rd(hfb_idma, 0xb74) != (uint32_t)target_pa) {
++		hg_wr(hfb_idma, 0x74, (uint32_t)target_pa);
++		hg_wr(hfb_idma, 0x1c, 1);
++		if (++hfb_flips <= 3 || hfb_flips % 3000 == 0) {
++			printf("HEROLTE FB2: flip %llu to %#llx\n", hfb_flips, target_pa);
++		}
++	}
+ 	if (++hgp_frames <= 3 || !ok) {
+ 		printf("HEROLTE GPU PRESENT: frame %llu %ux%u stride %u slot %d -> %s\n",
+ 		    hgp_frames, w, h, stride, s, ok ? "ok" : "failed");
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index 0ed9d75..3c2e832 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -71,6 +71,9 @@ extern "C" int herolte_gpu_present_slot(uint32_t id, uint64_t first_pa);
+ extern "C" int herolte_gpu_present_map(uint32_t id, const uint64_t *pages, unsigned n);
+ extern "C" bool herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h);
+ #define SWEET_FB_GPU_MAX_PAGES 2048     /* one 8 MiB GPU slot */
++/* Two panel buffers (herofb2): the Mali draws into the one not shown; the CPU writes only the first, shown first. */
++extern "C" bool herolte_fb_two_buffers(void);
++extern "C" void herolte_fb_primary(void);
+ #endif
+ 
+ enum {
+@@ -407,6 +410,12 @@ AppleCLCD::showFired(OSObject *owner, IOTimerEventSource *sender)
+ 	 * the 1.9 ms it stands still, and a copy of 2.5 ms overruns only into the top of the next reading.
+ 	 */
+ 	uint32_t line = fb->fDecon ? (*(volatile uint32_t *)(fb->fDecon + 0x8c) & 0xffff) : 0;
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/* With two buffers the Mali never draws into the one being read: no waiting for the blank. */
++	if (fb->fGpu && herolte_fb_two_buffers()) {
++		line = 0;
++	}
++#endif
+ 	if (line != 0 && line < SWEET_FB_PANEL_LINES && sender != NULL) {
+ 		uint64_t ns;
+ 		absolutetime_to_nanoseconds((SWEET_FB_PANEL_LINES - line) * SWEET_FB_LINE_TICKS, &ns);
+@@ -474,6 +483,11 @@ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+ 			fb->fFadeStep = step + 1;
+ 		}
+ 		IOLockUnlock(fb->fLock);
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		if (step == 0) {
++			herolte_fb_primary();
++		}
++#endif
+ 		if (step <= 6) {
+ 			for (uint32_t y = 0; y < fb->fHeight; y++) {
+ 				volatile uint32_t *row = (volatile uint32_t *)(fb->fPixels + (uint64_t)y * fb->fRowBytes);
+@@ -877,6 +891,9 @@ AppleCLCD::present(const uint8_t *rec)
+ 			s->release();
+ 			continue;
+ 		}
++		if (src != 0 && bpe == 4) {
++			herolte_fb_primary();   /* the CPU writes the first buffer: shown first (herofb2) */
++		}
+ #endif
+ 		if (src != 0 && bpe == 4 && fScaled) {
+ 			copied += scaledCopy(src + s->offset + (uint64_t)sy * s->bytesPerRow + (uint64_t)sx * 4,
