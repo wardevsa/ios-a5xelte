@@ -166,9 +166,69 @@ ask_for_gestures(void)
       method_setImplementation(enabled, (IMP)says_yes);
 }
 
+/*
+ * SpringBoard's own frame rate caps (from Scion's inject_sb.c, Galaxy S9). Some of its animations ask for fewer frames
+ * than the panel has: the crossfade of the page dots and the search pill after every page's slide is
+ * CAFrameRateRangeMake(20, 30, 0), and CoreAnimation gives SpringBoard 30 a second for as long as it runs -- on the S9
+ * half of all the refreshes missed while swiping. A range whose most is under 60 gets 60 as its most and preferred.
+ * DROP_DIR fps.off leaves them as Apple set them.
+ */
+typedef struct { float minimum, maximum, preferred; } frame_rate_range_t;
+static void (*fluid_set_range_was)(id, SEL, frame_rate_range_t, unsigned);
+static void (*animation_set_range_was)(id, SEL, frame_rate_range_t, unsigned);
+static unsigned ranges_raised;
+
+static frame_rate_range_t
+raise_range(frame_rate_range_t range)
+{
+   if (range.maximum > 0.0f && range.maximum < 60.0f) {
+      range.maximum = 60.0f;
+      range.preferred = 60.0f;
+      ranges_raised++;
+   }
+   return range;
+}
+
+static void
+fluid_set_range(id self, SEL cmd, frame_rate_range_t range, unsigned reason)
+{
+   fluid_set_range_was(self, cmd, raise_range(range), reason);
+}
+
+static void
+animation_set_range(id self, SEL cmd, frame_rate_range_t range, unsigned reason)
+{
+   animation_set_range_was(self, cmd, raise_range(range), reason);
+}
+
+static void
+raise_frame_rates(void)
+{
+   SEL set = sel_registerName("setFrameRateRange:highFrameRateReason:");
+   Class fluid = objc_getClass("SBFFluidBehaviorSettings"), animation = objc_getClass("SBFAnimationSettings");
+   Method m = fluid && !fluid_set_range_was ? class_getInstanceMethod(fluid, set) : NULL;
+   if (m)
+      fluid_set_range_was = (void (*)(id, SEL, frame_rate_range_t, unsigned))method_setImplementation(m, (IMP)fluid_set_range);
+   m = animation && !animation_set_range_was ? class_getInstanceMethod(animation, set) : NULL;
+   if (m)
+      animation_set_range_was = (void (*)(id, SEL, frame_rate_range_t, unsigned))method_setImplementation(m, (IMP)animation_set_range);
+   herodrm_log("herosb: frame rate caps raised to 60: fluid settings %s, animation settings %s",
+      fluid_set_range_was ? "yes" : "NO", animation_set_range_was ? "yes" : "NO");
+}
+
+static void
+report_ranges(void *unused)
+{
+   herodrm_log("herosb: %u frame rate ranges raised to 60 so far", ranges_raised);
+}
+
 __attribute__((constructor)) static void
 herosb_start(void)
 {
+   if (access(DROP_DIR "fps.off", F_OK) != 0) {
+      raise_frame_rates();
+      dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW, 120 * NSEC_PER_SEC), dispatch_get_main_queue(), NULL, report_ranges);
+   }
    if (access(DROP_DIR "gestures.off", F_OK) != 0)
       ask_for_gestures();
    if (access(DROP_DIR "wallpaper.off", F_OK) == 0)
