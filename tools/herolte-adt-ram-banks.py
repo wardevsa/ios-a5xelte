@@ -5,8 +5,8 @@
 
 The first bank must be the boot bank exactly (dram-base/dram-size, as boot_args gets them). The others are the
 pieces of the first DRAM bank (0x80000000 + 0x7e400000, the stock DTB's /memory) that neither Samsung's
-/reserved-memory (TIMA, crypto, video, GPU, camera, modem, secure camera; the 'reusable' ones left out too, in case
-they are made secure for DRM) nor this port use: S-Boot's load area and the kernel's private blocks up to 0x92000000
+/reserved-memory (TIMA, gpu_crc, camera, modem, secure camera; its 'reusable' crypto, video and gpu_buffer areas are
+used, as Linux does when no protected video plays) nor this port use: S-Boot's load area and the kernel's private blocks up to 0x92000000
 (Wi-Fi rings 0x8f000000, GPU 0x8fc00000-0x90000000, second panel buffer 0x91000000), the ECT that S-Boot leaves at
 0xa0000000 and the scaled default surface there, and the panel at 0xe2a00000. Linux (and TWRP) use all of them as
 ordinary RAM, so none is TrustZone's. Also left out: the areas S-Boot names on Linux's command line rather than in
@@ -24,7 +24,10 @@ EXTRA = [
     # pmap_destroy's tt_entry_free assertion failed: page tables written behind the kernel's back.
     (0x94000000, 0xa0000000),   # 192 MiB
     (0xa0800000, 0xb1000000),   # 264 MiB  (ECT + default surface below, TIMA above)
-    (0xb1200000, 0xc0000000),   # 238 MiB  (crypto/video above)
+    # Up to gpu_crc (no-map): crypto and video_* from 0xc0000000 are 'reusable' (CMA), ordinary RAM for Linux unless
+    # Android makes them secure for protected video, which nothing does here.
+    (0xb1200000, 0xcd000000),   # 446 MiB  (gpu_crc above)
+    (0xcd800000, 0xd0800000),   #  48 MiB  (gpu_buffer, 'reusable'; camera above)
     (0xdec00000, 0xe2a00000),   #  62 MiB  (camera below, panel above)
     (0xe3a00000, 0xf0000000),   # 198 MiB  (modem above)
     (0xf8800000, 0xfc000000),   #  56 MiB  (secure camera above)
