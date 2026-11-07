@@ -2506,6 +2506,11 @@ census_draw(struct eagl *e, unsigned function, unsigned kind)
 	if (frame_lines && function < 90) {
 		frame_noprog[function][kind]++;
 	}
+	if (eagl_tracing) {
+		/* (Galaxy S7 port) in a traced frame, which function a draw with no program was and what became of it */
+		eagl_trace("    no program: CoreAnimation's function %u (\"%s\"): %s\n", function, census_name(function),
+		    kind < CENSUS_KINDS ? census_kinds[kind] : "?");
+	}
 	if (!census_on || function >= 90) {
 		return;
 	}
