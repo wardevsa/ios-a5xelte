@@ -1,0 +1,117 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 2f15d35..03ec822 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2385,10 +2385,17 @@ hg_power_thread(__unused void *arg, __unused wait_result_t wr)
+ {
+ 	extern struct processor *cpu_to_processor(int cpu);
+ 	extern struct processor *thread_bind(struct processor *processor);
+-	uint32_t hot = 42, tmu_on = 1;
++	/*
++	 * (0331) The heat is the SoC's: the battery's TEMP stayed at 28.0 C for a whole session (boot-0330: written by the
++	 * host on Android, not measured). The TMUs read fine (boot-0330) and are calibrated by their own fuses, two points
++	 * as Samsung's exynos8890 data (25 and 85 C): TRIMINFO bits 7:0 the code at 25 C, 15:8 the code at 85 C; their
++	 * CURRENT_TEMP, bits 7:0, gave 44-49 C with the UI running. herohot=N, 80 C by default, back under N - 10.
++	 * herotmu=0: no TMU read at all (and no heat limit).
++	 */
++	uint32_t hot = 80, tmu_on = 1;
+ 	PE_parse_boot_argn("herohot", &hot, sizeof(hot));
+ 	PE_parse_boot_argn("herotmu", &tmu_on, sizeof(tmu_on));
+-	uint32_t cool = hot > 3 ? hot - 3 : 0;
++	uint32_t cool = hot > 10 ? hot - 10 : 0;
+ 	for (unsigned i = 0; i < 300 && !hc.saved; i++) {
+ 		hg_msleep(1000);
+ 	}
+@@ -2399,11 +2406,26 @@ hg_power_thread(__unused void *arg, __unused wait_result_t wr)
+ 	/* (the rate is changed from an A53, as at boot) */
+ 	thread_bind(cpu_to_processor(0));
+ 	hg_msleep(1);
+-	printf("HEROLTE POWER: Mongoose to %u MHz with the screen off or the battery at %u C (back under %u C)\n", hp_boot_mhz(), hot, cool);
+ 	vm_offset_t tmu[4] = { 0 };
++	int e25[4] = { 0 }, e85[4] = { 0 };
++	unsigned sensors = 0;
++	for (unsigned i = 0; tmu_on && i < 4; i++) {
++		tmu[i] = ml_io_map(hp_tmu_pa[i], 0x1000);
++		if (tmu[i]) {
++			uint32_t trim = hg_rd(tmu[i], 0x0);
++			e25[i] = (int)(trim & 0xff);
++			e85[i] = (int)((trim >> 8) & 0xff);
++			if (e25[i] > 0 && e85[i] > e25[i] + 20) {
++				sensors |= 1u << i;
++			}
++			printf("HEROLTE TMU: %#x: trim %#x: code %d at 25 C, %d at 85 C%s\n", hp_tmu_pa[i], trim, e25[i], e85[i],
++			    sensors & (1u << i) ? "" : " (not used)");
++		}
++	}
++	printf("HEROLTE POWER: Mongoose to %u MHz with the screen off or the SoC at %u C (back under %u C)\n", hp_boot_mhz(), hot, cool);
+ 	bool hot_now = false;
+ 	uint64_t last_log = 0;
+-	unsigned logs = 0;
++	int top = -1000, seen_max = -1000;
+ 	for (;;) {
+ 		hg_msleep(200);
+ 		uint64_t now = mach_absolute_time(), off = herolte_screen_off_at, ns = 0;
+@@ -2411,40 +2433,41 @@ hg_power_thread(__unused void *arg, __unused wait_result_t wr)
+ 			absolutetime_to_nanoseconds(now - off, &ns);
+ 		}
+ 		bool screen_off = off != 0 && ns > 3ull * NSEC_PER_SEC;
+-		int t = herolte_fg_temp_dc;
+-		if (t > -400 && t < 1000) {
+-			if (t >= (int)hot * 10) {
++		int c[4] = { -1000, -1000, -1000, -1000 };
++		top = -1000;
++		for (unsigned i = 0; i < 4; i++) {
++			if (!(sensors & (1u << i))) {
++				continue;
++			}
++			int code = (int)(hg_rd(tmu[i], 0x40) & 0xff);
++			int t = (code - e25[i]) * 60 / (e85[i] - e25[i]) + 25;
++			if (t > 0 && t < 130) {
++				c[i] = t;
++				top = t > top ? t : top;
++			}
++		}
++		seen_max = top > seen_max ? top : seen_max;
++		if (top > -1000) {
++			if (top >= (int)hot) {
+ 				hot_now = true;
+-			} else if (t <= (int)cool * 10) {
++			} else if (top < (int)cool) {
+ 				hot_now = false;
+ 			}
+ 		}
+ 		bool want_low = screen_off || hot_now;
+-		unsigned tenths = (unsigned)(t < 0 ? -t : t) % 10;
+ 		if (!hc.broken && want_low == hc.high) {
+ 			bool ok = want_low ? hc_go_low() : hc_go_high();
+-			printf("HEROLTE POWER: Mongoose %s %u MHz (screen %s%s, battery %d.%u C)\n", ok ? "to" : "NOT to",
+-			    want_low ? hp_boot_mhz() : hc.mhz, screen_off ? "off" : "on", hot_now ? ", hot" : "", t / 10, tenths);
++			printf("HEROLTE POWER: Mongoose %s %u MHz (screen %s%s, SoC %d C)\n", ok ? "to" : "NOT to",
++			    want_low ? hp_boot_mhz() : hc.mhz, screen_off ? "off" : "on", hot_now ? ", hot" : "", top);
+ 		}
+ 		uint64_t since = 0;
+ 		absolutetime_to_nanoseconds(now - last_log, &since);
+ 		if (last_log == 0 || since > 60ull * NSEC_PER_SEC) {
+ 			last_log = now;
+-			printf("HEROLTE POWER: battery %d.%u C, Mongoose %s, screen %s\n", t / 10, tenths, hc.high ? "up" : "down",
+-			    off ? "off" : "on");
+-			if (tmu_on && ++logs > 2) {
+-				for (unsigned i = 0; i < 4; i++) {
+-					if (!tmu[i]) {
+-						printf("HEROLTE TMU: reading %#x\n", hp_tmu_pa[i]);
+-						tmu[i] = ml_io_map(hp_tmu_pa[i], 0x1000);
+-					}
+-					if (tmu[i]) {
+-						printf("HEROLTE TMU: %#x: trim %#x %#x ctrl %#x %#x status %#x temp %#x %#x %#x\n", hp_tmu_pa[i],
+-						    hg_rd(tmu[i], 0x0), hg_rd(tmu[i], 0x4), hg_rd(tmu[i], 0x20), hg_rd(tmu[i], 0x24),
+-						    hg_rd(tmu[i], 0x28), hg_rd(tmu[i], 0x40), hg_rd(tmu[i], 0x44), hg_rd(tmu[i], 0x48));
+-					}
+-				}
+-			}
++			int b = herolte_fg_temp_dc;
++			printf("HEROLTE POWER: SoC %d C (big %d, little %d, GPU %d, ISP %d; most %d), battery reg %d.%u C, Mongoose %s, screen %s\n",
++			    top, c[0], c[1], c[2], c[3], seen_max, b / 10, (unsigned)(b < 0 ? -b : b) % 10, hc.high ? "up" : "down", off ? "off" : "on");
++			seen_max = -1000;
+ 		}
+ 	}
+ }

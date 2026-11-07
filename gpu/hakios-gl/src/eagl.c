@@ -412,11 +412,28 @@ eagl_leave(struct eagl *e, unsigned offset)
 	GLenum error;
 
 	if (check_errors && offset != 0x338 && (error = glGetError()) != 0) {
-		if (e->errors++ < 60) {
-			GLint program = 0;
+		/* (Galaxy S7 port) which draw it was, the first three of each kind (call, error, function, program): one kind
+		   alone (glUniform1fv in sb3's program) used to take all 60 lines before the blurs that come out black */
+		static struct { unsigned offset, error, function; GLint program, seen; } kinds[48];
+		static unsigned nkinds;
+		GLint program = 0;
+		unsigned k;
 
-			/* (Galaxy S7 port) which draw it was: the Today view's and Control Center's blurs came out black */
-			glGetIntegerv(0x8b8d /* GL_CURRENT_PROGRAM */, &program);
+		glGetIntegerv(0x8b8d /* GL_CURRENT_PROGRAM */, &program);
+		for (k = 0; k < nkinds; k++) {
+			if (kinds[k].offset == offset && kinds[k].error == error && kinds[k].function == last_function &&
+			    kinds[k].program == program) {
+				break;
+			}
+		}
+		if (k == nkinds && nkinds < sizeof(kinds) / sizeof(kinds[0])) {
+			kinds[nkinds].offset = offset;
+			kinds[nkinds].error = error;
+			kinds[nkinds].function = last_function;
+			kinds[nkinds++].program = program;
+		}
+		if (k < nkinds && kinds[k].seen++ < 3) {
+			e->errors++;
 			say("hakios-gl: %s: error %#x (frame %u, function %u last given numbers, program %d)\n", eagl_slot_name(offset),
 			    error, e->frames + 1, last_function, program);
 		}
@@ -4365,6 +4382,17 @@ install(void)
 
 	/* the kernel's boot-args are where a run is told things */
 	if (sysctlbyname("kern.bootargs", arguments, &size, NULL, 0) == 0) {
+		/* (Galaxy S7 port) and the drop zone's gl.args, one line: the boot line has room for no more */
+		FILE *more = fopen("/private/var/herolte/gl.args", "r");
+		size_t used = strlen(arguments);
+
+		if (more != NULL) {
+			if (used + 2 < sizeof(arguments) && fgets(arguments + used + 1, (int)(sizeof(arguments) - used - 1), more) != NULL) {
+				arguments[used] = ' ';
+				say("hakios-gl: gl.args: %s\n", arguments + used + 1);
+			}
+			fclose(more);
+		}
 		if ((argument = strstr(arguments, "gltrace=")) != NULL) {
 			trace_last = trace_first = (unsigned)strtoul(argument + 8, (char **)&argument, 10);
 			if (*argument == '-') {
