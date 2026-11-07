@@ -772,10 +772,10 @@ register_apps(int argc, char **argv)
 }
 
 int
-main(int argc, char **argv)
+main(int main_argc, char **main_argv)
 {
-   if (argc > 1 && strcmp(argv[1], "--register-apps") == 0)
-      return register_apps(argc, argv);
+   if (main_argc > 1 && strcmp(main_argv[1], "--register-apps") == 0)
+      return register_apps(main_argc, main_argv);
    disable_bluetooth_audio();
    install_audio_plugin();
    reduce_transparency();
