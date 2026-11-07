@@ -9,7 +9,8 @@ pieces of the first DRAM bank (0x80000000 + 0x7e400000, the stock DTB's /memory)
 they are made secure for DRM) nor this port use: S-Boot's load area and the kernel's private blocks up to 0x92000000
 (Wi-Fi rings 0x8f000000, GPU 0x8fc00000-0x90000000, second panel buffer 0x91000000), the ECT that S-Boot leaves at
 0xa0000000 and the scaled default surface there, and the panel at 0xe2a00000. Linux (and TWRP) use all of them as
-ordinary RAM, so none is TrustZone's.
+ordinary RAM, so none is TrustZone's. Also left out: the areas S-Boot names on Linux's command line rather than in
+the DTB (ess_setup, sec_tima_log, sec_avc_log, auto_summary_log; see EXTRA); check TWRP's /proc/cmdline on your phone.
 """
 import argparse, os, struct, sys
 
@@ -17,7 +18,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import adt  # noqa: E402
 
 EXTRA = [
-    (0x92000000, 0xa0000000),   # 224 MiB
+    # Not from 0x92000000: S-Boot's own command line (TWRP's /proc/cmdline, not the DTB) has ess_setup=0x91200000
+    # (Exynos snapshot), sec_tima_log=0x200000@0x92e02000 (written by TIMA/RKP above the kernel), sec_avc_log at
+    # 0x93004000 and auto_summary_log at 0x93088000. With them inside a bank, iOS reached its UI and then
+    # pmap_destroy's tt_entry_free assertion failed: page tables written behind the kernel's back.
+    (0x94000000, 0xa0000000),   # 192 MiB
     (0xa0800000, 0xb1000000),   # 264 MiB  (ECT + default surface below, TIMA above)
     (0xb1200000, 0xc0000000),   # 238 MiB  (crypto/video above)
     (0xdec00000, 0xe2a00000),   #  62 MiB  (camera below, panel above)
