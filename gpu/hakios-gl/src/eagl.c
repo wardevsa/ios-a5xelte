@@ -404,6 +404,8 @@ eagl_enter(struct eagl *e, unsigned offset)
 	}
 }
 
+static unsigned last_function = 255;    /* the function CoreAnimation last gave numbers to (hakios_gl_function_values) */
+
 static void
 eagl_leave(struct eagl *e, unsigned offset)
 {
@@ -411,7 +413,12 @@ eagl_leave(struct eagl *e, unsigned offset)
 
 	if (check_errors && offset != 0x338 && (error = glGetError()) != 0) {
 		if (e->errors++ < 60) {
-			say("hakios-gl: %s: error %#x\n", eagl_slot_name(offset), error);
+			GLint program = 0;
+
+			/* (Galaxy S7 port) which draw it was: the Today view's and Control Center's blurs came out black */
+			glGetIntegerv(0x8b8d /* GL_CURRENT_PROGRAM */, &program);
+			say("hakios-gl: %s: error %#x (frame %u, function %u last given numbers, program %d)\n", eagl_slot_name(offset),
+			    error, e->frames + 1, last_function, program);
 		}
 	}
 	if (slow_calls_us != 0) {
@@ -2038,6 +2045,7 @@ hakios_gl_function_values(void *context, unsigned function, unsigned index, size
 	static uint8_t said[90];
 
 	ca_context = context;
+	last_function = function;
 	if (function >= 90 || index != 0 || components * count > 20) {
 		return;
 	}

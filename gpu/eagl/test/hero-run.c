@@ -652,9 +652,130 @@ widgets_to_background(void *unused)
    }
 }
 
-int
-main(void)
+/*
+ * Apps from the drop zone (tools/herolte-drop.py app=FILE.ipa or app=DIR.app): DROP_DIR apps/NAME.app, and apps/.ready
+ * written after them. Each is moved to /Applications (the same volume), where a bundle of that name that we did not put
+ * there is left alone, and LaunchServices is told of it by a fresh hero-run ("--register-apps"; objc in a forked child of
+ * this process, which has threads, aborts). The PC tool refuses App Store binaries: they are encrypted (FairPlay) and
+ * nothing here can decrypt them.
+ */
+#define APPS_DIR DROP_DIR "apps/"
+#define APP_MARK ".herolte-app"
+#define MAX_APPS 32
+
+static int
+remove_tree(const char *path)
 {
+   struct stat st;
+   if (lstat(path, &st) != 0)
+      return errno == ENOENT ? 0 : -1;
+   if (!S_ISDIR(st.st_mode))
+      return unlink(path);
+   DIR *d = opendir(path);
+   struct dirent *e;
+   while (d && (e = readdir(d))) {
+      char child[1024];
+      if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0)
+         continue;
+      snprintf(child, sizeof(child), "%s/%s", path, e->d_name);
+      remove_tree(child);
+   }
+   if (d)
+      closedir(d);
+   return rmdir(path);
+}
+
+static void *
+install_apps(void *unused)
+{
+   static char paths[MAX_APPS][320];
+   char *args[MAX_APPS + 3] = { DROP_DIR "autorun", "--register-apps" };
+   int n = 0;
+   (void)unused;
+   for (int i = 0; i < 120 && access(APPS_DIR ".ready", F_OK) != 0; i++)
+      sleep(5);
+   if (access(APPS_DIR ".ready", F_OK) != 0)
+      return NULL;
+   DIR *d = opendir(APPS_DIR);
+   struct dirent *e;
+   while (d && (e = readdir(d)) && n < MAX_APPS) {
+      size_t len = strlen(e->d_name);
+      char from[320], mark[360];
+      struct stat st;
+      if (len < 5 || strcmp(e->d_name + len - 4, ".app") != 0)
+         continue;
+      snprintf(from, sizeof(from), APPS_DIR "%s", e->d_name);
+      snprintf(paths[n], sizeof(paths[n]), "/Applications/%s", e->d_name);
+      snprintf(mark, sizeof(mark), "%s/" APP_MARK, paths[n]);
+      if (lstat(paths[n], &st) == 0) {
+         if (access(mark, F_OK) != 0) {
+            herodrm_log("hero-run: app %s: /Applications has one of its own by that name; left alone", e->d_name);
+            continue;
+         }
+         remove_tree(paths[n]);
+      }
+      if (rename(from, paths[n]) != 0) {
+         herodrm_log("hero-run: app %s: cannot move it: %s", e->d_name, strerror(errno));
+         continue;
+      }
+      close(open(mark, O_WRONLY | O_CREAT, 0644));
+      herodrm_log("hero-run: app %s: put in /Applications", e->d_name);
+      args[2 + n] = paths[n];
+      n++;
+   }
+   if (d)
+      closedir(d);
+   unlink(APPS_DIR ".ready");
+   args[2 + n] = NULL;
+   if (n > 0) {
+      pid_t pid;
+      int status = 0, err = posix_spawn(&pid, args[0], NULL, NULL, args, environ);
+      if (err == 0)
+         waitpid(pid, &status, 0);
+      herodrm_log("hero-run: apps: %d registered by pid %d, spawn %d, status %#x", n, err ? -1 : pid, err, status);
+   }
+   return NULL;
+}
+
+static int
+register_apps(int argc, char **argv)
+{
+   void *pool = objc_autoreleasePoolPush();
+   int failed = 0;
+   dlopen("/System/Library/Frameworks/CoreServices.framework/CoreServices", RTLD_NOW);
+   int (*lsregister)(id, unsigned char) = (int (*)(id, unsigned char))dlsym(RTLD_DEFAULT, "LSRegisterURL");
+   int status[MAX_APPS];
+   for (int i = 2; i < argc && i - 2 < MAX_APPS; i++) {
+      id url = send_id((id)objc_getClass("NSURL"), "fileURLWithPath:", nsstring(argv[i]), NULL);
+      status[i - 2] = lsregister ? lsregister(url, 1) : -1;     /* as root, as tell_ls_of_posters() */
+   }
+   if (setgid(501) != 0 || setuid(501) != 0)
+      herodrm_log("hero-run: apps: cannot become mobile");
+   id workspace = objc_getClass("LSApplicationWorkspace") ?
+      ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("LSApplicationWorkspace"), sel_registerName("defaultWorkspace")) : nil;
+   SEL reg = sel_registerName("registerApplication:");
+   for (int i = 2; i < argc && i - 2 < MAX_APPS; i++) {
+      id url = send_id((id)objc_getClass("NSURL"), "fileURLWithPath:", nsstring(argv[i]), NULL);
+      BOOL ok = NO;
+      if (workspace && ((BOOL (*)(id, SEL, SEL))objc_msgSend)(workspace, sel_registerName("respondsToSelector:"), reg))
+         ok = ((BOOL (*)(id, SEL, id))objc_msgSend)(workspace, reg, url);
+      herodrm_log("hero-run: app %s: LSRegisterURL %d, registerApplication %d", argv[i], status[i - 2], ok);
+      failed += status[i - 2] != 0 && !ok;
+   }
+   if (failed && workspace) {
+      BOOL rebuilt = ((BOOL (*)(id, SEL, BOOL, BOOL, BOOL))objc_msgSend)(workspace,
+         sel_registerName("_LSPrivateRebuildApplicationDatabasesForSystemApps:internal:user:"), YES, YES, YES);
+      herodrm_log("hero-run: apps: the database rebuilt for the system's apps: %d", rebuilt);
+   }
+   objc_autoreleasePoolPop(pool);
+   return 0;
+}
+
+int
+main(int argc, char **argv)
+{
+   if (argc > 1 && strcmp(argv[1], "--register-apps") == 0)
+      return register_apps(argc, argv);
    disable_bluetooth_audio();
    install_audio_plugin();
    reduce_transparency();
@@ -675,6 +796,9 @@ main(void)
     */
    pthread_t widgets;
    int widgets_on = pthread_create(&widgets, NULL, widgets_to_background, NULL) == 0;
+   pthread_t apps;
+   if (pthread_create(&apps, NULL, install_apps, NULL) == 0)
+      pthread_detach(apps);
    sleep(20);
    load_env();
    posix_spawn_file_actions_t fa;
