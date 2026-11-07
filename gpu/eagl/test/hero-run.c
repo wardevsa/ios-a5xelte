@@ -783,6 +783,40 @@ register_apps(int argc, char **argv)
    return failed ? 1 : 0;
 }
 
+/*
+ * DROP_DIR apps.remove: one NAME.app a line, taken out of /Applications if we put it there (its mark), before lsd starts.
+ * With one gone LaunchServices' database goes too, so the next boot's lsd builds it without it.
+ */
+static void
+remove_listed_apps(void)
+{
+   FILE *f = fopen(DROP_DIR "apps.remove", "r");
+   char name[256];
+   int removed = 0;
+   while (f && fgets(name, sizeof(name), f)) {
+      char path[320], mark[360];
+      name[strcspn(name, "\r\n")] = 0;
+      size_t len = strlen(name);
+      if (len < 5 || strchr(name, '/') || strcmp(name + len - 4, ".app") != 0)
+         continue;
+      snprintf(path, sizeof(path), "/Applications/%s", name);
+      snprintf(mark, sizeof(mark), "%s/" APP_MARK, path);
+      if (access(mark, F_OK) != 0) {
+         herodrm_log("hero-run: app %s: not one of ours in /Applications, left alone", name);
+         continue;
+      }
+      int r = remove_tree(path);
+      herodrm_log("hero-run: app %s: taken out of /Applications (%d)", name, r);
+      removed += r == 0;
+   }
+   if (f) {
+      fclose(f);
+      unlink(DROP_DIR "apps.remove");
+   }
+   if (removed)
+      unlink(LS_DB_GONE);       /* remove_ls_db_once, just after, takes the database */
+}
+
 int
 main(int main_argc, char **main_argv)
 {
@@ -791,6 +825,7 @@ main(int main_argc, char **main_argv)
    disable_bluetooth_audio();
    install_audio_plugin();
    reduce_transparency();
+   remove_listed_apps();
    remove_ls_db_once();
    remove_mg_cache_once();
    wallpapers_for_this_screen();

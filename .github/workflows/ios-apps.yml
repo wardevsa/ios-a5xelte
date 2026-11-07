@@ -24,6 +24,7 @@ jobs:
           sdk=$(xcrun --sdk iphoneos --show-sdk-path)
           mkdir -p out
           for dir in apps/*/; do
+            [ -f "$dir/Info.plist" ] || continue
             dir=${dir%/}
             exe=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$dir/Info.plist")
             app="out/$exe.app"
@@ -32,7 +33,8 @@ jobs:
               -parse-as-library -o "$app/$exe" "$dir"/*.swift
             plutil -convert binary1 -o "$app/Info.plist" "$dir/Info.plist"
             printf 'APPL????' > "$app/PkgInfo"
-            codesign -s - -f "$app"
+            codesign -s - -f --entitlements apps/entitlements.plist "$app"
+            codesign -d --entitlements - "$app"
             file "$app/$exe"
             otool -L "$app/$exe"
           done
