@@ -454,7 +454,10 @@ run_ls_migrator(void)
  * every boot and its posters are there. Ours keeps the first one, which has none of them. Once, it goes: the next
  * start of lsd makes it anew. Nothing says where it lives on this root, so all of /private/var is looked through.
  */
-#define LS_DB_GONE DROP_DIR "lsdb2.gone"
+/* lsdb3 (boot-apps1): once more, after the apps' fallback asked lsd for a rebuild before the LS migrator had run and lsd
+ * spun at 125% with SpringBoard waiting on it. database2.done goes with it, so the census rebuilds once again, after
+ * the migrator, as it did the first time. */
+#define LS_DB_GONE DROP_DIR "lsdb3.gone"
 
 static int
 remove_ls_db_in(const char *dir, int depth)
@@ -487,6 +490,7 @@ remove_ls_db_once(void)
    if (access(LS_DB_GONE, F_OK) == 0)
       return;
    close(open(LS_DB_GONE, O_WRONLY | O_CREAT, 0644));
+   unlink(DROP_DIR "database2.done");
    time_t start = time(NULL);
    int removed = remove_ls_db_in("/private/var", 9);
    herodrm_log("hero-run: LS database: %d files removed in %ld s; the NEXT boot has it made anew", removed,
@@ -660,6 +664,7 @@ widgets_to_background(void *unused)
  * nothing here can decrypt them.
  */
 #define APPS_DIR DROP_DIR "apps/"
+static volatile int census_over;        /* set by main when the census child (and its LS migrator) has ended */
 #define APP_MARK ".herolte-app"
 #define MAX_APPS 32
 
@@ -727,12 +732,22 @@ install_apps(void *unused)
       closedir(d);
    unlink(APPS_DIR ".ready");
    args[2 + n] = NULL;
-   if (n > 0) {
-      pid_t pid;
-      int status = 0, err = posix_spawn(&pid, args[0], NULL, NULL, args, environ);
-      if (err == 0)
-         waitpid(pid, &status, 0);
-      herodrm_log("hero-run: apps: %d registered by pid %d, spawn %d, status %#x", n, err ? -1 : pid, err, status);
+   if (n == 0)
+      return NULL;
+   /* (boot-apps1) Not before the census has run the LS migrator: at 20 s LSRegisterURL failed (-1) and the rebuild
+    * then asked of lsd never ended, nor did SpringBoard's wait for it. */
+   for (int i = 0; i < 600 && !census_over; i++)
+      sleep(1);
+   pid_t pid;
+   int status = 0, err = posix_spawn(&pid, args[0], NULL, NULL, args, environ);
+   if (err == 0)
+      waitpid(pid, &status, 0);
+   herodrm_log("hero-run: apps: %d given to LaunchServices by pid %d, spawn %d, status %#x", n, err ? -1 : pid, err,
+      status);
+   if (err || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+      /* lsd finds what is in /Applications when it builds its database: the next boot's does. */
+      unlink(LS_DB_GONE);
+      herodrm_log("hero-run: apps: not registered now; the next boot makes LaunchServices' database anew");
    }
    return NULL;
 }
@@ -740,6 +755,7 @@ install_apps(void *unused)
 static int
 register_apps(int argc, char **argv)
 {
+   alarm(120);                          /* never a wait on lsd for as long as the phone runs */
    void *pool = objc_autoreleasePoolPush();
    int failed = 0;
    dlopen("/System/Library/Frameworks/CoreServices.framework/CoreServices", RTLD_NOW);
@@ -762,13 +778,9 @@ register_apps(int argc, char **argv)
       herodrm_log("hero-run: app %s: LSRegisterURL %d, registerApplication %d", argv[i], status[i - 2], ok);
       failed += status[i - 2] != 0 && !ok;
    }
-   if (failed && workspace) {
-      BOOL rebuilt = ((BOOL (*)(id, SEL, BOOL, BOOL, BOOL))objc_msgSend)(workspace,
-         sel_registerName("_LSPrivateRebuildApplicationDatabasesForSystemApps:internal:user:"), YES, YES, YES);
-      herodrm_log("hero-run: apps: the database rebuilt for the system's apps: %d", rebuilt);
-   }
+   /* No rebuild of the whole database here (boot-apps1: it never ended); the caller has the next boot do it. */
    objc_autoreleasePoolPop(pool);
-   return 0;
+   return failed ? 1 : 0;
 }
 
 int
@@ -858,6 +870,7 @@ main(int main_argc, char **main_argv)
       }
       census_drain();
       herodrm_log("hero-run: extensions: the child ended with status %#x", census_status);
+      census_over = 1;
       if (WIFEXITED(census_status) && WEXITSTATUS(census_status) == 0) {
          close(open(DROP_DIR "database2.done", O_WRONLY | O_CREAT, 0644));
       }
