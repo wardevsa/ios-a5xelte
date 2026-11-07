@@ -15,7 +15,7 @@ Apple's IPSW in a private repository and take the firmware from your own phone.
 | --- | --- |
 | Boot | Samsung S-Boot loads our loader from BOOT (`shim/herolte/`), which starts XNU |
 | CPU | All 8 cores, Mongoose at 2288 MHz (Samsung's own voltage table). UI threads move from the A53s to an idle Mongoose (0274, 0321). No thermal limit yet |
-| RAM | 2 GiB of the second DRAM bank; about 3 GiB with the first bank's free pieces (0326, being tested) |
+| RAM | About 3 GiB: the second DRAM bank (2 GiB) plus the first bank's free pieces (0326-0329, `tools/herolte-adt-ram-banks.py`) |
 | Storage | Own Exynos UFS driver; iOS root is HFSX in USERDATA, read/write, with the system apps |
 | GPU | Mali-T880 MP12 at 650 MHz through EAGL → OSMesa/Panfrost → our kernel job service |
 | Display | iOS draws an iPhone 8 screen, 750×1334 @2x, scaled to the 1440×2560 panel by the GPU into two buffers flipped on the display's IDMA (0322: no tearing). Panel at a real 60 Hz (0296); CoreAnimation told 120 Hz and the kernel's timer coalescing off (0323) |

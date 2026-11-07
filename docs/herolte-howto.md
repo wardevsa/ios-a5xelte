@@ -10,7 +10,7 @@ What works (November 2026): the iPhone X iOS 16.7.16 userland to the home
 screen and apps, **GPU acceleration** (Mali-T880 through OpenGL ES, double
 buffered display), all 8 cores, touch, buttons, battery, **Wi-Fi (WPA2)**,
 **the loudspeaker** (ringtones, keyboard clicks, media) and 2 GiB of RAM
-(about 3 GiB with patch 0326, being tested). Not working: modem, Bluetooth,
+(about 3 GiB with the RAM banks, patches 0326-0329). Not working: modem, Bluetooth,
 cameras, sensors, sleep, Metal (the Today view and Control Center blurs are
 black), the stock iOS 16 wallpaper (others work).
 
@@ -57,7 +57,7 @@ cd shim/herolte && CROSS=aarch64-none-elf- sh build.sh && cd ../..
 # Needs research/ipsw-x/d22ap.adt.
 python3 tools/mkadt_herolte.py herolte.adt --bank2 --bank2-mb 2048 --iphone8
 
-# Optional, with a kernel that has patch 0326: about 1 GiB more RAM from the
+# Recommended (kernel with patches 0326-0329): about 1 GiB more RAM from the
 # first DRAM bank (the pieces Samsung does not reserve).
 python3 tools/herolte-adt-ram-banks.py herolte.adt herolte-3g.adt
 ```
