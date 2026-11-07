@@ -1,23 +1,34 @@
 # iOS 16 on the Samsung Galaxy S7 (SM-G930F, Exynos 8890) — `herolte` branch
 
-**Status, 2026-10-31:** Apple's XNU kernel boots on a flat Galaxy S7 and runs the
+**Status, 2026-11-07:** Apple's XNU kernel boots on a flat Galaxy S7 and runs the
 unmodified **iPhone X iOS 16.7.16 userland** to the home screen with **GPU
-acceleration**: CoreAnimation renders on the Mali-T880 through OpenGL ES (Mesa
-Panfrost under an EAGL bridge). Apps open and load, and it is usable day to day
-apart from the gaps below. There is no Metal.
+acceleration**, **Wi-Fi** and **sound**: CoreAnimation renders on the Mali-T880
+through OpenGL ES (Mesa Panfrost under HakiOS's EAGL bridge), the BCM4359 joins
+WPA2 networks, and the loudspeaker plays. Apps open and load, and it is usable
+day to day apart from the gaps below. There is no Metal.
+
+**Try it:** [docs/herolte-howto.md](docs/herolte-howto.md). Apple's software and
+the Wi-Fi firmware are not in this repository: you build the iOS root from
+Apple's IPSW in a private repository and take the firmware from your own phone.
 
 | Area | State |
 | --- | --- |
 | Boot | Samsung S-Boot loads our loader from BOOT (`shim/herolte/`), which starts XNU |
-| CPU | All 8 cores. Mongoose raised from the bootloader's 728 MHz to 2600 MHz (measured 2598) at Samsung's own voltage table; UI threads prefer Mongoose, busy daemons the A53s (0274). No thermal limit yet |
-| RAM | 2 GiB of the second DRAM bank |
+| CPU | All 8 cores, Mongoose at 2288 MHz (Samsung's own voltage table). UI threads move from the A53s to an idle Mongoose (0274, 0321). No thermal limit yet |
+| RAM | 2 GiB of the second DRAM bank; about 3 GiB with the first bank's free pieces (0326, being tested) |
 | Storage | Own Exynos UFS driver; iOS root is HFSX in USERDATA, read/write, with the system apps |
-| GPU | Mali-T880 MP12 at 650 MHz through EAGL → OSMesa/Panfrost → our kernel job service. `JOB_READ_FAULT` (0x42) can still stop the GPU until reboot; not seen since the resolution below, cause unknown |
-| Display | iOS draws an iPhone 8 screen, 750×1334 @2x (72% fewer pixels), and the GPU scales it to the 1440×2560 panel. About 35-38 fps when in use, slower in the heaviest frames |
+| GPU | Mali-T880 MP12 at 650 MHz through EAGL → OSMesa/Panfrost → our kernel job service |
+| Display | iOS draws an iPhone 8 screen, 750×1334 @2x, scaled to the 1440×2560 panel by the GPU into two buffers flipped on the display's IDMA (0322: no tearing). Panel at a real 60 Hz (0296); CoreAnimation told 120 Hz and the kernel's timer coalescing off (0323) |
+| Wi-Fi | BCM4359 over PCIe with the phone's own firmware, WPA2 handshake in the kernel, `en0` and Apple80211 for wifid: the Wi-Fi icon, internet, Safari (0308-0315) |
+| Sound | The loudspeaker through the I2S block and an AudioServerPlugIn (`gpu/hakios-audio`, `heroaudio=3`) |
 | Navigation | Physical Home button (`home-button-type` 1). Home gestures need type 2, which brings UIKit's red rdar:45025538 status bar at this size; not solved |
-| Wallpaper | A fixed picture from the drop zone, drawn from inside SpringBoard (`gpu/eagl/src/herosb.c`). PosterBoard has no providers here, so the wallpaper gallery stays empty |
+| Wallpaper | iOS's own wallpapers and gallery, except the stock iOS 16 one (black) |
 | Touch, buttons, battery | Working |
-| Not working | modem, Wi-Fi, Bluetooth, audio, camera, sensors, sleep, Face ID. Widgets mostly wait; the lock screen's clock and date overlap |
+| Not working | modem, Bluetooth, camera, sensors, sleep, Face ID, Metal (the Today view and Control Center blurs are black), Siri's voices |
+
+Thanks to [Scion](https://github.com/Scion-Project/scion-kernel) and
+[danstronics/ios-s9plus-exynos](https://github.com/danstronics/ios-s9plus-exynos) (Galaxy S9/S9+):
+the display flip, the CoreAnimation timing, the UI-thread migration and the RAM banks follow their work.
 
 What made it usable, in the order found: factory GPU and CPU rates at factory
 voltages, the apps in the root image, moving `BTAudioHALPlugin` away (it kept
