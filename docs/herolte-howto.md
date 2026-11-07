@@ -79,6 +79,10 @@ python3 tools/mkpayload.py kernel.development.herolte herolte.adt payload.bin --
 
 Keep `-noprogress`: a boot line without it panicked early (not yet understood).
 
+With patch 0330 the Mongoose cores go back to the bootloader's 728 MHz while
+the screen is off (Power) and while the battery is at 42 C or more
+(`herohot=N` changes it); `heropower=0` turns that off.
+
 In TWRP, save your current BOOT first (keep it: it is your way back to
 Android), then build the XNU BOOT image from it (the Samsung header and DTBs
 are kept):
@@ -135,6 +139,16 @@ python3 tools/herolte-drop.py adb \
   wifi/fw.bin=drop/wifi/fw.bin wifi/clm.blob=drop/wifi/clm.blob \
   wifi/nvram.txt=drop/wifi/nvram.txt wifi/network.txt=drop/wifi/network.txt
 ```
+
+Apps: add `app=Foo.ipa` (or `app=Foo.app`, a folder) to the same command.
+On the next boot hero-run moves each app to `/Applications` and registers
+it; its icon shows on the home screen. Only apps that are **not
+encrypted** run here: open-source apps and your own builds (an `.ipa`
+exported from Xcode, the IPAs open-source projects publish). App Store
+downloads are encrypted with FairPlay, which needs Apple's hardware keys and
+servers; `herolte-drop.py` refuses them, as it refuses binaries without
+plain arm64 code (arm64e only). The App Store app itself cannot sign in or
+install anything on this port. The package holds 128 MiB in all.
 
 `lib/libheroeagl.dylib` is **`libhakiosgl.dylib`** of the artifact: with
 `herogl=1` the kernel puts HakiOS's EAGL bridge into backboardd under that
