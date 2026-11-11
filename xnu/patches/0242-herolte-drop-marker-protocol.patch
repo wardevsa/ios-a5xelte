@@ -1,5 +1,4 @@
 diff --git a/bsd/dev/herolte_drop.c b/bsd/dev/herolte_drop.c
-index bf37841..new123 100644
 --- a/bsd/dev/herolte_drop.c
 +++ b/bsd/dev/herolte_drop.c
 @@ -37,6 +37,10 @@ int herolte_ufs_read_before_log(uint64_t back, uint32_t count, void *dst);
@@ -11,7 +10,7 @@ index bf37841..new123 100644
  #define HDROP_BLOCK     4096u
  #define HDROP_BLOCKS    (32768u)
  #define HDROP_CHUNK     (256u * HDROP_BLOCK)
-@@ -158,20 +162,134 @@ hdrop_file(...)
+@@ -158,14 +162,120 @@ hdrop_file(...)
  	return error;
  }
  
@@ -101,27 +100,7 @@ index bf37841..new123 100644
 +	return id;
 +}
 +
-+static int
-+hdrop_set_installed_id(uint64_t id, vfs_context_t ctx)
-+{
-+	return hdrop_write_marker(HDROP_ID_PATH, id, ctx);
-+}
-+
 +static void hdrop_install(void);
-+
-+static void
-+hdrop_thread(__unused void *arg, __unused wait_result_t wr)
-+{
-+	for (unsigned i = 0; i < 3000; i++) {
-+		if (rootvnode != NULLVP && vnode_mount(rootvnode) != NULL &&
-+		    !vfs_isrdonly(vnode_mount(rootvnode))) {
-+			hdrop_install();
-+			return;
-+		}
-+		delay(100000);
-+	}
-+	printf("HEROLTE DROP: the root volume never became writable\n");
-+}
 +
 +void
 +herolte_drop_apply(void)
@@ -237,6 +216,6 @@ index bf37841..new123 100644
 +			}
 +		}
 +	}
- out:
- 	kfree_data(r.buf, HDROP_CHUNK);
++out:
++	kfree_data(r.buf, HDROP_CHUNK);
  }
