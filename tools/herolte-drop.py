@@ -28,7 +28,6 @@ import os
 import struct
 import subprocess
 import sys
-import time
 import zipfile
 
 LC_ENCRYPTION_INFO, LC_ENCRYPTION_INFO_64 = 0x21, 0x2c
@@ -136,8 +135,6 @@ def pack(items):
         data = open(src, 'rb').read()
         mode = 0o755 if os.access(src, os.X_OK) or dest == 'autorun' else 0o644
         files.append((dest, data, mode))
-    if have_apps:
-        files.append(('apps/.ready', b'ready\n', 0o644))     # last: hero-run waits for it
     for dest, data, mode in files:
         dest = dest.strip('/')
         parts = dest.split('/')
@@ -157,7 +154,8 @@ def pack(items):
         payload += b'\0' * (-len(payload) % 8)
     if len(payload) > (DROP_BLOCKS - 1) * BLOCK:
         sys.exit(f'package too large: {len(payload)} bytes')
-    ident = int(time.time())
+    # Deterministic ID: SHA-256 of payload, truncated to 64 bits
+    ident = int(hashlib.sha256(payload).hexdigest()[:16], 16)
     header = struct.pack('<8sIIQQ', b'HERODRP1', 1, len(entries), len(payload), ident)
     blob = header + b'\0' * (BLOCK - len(header)) + bytes(payload)
     blob += b'\0' * (-len(blob) % BLOCK)
