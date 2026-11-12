@@ -64,6 +64,7 @@ Nada más. DROP v2 solo escribe bajo `/private/var/herolte/` (el núcleo rechaza
    ```
    `CMDLINE` es la de `docs/herolte-howto.md` (menos de 608 caracteres). Hacer **otra** imagen con `herodrop=0` añadido
    (`xnu-boot-v2-nodrop.img`): arranca iOS sin tocar nada de DROP, es la salida si el DROP v2 diera problemas.
+   **Ojo:** la línea diaria mide 604 de 607 caracteres, así que `herodrop=0` (+12) no cabe sin quitar otro argumento; decidir cuál con el responsable.
    Cargador: `loader-clang/xnu_boot.Image` es de conveniencia (clang); el validado es el compilado con GCC aarch64.
 6. Generar y mirar el paquete de autoprueba: `make_selftest.py OUT --variant a --generation 1` (y `b`, generación 2).
    La orden exacta queda en `OUT/command.txt`. **No ejecutarla** todavía.
