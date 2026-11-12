@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include "../fdt.h"
 #include "fbtext.h"
+#include "splash.h"
 
 #define LOG_BASE 0x8ffff000UL
 #define RAM_BASE 0x90000000UL
@@ -123,7 +124,15 @@ uintptr_t hero_prepare_xnu(uintptr_t fdt, volatile uint64_t *log, uint64_t el, u
 {
     uint64_t rd_start, rd_end;
     log[77] = hero_fb_enable();
-    hero_fb_text(0, "HEROLTE XNU LOADER");
+    /* Optional boot image (splash.bin, see docs/herolte-splash.md): with one on screen the progress text is
+     * left out so that it stays clean; a failure still prints its reason (fail() above). */
+    extern const uint8_t hero_splash_blob[], hero_splash_blob_end[];
+    size_t splash_len = (size_t)(hero_splash_blob_end - hero_splash_blob);
+    int splash = splash_len && hero_splash_blit((volatile uint32_t *)HERO_FB_BASE, HERO_FB_WIDTH, HERO_FB_HEIGHT,
+                                                 hero_splash_blob, splash_len) == 0;
+    log[78] = (uint64_t)splash;
+    if (!splash)
+        hero_fb_text(0, "HEROLTE XNU LOADER");
     if (el != 4)
         return fail(log, -10, "NOT EL1");
     if (sctlr & 1)
@@ -160,7 +169,8 @@ uintptr_t hero_prepare_xnu(uintptr_t fdt, volatile uint64_t *log, uint64_t el, u
         !p->mem_size || p->mem_size > window_end - p->phys_base ||
         p->entry_va < p->virt_base || p->kernel_end < p->virt_base)
         return fail(log, -3, "PAYLOAD RAM OUTSIDE WINDOW");
-    hero_fb_hex(2, "RAM BASE", p->phys_base);
+    if (!splash)
+        hero_fb_hex(2, "RAM BASE", p->phys_base);
     log[13] = p->phys_base;
     log[14] = p->mem_size;
     uintptr_t memory_end = p->phys_base + p->mem_size;
@@ -168,7 +178,8 @@ uintptr_t hero_prepare_xnu(uintptr_t fdt, volatile uint64_t *log, uint64_t el, u
     if (kernel_end >= memory_end)
         return fail(log, -3, "KERNEL TOO LARGE");
 
-    hero_fb_text(1, "COPYING KERNEL");
+    if (!splash)
+        hero_fb_text(1, "COPYING KERNEL");
     for (uint32_t i = 0; i < p->nsegs; ++i) {
         const struct payload_seg *s = &p->segs[i];
         if (s->vmaddr < p->virt_base || s->file_size > s->vmsize ||
@@ -208,9 +219,11 @@ uintptr_t hero_prepare_xnu(uintptr_t fdt, volatile uint64_t *log, uint64_t el, u
     log[16] = p->nsegs;
     log[17] = ba_pa;
     log[10] = 5;
-    hero_fb_hex(1, "ENTRY", entry_pa);
-    hero_fb_hex(2, "BOOTARGS", ba_pa);
-    hero_fb_text(3, "JUMP TO XNU");
+    if (!splash) {
+        hero_fb_hex(1, "ENTRY", entry_pa);
+        hero_fb_hex(2, "BOOTARGS", ba_pa);
+        hero_fb_text(3, "JUMP TO XNU");
+    }
     clean_bytes(LOG_BASE, LOG_BASE + PAGE_SIZE);
     __asm__ volatile("ic iallu; dsb sy; isb" : : : "memory");
     return entry_pa;

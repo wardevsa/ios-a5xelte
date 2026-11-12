@@ -14,7 +14,7 @@ image() {
     objs=""
     for src in "$@"; do
         obj="out/${name}_$(basename "$src" | tr . _).o"
-        "${CROSS}gcc" $CFLAGS "$src" -o "$obj"
+        "${CROSS}gcc" $CFLAGS $SPLASH_DEF "$src" -o "$obj"
         objs="$objs $obj"
     done
     "${CROSS}ld" -static -T image.ld --build-id=none --no-warn-rwx-segments $objs -o "out/$name.elf"
@@ -36,5 +36,8 @@ print(f'{sys.argv[1]}: {len(p)} bytes; arm64 Image header OK')
 PY
 }
 
+# Optional boot image: shim/herolte/splash.bin (tools/herolte-make-splash.py) is embedded in xnu_boot.Image.
+SPLASH_DEF=""
+if [ -f splash.bin ]; then SPLASH_DEF='-DHERO_SPLASH_FILE="splash.bin"'; echo "boot image: splash.bin ($(wc -c < splash.bin) bytes)"; fi
 image probe probe.S probe.c fbtext.c ../fdt.c
-image xnu_boot xnu_boot.S xnu_boot.c fbtext.c ../fdt.c
+image xnu_boot xnu_boot.S xnu_boot.c fbtext.c splash.c splash_data.S ../fdt.c

@@ -23,3 +23,6 @@ nvram.txt*
 *.blob
 *.adt
 payload*.bin
+
+# boot image for the loader (tools/herolte-make-splash.py): the user's own picture
+shim/herolte/splash.bin
