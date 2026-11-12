@@ -102,6 +102,18 @@ jobs:
           set -o pipefail
           bash build.sh 2>&1 | tee ../build.log
 
+      # darwin-xnu-build skips, with only a warning, a patch that does not apply, and the build goes on with the
+      # older kernel. For this repository's own NNNN-*.patch that is a silent failure: make it fail the job.
+      - name: Fail if one of this repository's patches was skipped
+        if: always()
+        run: |
+          test -f build.log || exit 0
+          if sed 's/\x1b\[[0-9;]*m//g' build.log | grep -E 'Skipping patch .*/[0-9]{4}-[^/ ]*\.patch'; then
+            echo "::error title=patch skipped::a patch of this repository did not apply and was skipped by darwin-xnu-build; the kernel does not contain it"
+            exit 1
+          fi
+          echo "none of this repository's patches was skipped"
+
       # Logs need a GitHub sign-in to read; check-run annotations are public.
       # Publish the first errors and the log tail so failures can be read
       # through the API (repos/.../check-runs/<job>/annotations).
