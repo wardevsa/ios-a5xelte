@@ -98,8 +98,10 @@ python3 tools/herolte-pack-boot.py pack boot-stock.img \
 
 ## 5. Drop zone: GPU libraries, audio, Wi-Fi
 
-The kernel copies a small package from the end of USERDATA into
-`/private/var/herolte/` on every boot (`tools/herolte-drop.py`). Gather it in
+The kernel installs a package from the end of USERDATA into
+`/private/var/herolte/` (`tools/herolte-drop.py`, protocol DROP v2, `xnu/drop-v2/`): it checks the package's SHA-256, stages it
+under `.drop/`, moves it into place with renames, and publishes `.drop/ready` (hero-run then consumes the apps). The same package
+(content and `--generation`) is installed once; `--generation N` or `--force` installs it again. Files not in a new package stay. Gather it in
 a folder `drop/` from the `mesa-ios` artifact (`M/` below) and your phone.
 
 Wi-Fi firmware, from **your** phone's VENDOR partition (read only, in TWRP):
