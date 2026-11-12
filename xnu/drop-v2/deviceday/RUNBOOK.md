@@ -18,6 +18,16 @@ Regla del proyecto (`AGENTS.md`, `QWEN.md`): *no flashear sin permiso*.
   tres veces (al hacerlas, y de nuevo tras reconectar): coinciden con las particiones.
 - El final de USERDATA (donde DROP/log esperan su zona) contiene hoy datos de ext4: no hay log XNU en este teléfono.
 
+## Cómo conseguir el root de iOS (20 GiB) — decisión pendiente del responsable
+La cuenta de GitHub activa solo tiene el fork público (`ios-a5xelte`); el repo privado `ios-herolte-root` de la guía **no existe ahí**.
+Opciones, de más a menos cómoda:
+| Opción | Qué exige | Coste / riesgo |
+|---|---|---|
+| A. Repo **privado** propio + workflow `ios-root` | crear un repo privado, empujar la rama `ios-root-build`; corre en `macos-14` (hasta 180 min) y descarga el IPSW de Apple | las horas de macOS en repos privados se facturan ×10 sobre la cuota gratuita: **puede agotarla o generar cargos**; el responsable debe decidirlo |
+| B. Construirlo en este PC (Linux) con `tools/mkiosroot.sh` | `apfs-fuse` (hay que compilarlo), `sudo` (monta una imagen en bucle y conserva propietarios), unos 40 GB de trabajo (hay 71 libres) y descargar ≈ 7 GB del IPSW (`tools/remotezip.py`) | sin coste de nube; requiere root en el PC y tiempo; el script es del donante SWEET (hay que revisarlo para HEROLTE) |
+| C. Que lo facilite quien ya lo tenga (el responsable) | las partes `root.img.gz.part*` y `d22ap.adt` | ninguno, pero depende de él |
+En cualquier caso la instalación **borra USERDATA entero** (todo el Android): consejo con el responsable antes de empezar.
+
 ## 0. Reglas que no se tocan
 - Las pruebas de XNU escriben **solo BOOT** (`/dev/block/sda5` en el teléfono de pruebas). **Nunca** EFS, RECOVERY ni los
   bootloaders. Cualquier otra escritura en una partición se confirma con el responsable **antes**.
