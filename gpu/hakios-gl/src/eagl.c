@@ -4200,6 +4200,56 @@ my_getMacroContextPrivate(id self, SEL selector)
 	return e ? e->table : NULL;
 }
 
+/*
+ * Galaxy S7 port (wallpaper census): the original wallpaper and the gallery's previews come to backboardd as
+ * surfaces with no pixel format (1105x1160, 400x400), made by the kernel over -- or copied from -- another
+ * process's memory, and shown black. What is in them, once each for the first few: how much of the memory is
+ * zero, and which byte of the four is 255 most often (where the opacity is, if the picture is opaque).
+ */
+static void
+wrapped_census(struct image *image, const char *how)
+{
+	static unsigned told;
+	IOSurfaceRef surface = image->surface;
+
+	if (told >= 16 || IOSurfaceLock(surface, kIOSurfaceLockReadOnly, NULL) != 0) {
+		return;
+	}
+	told++;
+	const uint8_t *base = IOSurfaceGetBaseAddress(surface);
+	size_t row = IOSurfaceGetBytesPerRow(surface), width = IOSurfaceGetWidth(surface), height = IOSurfaceGetHeight(surface);
+	size_t zero = 0, all = 0, full[4] = { 0 }, sum[4] = { 0 };
+	uint32_t first = 0;
+	bool found = false;
+
+	for (size_t y = 0; base != NULL && y < height; y++) {
+		const uint8_t *p = base + row * y;
+		for (size_t x = 0; x + 1 <= width && (x + 1) * 4 <= row; x++, p += 4) {
+			uint32_t px;
+			memcpy(&px, p, 4);
+			all++;
+			if (px == 0) {
+				zero++;
+				continue;
+			}
+			if (!found) {
+				first = px;
+				found = true;
+			}
+			for (int c = 0; c < 4; c++) {
+				full[c] += p[c] == 255;
+				sum[c] += p[c];
+			}
+		}
+	}
+	IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
+	size_t lit = all - zero ? all - zero : 1;
+	say("hakios-gl: wrapped census (%s): surface %u %zu x %zu, %zu bytes a row, base %s: %zu of %zu pixels zero; "
+	    "first other %08x; bytes 0-3 at 255: %zu %zu %zu %zu; means %zu %zu %zu %zu\n", how, IOSurfaceGetID(surface), width,
+	    height, row, base ? "mapped" : "NULL", zero, all, first, full[0], full[1], full[2], full[3], sum[0] / lit,
+	    sum[1] / lit, sum[2] / lit, sum[3] / lit);
+}
+
 /* (the types are the method's own: the last three arrive on the stack, where sizes matter) */
 static BOOL
 my_texImageIOSurface(id self, SEL selector, IOSurfaceRef surface, unsigned long target, unsigned long internal,
@@ -4239,6 +4289,9 @@ my_texImageIOSurface(id self, SEL selector, IOSurfaceRef surface, unsigned long 
 		    height, plane, invert ? ", inverted" : "");
 	}
 	image->wrapped = IOSurfaceGetPixelFormat(surface) == 0;
+	if (image->wrapped) {
+		wrapped_census(image, format == GL_BGRA ? "shown, BGRA" : format == GL_RGBA ? "shown, RGBA" : "shown, other");
+	}
 	began = now_us();
 	if (!surface_shared(e, image)) {
 		surface_changed(e, image);              /* (what it adds up to now) */
