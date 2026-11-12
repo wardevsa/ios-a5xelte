@@ -105,7 +105,7 @@ extern void UIGraphicsBeginImageContextWithOptions(hero_size size, bool opaque, 
 extern void *UIGraphicsGetCurrentContext(void);
 extern id UIGraphicsGetImageFromCurrentImageContext(void);
 extern void UIGraphicsEndImageContext(void);
-extern void CGContextTranslateCTM(void *context, double x, double y);
+#include <CoreGraphics/CoreGraphics.h>
 
 static id
 preview_for_view(id self, SEL command, id view)
@@ -120,7 +120,7 @@ preview_for_view(id self, SEL command, id view)
    UIGraphicsBeginImageContextWithOptions((hero_size){ bounds.w, bounds.h }, false, 2.0);
    void *context = UIGraphicsGetCurrentContext();
    if (context != NULL) {
-      CGContextTranslateCTM(context, -bounds.x, -bounds.y);
+      CGContextTranslateCTM((CGContextRef)context, -bounds.x, -bounds.y);
       id layer = ((id (*)(id, SEL))objc_msgSend)(view, sel_registerName("layer"));
       ((void (*)(id, SEL, void *))objc_msgSend)(layer, sel_registerName("renderInContext:"), context);
    }
