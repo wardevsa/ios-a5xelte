@@ -236,6 +236,8 @@ struct image {
 	bool painted;                   /* something has been drawn into it (it is a target in fact, not only in name) */
 	unsigned looked;                /* ... the frame in which that memory was last looked at, */
 	uint64_t sum;                   /* ... and what it added up to */
+	bool sums_known;                /* (Galaxy S7 port) sums[] hold what each eighth of the rows adds up to */
+	uint64_t sums[8];               /* ... rows y with y % 8 == i: one eighth is looked at a frame, see surface_changed() */
 	unsigned cleaned;               /* (Galaxy S7 port) a shared picture: the frame its caches were last cleaned for the GPU */
 	GLenum to, internal, format, type;
 	uint32_t plane, seed;
@@ -679,28 +681,51 @@ surface_shared(struct eagl *e, struct image *image)
  * a frame, when the texture is about to be drawn with, the memory is added up, and copied again
  * if the sum has changed.
  */
+/*
+ * Galaxy S7 port: adding up the whole surface every frame for every such texture was 12.5% of backboardd's
+ * time (HERO_PROF, scrolling the home screen). One eighth of the rows is looked at a frame, a different eighth
+ * each frame, against what those rows added up to before; when any eighth has changed, all eight are added up
+ * again (the texture is about to be copied again anyway). A change is seen within eight frames.
+ */
+static uint64_t
+rows_sum(const uint8_t *base, size_t row, size_t used, GLsizei height, unsigned phase)
+{
+	uint64_t sum = used ^ phase, word;
+
+	for (GLsizei y = (GLsizei)phase; y < height; y += 8) {
+		const uint8_t *line = base + row * (size_t)y;
+		for (size_t at = 0; at + 8 <= used; at += 8) {
+			memcpy(&word, line + at, 8);
+			sum = (sum ^ word) * 0x9e3779b97f4a7c15ull;
+			sum ^= sum >> 29;
+		}
+	}
+	return sum;
+}
+
 static bool
 surface_changed(struct eagl *e, struct image *image)
 {
 	IOSurfaceRef surface = image->surface;
-	size_t size = IOSurfaceGetBytesPerRow(surface) * (size_t)(image->height - 1) +
-	    (size_t)image->width * bytes_a_pixel(image->format, image->type);
+	size_t row = IOSurfaceGetBytesPerRow(surface);
+	size_t used = (size_t)image->width * bytes_a_pixel(image->format, image->type);
 	const uint8_t *base = IOSurfaceGetBaseAddress(surface);
-	uint64_t sum = size, word;
 
-	if (image->looked == e->frames + 1 || base == NULL || IOSurfaceGetPlaneCount(surface) > 0) {
+	if (image->looked == e->frames + 1 || base == NULL || IOSurfaceGetPlaneCount(surface) > 0 || image->height <= 0) {
 		return false;
 	}
 	image->looked = e->frames + 1;
-	for (size_t at = 0; at + 8 <= size; at += 8) {
-		memcpy(&word, base + at, 8);
-		sum = (sum ^ word) * 0x9e3779b97f4a7c15ull;
-		sum ^= sum >> 29;
+	if (used > row) {
+		used = row;
 	}
-	if (sum == image->sum) {
+	unsigned phase = e->frames % 8;
+	if (image->sums_known && rows_sum(base, row, used, image->height, phase) == image->sums[phase]) {
 		return false;
 	}
-	image->sum = sum;
+	for (unsigned i = 0; i < 8; i++) {
+		image->sums[i] = rows_sum(base, row, used, image->height, i);
+	}
+	image->sums_known = true;
 	return true;
 }
 
