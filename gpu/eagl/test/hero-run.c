@@ -28,6 +28,7 @@ extern void NSSetUncaughtExceptionHandler(void (*handler)(id));
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include "drop_v2_userland.h"
 
 #define DROP_DIR "/private/var/herolte/"
 #define OUT DROP_DIR "test.out"
@@ -657,13 +658,15 @@ widgets_to_background(void *unused)
 }
 
 /*
- * Apps from the drop zone (tools/herolte-drop.py app=FILE.ipa or app=DIR.app): DROP_DIR apps/NAME.app, and apps/.ready
- * written after them. Each is moved to /Applications (the same volume), where a bundle of that name that we did not put
- * there is left alone, and LaunchServices is told of it by a fresh hero-run ("--register-apps"; objc in a forked child of
+ * Apps from the drop zone (tools/herolte-drop.py app=FILE.ipa or app=DIR.app): DROP_DIR apps/NAME.app, announced by the
+ * kernel's .drop/ready once the package is whole (xnu/drop-v2). Each is moved to /Applications (the same volume), where
+ * a bundle of that name that we did not put there is left alone, and LaunchServices is told of it by a fresh hero-run ("--register-apps"; objc in a forked child of
  * this process, which has threads, aborts). The PC tool refuses App Store binaries: they are encrypted (FairPlay) and
  * nothing here can decrypt them.
  */
 #define APPS_DIR DROP_DIR "apps/"
+#define DROP_READY DROP_DIR ".drop/ready"
+#define DROP_CONSUMED DROP_DIR ".drop/consumed"
 static volatile int census_over;        /* set by main when the census child (and its LS migrator) has ended */
 #define APP_MARK ".herolte-app"
 #define MAX_APPS 32
@@ -695,11 +698,19 @@ install_apps(void *unused)
 {
    static char paths[MAX_APPS][320];
    char *args[MAX_APPS + 3] = { DROP_DIR "autorun", "--register-apps" };
-   int n = 0;
+   int n = 0, pending = 0, legacy = 0;
+   char token[DROPV2_TOKEN_MAX] = "";
    (void)unused;
-   for (int i = 0; i < 120 && access(APPS_DIR ".ready", F_OK) != 0; i++)
-      sleep(5);
-   if (access(APPS_DIR ".ready", F_OK) != 0)
+   /* DROP v2: the kernel publishes .drop/ready ("generation|sha256") once a package is whole in place. A ready that is
+    * already in .drop/consumed is an old one: the kernel may still be installing a newer package, so keep waiting. A
+    * kernel with DROP v1 writes apps/.ready instead (and this process removes it, as before). */
+   for (int i = 0; i < 120 && !pending && !legacy; i++) {
+      pending = dropv2_pending(DROP_READY, DROP_CONSUMED, token, sizeof(token)) == 1;
+      legacy = !pending && access(APPS_DIR ".ready", F_OK) == 0;
+      if (!pending && !legacy)
+         sleep(5);
+   }
+   if (!pending && !legacy)
       return NULL;
    DIR *d = opendir(APPS_DIR);
    struct dirent *e;
@@ -730,7 +741,10 @@ install_apps(void *unused)
    }
    if (d)
       closedir(d);
-   unlink(APPS_DIR ".ready");
+   if (legacy)
+      unlink(APPS_DIR ".ready");
+   else if (dropv2_mark_consumed(DROP_CONSUMED, token) != 0)
+      herodrm_log("hero-run: apps: cannot write .drop/consumed (%s); the next boot looks at apps/ again", strerror(errno));
    args[2 + n] = NULL;
    if (n == 0)
       return NULL;
