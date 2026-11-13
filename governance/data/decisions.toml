@@ -251,3 +251,17 @@ rationale = "El Director lo dispone por razones de seguridad y rapidez. Qwen ocu
 consequences = "Las directivas de la jefatura técnica valen para objetivos, arquitectura, prioridades y decisiones técnicas sin nueva confirmación. LECTURA DEL INGENIERO (conservadora, a confirmar si se discrepa): no incluye autorizar acciones de nivel C (sudo, montar, publicar, borrar, tocar el teléfono) ni cambiar reglas X: esas siguen exigiendo una decisión del Director que nombre la acción (AUTHORITY.md §4), y la herramienta lo comprueba. Las directivas de jefatura que piden tocar el S7 ya dicen que necesitan 'autorización ROJO explícita'."
 reversal = "Nueva decisión del Director."
 
+[[decision]]
+id = "D-0020"
+title = "Excluir del root los 2 ficheros con U+0E33 (WorkflowKit th.lproj): sin nodecompose y sin parchear XNU"
+date = "2026-11-13"
+scope = "architecture"
+status = "APPROVED"
+proposer = "jefe-tecnico"
+approved_by = "director"
+approval_date = "2026-11-13"
+approval_ref = "Mensaje del Director, 2026-11-13: 'He aprobado el siguiente informe' (directiva de jefatura técnica: excluir del root los 2 nombres con U+0E33, sin nodecompose ni parche de XNU)"
+rationale = "La tabla de Linux descompone U+0E33 y XNU lo conserva (docs/herolte-unicode-aplicacion.md). Excluir 2 ficheros de localización tailandesa evita montar con nodecompose y modificar la tabla de XNU. La jefatura afirma que iOS hace fallback a en.lproj: NO verificado por el ingeniero."
+consequences = "Los 2 ficheros no estarán en el root (KI-0006). NO autoriza ninguna acción roja: generar la imagen sigue necesitando la autorización del Director que nombre privileged-or-mount (T-0025)."
+reversal = "Nueva decisión que elija nodecompose (roja) o el parche de la tabla."
+

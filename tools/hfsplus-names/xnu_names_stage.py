@@ -59,12 +59,16 @@ def apply(tree, p):
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('mode', choices=['plan', 'apply']); ap.add_argument('tree'); ap.add_argument('--ko')
+    ap = argparse.ArgumentParser(); ap.add_argument('mode', choices=['plan', 'apply']); ap.add_argument('tree'); ap.add_argument('--ko'); ap.add_argument('--exclude-list', help='escribe aquí (fichero NUEVO) las rutas relativas que necesitan nodecompose, para excluirlas del copiado (rsync --exclude-from); no borra nada')
     a = ap.parse_args()
     if not os.path.isdir(a.tree) or os.path.islink(a.tree): raise SystemExit('TREE debe ser un directorio real')
     p = plan(a.tree, h.linux_table(a.ko) if a.ko else None)
     print('renombres de hojas: %d | directorios que cambiarían: %d | colisiones: %d | demasiado largos: %d%s' % (len(p['renames']), len(p['dir_changes']), len(p['collisions']), len(p['too_long']),
           (' | necesitan nodecompose aun renombrados: %d' % len(p['needs_nodecompose'])) if a.ko else ''))
+    if a.exclude_list:
+        if not a.ko: raise SystemExit('--exclude-list necesita --ko')
+        with open(a.exclude_list, 'x', encoding='utf-8') as f:
+            for d, o, nw in sorted(p['needs_nodecompose']): f.write(os.path.relpath(os.path.join(d, nw if os.path.exists(os.path.join(d, nw)) else o), a.tree) + '\n')
     if a.mode == 'apply': print('renombrados: %d' % apply(a.tree, p))
     return 1 if (p['dir_changes'] or p['collisions'] or p['too_long']) else 0
 

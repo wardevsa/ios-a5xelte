@@ -283,7 +283,8 @@ status = "blocked"
 priority = 3
 owner = "ingeniero"
 depends_on = ["T-0024"]
+requires_decisions = ["D-0020"]
 actions = ["privileged-or-mount", "pc-implementation", "host-tests"]
-blocked_on = "autorización roja del Director que nombre privileged-or-mount, la imagen y los comandos (D-0017/D-0018 no la dan) y decisión sobre los 2 nombres con U+0E33 (nodecompose o excluirlos)"
-acceptance = "Imagen con nombre nuevo, hashes de la anterior intactos, hfsx_check esperando forma XNU, fsck_hfs -n rc=0 si procede, evidencias nuevas con SHA-256."
+blocked_on = "autorización roja del Director que nombre privileged-or-mount, la imagen nueva y los comandos (COMANDOS_SUDO.md del laboratorio) — la directiva 'T-0025 autorizada' no los nombra; D-0020 ya decidió los 2 nombres (excluirlos). Además el montaje lo hacen los scripts del laboratorio, que la directiva dice no tocar"
+acceptance = "Imagen con nombre nuevo con 30 nombres en forma XNU y los 2 de U+0E33 excluidos (KI-0006); hashes de la anterior intactos; hfsx_check esperando forma XNU; evidencias nuevas con SHA-256."
 

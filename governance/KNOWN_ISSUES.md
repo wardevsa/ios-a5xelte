@@ -32,5 +32,8 @@ La política es **disciplina asistida por herramienta**: `gate` y `check` inform
 ## KI-0005 — Baterías de rev2 incompletas
 La ronda 2 de mutación de rev2 (49 mutantes) quedó a medias por disco lleno; sus resultados parciales no son válidos. T-0005.
 
+## KI-0006 — 2 ficheros con U+0E33 excluidos del root (D-0020)
+Dos ficheros de `System/Library/PrivateFrameworks/WorkflowKit.framework/th.lproj/DefaultShortcuts/` (nombres tailandeses con `U+0E33`, SARA AM; carpetas `0C6A13DC-…` y `1401D3FE-…`) no se copian al root: la tabla de Linux descompone `U+0E33` y XNU lo conserva (`docs/herolte-unicode-aplicacion.md` §2). **Impacto esperado:** ninguno, según la jefatura (iOS usaría la localización inglesa); **no verificado** por el ingeniero. **Se vigila:** `xnu_names_stage.py plan --ko … --exclude-list` debe listar exactamente esos 2. **Resuelve:** nueva decisión (nodecompose o parche de la tabla). T-0025.
+
 ## Cómo añadir una entrada
 Número correlativo `KI-NNNN`, estado, desde cuándo, **salida o evidencia exacta**, qué no es, cómo se vigila y la tarea que lo resuelve. Las entradas resueltas no se borran: se marcan `resuelto` con el commit.

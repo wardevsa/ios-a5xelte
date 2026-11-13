@@ -25,6 +25,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0017 | APPROVED | architecture | 2026-11-13 | Corrección Unicode: regenerar en el generador del root los nombres en forma XNU (sin tocar el kernel), antes de repetir R2 | jefe-tecnico | director | — | Mensaje del Director, 2026-11-13: 'Apruebo D-0001 y D-0017, autorizo cambiar el generador sin R2. Y si, la directiva responde por mi, por razones de seguridad yo seguire leyendo todo para que no haya problemas e intervendre de forma extraordinaria si se requiere.' |
 | D-0018 | APPROVED | operation | 2026-11-13 | Levantar la congelación del generador del root (D-0006) solo para aplicar D-0017: imagen NUEVA con nombre nuevo, sin R2 previo y sin tocar la anterior | ingeniero | director | — | Mensaje del Director, 2026-11-13: 'Apruebo D-0001 y D-0017, autorizo cambiar el generador sin R2. Y si, la directiva responde por mi, por razones de seguridad yo seguire leyendo todo para que no haya problemas e intervendre de forma extraordinaria si se requiere.' |
 | D-0019 | APPROVED | process | 2026-11-13 | Delegación: la jefatura técnica (Qwen) decide lo técnico en nombre del Director; el Director lee todo e interviene de forma extraordinaria | director | director | — | Mensaje del Director, 2026-11-13: 'Apruebo D-0001 y D-0017, autorizo cambiar el generador sin R2. Y si, la directiva responde por mi, por razones de seguridad yo seguire leyendo todo para que no haya problemas e intervendre de forma extraordinaria si se requiere.' |
+| D-0020 | APPROVED | architecture | 2026-11-13 | Excluir del root los 2 ficheros con U+0E33 (WorkflowKit th.lproj): sin nodecompose y sin parchear XNU | jefe-tecnico | director | — | Mensaje del Director, 2026-11-13: 'He aprobado el siguiente informe' (directiva de jefatura técnica: excluir del root los 2 nombres con U+0E33, sin nodecompose ni parche de XNU) |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
 - **Estado:** APPROVED (director, 2026-11-13)
@@ -141,4 +142,10 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Razón:** El Director lo dispone por razones de seguridad y rapidez. Qwen ocupa el puesto de jefe técnico.
 - **Consecuencias:** Las directivas de la jefatura técnica valen para objetivos, arquitectura, prioridades y decisiones técnicas sin nueva confirmación. LECTURA DEL INGENIERO (conservadora, a confirmar si se discrepa): no incluye autorizar acciones de nivel C (sudo, montar, publicar, borrar, tocar el teléfono) ni cambiar reglas X: esas siguen exigiendo una decisión del Director que nombre la acción (AUTHORITY.md §4), y la herramienta lo comprueba. Las directivas de jefatura que piden tocar el S7 ya dicen que necesitan 'autorización ROJO explícita'.
 - **Cómo se revierte:** Nueva decisión del Director.
+
+## D-0020 — Excluir del root los 2 ficheros con U+0E33 (WorkflowKit th.lproj): sin nodecompose y sin parchear XNU
+- **Estado:** APPROVED (director, 2026-11-13)
+- **Razón:** La tabla de Linux descompone U+0E33 y XNU lo conserva (docs/herolte-unicode-aplicacion.md). Excluir 2 ficheros de localización tailandesa evita montar con nodecompose y modificar la tabla de XNU. La jefatura afirma que iOS hace fallback a en.lproj: NO verificado por el ingeniero.
+- **Consecuencias:** Los 2 ficheros no estarán en el root (KI-0006). NO autoriza ninguna acción roja: generar la imagen sigue necesitando la autorización del Director que nombre privileged-or-mount (T-0025).
+- **Cómo se revierte:** Nueva decisión que elija nodecompose (roja) o el parche de la tabla.
 

@@ -58,6 +58,18 @@ class T(unittest.TestCase):
         self.touch('d', 'xำ'); p = s.plan(self.t, h.linux_table(KO))                  # U+0E33: XNU lo conserva, la tabla de Linux lo descompone
         self.assertEqual(len(p['needs_nodecompose']), 1, p)
 
+    @unittest.skipUnless(os.path.exists(KO), 'sin hfsplus.ko del kernel en ejecución')
+    def test_exclude_list_names_only_the_names_that_need_nodecompose_and_deletes_nothing(self):
+        self.touch('d', 'x\u0e33'); self.touch('d', NFC_E); self.touch('d', ASCII)
+        out = os.path.join(tempfile.mkdtemp(prefix='xns-ex.'), 'excl.txt')
+        try:
+            r = s.main.__globals__['sys']; old = r.argv; r.argv = ['x', 'plan', self.t, '--ko', KO, '--exclude-list', out]
+            try: s.main()
+            finally: r.argv = old
+            self.assertEqual(open(out, encoding='utf-8').read().split('\n')[:-1], [os.path.join('d', 'x\u0e33')])
+            self.assertEqual(sorted(os.listdir(os.path.join(self.t, 'd'))), sorted(['x\u0e33', NFC_E, ASCII]))   # plan no toca nada
+        finally: shutil.rmtree(os.path.dirname(out), ignore_errors=True)
+
 
 if __name__ == '__main__':
     unittest.main()
