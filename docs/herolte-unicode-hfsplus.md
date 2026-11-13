@@ -160,3 +160,5 @@ a un nombre distinto, no a otra forma del mismo.
 5. En hardware (cuando exista un root instalado): abrir por nombre esos ficheros desde XNU.
 ## Siguiente cambio mínimo a decidir (no aplicado)
 Si autorizas R2 y confirma (1)-(3): `nodecompose` en `attach()` + renombrado previo de los ficheros a forma XNU + una sola función de traducción manifiesto→ruta (sección 3 de este documento). Si no, queda (B) o (C).
+
+Nota de trazabilidad: el directorio `results-3niveles-20261113` (primera ejecución del script) tiene un filtro defectuoso del catálogo (descartaba nombres cuyos bytes UTF-16 eran todos < 0x80, como U+0301) y da 116/101 en lugar de 329/297 en las líneas "forma … en disco". Se conserva sin tocar; **los resultados válidos son los de `results-3niveles-20261113-v2`** (script corregido en el mismo commit). Ambos están en `IOS-S7-archive/04-audit-evidence/unicode-3niveles-20261113.tar` (SHA-256 en su `.sha256`).
