@@ -338,3 +338,18 @@ sha256 = "c50853efe1f746edd962e79430ec5776e80c0323db1109f0ab1c6ea55f9442df"
 size = 2863
 immutable = true
 note = "Sustituye en valor probatorio a E-0021: la herramienta exige ahora que un clon SIN mutar pase antes de contar mutantes. Reproducible: python3 tools/governance_mutation.py"
+
+[[evidence]]
+id = "E-0024"
+title = "T-0009: resultados de la integración con origin/herolte (fusión de prueba, aplicación de los 5 parches en los dos órdenes, parches y registros)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/integracion-origin-herolte-20261113.tar"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "619b1b42f947649bfd228accae74f6f5b24bd328ddf2971ef4012bf95d915e9b"
+size = 81920
+immutable = true
+note = "Prueba de APLICABILIDAD de parches, no de compilación ni de funcionamiento. Informe: docs/herolte-integracion-origin-herolte.md"

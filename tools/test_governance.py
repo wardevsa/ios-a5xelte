@@ -135,13 +135,13 @@ class Tasks(Base):
     def t(self, ident, key, value=None): mutate(self.data('tasks.toml'), 'task', ident, key, value)
 
     def test_two_tasks_in_progress(self):
-        self.t('T-0008', 'status', '"in_progress"'); self.t('T-0009', 'status', '"in_progress"'); self.assertErr('más de una tarea en curso')
+        self.t('T-0008', 'status', '"in_progress"'); self.t('T-0010', 'status', '"in_progress"'); self.assertErr('más de una tarea en curso')
 
     def test_dependency_on_missing_task(self):
         self.t('T-0004', 'depends_on', '["T-9999"]'); self.assertErr('depende de una tarea inexistente T-9999')
 
     def test_dependency_cycle(self):
-        self.t('T-0008', 'depends_on', '["T-0009"]'); self.t('T-0009', 'depends_on', '["T-0008"]'); self.assertErr('ciclo de dependencias')
+        self.t('T-0008', 'depends_on', '["T-0010"]'); self.t('T-0010', 'depends_on', '["T-0008"]'); self.assertErr('ciclo de dependencias')
 
     def test_unknown_action_is_an_error_and_fails_closed(self):
         self.t('T-0008', 'actions', '["inventada"]'); self.assertErr("acción desconocida 'inventada'")
@@ -204,76 +204,63 @@ class Tasks(Base):
         self.t('T-0007', 'evidence', '["E-9999"]'); self.assertErr('evidencia inexistente E-9999')
 
 
-class Selection(Base):
-    def pick(self, mutate_fn=None):
-        policy, tasks, decs = (gov.load(self.d, f) for f in ('policy.toml', 'tasks.toml', 'decisions.toml'))
-        if mutate_fn: mutate_fn(tasks, decs)
-        return gov.next_task(policy, tasks, decs)
+class Selection(unittest.TestCase):
+    """Selection rules on SYNTHETIC data (the real queue changes every day; the rules must not depend on it)."""
+    POLICY = {'actions': [{'id': 'a', 'tier': 'A'}, {'id': 'b', 'tier': 'B'}, {'id': 'c', 'tier': 'C'}, {'id': 'x', 'tier': 'X'}]}
 
-    def test_the_real_queue_selects_the_best_ready_autonomous_task(self):
-        n, mode = self.pick(); self.assertEqual((n['id'], mode), ('T-0009', 'start'))
+    def task(self, i, **kw):
+        t = {'id': 'T-%04d' % i, 'status': 'ready', 'priority': 5, 'owner': 'ingeniero', 'depends_on': [], 'actions': ['a']}; t.update(kw); return t
+
+    def pick(self, *tasks, decisions=()):
+        return gov.next_task(self.POLICY, {'task': list(tasks)}, {'decision': list(decisions)})
+
+    def test_the_real_queue_selects_a_task_that_satisfies_every_rule(self):
+        policy, tasks, decs = (gov.load(REPO, f) for f in ('policy.toml', 'tasks.toml', 'decisions.toml')); n, mode = gov.next_task(policy, tasks, decs)
+        if n is None: return
+        by = {t['id']: t for t in tasks['task']}
+        self.assertIn(mode, ('start', 'resume')); self.assertEqual(n['owner'], 'ingeniero'); self.assertIn(gov.tier_of_actions(policy, n['actions']), ('A', 'B'))
+        if mode == 'start':
+            self.assertEqual(n['status'], 'ready'); self.assertFalse(n.get('blocked_on')); self.assertTrue(all(by[d]['status'] == 'done' for d in n.get('depends_on', [])))
 
     def test_blocked_tasks_are_never_selected(self):
-        def f(t, d):
-            for x in t['task']: x['status'] = 'blocked' if x['status'] == 'ready' else x['status']
-        self.assertEqual(self.pick(f), (None, None))
+        self.assertEqual(self.pick(self.task(1, status='blocked'), self.task(2, status='blocked')), (None, None))
 
     def test_dependencies_are_respected(self):
-        def f(t, d):
-            for x in t['task']:
-                if x['id'] == 'T-0009': x['depends_on'] = ['T-0004']
-        n, _ = self.pick(f); self.assertEqual(n['id'], 'T-0008')
+        n, _ = self.pick(self.task(1, depends_on=['T-0003'], priority=1), self.task(2, priority=9), self.task(3, status='blocked')); self.assertEqual(n['id'], 'T-0002')
+        n, _ = self.pick(self.task(1, depends_on=['T-0003'], priority=1), self.task(3, status='done')); self.assertEqual(n['id'], 'T-0001')
+        self.assertEqual(self.pick(self.task(1, depends_on=['T-9999'])), (None, None))                     # a dependency that does not exist is never satisfied
 
     def test_priority_then_id_order(self):
-        def f(t, d):
-            for x in t['task']:
-                if x['id'] in ('T-0010', 'T-0011'): x['priority'] = 1
-        n, _ = self.pick(f); self.assertEqual(n['id'], 'T-0010')
+        n, _ = self.pick(self.task(3, priority=2), self.task(2, priority=2), self.task(1, priority=7)); self.assertEqual(n['id'], 'T-0002')
 
     def test_tasks_owned_by_someone_else_are_not_selected(self):
-        def f(t, d):
-            for x in t['task']:
-                if x['id'] in ('T-0008', 'T-0009', 'T-0005', 'T-0010', 'T-0011'): x['owner'] = 'director'
-        self.assertEqual(self.pick(f), (None, None))
+        self.assertEqual(self.pick(self.task(1, owner='director'), self.task(2, owner='jefe-tecnico')), (None, None))
 
     def test_red_forbidden_and_unknown_actions_are_never_selected(self):
-        def f(t, d):
-            for x in t['task']:
-                if x['id'] == 'T-0009': x['actions'] = ['publish']
-                if x['id'] == 'T-0008': x['actions'] = ['inventada']
-                if x['id'] == 'T-0005': x['actions'] = ['destructive-git']
-        n, _ = self.pick(f); self.assertNotIn(n['id'], ('T-0009', 'T-0008', 'T-0005'))
+        self.assertEqual(self.pick(self.task(1, actions=['c']), self.task(2, actions=['x']), self.task(3, actions=['inventada']), self.task(4, actions=['a', 'c']), self.task(5, actions=[])), (None, None))
 
     def test_a_ready_task_that_declares_blocked_on_is_not_selected(self):
-        def f(t, d):
-            for x in t['task']:
-                if x['id'] == 'T-0009': x['blocked_on'] = 'algo'
-        n, _ = self.pick(f); self.assertNotEqual(n['id'], 'T-0009')
+        n, _ = self.pick(self.task(1, blocked_on='algo', priority=1), self.task(2)); self.assertEqual(n['id'], 'T-0002')
 
     def test_required_decisions_must_be_approved(self):
-        def f(t, d):
-            for x in t['task']:
-                if x['id'] == 'T-0009': x['requires_decisions'] = ['D-0007']
-        n, _ = self.pick(f); self.assertNotEqual(n['id'], 'T-0009')
-        def g(t, d):
-            f(t, d)
-            for x in d['decision']:
-                if x['id'] == 'D-0007': x['status'] = 'APPROVED'
-        n, _ = self.pick(g); self.assertEqual(n['id'], 'T-0009')
+        t = self.task(1, requires_decisions=['D-0001'])
+        self.assertEqual(self.pick(t, decisions=[{'id': 'D-0001', 'status': 'PROPOSED'}]), (None, None))
+        self.assertEqual(self.pick(t, decisions=[]), (None, None))
+        n, _ = self.pick(t, decisions=[{'id': 'D-0001', 'status': 'APPROVED'}]); self.assertEqual(n['id'], 'T-0001')
 
     def test_the_task_in_progress_is_resumed_before_anything_new(self):
-        def f(t, d):
-            for x in t['task']:
-                if x['id'] == 'T-0010': x['status'] = 'in_progress'
-        n, mode = self.pick(f); self.assertEqual((n['id'], mode), ('T-0010', 'resume'))
+        n, mode = self.pick(self.task(1, priority=1), self.task(2, status='in_progress', priority=9)); self.assertEqual((n['id'], mode), ('T-0002', 'resume'))
 
     def test_a_yellow_task_is_selected_only_as_local_work(self):
-        def f(t, d):
-            for x in t['task']:
-                if x['id'] == 'T-0009': x['actions'] = ['patch-series-change']
-        n, _ = self.pick(f); self.assertEqual(n['id'], 'T-0009')
-        policy = gov.load(self.d, 'policy.toml'); self.assertEqual(gov.tier_of_actions(policy, ['patch-series-change']), 'B')
-        self.assertEqual(run(self.d, 'gate', 'patch-series-change').returncode, 10)                          # allowed locally, never "integrated"
+        n, _ = self.pick(self.task(1, actions=['b'])); self.assertEqual(n['id'], 'T-0001'); self.assertEqual(gov.tier_of_actions(self.POLICY, n['actions']), 'B')
+        d = tempfile.mkdtemp(prefix='gov-sel.')
+        try:
+            shutil.copytree(os.path.join(REPO, 'governance'), os.path.join(d, 'governance'), ignore=shutil.ignore_patterns('__pycache__'))
+            self.assertEqual(run(d, 'gate', 'patch-series-change').returncode, 10)                          # allowed locally, never "integrated"
+        finally: shutil.rmtree(d, ignore_errors=True)
+
+    def test_a_task_with_a_non_integer_priority_is_ignored_not_a_crash(self):
+        n, _ = self.pick(self.task(1, priority='alta'), self.task(2)); self.assertEqual(n['id'], 'T-0002')
 
 
 class Gate(Base):

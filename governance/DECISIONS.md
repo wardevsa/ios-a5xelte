@@ -13,12 +13,13 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0005 | APPROVED | operation | 2026-11-13 | El experimento R2 (monta imágenes, usa sudo) no está autorizado | ingeniero | director | — | Restricciones reiteradas del Director en todos los mensajes de la serie T04-R2/Unicode: 'No ejecutes R2', 'No autorices R2', 'No monta imágenes' |
 | D-0006 | APPROVED | operation | 2026-11-13 | Generación del root: no cambiar el generador ni regenerar lab-full.img.partial hasta decidir sobre el bloqueo Unicode | ingeniero | director | — | Mensajes del Director 'Espera mi decisión antes de implementar cambios que afecten a la generación del root filesystem' y 'No repares, regeneres ni sustituyas esa imagen todavía', 2026-11-13 |
 | D-0007 | PROPOSED | architecture | 2026-11-13 | Reservar el rango de parches 0400+ para S7GE (el 0300-0309 propuesto en S7GE_ARCHITECTURE.md ya está ocupado) | ingeniero | — | — | — |
-| D-0008 | PROPOSED | architecture | 2026-11-13 | Renumerar nuestros 0332 (marcador DROP), 0334 (DROP v2) y 0335 (splash) antes de fusionar con origin/herolte, que ya usa 0332-0334 para gráficos | ingeniero | — | — | — |
+| D-0008 | SUPERSEDED | architecture | 2026-11-13 | Renumerar nuestros 0332 (marcador DROP), 0334 (DROP v2) y 0335 (splash) antes de fusionar con origin/herolte, que ya usa 0332-0334 para gráficos | ingeniero | — | — | — |
 | D-0009 | PROPOSED | architecture | 2026-11-13 | Ratificar las decisiones D1-D12 de DROP v2 de xnu/drop-v2/DECISIONES.md, tomadas por el jefe de proyecto suplente | ingeniero | — | — | — |
 | D-0010 | APPROVED | operation | 2026-11-13 | Escribir en BOOT del S7 (peldaños N1/N2) requiere una autorización C específica; la candidata verificada del PC no la sustituye | ingeniero | director | — | Mensaje del Director 'Todavía NO hemos comenzado las pruebas reales en el Galaxy S7... No confundas imágenes generadas con un arranque real', 2026-11-13; AGENTS.md (solo BOOT) |
 | D-0011 | PROPOSED | process | 2026-11-13 | Mecanismo de autorización roja y de revisión amarilla: authorizes + valid_until + gate; review_ref antes de pasar a done | ingeniero | — | — | — |
 | D-0012 | PROPOSED | process | 2026-11-13 | Los niveles de evidencia (domain, level, device) se declaran y nunca se elevan automáticamente; una suite del PC no puede declarar hardware | ingeniero | — | — | — |
 | D-0013 | PROPOSED | policy | 2026-11-13 | Alinear los permisos de Claude Code (settings.json) con policy.toml para convertir la disciplina asistida en un control técnico | ingeniero | — | — | — |
+| D-0014 | PROPOSED | architecture | 2026-11-13 | Renumerar solo los dos parches nuestros que colisionan con origin/herolte (0332 marcador -> 0336, 0334 DROP v2 -> 0337, manteniendo el orden relativo) y hacer que ci_check/preflight identifiquen el parche por nombre completo | ingeniero | — | — | — |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
 - **Estado:** PROPOSED
@@ -63,7 +64,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Cómo se revierte:** Renombrar los parches S7GE; no hay ninguno creado todavía.
 
 ## D-0008 — Renumerar nuestros 0332 (marcador DROP), 0334 (DROP v2) y 0335 (splash) antes de fusionar con origin/herolte, que ya usa 0332-0334 para gráficos
-- **Estado:** PROPOSED
+- **Estado:** SUPERSEDED
 - **Razón:** origin/herolte (2026-11-13) tiene 0332-surface-wrap, 0333-gpu-wait-asleep y 0334-present-wait-asleep. Colisión de números con ramas distintas del mismo proyecto.
 - **Consecuencias:** Cambia nombres de fichero, no contenido; el kernel de la candidata N2 (construido con nuestro 0334) no cambia, pero habría que reconstruirlo y reverificar la imagen si se rehace sobre la nueva serie.
 - **Cómo se revierte:** Revertir el renombrado antes de publicar.
@@ -97,4 +98,11 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Razón:** La herramienta informa pero no puede impedir que un agente ejecute un comando (KI-0004, límite 1 de la auditoría). Solo la configuración de permisos del propio agente lo impide.
 - **Consecuencias:** Requiere cambiar la configuración del agente: acción roja host-config-change; no se ha tocado.
 - **Cómo se revierte:** Restaurar el settings.json anterior (copia previa obligatoria).
+
+## D-0014 — Renumerar solo los dos parches nuestros que colisionan con origin/herolte (0332 marcador -> 0336, 0334 DROP v2 -> 0337, manteniendo el orden relativo) y hacer que ci_check/preflight identifiquen el parche por nombre completo
+- **Estado:** PROPOSED
+- **Razón:** T-0009 midió que solo colisionan 0332 y 0334 (upstream no usa 0335, que D-0008 daba por colisión) y que los 5 parches aplican en ambos órdenes sin pisarse. El riesgo real es de identificación: el prefijo 0334- de ci_check.py casa con el parche de DROP v2 y con present-wait-asleep de upstream, y podría dar un falso 'aplicado'. Informe: docs/herolte-integracion-origin-herolte.md (E-0024).
+- **Consecuencias:** Cambia nombres de dos ficheros de la serie y unas 25 referencias documentales/herramientas (no los nombres de artefacto kernel-0334-*). El kernel de la candidata N2 no cambia por el renombrado, pero sí si se fusiona y reconstruye con 0332-0334 de upstream; entonces la candidata N2 se regenera con nombre nuevo y se reverifica.
+- **Cómo se revierte:** git revert de los renombrados antes de publicar.
+- **Sustituye a:** D-0008
 

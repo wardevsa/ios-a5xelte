@@ -97,13 +97,13 @@ acceptance = "Cada selector con parámetros, validaciones presentes/ausentes y r
 [[task]]
 id = "T-0009"
 title = "Plan de integración con origin/herolte: aplicabilidad de sus 0332-0334 sobre nuestra rama y propuesta de renumeración (informe)"
-status = "in_progress"
+status = "done"
 priority = 2
 owner = "ingeniero"
 depends_on = []
 actions = ["read-analysis", "docs-write", "host-tests", "local-commit"]
 acceptance = "Informe con qué parches de origin/herolte aplican limpios sobre herolte-drop-v2 (usando la herramienta del CI sin publicar), qué colisiona y orden de renumeración; no renumera nada."
-resume = "Clon temporal de prueba en /tmp/t0009.*; el clon de este repo es parcial (blob:none): la fusión necesita traer blobs de upstream (remoto público, solo lectura). Siguiente: fusión de prueba, aplicabilidad de 0332-0334 y tabla de renumeración en docs/herolte-integracion-origin-herolte.md."
+evidence = ["E-0024"]
 
 [[task]]
 id = "T-0010"
@@ -180,8 +180,8 @@ priority = 9
 owner = "ingeniero"
 depends_on = ["T-0009"]
 actions = ["patch-series-change", "local-commit"]
-requires_decisions = ["D-0007", "D-0008"]
-blocked_on = "decisión: revisión del jefe técnico de D-0007 y D-0008 (PROPOSED)"
+requires_decisions = ["D-0007", "D-0014"]
+blocked_on = "decisión: revisión del jefe técnico de D-0007 y D-0014 (PROPOSED)"
 acceptance = "Serie sin colisiones; ci_check aplicable; kernel candidato reconstruido y candidata N2 reverificada con nombre nuevo."
 
 [[task]]
@@ -240,3 +240,14 @@ actions = ["host-config-change"]
 requires_decisions = ["D-0013"]
 blocked_on = "autorización del director (acción roja) y aprobación de D-0013; el ingeniero prepara la propuesta de lista, no la aplica"
 acceptance = "Propuesta de configuración revisada por el jefe técnico, aplicada por el director con copia previa del fichero, y una prueba de que una orden roja es rechazada por el propio agente."
+
+[[task]]
+id = "T-0022"
+title = "ci_check.py y preflight.py: identificar el parche por nombre completo (hoy el prefijo 0334- casa con dos parches)"
+status = "ready"
+priority = 3
+owner = "ingeniero"
+depends_on = ["T-0009"]
+actions = ["pc-implementation", "host-tests", "local-commit"]
+acceptance = "Pruebas que demuestren que un log donde se salta 0334-herolte-drop-v2 pero se aplica 0334-present-wait-asleep da FALLO (hoy daría OK), y que el nombre completo se exige; sin cambiar ningún parche."
+

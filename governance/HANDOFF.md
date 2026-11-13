@@ -8,7 +8,18 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0002 — Auditoría de `tools/governance.py` y mecanismos de continuidad, 2026-11-13
+## Relevo vigente: H-0003 — T-0009 cerrada (integración con `origin/herolte`), 2026-11-13
+**De:** ingeniero principal. **Estado:** trabajo en rama **`herolte-drop-v2`** (worktree `~/HackiOS/repos/wardevsa-ios-a5xelte-v2`), sin push; el árbol principal del responsable no se ha tocado (sus 28 ficheros sin confirmar conservan su SHA-256).
+- **Hecho:** T-0009 → `done`. Informe `docs/herolte-integracion-origin-herolte.md`; resultados archivados (E-0024). **Conclusión:** los contenidos **no** chocan (un único conflicto de texto en `HEROLTE_PROGRESS.md`, resoluble conservando ambas secciones); los 5 parches de las dos series **aplican en ambos órdenes**; solo colisionan los números `0332` y `0334` (upstream no usa `0335`, de modo que D-0008 —que lo daba por colisión— queda `SUPERSEDED` por **D-0014**).
+- **Hallazgo de riesgo silencioso:** `ci_check.py`/`preflight.py` identifican el parche por el prefijo `0334-`, que casa con nuestro DROP v2 **y** con `0334-present-wait-asleep` de upstream: puede dar un falso "aplicado". Nueva tarea **T-0022** (verde): exigir el nombre completo, con pruebas.
+- **El repositorio es un clon parcial** (`blob:none`): una fusión local falla por blobs ausentes; el análisis se hizo en un clon temporal con la URL pública de `origin` como remoto *promisor* (solo lectura).
+- **Siguiente (verde):** `python3 tools/governance.py next` → **T-0008** (ABI real de `HeroGPU`) y **T-0022** (`ci_check`), ambas sin autorización. Después T-0005 (ronda 2 de mutación de rev2).
+- **Decisiones para la jefatura técnica:** D-0014 (renumerar solo 0332→0336 y 0334→0337 y exigir nombre completo en `ci_check`; reemplaza a D-0008), además de D-0001, D-0007, D-0009, D-0011, D-0012, D-0013.
+- **Pasar al S7:** ver §"¿Hay que pasar al S7?" del informe a la dirección: las candidatas N1/N2 están verificadas en el PC; falta la decisión del cargador (T-0013) y una **autorización roja** del Director (T-0012). No se ha tocado el teléfono.
+
+---
+
+## Relevo anterior: H-0002 — Auditoría de `tools/governance.py` y mecanismos de continuidad, 2026-11-13
 **De:** ingeniero principal (Claude). **Para:** jefe de dirección técnica (revisión independiente) y Director. **Estado:** T-0001 sigue `in_review`; la auditoría está hecha y corregida; **nada consolidado ni publicado**.
 
 ### 1. Repositorio, rama y Git

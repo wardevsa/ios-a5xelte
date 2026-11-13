@@ -18,7 +18,7 @@ level = "L2"
 title = "Pruebas negativas del validador de gobierno"
 command = ["python3", "-W", "ignore", "tools/test_governance.py"]
 cost = "2 s"
-baseline = "96 pruebas OK: permisos, operaciones prohibidas, integridad de evidencias, generación de vistas, recuperación ante errores, selección de tareas, solo lectura e independencia de rutas"
+baseline = "97 pruebas OK: permisos, operaciones prohibidas, integridad de evidencias, generación de vistas, recuperación ante errores, selección de tareas, solo lectura e independencia de rutas"
 
 [[suite]]
 id = "governance-onboarding"

@@ -49,7 +49,7 @@ class Onboarding(unittest.TestCase):
         evid = {e['id']: e for e in gov.load(self.c, 'evidence.toml')['evidence']}
         self.assertIn(evid['E-0001']['sha256'][:8], rd('STATE.md'))
         policy, tasks, decs = (gov.load(self.c, f) for f in ('policy.toml', 'tasks.toml', 'decisions.toml')); n, mode = gov.next_task(policy, tasks, decs)
-        self.assertIn(n['id'], rd('ACTIVE_TASK.md')); self.assertIn(n['id'], rd('HANDOFF.md'))
+        self.assertIn(n['id'], rd('ACTIVE_TASK.md')); self.assertIn(n['id'], rd('HANDOFF.md').split('Relevo anterior')[0])         # the CURRENT handoff names the next task
         sha = re.search(r'state-commit: ([0-9a-f]+)', rd('STATE.md')).group(1); self.assertEqual(self.sh(['git', 'cat-file', '-t', sha]).stdout.strip(), 'commit')
         for t in tasks['task']:                                                     # every blocked task the state document names is really blocked
             if t['status'] == 'blocked': self.assertIn(t['id'], rd('STATE.md') + rd('TASKS.md'))
@@ -63,20 +63,21 @@ class Onboarding(unittest.TestCase):
     def test_resume_drill_after_an_interruption(self):
         c = tg.make_clone(tempfile.mkdtemp(prefix='gov-resume.', dir=self.tmp))                      # its own clone: this test changes state
         g = lambda *a: self.gov(*a, cwd=c); git = lambda *a: self.sh(['git', '-c', 'commit.gpgsign=false'] + list(a), cwd=c)
+        policy, tasks, decs = (gov.load(c, f) for f in ('policy.toml', 'tasks.toml', 'decisions.toml')); first, _ = gov.next_task(policy, tasks, decs); fid = first['id']
         tp = os.path.join(c, 'governance', 'data', 'tasks.toml')
-        tg.mutate(tp, 'task', 'T-0009', 'status', '"in_progress"'); tg.mutate(tp, 'task', 'T-0009', 'resume', '"Paso 3 de 5: falta aplicar 0332 sobre la rama; ver el checkpoint."')
-        open(os.path.join(c, 'governance', 'checkpoints', '2026-11-13-T-0009-01.md'), 'w').write('# Checkpoint T-0009 #01\n- Siguiente paso exacto: aplicar 0332 con ci_check.\n')
+        tg.mutate(tp, 'task', fid, 'status', '"in_progress"'); tg.mutate(tp, 'task', fid, 'resume', '"Paso 3 de 5: falta aplicar el parche; ver el checkpoint."')
+        open(os.path.join(c, 'governance', 'checkpoints', '2026-11-13-%s-01.md' % fid), 'w').write('# Checkpoint %s #01\n- Siguiente paso exacto: aplicar el parche.\n' % fid)
         self.assertEqual(g('render').returncode, 0); self.assertEqual(g('check').returncode, 0)
-        self.assertEqual(git('add', '-A').returncode, 0); self.assertEqual(git('commit', '-q', '-m', 'simulacro: T-0009 en curso').returncode, 0)
-        r = g('next'); self.assertEqual(r.returncode, 0); self.assertIn('REANUDAR T-0009', r.stdout)                         # a brand-new process resumes it
+        self.assertEqual(git('add', '-A').returncode, 0); self.assertEqual(git('commit', '-q', '-m', 'simulacro: %s en curso' % fid).returncode, 0)
+        r = g('next'); self.assertEqual(r.returncode, 0); self.assertIn('REANUDAR %s' % fid, r.stdout)                 # a brand-new process resumes it
         self.assertIn('Paso 3 de 5', open(os.path.join(c, 'governance', 'ACTIVE_TASK.md'), encoding='utf-8').read())
-        self.assertIn('T-0009', g('status').stdout)
-        tg.mutate(tp, 'task', 'T-0009', 'status', '"done"'); g('render'); r = g('next'); self.assertIn('EMPEZAR T-0008', r.stdout)  # finished: the next one is offered
+        self.assertIn(fid, g('status').stdout)
+        tg.mutate(tp, 'task', fid, 'status', '"done"'); g('render'); r = g('next'); self.assertIn('EMPEZAR', r.stdout); self.assertNotIn('EMPEZAR %s' % fid, r.stdout)   # finished: another one is offered
         self.assertEqual(g('check').returncode, 0)
 
     def test_the_cold_start_drill_is_self_consistent(self):
         p = self.sh([sys.executable, '-I', DRILL, '--root', self.c, 'prompt']).stdout; self.assertEqual(len(re.findall(r'^\s+q\d+:', p, re.M)), 10)
-        for forbidden in ('26a39560', 'T-0009', 'herolte-drop-v2', 'T-0008'): self.assertNotIn(forbidden, p)                         # the statement must not leak the answers
+        for forbidden in ('26a39560', 'herolte-drop-v2', 'T-0008', 'T-0022'): self.assertNotIn(forbidden, p)                         # the statement must not leak the answers
         exp = drill.expected(self.c)
         ans = {'q1': exp['q1'][0], 'q2': 'el árbol wardevsa-ios-a5xelte, cambios del responsable', 'q3': '%s con python3 tools/governance.py next' % exp['q3'][0], 'q4': exp['q4'], 'q5': exp['q5'],
                'q6': {'level': 'L2', 'domain': 'host', 'booted_on_phone': False}, 'q7': exp['q7'][0], 'q8': '5 errores, documentados en KNOWN_ISSUES.md',
