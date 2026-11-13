@@ -1,7 +1,8 @@
 #!/bin/bash
 # HEROLTE: adjust a staged iOS 16 root (tools/a5xelte-stage-ios-root.sh) for a
 # phone without modem, GPU or SEP, following the SWEET donor's image v12/v13
-# (NOTES.md). Run as root on macOS with the HFSX root mounted read-write.
+# (NOTES.md). Run as root (macOS or Linux) with the HFSX root mounted read-write.
+# On Linux, where there is no /usr/bin/plutil, tools/plutil_lite.py makes the same calls.
 #   - com.apple.migration.plist LastSystemVersion = this build: backboardd
 #     holds SpringBoard's system-shell check-in until DataMigration finishes,
 #     and the migration plugin wrapper aborts on every boot.
@@ -19,6 +20,13 @@ if [[ $# != 2 || ${EUID} != 0 ]]; then
     exit 2
 fi
 root=$1 build=$2
+if [[ -x /usr/bin/plutil ]]; then
+    plutil() { /usr/bin/plutil "$@"; }
+else
+    plutil_py=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/plutil_lite.py
+    [[ -f $plutil_py ]] || { echo "no plutil and no $plutil_py" >&2; exit 1; }
+    plutil() { python3 "$plutil_py" "$@"; }
+fi
 [[ -f "$root/sbin/launchd" ]] || { echo "not a staged root: $root" >&2; exit 1; }
 
 prefs="$root/private/var/mobile/Library/Preferences"
@@ -27,12 +35,12 @@ install -d -o 501 -g 501 -m 0755 "$root/private/var/mobile" \
 
 plist() {  # plist FILE KEY TYPE VALUE ...  (creates or updates entries)
     local file=$1; shift
-    [[ -f $file ]] || /usr/bin/plutil -create xml1 "$file"
+    [[ -f $file ]] || plutil -create xml1 "$file"
     while (($#)); do
-        /usr/bin/plutil -replace "$1" "-$2" "$3" "$file"
+        plutil -replace "$1" "-$2" "$3" "$file"
         shift 3
     done
-    /usr/bin/plutil -convert xml1 "$file"
+    plutil -convert xml1 "$file"
     chown 501:501 "$file"
     chmod 0600 "$file"
 }
@@ -41,7 +49,7 @@ plist() {  # plist FILE KEY TYPE VALUE ...  (creates or updates entries)
 # (1440x2560 at @3x); the IPSW has none. The 375w-812h ones are given it.
 find "$root/Library/Wallpaper/Collections" -path '*375w-812h*' -name Wallpaper.plist -print0 |
 while IFS= read -r -d '' wallpaper; do
-    /usr/bin/plutil -replace logicalScreenClass -string '480w-853h@3x~iphone' "$wallpaper"
+    plutil -replace logicalScreenClass -string '480w-853h@3x~iphone' "$wallpaper"
 done
 
 plist "$prefs/com.apple.migration.plist" LastSystemVersion string "$build"
@@ -62,7 +70,7 @@ plist "$prefs/com.apple.managedconfiguration.notbackedup.plist" \
     LockdownActivationIndicatesCloudConfigurationAvailable bool NO
 
 launchd="$root/System/Library/xpc/launchd.plist"
-/usr/bin/python3 - "$launchd" <<'EOF'
+python3 - "$launchd" <<'EOF'
 import plistlib, sys
 path = sys.argv[1]
 with open(path, 'rb') as f:

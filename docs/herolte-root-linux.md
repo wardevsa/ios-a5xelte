@@ -17,6 +17,14 @@ Estado a 2026-11-12. **No se ha construido el root todavía.** Lo que sí está 
 | ¿Qué sigue pidiendo `sudo`? | montar la imagen HFS+ (`mount -t hfsplus -o force,rw`), poblarla con los propietarios de iOS (`chown`) y ejecutar `tools/a5xelte-stage-ios-root.sh` / `tools/herolte-tune-ios-root.sh` como root. Sin `sudo` sin contraseña en este PC, esos pasos los tiene que lanzar una persona |
 | ¿Qué es específico de macOS en el pipeline? | `hdiutil` (crear y montar la imagen) y `plutil` (4 sitios de `herolte-tune-ios-root.sh`); `a5xelte-stage-ios-root.sh` no usa herramientas de macOS. En Linux: `mkfs.hfsplus -s -J` + `mount`, y un sustituto de `plutil` con `plistlib` |
 
+## Hecho el 2026-11-13: `plutil` ya no bloquea Linux
+- `tools/plutil_lite.py` hace las llamadas de `plutil` que usa el *tuning* (`-create xml1`, `-replace KEY -string|-bool|-integer|-float|-json`, `-convert xml1|binary1`),
+  conserva el formato (XML o binario) en `-replace` y escribe con fichero temporal + `os.replace`.
+- `tools/herolte-tune-ios-root.sh` usa `/usr/bin/plutil` si existe (macOS) y si no `plutil_lite.py`. Sin cambios de comportamiento en macOS.
+- `tools/test_tune_ios_root.sh`: 26 comprobaciones (plutil_lite y el *tuning* completo sobre un root falso bajo `fakeroot`, sin `sudo` y sin montar): propietarios 501/0,
+  modos, formatos, CommCenter fuera de `launchd.plist`, autorun añadido, fondos de otra pantalla intactos, rechazo sin root y con raíz no preparada. **26 PASS, 0 FALLA.**
+- **No probado:** contra un root real de iOS (hace falta montarlo) ni en el teléfono. Queda por escribir el sustituto Linux de `hdiutil` + poblado con propietarios y enlaces duros (paso 2).
+
 ## Camino propuesto (sin coste de nube)
 1. Extraer los tres `.dmg` con `7z x` a directorios y guardar el manifiesto de propietarios/enlaces de `7z l -slt` (sin root).
 2. `mkfs.hfsplus -s -J` sobre un fichero de 20 GiB; **con `sudo`**: montarlo y copiar con los propietarios del manifiesto y los enlaces duros.
