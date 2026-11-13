@@ -21,6 +21,8 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0013 | PROPOSED | policy | 2026-11-13 | Alinear los permisos de Claude Code (settings.json) con policy.toml para convertir la disciplina asistida en un control técnico | ingeniero | — | — | — |
 | D-0014 | PROPOSED | architecture | 2026-11-13 | Renumerar solo los dos parches nuestros que colisionan con origin/herolte (0332 marcador -> 0336, 0334 DROP v2 -> 0337, manteniendo el orden relativo) y hacer que ci_check/preflight identifiquen el parche por nombre completo | ingeniero | — | — | — |
 | D-0015 | PROPOSED | architecture | 2026-11-13 | Aislamiento de clientes de HeroGPU: address space por cliente, jc_va validada contra los BO del cliente, entitlement en initWithTask, presupuesto de memoria y SurfaceBO con comprobación de propiedad | ingeniero | — | — | — |
+| D-0016 | APPROVED | architecture | 2026-11-13 | Cargador de las pruebas: usar el compilado con clang (loader-clang/, E-0008); no ejecutar el GCC descargado | ingeniero | jefe-tecnico | — | Directiva de jefatura técnica del 2026-11-13 (Qwen, relayada por el Director), apartado 'D-0013: Cargador para xnu_boot: clang'. La directiva la numeró D-0013, que ya existe (permisos de Claude Code): registrada aquí como D-0016. No autoriza ninguna acción de nivel C |
+| D-0017 | PROPOSED | architecture | 2026-11-13 | Corrección Unicode: regenerar en el generador del root los nombres en forma XNU (sin tocar el kernel), antes de repetir R2 | jefe-tecnico | — | — | — |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
 - **Estado:** PROPOSED
@@ -112,4 +114,16 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Razón:** docs/S7GE_ABI.md (T-0008) leyó HeroGPU.cpp y herolte_gpu.c y encontró: una sola AS0 compartida por todos los clientes, Submit con la VA de la cadena de jobs aportada por el cliente y sin validar, ningún entitlement ni presupuesto de memoria, SurfaceBO con búsqueda global por id y handles sin generación. Incumple los principios 2.5 y 23 de S7GE.
 - **Consecuencias:** Es una modificación del kernel y de la serie de parches (nivel B, revisor jefe técnico): se haría con una tarea nueva y tras esa revisión. Hasta entonces la GPU solo debe usarla software del proyecto en el teléfono de pruebas.
 - **Cómo se revierte:** Es una propuesta; si se implementa, git revert del parche.
+
+## D-0016 — Cargador de las pruebas: usar el compilado con clang (loader-clang/, E-0008); no ejecutar el GCC descargado
+- **Estado:** APPROVED (jefe-tecnico, 2026-11-13)
+- **Razón:** clang ya está disponible en ~/HackiOS/builds/device-day/loader-clang/ y se usó en E-0008; no requiere compilar ni ejecutar nada nuevo.
+- **Consecuencias:** T-0013 se cierra sin ninguna acción roja. No autoriza escribir BOOT ni tocar el teléfono. El preflight seguirá avisando de que no hay GCC aarch64: es un aviso conocido y aceptado.
+- **Cómo se revierte:** Nueva decisión que elija GCC (requeriría host-config-change, roja).
+
+## D-0017 — Corrección Unicode: regenerar en el generador del root los nombres en forma XNU (sin tocar el kernel), antes de repetir R2
+- **Estado:** PROPOSED
+- **Razón:** La directiva de jefatura técnica del 2026-11-13 elige 'Opción 3: regenerar nombres en el generador del root usando la tabla de XNU' (sin cambios de kernel, reversible). La numeró D-0003, que ya es la dirección de S7GE; el texto no mapea con exactitud a las opciones de docs/herolte-unicode-hfsplus.md (1-5, B, C, D): se interpreta como la corrección 1-5 sin la parte del kernel.
+- **Consecuencias:** Cambiar el generador del root es decisión del DIRECTOR (AUTHORITY.md §2) y D-0006 lo mantiene congelado hasta que decida: por eso queda PROPUESTA y T-0003 sigue bloqueada. Además, mi informe (sección 3) recomienda la corrección solo si R2 la confirma, y R2 sigue sin autorizar (D-0005, de nivel rojo): se necesita la confirmación del Director de si acepta aplicarla sin R2 previo.
+- **Cómo se revierte:** git revert del cambio del generador; las imágenes viejas se conservan (E-0010).
 

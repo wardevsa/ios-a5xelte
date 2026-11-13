@@ -141,14 +141,14 @@ min_evidence = { level = "L3", device = "this-unit" }
 [[task]]
 id = "T-0013"
 title = "Decidir el cargador de las pruebas: el de clang (conveniencia) o compilar con el GCC aarch64 de Arm"
-status = "blocked"
+status = "done"
 priority = 9
 owner = "director"
 depends_on = []
-actions = ["host-config-change"]
-blocked_on = "decisión del director (autorizar ejecutar el GCC descargado o compilarlo él; aviso del preflight)"
-acceptance = "Decisión APPROVED y, si procede, cargador GCC construido, verificado y añadido a evidence.toml."
+actions = ["docs-write"]
+acceptance = "Resuelta por D-0016 (jefe técnico): se usa el cargador de clang (E-0008). No se ejecuta ni se compila ningún GCC, así que no hay acción roja; se retiró host-config-change de las acciones porque ya no se hará."
 evidence = ["E-0008"]
+requires_decisions = ["D-0016"]
 
 [[task]]
 id = "T-0014"
