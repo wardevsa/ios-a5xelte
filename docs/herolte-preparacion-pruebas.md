@@ -27,7 +27,7 @@ Sigue abierto (decisión del responsable): cargador compilado con GCC (el del ki
 | Etapa | Estado |
 |---|---|
 | IPSW público descargado y verificado (SHA-384 de Apple) | hecho |
-| Extracción con `7z`, manifiestos de propietarios/modos/enlaces/tiempos, verificación estricta de contenido (`os`, `systemos`, `appos`) | hecho: `systemos` 1459/1459 OK, `appos` 884/884 OK, `os` hecho |
+| Extracción con `7z`, manifiestos de propietarios/modos/enlaces/tiempos, verificación estricta de contenido (`os`, `systemos`, `appos`) | hecho: `systemos` 1459/1459 OK y `appos` 884/884 OK (verificación estricta). `os`: la verificación previa al enlazado dio 185 errores (4 ausentes y 181 enlaces duros sin crear); `relink.py` creó 37 046 enlaces, 0 nombres ausentes; la comprobación de `os` ya en la imagen poblada dio 318 070 OK, 2 `EXTRA` y 1 nombre normalizado. No hay un `os.final` equivalente al de las otras dos |
 | Tuning (`plutil_lite`) y staging portables a Linux, probados con `fakeroot` | hecho (commits `5b48ed9`…`44cc748`); no probado con root real |
 | Imagen HFSX de 20 GiB creada y **poblada con root real** (`lab-full.img.partial`, 12 GB) | hecho (2026-11-13 10:20), por el responsable con `sudo` |
 | Verificación de la imagen | **FALLA** (`ROOT_HFSPLUS_LAB_FAILED`): metadatos del árbol OK salvo 2 `EXTRA` y 1 nombre normalizado; `fsck_hfs` dice "corrupt" |
