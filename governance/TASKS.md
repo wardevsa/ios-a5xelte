@@ -19,7 +19,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 | T-0004 | blocked | 6 | ingeniero | R2: experimento nodecompose con imágenes de 512 MiB A/B/C (monta imágenes, sudo) | T-0005, T-0006 | C rojo | autorización explícita del director (D-0005) y cierre de T-0005/T-0006 |
 | T-0021 | blocked | 6 | director | Alinear los permisos de Claude Code con policy.toml (lista de órdenes permitidas/denegadas por nivel) | T-0001 | C rojo | autorización del director (acción roja) y aprobación de D-0013; el ingeniero prepara la propuesta de lista, no la aplica |
 | T-0010 | ready | 7 | ingeniero | S7GE_HARDWARE.md: mapa de registros y erratas T880 r2p0 con el checklist de la auditoría Panfrost, y propuesta de nodo de GPU en el ADT | — | A verde | — |
-| T-0011 | ready | 8 | ingeniero | Auditoría de licencias de lo que se pretende reutilizar (Mesa, metal2vulkan, hakios-gl, A5XELTE) | — | A verde | — |
+| T-0011 | done | 8 | ingeniero | Auditoría de licencias de lo que se pretende reutilizar (Mesa, metal2vulkan, hakios-gl, A5XELTE) | — | A verde | — |
 | T-0023 | blocked | 8 | ingeniero | Implementar el aislamiento de clientes de HeroGPU (D-0015): handles con generación, validación de jc_va, entitlement, presupuesto, address space por cliente | T-0008, T-0010 | B amarillo | aprobación de D-0015 por el jefe técnico y auditoría previa de qué mapea AS0 (T-0010) |
 | T-0012 | blocked | 9 | director | Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP | T-0013 | C rojo | autorización explícita del director (D-0010); candidata y verificación en E-0001..E-0006 |
 | T-0013 | done | 9 | director | Decidir el cargador de las pruebas: el de clang (conveniencia) o compilar con el GCC aarch64 de Arm | — | A verde | — |

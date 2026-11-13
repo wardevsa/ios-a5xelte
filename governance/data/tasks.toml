@@ -118,7 +118,7 @@ acceptance = "Cada punto del checklist marcado verificado / no verificado con re
 [[task]]
 id = "T-0011"
 title = "Auditoría de licencias de lo que se pretende reutilizar (Mesa, metal2vulkan, hakios-gl, A5XELTE)"
-status = "ready"
+status = "done"
 priority = 8
 owner = "ingeniero"
 depends_on = []
