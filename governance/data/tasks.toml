@@ -87,7 +87,7 @@ evidence = ["E-0011"]
 [[task]]
 id = "T-0008"
 title = "S7GE_ABI.md: el ABI real de HeroGPU (selectores 0-7), qué valida el kernel y la brecha frente al §23 de S7GE"
-status = "ready"
+status = "done"
 priority = 3
 owner = "ingeniero"
 depends_on = []
@@ -250,4 +250,16 @@ owner = "ingeniero"
 depends_on = ["T-0009"]
 actions = ["pc-implementation", "host-tests", "local-commit"]
 acceptance = "Pruebas que demuestren que un log donde se salta 0334-herolte-drop-v2 pero se aplica 0334-present-wait-asleep da FALLO (hoy daría OK), y que el nombre completo se exige; sin cambiar ningún parche."
+
+[[task]]
+id = "T-0023"
+title = "Implementar el aislamiento de clientes de HeroGPU (D-0015): handles con generación, validación de jc_va, entitlement, presupuesto, address space por cliente"
+status = "blocked"
+priority = 8
+owner = "ingeniero"
+depends_on = ["T-0008", "T-0010"]
+actions = ["patch-series-change", "architecture-change", "local-commit"]
+requires_decisions = ["D-0015"]
+blocked_on = "aprobación de D-0015 por el jefe técnico y auditoría previa de qué mapea AS0 (T-0010)"
+acceptance = "Parches nuevos (rango 0400+ si D-0007 se aprueba) con un banco de pruebas de host con doble de herolte_gpu_* para handles, presupuesto y validación; la candidata N2 no cambia salvo reconstrucción deliberada."
 

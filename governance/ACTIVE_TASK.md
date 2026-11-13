@@ -6,7 +6,7 @@
 
 Tareas pendientes de revisión: T-0001 (Misión 0: implantar el sistema de gobierno de ingeniería autónoma (governance/, tools/governance.py, puntero en AGENTS.md))
 
-Siguiente tarea que se puede empezar sin pedir autorización: **T-0008 — S7GE_ABI.md: el ABI real de HeroGPU (selectores 0-7), qué valida el kernel y la brecha frente al §23 de S7GE**
+Siguiente tarea que se puede empezar sin pedir autorización: **T-0022 — ci_check.py y preflight.py: identificar el parche por nombre completo (hoy el prefijo 0334- casa con dos parches)**
 
 ## Cómo reanudar
 1. Lee `README.md` y `HANDOFF.md`; ejecuta `python3 tools/governance.py check` y `status`.

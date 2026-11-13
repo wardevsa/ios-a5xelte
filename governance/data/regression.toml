@@ -37,7 +37,7 @@ title = "Batería de 22 mutantes de tools/governance.py (cada uno desactiva una 
 command = ["python3", "tools/governance_mutation.py"]
 timeout = 1500
 cost = "5 min"
-baseline = "control sin mutar: pasa; 22 mutantes, 22 detectados, 0 sobreviven (E-0023)"
+baseline = "control sin mutar: pasa; 22 mutantes, 22 detectados, 0 sobreviven (E-0025)"
 
 [[suite]]
 id = "verify-boot"

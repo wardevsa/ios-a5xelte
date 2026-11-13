@@ -8,7 +8,17 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0003 — T-0009 cerrada (integración con `origin/herolte`), 2026-11-13
+## Relevo vigente: H-0004 — T-0008 cerrada (ABI real de `HeroGPU`), 2026-11-13
+**Rama `herolte-drop-v2`**, worktree `~/HackiOS/repos/wardevsa-ios-a5xelte-v2`, sin push; árbol principal del responsable intacto.
+- **Hecho:** T-0008 → `done`. `docs/S7GE_ABI.md`: los 8 selectores de `HeroGPU`, qué valida el kernel y qué no, y la brecha frente a S7GE. **Hallazgos graves (nivel de código leído, no probados en hardware):** una sola address space **AS0 compartida por todos los clientes**; `Submit` acepta la VA de la cadena de jobs **sin validarla**; `SurfaceBO` busca por id **globalmente**; **ningún entitlement** ni presupuesto de memoria; handles `índice+1` reutilizables. Lo bueno: se desmapea de la GPU antes de liberar; los jobs están serializados; la memoria se pone a cero; no se exponen MMIO ni direcciones físicas.
+- **Propuesta (no aplicada):** **D-0015** y la tarea bloqueada **T-0023** (aislamiento de clientes). Antes, T-0010: auditar qué mapea AS0.
+- **Evidencia de la herramienta de gobierno:** batería final de mutantes **E-0025** (control sin mutar pasa; 22/22 detectados) sobre las 97 pruebas definitivas.
+- **Siguiente (verde):** `python3 tools/governance.py next` → **T-0022** (`ci_check`: nombre completo del parche), después T-0010 y T-0011 (documentos), y T-0005 (ronda 2 de mutación de rev2).
+- **Pasar al S7:** ver el informe a la dirección; sigue sin tocarse el teléfono.
+
+---
+
+## Relevo anterior: H-0003 — T-0009 cerrada (integración con `origin/herolte`), 2026-11-13
 **De:** ingeniero principal. **Estado:** trabajo en rama **`herolte-drop-v2`** (worktree `~/HackiOS/repos/wardevsa-ios-a5xelte-v2`), sin push; el árbol principal del responsable no se ha tocado (sus 28 ficheros sin confirmar conservan su SHA-256).
 - **Hecho:** T-0009 → `done`. Informe `docs/herolte-integracion-origin-herolte.md`; resultados archivados (E-0024). **Conclusión:** los contenidos **no** chocan (un único conflicto de texto en `HEROLTE_PROGRESS.md`, resoluble conservando ambas secciones); los 5 parches de las dos series **aplican en ambos órdenes**; solo colisionan los números `0332` y `0334` (upstream no usa `0335`, de modo que D-0008 —que lo daba por colisión— queda `SUPERSEDED` por **D-0014**).
 - **Hallazgo de riesgo silencioso:** `ci_check.py`/`preflight.py` identifican el parche por el prefijo `0334-`, que casa con nuestro DROP v2 **y** con `0334-present-wait-asleep` de upstream: puede dar un falso "aplicado". Nueva tarea **T-0022** (verde): exigir el nombre completo, con pruebas.

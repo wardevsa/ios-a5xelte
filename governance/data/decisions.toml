@@ -178,3 +178,14 @@ rationale = "T-0009 midió que solo colisionan 0332 y 0334 (upstream no usa 0335
 consequences = "Cambia nombres de dos ficheros de la serie y unas 25 referencias documentales/herramientas (no los nombres de artefacto kernel-0334-*). El kernel de la candidata N2 no cambia por el renombrado, pero sí si se fusiona y reconstruye con 0332-0334 de upstream; entonces la candidata N2 se regenera con nombre nuevo y se reverifica."
 reversal = "git revert de los renombrados antes de publicar."
 
+[[decision]]
+id = "D-0015"
+title = "Aislamiento de clientes de HeroGPU: address space por cliente, jc_va validada contra los BO del cliente, entitlement en initWithTask, presupuesto de memoria y SurfaceBO con comprobación de propiedad"
+date = "2026-11-13"
+scope = "architecture"
+status = "PROPOSED"
+proposer = "ingeniero"
+rationale = "docs/S7GE_ABI.md (T-0008) leyó HeroGPU.cpp y herolte_gpu.c y encontró: una sola AS0 compartida por todos los clientes, Submit con la VA de la cadena de jobs aportada por el cliente y sin validar, ningún entitlement ni presupuesto de memoria, SurfaceBO con búsqueda global por id y handles sin generación. Incumple los principios 2.5 y 23 de S7GE."
+consequences = "Es una modificación del kernel y de la serie de parches (nivel B, revisor jefe técnico): se haría con una tarea nueva y tras esa revisión. Hasta entonces la GPU solo debe usarla software del proyecto en el teléfono de pruebas."
+reversal = "Es una propuesta; si se implementa, git revert del parche."
+

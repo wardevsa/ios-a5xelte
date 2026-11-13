@@ -20,6 +20,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0012 | PROPOSED | process | 2026-11-13 | Los niveles de evidencia (domain, level, device) se declaran y nunca se elevan automáticamente; una suite del PC no puede declarar hardware | ingeniero | — | — | — |
 | D-0013 | PROPOSED | policy | 2026-11-13 | Alinear los permisos de Claude Code (settings.json) con policy.toml para convertir la disciplina asistida en un control técnico | ingeniero | — | — | — |
 | D-0014 | PROPOSED | architecture | 2026-11-13 | Renumerar solo los dos parches nuestros que colisionan con origin/herolte (0332 marcador -> 0336, 0334 DROP v2 -> 0337, manteniendo el orden relativo) y hacer que ci_check/preflight identifiquen el parche por nombre completo | ingeniero | — | — | — |
+| D-0015 | PROPOSED | architecture | 2026-11-13 | Aislamiento de clientes de HeroGPU: address space por cliente, jc_va validada contra los BO del cliente, entitlement en initWithTask, presupuesto de memoria y SurfaceBO con comprobación de propiedad | ingeniero | — | — | — |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
 - **Estado:** PROPOSED
@@ -105,4 +106,10 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Consecuencias:** Cambia nombres de dos ficheros de la serie y unas 25 referencias documentales/herramientas (no los nombres de artefacto kernel-0334-*). El kernel de la candidata N2 no cambia por el renombrado, pero sí si se fusiona y reconstruye con 0332-0334 de upstream; entonces la candidata N2 se regenera con nombre nuevo y se reverifica.
 - **Cómo se revierte:** git revert de los renombrados antes de publicar.
 - **Sustituye a:** D-0008
+
+## D-0015 — Aislamiento de clientes de HeroGPU: address space por cliente, jc_va validada contra los BO del cliente, entitlement en initWithTask, presupuesto de memoria y SurfaceBO con comprobación de propiedad
+- **Estado:** PROPOSED
+- **Razón:** docs/S7GE_ABI.md (T-0008) leyó HeroGPU.cpp y herolte_gpu.c y encontró: una sola AS0 compartida por todos los clientes, Submit con la VA de la cadena de jobs aportada por el cliente y sin validar, ningún entitlement ni presupuesto de memoria, SurfaceBO con búsqueda global por id y handles sin generación. Incumple los principios 2.5 y 23 de S7GE.
+- **Consecuencias:** Es una modificación del kernel y de la serie de parches (nivel B, revisor jefe técnico): se haría con una tarea nueva y tras esa revisión. Hasta entonces la GPU solo debe usarla software del proyecto en el teléfono de pruebas.
+- **Cómo se revierte:** Es una propuesta; si se implementa, git revert del parche.
 

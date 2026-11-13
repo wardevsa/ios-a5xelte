@@ -353,3 +353,18 @@ sha256 = "619b1b42f947649bfd228accae74f6f5b24bd328ddf2971ef4012bf95d915e9b"
 size = 81920
 immutable = true
 note = "Prueba de APLICABILIDAD de parches, no de compilación ni de funcionamiento. Informe: docs/herolte-integracion-origin-herolte.md"
+
+[[evidence]]
+id = "E-0025"
+title = "Batería FINAL de mutantes de tools/governance.py sobre las pruebas definitivas (97): control sin mutar pasa; 22/22 detectados"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/governance-mutation-20261113-final.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "c50853efe1f746edd962e79430ec5776e80c0323db1109f0ab1c6ea55f9442df"
+size = 2863
+immutable = true
+note = "Sustituye en valor probatorio a E-0021 y E-0023 (se reescribieron las pruebas de selección). Reproducible: python3 tools/governance_mutation.py"

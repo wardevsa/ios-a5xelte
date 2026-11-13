@@ -149,7 +149,7 @@ class Tasks(Base):
 
     def test_blocked_without_reason_and_ready_with_reason(self):
         self.t('T-0003', 'blocked_on', None); self.assertErr('bloqueada sin blocked_on')
-        self.t('T-0008', 'blocked_on', '"algo"'); self.assertErr('está ready pero declara blocked_on')
+        self.t('T-0022', 'blocked_on', '"algo"'); self.assertErr('está ready pero declara blocked_on')
 
     def test_c_action_in_progress_without_authorization(self):
         self.t('T-0007', 'status', '"in_progress"'); self.assertErr('acción C en curso/hecha sin authorization_ref')
