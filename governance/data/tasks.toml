@@ -244,7 +244,7 @@ acceptance = "Propuesta de configuración revisada por el jefe técnico, aplicad
 [[task]]
 id = "T-0022"
 title = "ci_check.py y preflight.py: identificar el parche por nombre completo (hoy el prefijo 0334- casa con dos parches)"
-status = "ready"
+status = "done"
 priority = 3
 owner = "ingeniero"
 depends_on = ["T-0009"]

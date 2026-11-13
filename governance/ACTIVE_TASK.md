@@ -6,7 +6,7 @@
 
 Tareas pendientes de revisión: T-0001 (Misión 0: implantar el sistema de gobierno de ingeniería autónoma (governance/, tools/governance.py, puntero en AGENTS.md))
 
-Siguiente tarea que se puede empezar sin pedir autorización: **T-0022 — ci_check.py y preflight.py: identificar el parche por nombre completo (hoy el prefijo 0334- casa con dos parches)**
+Siguiente tarea que se puede empezar sin pedir autorización: **T-0005 — rev2: ronda 2 de mutación (49 mutantes) sobre las pruebas reforzadas, con presupuesto de disco**
 
 ## Cómo reanudar
 1. Lee `README.md` y `HANDOFF.md`; ejecuta `python3 tools/governance.py check` y `status`.

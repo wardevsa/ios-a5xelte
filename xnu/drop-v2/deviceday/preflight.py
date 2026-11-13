@@ -78,8 +78,8 @@ def host_checks(kit):
     hero = open(os.path.join(REPO, 'gpu', 'eagl', 'test', 'hero-run.c')).read()
     check('hero-run.c usa .drop/ready y consumed', 'dropv2_pending' in hero and 'DROP_CONSUMED' in hero)
     patches = sorted(os.listdir(os.path.join(REPO, 'xnu', 'patches')))
-    has334 = any(p.startswith('0334-') for p in patches)
-    report('ok' if has334 else 'warn', 'parche 0334 en xnu/patches/',
+    has334 = '0334-herolte-drop-v2.patch' in patches   # nombre completo: upstream tiene otro 0334 (T-0009)
+    report('ok' if has334 else 'warn', 'parche 0334-herolte-drop-v2 en xnu/patches/',
            '' if has334 else 'no está (queda en xnu/drop-v2/patches-proposed/): el CI NO lo compilará hasta que se adopte')
     if has334 and any(p.startswith('0333-herolte-drop-block1') for p in patches):
         report('fail', '0333 y 0334 a la vez en xnu/patches/',

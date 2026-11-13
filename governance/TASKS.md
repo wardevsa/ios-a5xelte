@@ -11,7 +11,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 | T-0009 | done | 2 | ingeniero | Plan de integración con origin/herolte: aplicabilidad de sus 0332-0334 sobre nuestra rama y propuesta de renumeración (informe) | — | A verde | — |
 | T-0003 | blocked | 3 | director | Decidir el bloqueo Unicode: aplicar la corrección 1-5 (nodecompose + nombres en forma XNU), la alternativa (B) o la (C) | T-0002 | B amarillo | decisión del director (D-0006 mantiene el generador sin cambios hasta entonces) |
 | T-0008 | done | 3 | ingeniero | S7GE_ABI.md: el ABI real de HeroGPU (selectores 0-7), qué valida el kernel y la brecha frente al §23 de S7GE | — | A verde | — |
-| T-0022 | ready | 3 | ingeniero | ci_check.py y preflight.py: identificar el parche por nombre completo (hoy el prefijo 0334- casa con dos parches) | T-0009 | A verde | — |
+| T-0022 | done | 3 | ingeniero | ci_check.py y preflight.py: identificar el parche por nombre completo (hoy el prefijo 0334- casa con dos parches) | T-0009 | A verde | — |
 | T-0005 | ready | 4 | ingeniero | rev2: ronda 2 de mutación (49 mutantes) sobre las pruebas reforzadas, con presupuesto de disco | — | A verde | — |
 | T-0019 | blocked | 4 | ingeniero | Archivar en el NTFS la imagen de laboratorio lab-full.img.partial (y os.apfs): hoy solo existen en /tmp, que se pierde al reiniciar | — | A verde | confirmación del director: ambos ficheros se reservaron a su decisión en el informe de almacenamiento (la copia no los mueve ni toca) |
 | T-0006 | blocked | 5 | ingeniero | rev2: revisión independiente nueva, PINNED/APPROVED.sha256 como artefactos de revisión e informe A-I | T-0005 | A verde | T-0005 |
