@@ -8,7 +8,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 |---|---|---|---|---|---|---|---|
 | T-0001 | in_review | 1 | ingeniero | Misión 0: implantar el sistema de gobierno de ingeniería autónoma (governance/, tools/governance.py, puntero en AGENTS.md) | — | B amarillo | — |
 | T-0002 | done | 2 | ingeniero | Auditoría Unicode HFS+ (XNU frente a Linux): causa, tabla de los 32 nombres, corrección propuesta | — | A verde | — |
-| T-0009 | ready | 2 | ingeniero | Plan de integración con origin/herolte: aplicabilidad de sus 0332-0334 sobre nuestra rama y propuesta de renumeración (informe) | — | A verde | — |
+| T-0009 | in_progress | 2 | ingeniero | Plan de integración con origin/herolte: aplicabilidad de sus 0332-0334 sobre nuestra rama y propuesta de renumeración (informe) | — | A verde | — |
 | T-0003 | blocked | 3 | director | Decidir el bloqueo Unicode: aplicar la corrección 1-5 (nodecompose + nombres en forma XNU), la alternativa (B) o la (C) | T-0002 | B amarillo | decisión del director (D-0006 mantiene el generador sin cambios hasta entonces) |
 | T-0008 | ready | 3 | ingeniero | S7GE_ABI.md: el ABI real de HeroGPU (selectores 0-7), qué valida el kernel y la brecha frente al §23 de S7GE | — | A verde | — |
 | T-0005 | ready | 4 | ingeniero | rev2: ronda 2 de mutación (49 mutantes) sobre las pruebas reforzadas, con presupuesto de disco | — | A verde | — |
