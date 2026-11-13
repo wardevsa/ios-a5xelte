@@ -581,6 +581,61 @@ copy_audio_file(const char *from, const char *to, mode_t mode)
    herodrm_log("hero-run: audio plug-in: %s: %s", to, out >= 0 ? "put" : "not put");
 }
 
+/*
+ * The wallpapers' pictures as PNG (tools/herolte-wallpaper-png.sh): the stock ones are HEIC, and with no HEVC decoder
+ * ImageIO draws them empty (boot-heic). DROP_DIR walls/list has "N /Library/Wallpaper/..." lines; walls/N goes over
+ * that file, under its name (the .ca packages name their assets by file name; ImageIO knows a PNG by its first bytes).
+ * Only files under /Library/Wallpaper/ that already exist, and only when the size differs (once).
+ */
+static void
+install_wallpaper_pictures(void)
+{
+   FILE *list = fopen(DROP_DIR "walls/list", "r");
+   char line[1024];
+   unsigned put = 0, same = 0, refused = 0;
+   if (!list)
+      return;
+   while (fgets(line, sizeof(line), list)) {
+      line[strcspn(line, "\r\n")] = 0;
+      char *path = strchr(line, ' ');
+      if (!path)
+         continue;
+      *path++ = 0;
+      char from[64];
+      struct stat src, dst;
+      snprintf(from, sizeof(from), DROP_DIR "walls/%s", line);
+      if (strncmp(path, "/Library/Wallpaper/", 19) != 0 || strstr(path, "..") || stat(from, &src) != 0 ||
+          stat(path, &dst) != 0) {
+         refused++;
+         continue;
+      }
+      if (src.st_size == dst.st_size) {
+         same++;
+         continue;
+      }
+      char tmp[1100];
+      snprintf(tmp, sizeof(tmp), "%s.herolte", path);
+      char buffer[65536];
+      ssize_t n;
+      int in = open(from, O_RDONLY), out = in >= 0 ? open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644) : -1;
+      int ok = out >= 0;
+      while (ok && (n = read(in, buffer, sizeof(buffer))) > 0)
+         ok = write(out, buffer, (size_t)n) == n;
+      if (out >= 0)
+         close(out);
+      if (in >= 0)
+         close(in);
+      if (ok && rename(tmp, path) == 0)
+         put++;
+      else {
+         unlink(tmp);
+         refused++;
+      }
+   }
+   fclose(list);
+   herodrm_log("hero-run: wallpaper pictures as PNG: %u put, %u already there, %u refused", put, same, refused);
+}
+
 static void
 install_audio_plugin(void)
 {
@@ -828,6 +883,7 @@ main(int main_argc, char **main_argv)
    remove_listed_apps();
    remove_ls_db_once();
    remove_mg_cache_once();
+   install_wallpaper_pictures();
    wallpapers_for_this_screen();
    migration_restore();
    disable_refused_jobs();
