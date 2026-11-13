@@ -96,3 +96,67 @@ Pendientes de escribir cuando se apruebe aplicar la corrección: prueba del reno
 5. Que XNU, en el teléfono, abra por nombre esos 32 ficheros (hipótesis sobre `hfs_catalog.c:3529`; no se puede probar sin hardware y sin un root instalado).
 6. Que el kernel del PC en el momento de rehacer la imagen use la misma tabla (el número 144 lo vigila).
 **Decisión que sigue siendo tuya:** autorizar R2 con `sudo` (ejecutor `rev2`, ronda 2 de mutación y revisión independiente pendientes) y elegir entre aplicar la corrección 1-5, (B) o (C). Hasta entonces la generación del root no se cambia.
+
+---
+# Cierre de la comparación en tres niveles (2026-11-13, segunda pasada)
+Solo lectura. Reproducible con `tools/hfsplus-names/compare_names.py` (registro de entradas con SHA-256 en `inputs.sha256` del directorio de resultados). Todo lo que sigue se midió; lo que no, está marcado como hipótesis.
+
+## Nivel 1 — XNU: el arnés ejecuta el código original
+- **No se copia ni reimplementa nada.** `tools/hfsplus-names/xnu_nfd.c` hace `#include "vfs_utfconv.c"` y llama a `utf8_decodestr(utf8, len, out, &outlen, buflen, ':', UTF_DECOMPOSED)`, la misma llamada de `bsd/sweet_hfs/core/hfs_catalog.c:3529-3530`
+  (`altslash` = `':'`; XNU mismo convierte `:` en `/`). `nm` del ejecutable: `utf8_decodestr`, `utf8_encodestr` y `unicode_decomposeable` son símbolos **del `vfs_utfconv.c` compilado**.
+- **El fichero es el de Apple, sin cambios:** `vfs_utfconv.c` (SHA-256 `4cfa93d4…8e0c3`) y `vfs_utfconvdata.h` (`696f99ae…c032`) salen del árbol del CI (`buildtree-0332-fork-8d1cf43`), son idénticos byte a byte al contenido del `tgz`, y **ningún parche de `xnu/patches/` toca `vfs_utfconv`**.
+- **Y sus tablas están en el kernel real:** `__CFUniCharDecompositionTable` (1940 entradas u16) y `__CFUniCharMultipleDecompositionTable` (1888) aparecen byte a byte en `kernel.development.herolte` (SHA-256 `e678b454…`), en los desplazamientos `0x9fa0` y `0xaec8`.
+- **Adaptaciones necesarias para compilar en espacio de usuario** (`build_xnu_nfd.sh`): `-DKERNEL=1 -D__APPLE_API_UNSTABLE -D__APPLE_API_PRIVATE -DKERNEL_PRIVATE` (los `UTF_*` están bajo esos `#ifdef` de `sys/utfconv.h`), `-DVFS_UTF8_UNIT_TEST=1` (el propio gancho de Apple, línea 39 de `vfs_utfconv.c`: usa `<assert.h>` en lugar de `kern/assert.h`),
+  `-DMAXPATHLEN=1024 -DZ_WAITOK=0`, `kalloc_data(a,b)`→`malloc(a)` y `kfree_data(a,b)`→`free(a)` (solo los usa `utf8_normalizestr`, que no se ejecuta), y cabeceras simuladas vacías `sys/param.h`, `sys/malloc.h`, `sys/appleapiopts.h`, `kern/assert.h`, más `sys/errno.h`→`<errno.h>` y `libkern/OSByteOrder.h` con `OSSwapInt16`=`__builtin_bswap16` y los `htobe16`/`be16toh` de `<endian.h>`.
+- **Resultados sobre los 329 nombres no ASCII** (`results-…-v2/results.json`): el original está en NFC en 329 (en NFD en 136, los que no cambian); la forma XNU **coincide con el NFD de Python en 329** y con el modelo `xnu_nfd` en 329. Salidas anómalas: ninguna. Diferencial exhaustivo del BMP (63 360 caracteres): idéntico salvo U+2400.
+- **U+0E33 (SARA AM):** XNU lo deja entero (`0E04 0E33` → `0E04 0E33`). Es coherente con su tabla: la clave U+0E33 **no existe** en `__CFUniCharDecompositionTable` (970 pares), mientras que U+0625, U+03AC y U+0219 sí.
+
+## Nivel 2 — HFS+ de Linux: tabla y rutina localizadas por símbolo
+Módulo `hfsplus.ko` de `7.0.0-42-generic` (`/lib/modules/.../hfsplus.ko.zst`, SHA-256 `c7892805…aa09` del `.zst`). Símbolos (`linux-routine/symbols.txt`):
+| Símbolo | Dirección | Qué es |
+|---|---|---|
+| `hfsplus_decompose_table` | `.data`+`0x2820`, 8436 bytes → desplazamiento de fichero **`0x15640`** | la tabla (la que había localizado antes por estructura: coincide) |
+| `decompose_unichar` | `.text` `0xc700`, 369 bytes | rutina: **Hangul aritmético** (`c709-c7a7`: `sub $0xac00`, `cmp $0x2ba3`, bases `0x1100/0x1161/0x11a7`) y **trie de 4 niveles de nibbles** (`shr $0xc; and $0xf`, `shr $8`, `shr $4`, `and $0xf`; el último valor: bits 1:0 = nº de unidades, resto = índice en u16) |
+| `hfsplus_asc2uni` | `.text` `0xd0d0` | UTF-8→UTF-16 al **escribir**: `:`→`/` (`cmp $0x3a`), U+2400→0 (`cmp $0x2400`), y **`sbi->flags` bit 1 (`mov 0x100(%rdi)`; `shr $1; and $1`)**: si es 1 (`nodecompose`) guarda el carácter tal cual (`d187`), si es 0 llama a `decompose_unichar` (`d223`) |
+| `hfsplus_uni2asc` | `.text` `0xc890` | UTF-16→UTF-8 al **leer**: el mismo bit gobierna `hfsplus_compose_lookup` (`c650`); sin `nodecompose` **recompone** |
+| `hfsplus_compose_table` | `.data`+`0x8c0` | tabla inversa |
+La cadena `,nodecompose` está en el módulo (opción de montaje). El código fuente del kernel **no está en este PC**: la rutina se verificó leyendo el desensamblado y comparando con la imagen, no con el fuente.
+**Resultado:** la tabla de Linux reproduce en disco **329 de 329** nombres (`disk_bytes_equal_Linux_form_UTF16BE`: 329; la forma XNU está en disco solo en 297).
+
+## Tabla comparativa: los 32 nombres (solo puntos de código; los nombres de Apple están en `diff32.tsv`, fuera de git)
+Las 15 diferencias **canónicamente equivalentes** son solo de *nivel de normalización* (Arabe 9 + rumano 6: Linux deja el carácter compuesto, XNU lo descompone). Las 2 tailandesas son equivalentes solo por **compatibilidad** (Linux aplica una descomposición de compatibilidad, que Apple no usa). Las 15 griegas **no son equivalentes**: Linux emite U+030D (línea vertical), XNU U+0301 (agudo):
+a un nombre distinto, no a otra forma del mismo.
+| Clase | Nombres | Carácter origen | Linux escribe | XNU/`fsck_hfs` esperan | Relación Unicode |
+|---|---|---|---|---|---|
+| Árabe | 7 | U+0625 alef con hamza abajo | U+0625 (sin descomponer) | U+0627 U+0655 | equivalentes canónicos |
+| Árabe | 2 | U+0623 alef con hamza arriba | U+0623 | U+0627 U+0654 | equivalentes canónicos |
+| Rumano | 1 | U+0219 s con coma bajo | U+0219 | U+0073 U+0326 | equivalentes canónicos |
+| Rumano | 5 | U+021B t con coma bajo | U+021B | U+0074 U+0326 | equivalentes canónicos |
+| Griego | 15 | vocal con tonos (U+03AC…03CE, etc.) | vocal + **U+030D** | vocal + **U+0301** | **no equivalentes** |
+| Tailandés | 2 | U+0E33 SARA AM | U+0E4D U+0E32 | U+0E33 | solo compatibilidad |
+(Detalle por nombre y GUID en la tabla de la sección 2 de este documento.)
+**¿Normalización o codificación?** En los 32 es **normalización/tabla**, no codificación: los bytes del catálogo son exactamente `UTF-16BE` de la forma de Linux (329/329), `:`→`/` coincide en los 2 nombres con `:` y no interviene U+2400. La representación (UTF-8 en el árbol POSIX, UTF-16BE en el catálogo, composición al leer en Linux) es la misma en ambos lados; lo que difiere es **qué descomposición se aplica**.
+
+## Nivel 3 — Diagnóstico del proyecto: en qué etapa aparece
+| Etapa | Qué ocurre | Evidencia |
+|---|---|---|
+| Generación del nombre (7z, manifiestos) | los nombres salen en NFC; correctos | 329/329 en NFC; 0 fuera del BMP; 0 directorios |
+| **Escritura del catálogo** (`populate_image.sh`, `rsync`, 10:18:28-10:19:29) | **aquí se produce la divergencia**: `hfsplus_asc2uni` con `nodecompose`=0 decompone con la tabla de Linux | la imagen tiene la forma de Linux en 329/329; el montaje no usa `nodecompose` |
+| Enumeración (`catalog_dump.py`, catálogo en bruto) | correcta | ve los bytes reales |
+| Verificación de metadatos (`verify_meta.py`, lectura por el montaje) | **no la ve**: Linux recompone al leer; los 32 caminos no figuran entre los registros no-OK (solo hay 3: 2 `EXTRA` del diario y 1 `NAME-NORMALIZED`) | `ver.full.os.jsonl` |
+| Verificación del catálogo (`hfsx_check.py`) y `fsck_hfs` | **la ven**: 32 esperados ausentes y 32 inesperados; 32 "Illegal name" | `ver.full.hfsx_pre/post.txt`, `ver.full.fsck_pre/post.txt` |
+
+## Lo que `fsck_hfs` dijo realmente (no afirmo que la normalización lo explique por sí sola)
+- `fsck_hfs` (540.1-Linux, `-n`, "NO WRITE") recorrió **todas** las fases (extents, catálogo, ficheros multienlace, jerarquía, atributos, mapa de bits, información del volumen) y las dos ejecuciones, antes y después, dan **exactamente lo mismo**: 32 mensajes "Illegal name" y la frase final "found corrupt"; ningún otro aviso. La depuración añade solo líneas informativas (p. ej. `CheckHardLinks: found 4865 pre-Leopard file inodes`, que no está marcado como error).
+- **Hecho:** los 32 "Illegal name" son los 32 nombres de Linux y sus "replacement" son la forma XNU. **Hecho:** es lo único que `fsck_hfs` señala. **No demostrado:** que `fsck_hfs` quede en rc=0 al corregir esos nombres. Pueden aparecer otras condiciones que hoy no se muestran (por ejemplo, tras reparar el catálogo), y no puedo distinguirlas sin una imagen corregida.
+- **Confianza:** causa de los 32 nombres distintos en disco: **muy alta** (329/329, símbolo y desensamblado, tablas idénticas al kernel desplegado). Que son el único motivo de la corrupción señalada por `fsck_hfs`: **alta para "es lo único que dice"; media para "corregirlos lo deja limpio"**.
+  Que XNU no abriría por nombre esos 32 ficheros: **media** (ruta de código leída en `hfs_catalog.c`, no ejecutada en XNU).
+
+## Pruebas adicionales necesarias (ordenadas; ninguna se ha hecho)
+1. **R2 (monta; necesita `sudo` y autorización):** imágenes pequeñas A (sin `nodecompose`), B y C (`nodecompose`), con **los mismos 32 nombres en forma NFC y en forma XNU** (más los 329 si cabe), y `fsck_hfs -n` sobre cada una: ¿B/C con nombres XNU dan rc=0?
+2. En las mismas imágenes: `rsync -aH`, `chown`/`chmod`/`touch`, enlaces duros y renombrados con `nodecompose` (¿Linux encuentra por nombre XNU?).
+3. Remontar sin y con `nodecompose` y comprobar que la lectura de Linux sigue siendo coherente (hoy `uni2asc` recompone solo sin `nodecompose`).
+4. Si (1) no deja `fsck_hfs` en 0: ejecutarlo en modo diagnóstico con las dos formas, para ver qué otra condición aparece.
+5. En hardware (cuando exista un root instalado): abrir por nombre esos ficheros desde XNU.
+## Siguiente cambio mínimo a decidir (no aplicado)
+Si autorizas R2 y confirma (1)-(3): `nodecompose` en `attach()` + renombrado previo de los ficheros a forma XNU + una sola función de traducción manifiesto→ruta (sección 3 de este documento). Si no, queda (B) o (C).

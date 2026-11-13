@@ -11,7 +11,8 @@ int main(void) {
     while (fgets(line, sizeof line, stdin)) {
         size_t n = strlen(line); while (n && line[n - 1] == '\n') line[--n] = 0;
         u_int16_t out[2048]; size_t outlen = 0;
-        int rc = utf8_decodestr((const u_int8_t *)line, n, out, &outlen, sizeof out, 0, UTF_DECOMPOSED);
+        /* same call as xnu/bsd/sweet_hfs/core/hfs_catalog.c:3530 (altslash ':'; UTF_DECOMPOSED unless the descriptor is already CD_DECOMPOSED) */
+        int rc = utf8_decodestr((const u_int8_t *)line, n, out, &outlen, sizeof out, ':', UTF_DECOMPOSED);
         printf("%d", rc);
         for (size_t i = 0; i < outlen / 2; i++) printf(" %04X", out[i]);
         printf("\n");

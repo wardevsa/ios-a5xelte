@@ -68,6 +68,13 @@ class DifferentialAgainstXnu(unittest.TestCase):
             if H.xnu_nfd(chr(c)) != r: bad.append(c)
         self.assertEqual([hex(c) for c in bad], ['0x2400'])                         # U+2400 is XNU's alternative NUL (maps to '/'): an API artefact
 
+    def test_colon_is_mapped_by_xnu_itself_and_sara_am_is_kept(self):
+        r = xnu_real(['a:b', 'x\u00e9:y', '\u0e04\u0e33', '\u0625', '\u03af'])
+        self.assertEqual(r, ['a/b', 'xe\u0301/y', '\u0e04\u0e33', '\u0627\u0655', '\u03b9\u0301'])   # altslash ':' as in hfs_catalog.c:3530; U+0E33 untouched
+
+    def test_xnu_rejects_only_the_two_noncharacters_in_the_bmp(self):
+        r = xnu_real([chr(0xfffe), chr(0xffff), chr(0xfeff)]); self.assertEqual([x is None for x in r], [True, True, False])
+
     def test_random_strings_with_combining_marks(self):
         rnd = random.Random(1); pool = list(range(0x41, 0x7b)) + list(range(0xc0, 0x180)) + list(range(0x300, 0x340)) + [0x623, 0x625, 0x627, 0x654, 0x655,
               0x219, 0x21b, 0x3ac, 0x3af, 0x385, 0xe33, 0xe4d, 0xe32, 0xf71, 0xf72, 0xf73, 0x2126, 0xac01, 0x1100, 0x1161, 0x11a8, 0x95c, 0x921, 0x93c]
@@ -120,6 +127,24 @@ class EvidenceRegression(unittest.TestCase):
         missing_in_xnu_form = [n for n in names if H.xnu_nfd(n) not in disk]
         self.assertEqual(len(missing_in_xnu_form), 32)
         self.assertEqual(H.find_collisions(sorted(names)), [])
+
+    def test_the_32_differences_by_equivalence_class(self):
+        import unicodedata as u
+        T = H.linux_table(KO); recs = [json.loads(l) for l in open(AUDIT[0])]
+        names = set()
+        for v in ('os', 'systemos', 'appos'):
+            for l in open('%s/man_%s.jsonl' % (OUT[0], v)):
+                last = json.loads(l)['path'].rpartition('/')[2]
+                if any(ord(c) > 127 for c in last): names.add(last.replace(':', '/'))
+        kinds = {'canonical': 0, 'compat_only': 0, 'different': 0}
+        for n in names:
+            L, X = H.linux_nfd(n, T), H.xnu_nfd(n)
+            if L == X: continue
+            if u.normalize('NFC', L) == u.normalize('NFC', X): kinds['canonical'] += 1
+            elif u.normalize('NFKC', L) == u.normalize('NFKC', X): kinds['compat_only'] += 1
+            else: kinds['different'] += 1
+        # Arabic (9) + Romanian (6) differ in normalisation LEVEL only; Thai (2) by a compatibility decomposition; Greek (15): U+030D is another character
+        self.assertEqual(kinds, {'canonical': 15, 'compat_only': 2, 'different': 15})
 
 
 if __name__ == '__main__':
