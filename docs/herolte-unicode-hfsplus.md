@@ -162,3 +162,74 @@ a un nombre distinto, no a otra forma del mismo.
 Si autorizas R2 y confirma (1)-(3): `nodecompose` en `attach()` + renombrado previo de los ficheros a forma XNU + una sola función de traducción manifiesto→ruta (sección 3 de este documento). Si no, queda (B) o (C).
 
 Nota de trazabilidad: el directorio `results-3niveles-20261113` (primera ejecución del script) tiene un filtro defectuoso del catálogo (descartaba nombres cuyos bytes UTF-16 eran todos < 0x80, como U+0301) y da 116/101 en lugar de 329/297 en las líneas "forma … en disco". Se conserva sin tocar; **los resultados válidos son los de `results-3niveles-20261113-v2`** (script corregido en el mismo commit). Ambos están en `IOS-S7-archive/04-audit-evidence/unicode-3niveles-20261113.tar` (SHA-256 en su `.sha256`).
+
+---
+# Tercera pasada: unidades UTF-16, tablas contrastadas con el kernel y discrepancias por carácter (2026-11-13)
+**Auditoría del filtro.** El único filtro por valor de byte de toda la cadena era el de la primera ejecución de `compare_names.py` (descartaba nombres cuyos bytes UTF-16 eran todos < 0x80, como U+0301 = `03 01`; con él se ven 217 nombres no ASCII en vez de 329). Las demás herramientas
+(`hfsx_check.py:74`, `unicode_audit.py`, `unicode_cause.py`, `bmp_compare.py`) filtran por carácter decodificado (`ord(c) > 127`) y no estaban afectadas. Ahora `hfs_names.py` ofrece `units()`, `nonascii_units()` y `catalog_names()` (unidades UTF-16 de 16 bits; rechaza longitudes impares; el modelo de Linux se niega con `Unmodelled` ante
+unidades suplentes en vez de adivinar) y `compare_names.py` se reescribió sobre ellas. Pruebas: 16 OK, 0 omitidas; reintroducir el filtro por bytes en una copia temporal hace fallar 3 (y el script ve 217 nombres).
+No se modificó ninguna tabla ni rutina de XNU ni de Linux; `altslash=':'` se mantiene (`xnu_nfd.c:15`, la llamada de `hfs_catalog.c:3530`).
+
+**Resultado de la repetición completa** (`results-3niveles-20261113-v3`, 24 comprobaciones, **24 PASS, 0 FAIL**, salida 0): 329 nombres no ASCII (todos en NFC); la forma de **Linux** está en el catálogo en **329/329**, la de **XNU** en **297/329**; Linux y XNU coinciden en 297 y **difieren en 32**
+(15 canónicamente equivalentes, 2 solo por compatibilidad, 15 no equivalentes); 14 caracteres distintos cambian en los nombres; en todo el BMP difieren **144**. Estos números son idénticos a los de la segunda pasada (v2).
+El script **no declara equivalencia** entre las dos implementaciones: informa dónde difieren. Lo único que "coincide" son las tablas de XNU con las del kernel (siguiente apartado).
+
+## Tablas de XNU contrastadas con el kernel desplegado (bytes, no texto)
+Las 7 tablas CoreFoundation del arnés compilado (`nm -S` del ejecutable, bytes leídos de `.rodata`) se buscan en `kernel.development.herolte` (SHA-256 `e678b454…`). Además, la cabecera de texto y los bytes compilados de las dos tablas de descomposición son iguales.
+| Tabla de XNU (compilada en el arnés) | Bytes | Apariciones en el kernel | Offset | Sección |
+|---|---|---|---|---|
+| `__CFUniCharBMPPrecompDestinationTable` | 3668 | 1 | `0xbf30` | `__TEXT,__const` |
+| `__CFUniCharCombiningBitmap` | 896 | 1 | `0x98d0` | `__TEXT,__const` |
+| `__CFUniCharCombiningPropertyBitmap` | 5376 | 1 | `0xcd84` | `__TEXT,__const` |
+| `__CFUniCharDecomposableBitmap` | 832 | 1 | `0x9c60` | `__TEXT,__const` |
+| `__CFUniCharDecompositionTable` | 3880 | 1 | `0x9fa0` | `__TEXT,__const` |
+| `__CFUniCharMultipleDecompositionTable` | 3776 | 1 | `0xaec8` | `__TEXT,__const` |
+| `__CFUniCharPrecompSourceTable` | 424 | 1 | `0xbd88` | `__TEXT,__const` |
+
+
+## Discrepancias por carácter: entrada, salida y nivel de transformación
+"Nivel" = a qué forma normal de Unicode 3.2 equivale la salida: `NFD(3.2)` (descomposición canónica completa), `NFKD(3.2)` (de compatibilidad), `sin descomposición`, u `otro` (no es ni NFD ni NFKD). "Nombres" = nombres de los 32 que contienen el carácter (un nombre puede tener varios).
+| Carácter | Nombre Unicode | Nombres | Entrada | Linux escribe | XNU escribe | Nivel Linux | Nivel XNU | Relación |
+|---|---|---|---|---|---|---|---|---|
+| U+0219 | Latin Small Letter S With Comma Below | 1 | 0219 | 0219 | 0073 0326 | sin descomposición | NFD(3.2) | canónicamente equivalentes |
+| U+021B | Latin Small Letter T With Comma Below | 6 | 021B | 021B | 0074 0326 | sin descomposición | NFD(3.2) | canónicamente equivalentes |
+| U+038F | Greek Capital Letter Omega With Tonos | 1 | 038F | 03A9 030D | 03A9 0301 | otro: ni NFD ni NFKD | NFD(3.2) | NO equivalentes |
+| U+03AC | Greek Small Letter Alpha With Tonos | 1 | 03AC | 03B1 030D | 03B1 0301 | otro: ni NFD ni NFKD | NFD(3.2) | NO equivalentes |
+| U+03AD | Greek Small Letter Epsilon With Tonos | 4 | 03AD | 03B5 030D | 03B5 0301 | otro: ni NFD ni NFKD | NFD(3.2) | NO equivalentes |
+| U+03AE | Greek Small Letter Eta With Tonos | 3 | 03AE | 03B7 030D | 03B7 0301 | otro: ni NFD ni NFKD | NFD(3.2) | NO equivalentes |
+| U+03AF | Greek Small Letter Iota With Tonos | 8 | 03AF | 03B9 030D | 03B9 0301 | otro: ni NFD ni NFKD | NFD(3.2) | NO equivalentes |
+| U+03CC | Greek Small Letter Omicron With Tonos | 8 | 03CC | 03BF 030D | 03BF 0301 | otro: ni NFD ni NFKD | NFD(3.2) | NO equivalentes |
+| U+03CD | Greek Small Letter Upsilon With Tonos | 1 | 03CD | 03C5 030D | 03C5 0301 | otro: ni NFD ni NFKD | NFD(3.2) | NO equivalentes |
+| U+03CE | Greek Small Letter Omega With Tonos | 1 | 03CE | 03C9 030D | 03C9 0301 | otro: ni NFD ni NFKD | NFD(3.2) | NO equivalentes |
+| U+0622 | Arabic Letter Alef With Madda Above | 2 | 0622 | 0622 | 0627 0653 | sin descomposición | NFD(3.2) | canónicamente equivalentes |
+| U+0623 | Arabic Letter Alef With Hamza Above | 3 | 0623 | 0623 | 0627 0654 | sin descomposición | NFD(3.2) | canónicamente equivalentes |
+| U+0625 | Arabic Letter Alef With Hamza Below | 7 | 0625 | 0625 | 0627 0655 | sin descomposición | NFD(3.2) | canónicamente equivalentes |
+| U+0E33 | Thai Character Sara Am | 2 | 0E33 | 0E4D 0E32 | 0E33 | NFKD(3.2) | sin descomposición | equivalentes solo por compatibilidad |
+
+Lectura: **XNU aplica NFD(3.2) en todos los casos**. Linux **no descompone** U+0219, U+021B, U+0622, U+0623 y U+0625; aplica una descomposición de **compatibilidad** a U+0E33; y para los vocales griegas con tonos emite una secuencia que **no corresponde a ninguna forma normal** (U+030D en lugar de U+0301).
+Corrección de la tabla por clase de la sección anterior: la clase árabe incluye **U+0622** (2 nombres) además de U+0623 (3) y U+0625 (7); los 9 nombres árabes contienen combinaciones de ellos. La lista completa de los 144 caracteres del BMP, con los mismos campos, es `bmp_diff_chars.tsv`.
+
+## Reproducibilidad y hashes
+```
+tools/hfsplus-names/build_xnu_nfd.sh BUILDTREE.tgz OUT/harness
+python3 -I tools/hfsplus-names/compare_names.py --catalog catalog.jsonl --manifests DIR --xnu-harness OUT/harness/xnu_nfd --xnu-src OUT/harness/src --ko hfsplus.ko[.zst] --kernel kernel.development.herolte --out NUEVO_DIR
+python3 -W ignore tools/hfsplus-names/test_hfs_names.py
+```
+Artefactos usados (`inputs.sha256` de la ejecución incluye también los scripts y las rutas completas):
+| Artefacto | SHA-256 (16 primeros) |
+|---|---|
+| `catalog.jsonl` | `230ba259aeffa94d…` |
+| `xnu_nfd` | `006852f05cae258e…` |
+| `hfsplus.ko.zst` | `c7892805f8fe84d8…` |
+| `kernel.development.herolte` | `e678b4545f72bdec…` |
+| `vfs_utfconv.c` | `4cfa93d4cc2d60ea…` |
+| `vfs_utfconvdata.h` | `696f99ae7235aad5…` |
+| `utfconv.h` | `78ee7b38f46cd17c…` |
+| `man_os.jsonl` | `a7e2cd14a42364d8…` |
+| `man_systemos.jsonl` | `a101151bc6eb5960…` |
+| `man_appos.jsonl` | `d55a8eb79e3a8a4b…` |
+| `compare_names.py` | `a98eae54312b8f3c…` |
+| `hfs_names.py` | `e3d3fe8d0772f921…` |
+| `xnu_nfd.c` | `c0c68b502c0ba7d6…` |
+| `build_xnu_nfd.sh` | `9db38185c5539a1a…` |
+Evidencia: `IOS-S7-archive/04-audit-evidence/unicode-3niveles-v3-20261113.tar` (con su `.sha256`). Nada se ha modificado en el volumen ni en DROP.

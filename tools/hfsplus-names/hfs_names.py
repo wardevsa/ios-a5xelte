@@ -7,7 +7,7 @@ xnu_nfd(s)     what XNU's HFS stores for a name: Unicode 3.2 canonical decomposi
 linux_table(ko) the decomposition table of a Linux hfsplus.ko, found by structure and validated on known decompositions.
 linux_nfd(s,t) what Linux's hfsplus (default mount, no 'nodecompose') writes for a name: per-character table lookup, Hangul arithmetic, no reordering.
 """
-import io, struct, subprocess, unicodedata
+import io, json, struct, subprocess, unicodedata
 
 U32 = unicodedata.ucd_3_2_0
 EXCLUDED = ((0x2000, 0x2FFF), (0xF900, 0xFAFF), (0x2F800, 0x2FAFF))
@@ -88,3 +88,42 @@ def find_collisions(names):
 
 
 def too_long(name): return len(hfs_component(name).encode('utf-16-le')) // 2 > 255
+
+
+# ---- UTF-16 units: every comparison is made on 16-bit units / code points, never on the value of single bytes ----------------------------
+def units(s):
+    """UTF-16 code units of a Python string (surrogate pairs for characters above U+FFFF, lone surrogates kept)."""
+    b = s.encode('utf-16-be', 'surrogatepass')
+    return list(struct.unpack('>%dH' % (len(b) // 2), b))
+
+
+def from_units(u): return struct.pack('>%dH' % len(u), *u).decode('utf-16-be', 'surrogatepass')
+
+
+def nonascii_units(u):
+    """True when some UTF-16 unit is above 0x7F. Never test the BYTES of the UTF-16 form: U+0301 is the bytes 03 01, both below 0x80."""
+    return any(x > 0x7F for x in u)
+
+
+def catalog_names(path):
+    """(record type, UTF-16 units) of every key of an audit catalog.jsonl ({'raw': hex of the UTF-16BE name, 'rt': type, ...})."""
+    out = []
+    for line in open(path):
+        r = json.loads(line); b = bytes.fromhex(r['raw'])
+        if len(b) % 2: raise ValueError('odd-length UTF-16 name in %s' % path)
+        out.append((r.get('rt'), list(struct.unpack('>%dH' % (len(b) // 2), b))))
+    return out
+
+
+class Unmodelled(Exception):
+    pass
+
+
+def linux_nfd_units(u, table):
+    """What Linux's hfsplus writes for already-UTF-16 input. Surrogates are not modelled (Linux's own nls conversion of a 4-byte UTF-8 character
+    was not read in the module here): raises Unmodelled instead of guessing."""
+    out = []
+    for x in u:
+        if 0xD800 <= x <= 0xDFFF: raise Unmodelled('surrogate unit %04X' % x)
+        out.extend(linux_decomp(table, x))
+    return out

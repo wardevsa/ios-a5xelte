@@ -18,10 +18,11 @@ def build_harness():
     if not (os.path.exists(BUILDTREE) and shutil.which('gcc') and shutil.which('tar')): return None
     d = tempfile.mkdtemp(prefix='xnu-nfd.')
     r = subprocess.run([os.path.join(HERE, 'build_xnu_nfd.sh'), BUILDTREE, d], capture_output=True, text=True)
-    return os.path.join(d, 'xnu_nfd') if r.returncode == 0 else None
+    return d if r.returncode == 0 else None
 
 
-HARNESS = build_harness()
+HARNESS_DIR = build_harness()
+HARNESS = os.path.join(HARNESS_DIR, 'xnu_nfd') if HARNESS_DIR else None
 
 
 def xnu_real(strings):
@@ -30,6 +31,30 @@ def xnu_real(strings):
     for line in p.stdout.splitlines():
         f = line.split(); out.append(None if f[0] != '0' else ''.join(chr(int(x, 16)) for x in f[1:]))
     return out
+
+
+class UnitsNotBytes(unittest.TestCase):
+    """Regression of the filter that looked at the BYTES of the UTF-16 form and lost names made only of marks like U+0301 (bytes 03 01)."""
+    def test_units_and_nonascii(self):
+        self.assertEqual(H.units('e\u0301'), [0x65, 0x301]); self.assertTrue(H.nonascii_units([0x65, 0x301])); self.assertFalse(H.nonascii_units([0x65, 0x66]))
+        self.assertTrue(H.nonascii_units([0x301])); self.assertTrue(H.nonascii_units([0x80]))
+        self.assertTrue(all(b < 0x80 for x in [0x301] for b in divmod(x, 256)))     # the trap: every byte of U+0301 is below 0x80
+        self.assertEqual(H.units('\U0001F600'), [0xD83D, 0xDE00]); self.assertEqual(H.from_units([0xD83D, 0xDE00]), '\U0001F600')
+
+    def test_catalog_loader_keeps_names_whose_bytes_are_all_below_0x80(self):
+        d = tempfile.mkdtemp(prefix='cat-test.'); p = os.path.join(d, 'catalog.jsonl')
+        names = ['e\u0301', 'plain', '\u0301', 'a\u0300\u0301', '\u00e9']
+        with open(p, 'w') as f:
+            for n in names: f.write(json.dumps(dict(raw=n.encode('utf-16-be').hex(), rt=2)) + '\n')
+        got = H.catalog_names(p)
+        self.assertEqual([H.from_units(u) for _, u in got], names)
+        self.assertEqual([H.nonascii_units(u) for _, u in got], [True, False, True, True, True])    # a byte filter gives [F? ...] for the 03xx ones
+        with open(p, 'w') as f: f.write(json.dumps(dict(raw='006', rt=2)) + '\n')
+        with self.assertRaises(ValueError): H.catalog_names(p)                                       # odd-length UTF-16 is refused, not truncated
+
+    def test_linux_model_refuses_surrogates_instead_of_guessing(self):
+        if not os.path.exists(KO): self.skipTest('no hfsplus.ko')
+        with self.assertRaises(H.Unmodelled): H.linux_nfd_units([0xD83D, 0xDE00], H.linux_table(KO))
 
 
 class Models(unittest.TestCase):
@@ -111,8 +136,22 @@ class LinuxTable(unittest.TestCase):
         self.assertEqual(n, 144)                                                    # recorded 2026-11-13; a different kernel table would change it
 
 
-@unittest.skipUnless(AUDIT and OUT and os.path.exists(KO), 'T04-R audit catalog or hfsplus.ko not available')
+@unittest.skipUnless(AUDIT and OUT and os.path.exists(KO) and HARNESS, 'T04-R audit catalog, hfsplus.ko or the XNU harness not available')
 class EvidenceRegression(unittest.TestCase):
+    def test_compare_names_script_end_to_end(self):
+        D = os.path.expanduser('~/HackiOS/builds/device-day/artifacts/kernel-0334-v2-herolte-drop-v2/kernel.development.herolte')
+        if not os.path.exists(D): self.skipTest('kernel artifact absent')
+        out = os.path.join(tempfile.mkdtemp(prefix='cmp-test.'), 'out')
+        r = subprocess.run([sys.executable, '-I', os.path.join(HERE, 'compare_names.py'), '--catalog', AUDIT[0], '--manifests', OUT[0], '--xnu-harness', HARNESS,
+                            '--xnu-src', os.path.join(HARNESS_DIR, 'src'), '--ko', KO, '--kernel', D, '--out', out], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout[-600:] + r.stderr[-600:])
+        R = json.load(open(out + '/results.json'))
+        self.assertEqual((R['n_names'], R['Linux_form_in_catalog'], R['XNU_form_in_catalog'], R['n_diff'], R['bmp_chars_that_differ'], R['checks_fail']), (329, 329, 297, 32, 144, 0))
+        self.assertEqual(R['diff_by_relation'], {'canónicamente equivalentes': 15, 'NO equivalentes': 15, 'equivalentes solo por compatibilidad': 2})
+        self.assertEqual(open(out + '/tables_vs_kernel.tsv').read().count('\t1\t0x'), 7)                    # each of the 7 compiled tables appears once in the kernel
+        self.assertTrue(subprocess.run([sys.executable, '-I', os.path.join(HERE, 'compare_names.py'), '--catalog', AUDIT[0], '--manifests', OUT[0], '--xnu-harness', HARNESS,
+                            '--xnu-src', os.path.join(HARNESS_DIR, 'src'), '--ko', KO, '--kernel', D, '--out', out], capture_output=True).returncode != 0)   # refuses an existing out dir
+
     def test_linux_table_explains_every_name_on_the_lab_image_and_xnu_differs_in_32(self):
         T = H.linux_table(KO)
         recs = [json.loads(l) for l in open(AUDIT[0])]
