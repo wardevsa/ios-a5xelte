@@ -18,7 +18,9 @@ t "replace sustituye un valor existente" bash -c "python3 '$PL' -replace A -stri
 B=$SB/b.plist; python3 -I -c "import plistlib;plistlib.dump({'k':1},open('$B','wb'),fmt=plistlib.FMT_BINARY)"
 t "replace conserva el formato binario" bash -c "python3 '$PL' -replace k -integer 2 '$B' && head -c 6 '$B' | grep -q bplist"
 t "convert xml1 reescribe en XML" bash -c "python3 '$PL' -convert xml1 '$B' && head -c 5 '$B' | grep -q '<?xml' && python3 -I -c \"import plistlib;assert plistlib.load(open('$B','rb'))=={'k':2}\""
-t "convert binary1 vuelve a binario" bash -c "python3 '$PL' -convert binary1 '$B' && head -c 6 '$B' | grep -q bplist"
+t "convert binary1 no esta soportado (el script no lo usa)" bash -c "! python3 '$PL' -convert binary1 '$B'"
+t "float no esta soportado (el script no lo usa)" bash -c "! python3 '$PL' -replace k -float 1.5 '$B'"
+t "unittest de tipos y estructuras (test_plutil_lite.py)" python3 -I "$HERE/test_plutil_lite.py"
 t "tipo no soportado falla" bash -c "! python3 '$PL' -replace k -data abc '$B'"
 t "bool invalido falla" bash -c "! python3 '$PL' -replace k -bool maybe '$B'"
 t "integer invalido falla" bash -c "! python3 '$PL' -replace k -integer 1x '$B'"
@@ -39,7 +41,16 @@ plistlib.dump({'logicalScreenClass': '375w-812h@3x~iphone'}, open(r + '/Library/
 plistlib.dump({'logicalScreenClass': '414w-896h@3x~iphone'}, open(r + '/Library/Wallpaper/Collections/z-414w-896h/Wallpaper.plist', 'wb'), fmt=plistlib.FMT_XML)
 EOF
 P=$R/private/var/mobile/Library/Preferences
+snap(){ (cd "$R" && find . -mindepth 1 \( -type f -printf 'F %p %s ' -exec sha256sum {} \; -o -type d -printf 'D %p\n' \) | sed 's/  \.\/.*//' | sort); }
+snap > "$SB/tree.before"
 fakeroot -- bash -c "bash '$TUNE' '$R' 20H392 > '$SB/tune.out' 2>&1; echo \$? > '$SB/tune.rc'; stat -c '%u:%g %a' '$P/com.apple.springboard.plist' > '$SB/own.txt'; stat -c '%u:%g' '$R/private/var/containers' > '$SB/own2.txt'"
+snap > "$SB/tree.after"
+# entradas y salidas: lo creado, lo borrado y lo modificado deben ser EXACTAMENTE lo que el script documenta
+CH=$(diff "$SB/tree.before" "$SB/tree.after" | grep '^[<>]' | awk '{print $3}' | sort -u | tr '\n' ' ')
+EXPECTED="./Library/Wallpaper/Collections/x-375w-812h-y/Wallpaper.plist ./System/Library/xpc/launchd.plist ./private ./private/var ./private/var/containers ./private/var/containers/Bundle ./private/var/containers/Data ./private/var/containers/Data/System ./private/var/containers/Shared ./private/var/containers/Shared/SystemGroup ./private/var/containers/Temp ./private/var/mobile ./private/var/mobile/Library ./private/var/mobile/Library/Preferences ./private/var/mobile/Library/Preferences/com.apple.managedconfiguration.notbackedup.plist ./private/var/mobile/Library/Preferences/com.apple.migration.plist ./private/var/mobile/Library/Preferences/com.apple.purplebuddy.plist ./private/var/mobile/Library/Preferences/com.apple.springboard.plist "
+echo "cambiado: $CH" > "$SB/changed.txt"
+t "tune: el conjunto de rutas creadas/modificadas es exactamente el esperado (nada mas)" test "$CH" = "$(echo $EXPECTED | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+t "tune: sbin/launchd y el wallpaper de otra pantalla no cambian de contenido" bash -c "! echo '$CH' | grep -q -e './sbin/launchd' -e 'z-414w-896h'"
 t "tune: rc 0 (sin plutil de Apple: usa plutil_lite)" test "$(cat "$SB/tune.rc")" = 0
 t "tune: dice que completo" grep -q "tuning complete for build 20H392" "$SB/tune.out"
 t "tune: migration LastSystemVersion" bash -c "python3 -I -c \"import plistlib;assert plistlib.load(open('$P/com.apple.migration.plist','rb'))['LastSystemVersion']=='20H392'\""

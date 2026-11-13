@@ -2,12 +2,12 @@
 """plutil_lite: the few `plutil` calls that tools/herolte-tune-ios-root.sh makes, for Linux.
 
     plutil_lite.py -create xml1 FILE
-    plutil_lite.py -replace KEY -string|-bool|-integer|-float|-json VALUE FILE
-    plutil_lite.py -convert xml1|binary1 FILE
+    plutil_lite.py -replace KEY -string|-bool|-integer|-json VALUE FILE
+    plutil_lite.py -convert xml1 FILE
 
-Same behaviour as Apple's plutil for these calls: -replace keeps the file's current format (xml or binary),
--create writes an empty dictionary, -convert rewrites the file. KEY is a plain top-level key (no key paths: the
-tune script does not use them; a dotted key is refused instead of being guessed). Anything else exits non-zero.
+Only the calls tools/herolte-tune-ios-root.sh makes, nothing more. -replace keeps the file's current format
+(xml or binary), -create writes an empty dictionary and refuses to overwrite, -convert xml1 rewrites the file as XML.
+KEY is a plain top-level key (a dotted key is refused instead of being guessed). Anything else exits non-zero.
 """
 import json
 import os
@@ -61,11 +61,6 @@ def parse_value(kind, text):
             return int(text, 0)
         except ValueError:
             die("bad integer value: %r" % text)
-    if kind == "-float":
-        try:
-            return float(text)
-        except ValueError:
-            die("bad float value: %r" % text)
     if kind == "-json":
         try:
             return json.loads(text)
@@ -81,9 +76,9 @@ def main(argv):
             die("%s: file exists" % a[2])
         save(a[2], {}, plistlib.FMT_XML)
         return 0
-    if len(a) == 3 and a[0] == "-convert" and a[1] in ("xml1", "binary1"):
+    if len(a) == 3 and a[0] == "-convert" and a[1] == "xml1":
         data, _ = load(a[2])
-        save(a[2], data, plistlib.FMT_XML if a[1] == "xml1" else plistlib.FMT_BINARY)
+        save(a[2], data, plistlib.FMT_XML)
         return 0
     if len(a) == 5 and a[0] == "-replace":
         key, kind, text, path = a[1:]

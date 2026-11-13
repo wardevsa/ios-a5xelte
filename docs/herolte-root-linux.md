@@ -17,13 +17,31 @@ Estado a 2026-11-12. **No se ha construido el root todavía.** Lo que sí está 
 | ¿Qué sigue pidiendo `sudo`? | montar la imagen HFS+ (`mount -t hfsplus -o force,rw`), poblarla con los propietarios de iOS (`chown`) y ejecutar `tools/a5xelte-stage-ios-root.sh` / `tools/herolte-tune-ios-root.sh` como root. Sin `sudo` sin contraseña en este PC, esos pasos los tiene que lanzar una persona |
 | ¿Qué es específico de macOS en el pipeline? | `hdiutil` (crear y montar la imagen) y `plutil` (4 sitios de `herolte-tune-ios-root.sh`); `a5xelte-stage-ios-root.sh` no usa herramientas de macOS. En Linux: `mkfs.hfsplus -s -J` + `mount`, y un sustituto de `plutil` con `plistlib` |
 
-## Hecho el 2026-11-13: `plutil` ya no bloquea Linux
-- `tools/plutil_lite.py` hace las llamadas de `plutil` que usa el *tuning* (`-create xml1`, `-replace KEY -string|-bool|-integer|-float|-json`, `-convert xml1|binary1`),
-  conserva el formato (XML o binario) en `-replace` y escribe con fichero temporal + `os.replace`.
-- `tools/herolte-tune-ios-root.sh` usa `/usr/bin/plutil` si existe (macOS) y si no `plutil_lite.py`. Sin cambios de comportamiento en macOS.
-- `tools/test_tune_ios_root.sh`: 26 comprobaciones (plutil_lite y el *tuning* completo sobre un root falso bajo `fakeroot`, sin `sudo` y sin montar): propietarios 501/0,
-  modos, formatos, CommCenter fuera de `launchd.plist`, autorun añadido, fondos de otra pantalla intactos, rechazo sin root y con raíz no preparada. **26 PASS, 0 FALLA.**
-- **No probado:** contra un root real de iOS (hace falta montarlo) ni en el teléfono. Queda por escribir el sustituto Linux de `hdiutil` + poblado con propietarios y enlaces duros (paso 2).
+## Tuning del root en Linux (2026-11-13)
+**Qué hay**
+- `tools/plutil_lite.py`: solo las tres llamadas que hace `herolte-tune-ios-root.sh` (`-create xml1`; `-replace KEY -string|-bool|-integer|-json VALOR`; `-convert xml1`). Conserva el formato (XML o binario) en `-replace`, escribe con fichero temporal + `os.replace` y mantiene el modo; no hay claves con ruta, `-float`, `-data` ni `binary1`, y los fallos salen con código distinto de 0 sin tocar el fichero.
+- `tools/herolte-tune-ios-root.sh`: usa `/usr/bin/plutil` si existe (macOS, sin cambios) y si no `plutil_lite.py`.
+- Pruebas: `python3 -I tools/test_plutil_lite.py` (7: tipos, `bool` frente a `int`, estructuras, fechas, `data`, formatos, modo) y `bash tools/test_tune_ios_root.sh` (30: las anteriores más el *tuning* completo sobre un root falso bajo `fakeroot`, con la comparación de entradas y salidas del árbol: el conjunto de rutas creadas o modificadas es exactamente el documentado y `sbin/launchd` y los fondos de otras pantallas no cambian). Último resultado: 7 OK y 30 PASS, 0 FALLA.
+
+**Cómo ejecutarlo en Linux (con el root HFSX montado en lectura-escritura, ya poblado con `a5xelte-stage-ios-root.sh`)**
+```
+sudo bash tools/herolte-tune-ios-root.sh /ruta/del/montaje 20H392
+```
+**Qué necesita privilegios reales y qué no**
+| Operación | ¿Root real? |
+|---|---|
+| `7z x` de los `.dmg`, `7z l -slt` (manifiesto de propietarios/enlaces), `mkfs.hfsplus -s -J` sobre un **fichero** | no |
+| `plutil_lite.py` y las pruebas de arriba | no |
+| `herolte-tune-ios-root.sh` sobre un árbol falso | no, pero bajo `fakeroot` |
+| `mount -t hfsplus -o force,rw` de la imagen | **sí** |
+| poblar con los propietarios de iOS (`chown` a 0 y 501 persistentes en el disco), enlaces duros y modos | **sí** |
+| ejecutar el *tuning* sobre el montaje real (exige `EUID 0` y hace `chown 501:501`) | **sí** |
+
+**Limitaciones (fakeroot no equivale a root real)**
+- `fakeroot` solo *simula* `chown`/`stat` dentro de su proceso: nada de propietarios queda escrito en el disco. Las pruebas comprueban que el script pide los propietarios correctos (501:501, modo 600, 0:0 en contenedores), no que el sistema de ficheros los guarde.
+- No se prueba el controlador `hfsplus` de Linux (propietarios, enlaces duros, xattrs, `nodecompose`, normalización de nombres, journal), ni un root real de iOS (nombres Unicode, `launchd.plist` real, `Wallpaper.plist` reales), ni que iOS arranque desde el resultado.
+- El `launchd.plist` y los fondos del test son sintéticos: el script exige que haya un job de CommCenter y falla si no lo hay.
+- `plutil_lite` no es un `plutil` completo; si el script empieza a usar otra opción, fallará de forma explícita y habrá que añadirla.
 
 ## Camino propuesto (sin coste de nube)
 1. Extraer los tres `.dmg` con `7z x` a directorios y guardar el manifiesto de propietarios/enlaces de `7z l -slt` (sin root).
