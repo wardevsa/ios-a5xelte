@@ -148,7 +148,7 @@ class Tasks(Base):
         self.assertEqual(gov.tier_of_actions(gov.load(self.d, 'policy.toml'), ['inventada']), 'X')              # fail-closed, not green
 
     def test_blocked_without_reason_and_ready_with_reason(self):
-        self.t('T-0003', 'blocked_on', None); self.assertErr('bloqueada sin blocked_on')
+        self.t('T-0004', 'blocked_on', None); self.assertErr('bloqueada sin blocked_on')
         self.t('T-0022', 'status', '"ready"'); self.t('T-0022', 'blocked_on', '"algo"'); self.assertErr('está ready pero declara blocked_on')   # no depende del estado real
 
     def test_c_action_in_progress_without_authorization(self):
@@ -175,7 +175,7 @@ class Tasks(Base):
 
     def test_done_with_unfinished_dependency_and_in_progress_with_unfinished_dependency(self):
         self.t('T-0002', 'depends_on', '["T-0004"]'); self.assertErr('done con dependencia T-0004 sin terminar')
-        self.t('T-0008', 'status', '"in_progress"'); self.t('T-0008', 'depends_on', '["T-0003"]'); self.assertErr('en curso pero su dependencia T-0003 no está done')
+        self.t('T-0008', 'status', '"in_progress"'); self.t('T-0008', 'depends_on', '["T-0006"]'); self.assertErr('en curso pero su dependencia T-0006 no está done')
 
     def test_yellow_task_cannot_become_done_without_a_recorded_review(self):
         self.t('T-0016', 'status', '"done"'); self.t('T-0016', 'depends_on', '[]'); self.t('T-0016', 'requires_decisions', '[]'); self.t('T-0016', 'blocked_on', None)
