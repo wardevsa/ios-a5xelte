@@ -384,3 +384,18 @@ size = 10000
 immutable = true
 note = "Espacio libre en ext4: 5244 -> 30360 MiB. Los 224 sandboxes siguen en el TAR E-0011."
 
+[[evidence]]
+id = "E-0027"
+title = "rev2: ronda 2 de mutación completa (49 mutantes, con control de disco): 46 detectados, 3 sobreviven (M16 y N02 equivalentes conocidos; R07 sin clasificar: hueco de cobertura)"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/rev2-mutation-ronda2-summary-20261113.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "ee1823dce9bb5cac715b689642e62e16827a15fb50094200bd0904856ac18f3a"
+size = 8410
+immutable = true
+note = "Mutación sobre r2_lib.sh de rev2 con la batería de stubs (sin montar nada, sin sudo). Salida íntegra en rev2-mutation-ronda2-stdout-20261113.txt. Sustituye a la ronda cortada por disco lleno (sus 'SOBREVIVE' eran artefactos). No valida R2 ni autoriza nada."
+

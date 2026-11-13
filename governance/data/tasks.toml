@@ -53,13 +53,13 @@ acceptance = "fsck_hfs -n rc=0 sobre B/C con nombres en forma XNU, hashes de las
 [[task]]
 id = "T-0005"
 title = "rev2: ronda 2 de mutación (49 mutantes) sobre las pruebas reforzadas, con presupuesto de disco"
-status = "ready"
+status = "done"
 priority = 4
 owner = "ingeniero"
 depends_on = []
 actions = ["host-tests", "pc-implementation", "local-commit"]
-acceptance = "Cada mutante clasificado DETECTADO / EQUIVALENTE DEMOSTRADO / SOBREVIVE con evidencia; N25 en el resumen final; 5 baterías consecutivas; sin llenar el disco."
-evidence = ["E-0014"]
+acceptance = "Hecho (E-0027): 49 mutantes clasificados; 46 DETECTADOS (incluido N25), 2 SOBREVIVEN equivalentes conocidos (M16, N02) y 1 SOBREVIVE sin clasificar (R07_sin_espera_de_desasociacion): hueco de cobertura abierto en T-0027. No son 5 baterías consecutivas nuevas: las 5 de la ronda 1 (battery5-*) siguen siendo la referencia."
+evidence = ["E-0014", "E-0027"]
 resume = "Trabajo en scratchpad t04r/r2/v2/rev2 (efímero; copia en E-0014). Pruebas nuevas ya escritas (131 PASS por batería). La ronda 2 anterior se cortó por disco lleno: lanzar con comprobación de espacio (>= 12 GB libres) y sin conservar sandboxes de baterías ya resumidas fuera del archivo."
 
 [[task]]
@@ -289,4 +289,14 @@ authorization_ref = "D-0021"
 actions = ["privileged-or-mount", "pc-implementation", "host-tests"]
 blocked_on = "la autorización roja ya existe (D-0021) pero la ejecución es IMPOSIBLE hoy: (1) faltan ~25 GiB libres en ext4 (quedan ~7 GiB; imagen ~12 GiB reales + árboles de staging), (2) los árboles de staging (r3/work) ya no están en el scratchpad (archivados en NTFS, E-0011..E-0017), (3) apply_meta_img/stage_links/verify_meta/hfsx_check buscan el nombre del manifiesto: sin tocarlos la imagen saldría inconsistente. Ver el informe al Director"
 acceptance = "Imagen con nombre nuevo con 30 nombres en forma XNU y los 2 de U+0E33 excluidos (KI-0006); hashes de la anterior intactos; hfsx_check esperando forma XNU; evidencias nuevas con SHA-256."
+
+[[task]]
+id = "T-0027"
+title = "rev2: cubrir el mutante R07 (sin espera de desasociación) que sobrevive a la batería, o demostrar que es equivalente"
+status = "ready"
+priority = 6
+owner = "ingeniero"
+depends_on = ["T-0005"]
+actions = ["host-tests", "pc-implementation", "local-commit"]
+acceptance = "Una prueba nueva que falle con R07 y pase con rev2, o una demostración de equivalencia; sin tocar el rev2 aprobado (nueva revisión con sus sumas) y sin ejecutar el runner real ni montar nada."
 
