@@ -1,5 +1,6 @@
 # Working on the HEROLTE port (Galaxy S7 SM-G930F, Exynos 8890)
 
+- **Governance (proposal D-0001, pending ratification):** read `governance/README.md` first. It defines roles, autonomy levels, evidence and handoff rules and the current state/task queue; `python3 tools/governance.py check` validates it. Nothing there overrides the rules below.
 - Read `HEROLTE_PROGRESS.md` and `docs/herolte-bringup.md` first; record new device evidence in the former. The A5XELTE files below are the reference implementation this port adapts.
 - XNU trials may write only BOOT (`/dev/block/platform/155a0000.ufs/by-name/BOOT`). Keep the stock BOOT and a TWRP backup of EFS (IMEI) off the phone; never write EFS, RECOVERY or the bootloader partitions. Confirm every other partition write with the user first.
 

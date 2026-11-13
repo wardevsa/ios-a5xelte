@@ -1,0 +1,28 @@
+<!-- GENERADO por tools/governance.py render desde governance/data/*.toml. NO EDITAR A MANO: se pierde en el siguiente render. -->
+
+# Índice de evidencias
+
+Evidencia = artefacto cuyo hash respalda una afirmación. Las **inmutables** no se editan, mueven ni borran; se añaden versiones nuevas con otro nombre. Verificar: `python3 tools/governance.py evidence [--all]`.
+
+| ID | Tipo | Título | Ubicación | Ruta | SHA-256 | Inmutable |
+|---|---|---|---|---|---|---|
+| E-0001 | image | Candidata N2 de solo lectura (imagen BOOT, run2): 47-50 PASS, 0 FAIL | device-day-kit | `~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.img` | `26a39560ed963c89…` | sí |
+| E-0002 | artifact | Payload SWEETXNU de la candidata N2 | device-day-kit | `~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.payload.bin` | `0bdbc2021437c722…` | sí |
+| E-0003 | log | Procedencia de la candidata N2 (entradas con SHA-256, comando, commit de herramientas) | device-day-kit | `~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.PROVENANCE.txt` | `a337dfb2b1437663…` | sí |
+| E-0004 | result | Verificación independiente de la candidata N2 (50 PASS, 0 FAIL, salida 0) | device-day-kit | `~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.verify-independent.txt` | `8c9420a62e76f5c9…` | sí |
+| E-0005 | result | Resultados consolidados de la ejecución N2 run2 (hashes, argumentos efectivos, originales, preflight) | device-day-kit | `~/HackiOS/builds/device-day/boot-candidates-n2-run2/RESULTS-run2.txt` | `d9f2a488c611bd28…` | sí |
+| E-0006 | result | Preflight del kit y del kernel DROP v2 (14 correctas, 1 aviso, 0 fallos) | device-day-kit | `~/HackiOS/builds/device-day/boot-candidates-n2-run2/preflight-run2.txt` | `af950321306fb0d4…` | sí |
+| E-0007 | artifact | Kernel con DROP v2 (CI run 43223873690, 0334 aplicado) | device-day-kit | `~/HackiOS/builds/device-day/artifacts/kernel-0334-v2-herolte-drop-v2/kernel.development.herolte` | `e678b4545f72bdec…` | sí |
+| E-0008 | artifact | Cargador xnu_boot.Image compilado con clang (de conveniencia, no el validado con GCC) | device-day-kit | `~/HackiOS/builds/device-day/loader-clang/xnu_boot.Image` | `0a68abbd2d2bd186…` | sí |
+| E-0009 | image | BOOT original de Samsung copiado del teléfono (base de las candidatas) | host | `~/HackiOS/backups/device-herolte/2026-11-12/BOOT.img` | `adc519d0f16fd314…` | sí |
+| E-0010 | image | Imagen de laboratorio HFSX poblada lab-full.img.partial (verificación FAILED por 32 nombres Unicode) | host-volatile | `/tmp/claude-1000/-home-pioxi-HackiOS-repos-wardevsa-ios-a5xelte/2013331e-f694-44e9-97ca-fda8e240f915/scratchpad/t04r/image/lab-full.img.partial` | `e724f9818a28d2c9…` | sí |
+| E-0011 | archive | Archivo TAR de 224 sandboxes de las baterías R2 y las carpetas tests/ (24,1 GiB) | ntfs-archive | `/media/pioxi/F20C31440C31055F/IOS-S7-archive/01-test-sandboxes/r2-v2-tests-sandboxes-20261113.tar` | `ff4f4f51bd3dce4c…` | sí |
+| E-0012 | archive | Archivo TAR de t02/ex (extracción de os.dmg), 6 861 de 6 862 ficheros | ntfs-archive | `/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/t02-ex.tar` | `16c874786207347c…` | sí |
+| E-0013 | archive | Archivo TAR de t04r/r3/work (extracción completa os/systemos/appos, 184 026 ficheros) | ntfs-archive | `/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/t04r-r3-work.tar` | `46b0305cad193037…` | sí |
+| E-0014 | archive | Copia de herramientas y evidencias del laboratorio T04-R (pipeline, auditoría, rev2 sin sandboxes) | ntfs-archive | `/media/pioxi/F20C31440C31055F/IOS-S7-archive/06-session-backups/t04r-tools-evidence-20261113.tar` | `44134c72387889a6…` | sí |
+| E-0015 | archive | Material de análisis Unicode (tabla de Linux extraída, arnés, JSON) | ntfs-archive | `/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/unicode-analysis-20261113.tar` | `5eabf6e2e5ec14bd…` | sí |
+| E-0016 | archive | Comparación Unicode en tres niveles, primera pasada (con el filtro por bytes defectuoso, marcada) | ntfs-archive | `/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/unicode-3niveles-20261113.tar` | `80d035f163ff32d7…` | sí |
+| E-0017 | archive | Comparación Unicode en tres niveles v3 (unidades UTF-16, 7 tablas XNU vs kernel, 24/24 comprobaciones) | ntfs-archive | `/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/unicode-3niveles-v3-20261113.tar` | `839b4e2714cd8f6f…` | sí |
+| E-0018 | log | Manifiesto SHA-256 del kit del día del dispositivo (199 ficheros) | device-day-kit | `~/HackiOS/builds/device-day/MANIFEST.sha256` | `65eef0fbb7436fb9…` | sí |
+| E-0019 | result | Resultados del verificador sobre todas las candidatas (la vigente 47 PASS; las anteriores, 3 o 4 FAIL por no llevar ufsrw=0 etc.) | device-day-kit | `~/HackiOS/builds/device-day/boot-candidates-n2/verify-all-20261113.txt` | `ca05394da28d2659…` | sí |
+| E-0020 | doc | Política de almacenamiento (ext4 activo, NTFS archivo) | ntfs-archive | `/media/pioxi/F20C31440C31055F/IOS-S7-archive/05-manifests-and-hashes/POLITICA_ALMACENAMIENTO.md` | `e38ac5d2a8687382…` | no |

@@ -1,0 +1,216 @@
+# Cola de tareas (fuente de verdad; la vista es TASKS.md y ACTIVE_TASK.md, generadas).
+# Estados: ready (se puede empezar), blocked (necesita algo que no depende del ingeniero: ver blocked_on), in_progress (como máximo una),
+#          in_review (hecha, espera revisión de quien indica la política), done, cancelled.
+# Una tarea con acciones de nivel C solo puede estar in_progress/in_review/done si authorization_ref apunta a una decisión APPROVED del director.
+# priority: 1 = la más urgente. depends_on: ids de tareas que deben estar done.
+
+[[task]]
+id = "T-0001"
+title = "Misión 0: implantar el sistema de gobierno de ingeniería autónoma (governance/, tools/governance.py, puntero en AGENTS.md)"
+status = "in_review"
+priority = 1
+owner = "ingeniero"
+depends_on = []
+actions = ["docs-write", "pc-implementation", "local-commit", "governance-maintain", "policy-change"]
+acceptance = "python3 tools/governance.py check sin errores; python3 tools/test_governance.py en OK; otro modelo puede incorporarse con README.md + HANDOFF.md; D-0001 ratificada o rechazada por el jefe técnico y el director."
+evidence = []
+resume = "Esperando revisión del jefe técnico (informe de transferencia en HANDOFF.md) y ratificación del director (D-0001, cambio de AGENTS.md)."
+
+[[task]]
+id = "T-0002"
+title = "Auditoría Unicode HFS+ (XNU frente a Linux): causa, tabla de los 32 nombres, corrección propuesta"
+status = "done"
+priority = 2
+owner = "ingeniero"
+depends_on = []
+actions = ["read-analysis", "docs-write", "pc-implementation", "local-commit", "archive-copy"]
+acceptance = "Causa demostrada con código y datos; resultados reproducibles con hashes; imagen de laboratorio intacta. Cumplida: docs/herolte-unicode-hfsplus.md, 24/24 comprobaciones, 16+22 pruebas."
+evidence = ["E-0010", "E-0015", "E-0016", "E-0017"]
+
+[[task]]
+id = "T-0003"
+title = "Decidir el bloqueo Unicode: aplicar la corrección 1-5 (nodecompose + nombres en forma XNU), la alternativa (B) o la (C)"
+status = "blocked"
+priority = 3
+owner = "director"
+depends_on = ["T-0002"]
+actions = ["architecture-change"]
+blocked_on = "decisión del director (D-0006 mantiene el generador sin cambios hasta entonces)"
+acceptance = "Decisión APPROVED en decisions.toml que elija la opción; si es la 1-5, requiere antes el resultado de T-0004."
+
+[[task]]
+id = "T-0004"
+title = "R2: experimento nodecompose con imágenes de 512 MiB A/B/C (monta imágenes, sudo)"
+status = "blocked"
+priority = 6
+owner = "ingeniero"
+depends_on = ["T-0005", "T-0006"]
+actions = ["privileged-or-mount"]
+blocked_on = "autorización explícita del director (D-0005) y cierre de T-0005/T-0006"
+acceptance = "fsck_hfs -n rc=0 sobre B/C con nombres en forma XNU, hashes de las imágenes originales intactos, evidencias nuevas con nombre nuevo."
+
+[[task]]
+id = "T-0005"
+title = "rev2: ronda 2 de mutación (49 mutantes) sobre las pruebas reforzadas, con presupuesto de disco"
+status = "ready"
+priority = 4
+owner = "ingeniero"
+depends_on = []
+actions = ["host-tests", "pc-implementation", "local-commit"]
+acceptance = "Cada mutante clasificado DETECTADO / EQUIVALENTE DEMOSTRADO / SOBREVIVE con evidencia; N25 en el resumen final; 5 baterías consecutivas; sin llenar el disco."
+evidence = ["E-0014"]
+resume = "Trabajo en scratchpad t04r/r2/v2/rev2 (efímero; copia en E-0014). Pruebas nuevas ya escritas (131 PASS por batería). La ronda 2 anterior se cortó por disco lleno: lanzar con comprobación de espacio (>= 12 GB libres) y sin conservar sandboxes de baterías ya resumidas fuera del archivo."
+
+[[task]]
+id = "T-0006"
+title = "rev2: revisión independiente nueva, PINNED/APPROVED.sha256 como artefactos de revisión e informe A-I"
+status = "blocked"
+priority = 5
+owner = "ingeniero"
+depends_on = ["T-0005"]
+actions = ["read-analysis", "docs-write", "host-tests", "local-commit"]
+blocked_on = "T-0005"
+acceptance = "Informe A-I con veredicto R2_REV2_VALIDADO o NO_VALIDADO; el ingeniero no autoriza R2."
+
+[[task]]
+id = "T-0007"
+title = "Retirar los originales de 224 sandboxes (~24 GiB) ya archivados y verificados"
+status = "blocked"
+priority = 12
+owner = "ingeniero"
+depends_on = []
+actions = ["delete-or-overwrite"]
+blocked_on = "autorización explícita del director (borrado); copia verificada en E-0011"
+acceptance = "sha256 -c del TAR correcto antes y después; solo los sandboxes-*; results/battery/mutants intactos; espacio libre medido."
+evidence = ["E-0011"]
+
+[[task]]
+id = "T-0008"
+title = "S7GE_ABI.md: el ABI real de HeroGPU (selectores 0-7), qué valida el kernel y la brecha frente al §23 de S7GE"
+status = "ready"
+priority = 3
+owner = "ingeniero"
+depends_on = []
+actions = ["read-analysis", "docs-write", "local-commit"]
+acceptance = "Cada selector con parámetros, validaciones presentes/ausentes y riesgos; brecha frente a handles con generación, validación de jc_va y entitlements; no cambia código."
+
+[[task]]
+id = "T-0009"
+title = "Plan de integración con origin/herolte: aplicabilidad de sus 0332-0334 sobre nuestra rama y propuesta de renumeración (informe)"
+status = "ready"
+priority = 2
+owner = "ingeniero"
+depends_on = []
+actions = ["read-analysis", "docs-write", "host-tests", "local-commit"]
+acceptance = "Informe con qué parches de origin/herolte aplican limpios sobre herolte-drop-v2 (usando la herramienta del CI sin publicar), qué colisiona y orden de renumeración; no renumera nada."
+
+[[task]]
+id = "T-0010"
+title = "S7GE_HARDWARE.md: mapa de registros y erratas T880 r2p0 con el checklist de la auditoría Panfrost, y propuesta de nodo de GPU en el ADT"
+status = "ready"
+priority = 7
+owner = "ingeniero"
+depends_on = []
+actions = ["read-analysis", "docs-write", "local-commit"]
+acceptance = "Cada punto del checklist marcado verificado / no verificado con referencia; el nodo ADT propuesto solo en documento."
+
+[[task]]
+id = "T-0011"
+title = "Auditoría de licencias de lo que se pretende reutilizar (Mesa, metal2vulkan, hakios-gl, A5XELTE)"
+status = "ready"
+priority = 8
+owner = "ingeniero"
+depends_on = []
+actions = ["read-analysis", "docs-write", "local-commit"]
+acceptance = "Tabla componente / licencia / evidencia / compatibilidad con APSL-2.0 y MIT; lo no verificado queda marcado."
+
+[[task]]
+id = "T-0012"
+title = "Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP"
+status = "blocked"
+priority = 9
+owner = "director"
+depends_on = ["T-0013"]
+actions = ["device-read", "device-write-boot"]
+blocked_on = "autorización explícita del director (D-0010); candidata y verificación en E-0001..E-0006"
+acceptance = "Imagen con SHA-256 y verificador PASS nombrada en la autorización; copias de BOOT y EFS fuera del teléfono; resultado registrado como evidencia del dispositivo, separado de las comprobaciones del PC."
+evidence = ["E-0001", "E-0003", "E-0004", "E-0009"]
+
+[[task]]
+id = "T-0013"
+title = "Decidir el cargador de las pruebas: el de clang (conveniencia) o compilar con el GCC aarch64 de Arm"
+status = "blocked"
+priority = 9
+owner = "director"
+depends_on = []
+actions = ["host-config-change"]
+blocked_on = "decisión del director (autorizar ejecutar el GCC descargado o compilarlo él; aviso del preflight)"
+acceptance = "Decisión APPROVED y, si procede, cargador GCC construido, verificado y añadido a evidence.toml."
+evidence = ["E-0008"]
+
+[[task]]
+id = "T-0014"
+title = "Decidir qué argumento quitar de la línea diaria (604/607 caracteres) para poder añadir herodrop=0 y herosplash=1"
+status = "blocked"
+priority = 10
+owner = "director"
+depends_on = []
+actions = ["architecture-change"]
+blocked_on = "decisión del director o del jefe técnico"
+acceptance = "Decisión APPROVED; la línea resultante verificada con herolte-verify-boot.py."
+
+[[task]]
+id = "T-0015"
+title = "Root de iOS de 20 GiB válido y verificable (fsck_hfs sin errores, nombres coherentes con XNU)"
+status = "blocked"
+priority = 11
+owner = "ingeniero"
+depends_on = ["T-0003", "T-0004"]
+actions = ["root-generator-change"]
+blocked_on = "T-0003 (decisión) y T-0004 (R2)"
+acceptance = "Imagen nueva (la de laboratorio se conserva) con verify_full en PASS, firma HX, tamaño <= 21566 MiB; nada se escribe en el teléfono."
+
+[[task]]
+id = "T-0016"
+title = "Aplicar la renumeración de parches y fusionar con origin/herolte (si el jefe técnico aprueba D-0008)"
+status = "blocked"
+priority = 9
+owner = "ingeniero"
+depends_on = ["T-0009"]
+actions = ["patch-series-change", "local-commit"]
+blocked_on = "decisión: revisión del jefe técnico de D-0007 y D-0008 (PROPOSED)"
+acceptance = "Serie sin colisiones; ci_check aplicable; kernel candidato reconstruido y candidata N2 reverificada con nombre nuevo."
+
+[[task]]
+id = "T-0017"
+title = "Publicar las ramas de trabajo (git push) tras la revisión del gobierno"
+status = "blocked"
+priority = 13
+owner = "ingeniero"
+depends_on = ["T-0001"]
+actions = ["publish"]
+blocked_on = "autorización explícita del director (nombrando rama y remoto)"
+acceptance = "Solo las ramas autorizadas; sin datos privados ni binarios de Apple."
+
+[[task]]
+id = "T-0018"
+title = "Arreglar tools/validate-repo.py (huecos y duplicados en la numeración de parches, M3 de la auditoría)"
+status = "blocked"
+priority = 14
+owner = "ingeniero"
+depends_on = ["T-0016"]
+actions = ["pc-implementation", "patch-series-change", "local-commit"]
+blocked_on = "T-0016 (la numeración definitiva de la serie)"
+acceptance = "validate-repo.py sale con 0 y se añade a las suites de regresión."
+
+[[task]]
+id = "T-0019"
+title = "Archivar en el NTFS la imagen de laboratorio lab-full.img.partial (y os.apfs): hoy solo existen en /tmp, que se pierde al reiniciar"
+status = "blocked"
+priority = 4
+owner = "ingeniero"
+depends_on = []
+actions = ["archive-copy"]
+blocked_on = "confirmación del director: ambos ficheros se reservaron a su decisión en el informe de almacenamiento (la copia no los mueve ni toca)"
+acceptance = "Copia dispersa (--sparse) con compare y SHA-256 igual al registrado en E-0010; origen intacto; entrada nueva en evidence.toml."
+evidence = ["E-0010"]
