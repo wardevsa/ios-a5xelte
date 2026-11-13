@@ -1,7 +1,7 @@
 # Estado actual de IOS S7
 
-<!-- state-commit: 0def655 -->
-**Verificado el 2026-11-13 sobre el commit `0def655`** (el cierre de T-0009/T-0008 y la batería final van en los commits siguientes; `check` avisará de la distancia). `python3 tools/governance.py check` avisa si HEAD se ha alejado de este commit. Cuando el panorama cambie, actualiza este fichero **y** la marca de arriba.
+<!-- state-commit: 8b596ba -->
+**Verificado el 2026-11-13 sobre el commit `8b596ba`** (después solo este relevo H-0005 y el cierre de T-0005; `check` avisará de la distancia).
 
 ## 1. En una frase
 Todo el trabajo hecho hasta hoy es **en el PC**: hay una candidata BOOT N2 de solo lectura verificada, un pipeline de root portable a Linux con una verificación fallida por 32 nombres Unicode, herramientas probadas y un estudio de la arquitectura gráfica S7GE. **Nada se ha escrito ni probado en el Galaxy S7** (BOOT original de Samsung, Android intacto).

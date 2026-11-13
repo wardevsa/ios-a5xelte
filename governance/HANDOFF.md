@@ -8,7 +8,16 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0004 — T-0008 cerrada (ABI real de `HeroGPU`), 2026-11-13
+## Relevo vigente: H-0005 — el Director aprueba el gobierno; Unicode: herramienta lista, imagen pendiente (2026-11-13)
+- **Decisiones del Director (sus palabras en `approval_ref`):** D-0001 (gobierno) y D-0017 (Unicode) **APPROVED**; D-0018 levanta la congelación del generador (D-0006 sustituida) solo para esto; **D-0019**: la jefatura técnica (Qwen) decide lo técnico en su nombre. **No** autoriza por sí sola acciones rojas ni toca reglas X: el S7 sigue prohibido hasta una autorización roja explícita.
+- **Hecho:** T-0013 (cargador clang, D-0016), T-0003, T-0010 (`S7GE_HARDWARE.md`: tablas de página de AS0 escribibles desde un job, por lectura de código), T-0011 (`S7GE_LICENCIAS.md`), T-0022, T-0024 (`xnu_names_stage.py`; 30 de 32 nombres se arreglan solo renombrando, 2 con U+0E33 necesitan `nodecompose`).
+- **En curso:** T-0005 (mutación rev2 ronda 2, en segundo plano en el scratchpad; guardia de disco 3 GiB; salida `t0005_ronda2b_out.txt`). Si el proceso ya no existe, ver `mutation_summary3-*` más reciente y registrar el resultado.
+- **Bloqueado a la espera de una autorización roja:** T-0025 (imagen nueva; monta HFS+), T-0004 (R2).
+- **Siguiente (verde):** `python3 tools/governance.py next`.
+
+---
+
+## Relevo anterior: H-0004 — T-0008 cerrada (ABI real de `HeroGPU`), 2026-11-13
 **Rama `herolte-drop-v2`**, worktree `~/HackiOS/repos/wardevsa-ios-a5xelte-v2`, sin push; árbol principal del responsable intacto.
 - **Hecho:** T-0008 → `done`. `docs/S7GE_ABI.md`: los 8 selectores de `HeroGPU`, qué valida el kernel y qué no, y la brecha frente a S7GE. **Hallazgos graves (nivel de código leído, no probados en hardware):** una sola address space **AS0 compartida por todos los clientes**; `Submit` acepta la VA de la cadena de jobs **sin validarla**; `SurfaceBO` busca por id **globalmente**; **ningún entitlement** ni presupuesto de memoria; handles `índice+1` reutilizables. Lo bueno: se desmapea de la GPU antes de liberar; los jobs están serializados; la memoria se pone a cero; no se exponen MMIO ni direcciones físicas.
 - **Propuesta (no aplicada):** **D-0015** y la tarea bloqueada **T-0023** (aislamiento de clientes). Antes, T-0010: auditar qué mapea AS0.
