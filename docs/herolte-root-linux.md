@@ -43,6 +43,13 @@ sudo bash tools/herolte-tune-ios-root.sh /ruta/del/montaje 20H392
 - El `launchd.plist` y los fondos del test son sintéticos: el script exige que haya un job de CommCenter y falla si no lo hay.
 - `plutil_lite` no es un `plutil` completo; si el script empieza a usar otra opción, fallará de forma explícita y habrá que añadirla.
 
+## Staging del root en Linux (2026-11-13)
+`tools/a5xelte-stage-ios-root.sh` tenía tres dependencias de macOS que lo rompían en Linux: `stat -f %u` (en Linux es el estado del sistema de ficheros), `mount | grep " on DIR (hfs,"` y `/usr/bin/rsync --extended-attributes`.
+Ahora las resuelve `tools/ios-root-portable.sh` (`r_uid`, `r_is_hfs_mount` leyendo `/proc/self/mounts`, `r_rsync_xattr_flag`, `r_rsync_bin`); en macOS el comportamiento es el mismo (misma orden, mismo `rsync` de Apple).
+- `bash tools/test_stage_portable.sh`: **20 PASS, 0 FALLA**. La biblioteca (incluida la comprobación del montaje contra una tabla falsa, que solo se acepta con `R_TESTING=1`) y el staging completo sobre árboles falsos bajo `fakeroot`: propietario 0 de `launchd`, `db/diagnostics` 272:272 modo 751, `systembag.kb` 0 modo 600, enlaces duros y simbólicos, la caché de dyld enlazada con la de los cryptexes (mismo inodo), apps y `LinguisticData` omitidas, y negativas (segunda ejecución sobre una raíz con `launchd`, destino que no es HFS montado, sin root).
+- **Diferencia de fondo que sigue abierta:** el script exige que `OS`/`SystemOS` estén en un montaje con propietarios (los de Apple, uid 0). En macOS lo da `hdiutil`; en Linux `7z x` como usuario deja todo con tu uid y el script se niega ("mounted without owners"). Hay que aplicar los propietarios del manifiesto de `7z l -slt` como root antes (es lo que hace `apply_meta` en el experimento T04-R) o extraer como root. Eso **no está probado con un root real**.
+- Sigue sin probarse: el controlador `hfsplus` real (nombres, `nodecompose`, enlaces duros a gran escala, journal) y que iOS arranque; ver el experimento T04-R2.
+
 ## Camino propuesto (sin coste de nube)
 1. Extraer los tres `.dmg` con `7z x` a directorios y guardar el manifiesto de propietarios/enlaces de `7z l -slt` (sin root).
 2. `mkfs.hfsplus -s -J` sobre un fichero de 20 GiB; **con `sudo`**: montarlo y copiar con los propietarios del manifiesto y los enlaces duros.
