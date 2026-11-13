@@ -108,7 +108,7 @@ evidence = ["E-0024"]
 [[task]]
 id = "T-0010"
 title = "S7GE_HARDWARE.md: mapa de registros y erratas T880 r2p0 con el checklist de la auditoría Panfrost, y propuesta de nodo de GPU en el ADT"
-status = "ready"
+status = "done"
 priority = 7
 owner = "ingeniero"
 depends_on = []
