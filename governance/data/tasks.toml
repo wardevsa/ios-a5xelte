@@ -267,12 +267,23 @@ acceptance = "Parches nuevos (rango 0400+ si D-0007 se aprueba) con un banco de 
 [[task]]
 id = "T-0024"
 title = "Aplicar la corrección Unicode (D-0017): el generador entrega a Linux los nombres ya en forma XNU (hfs_component), un único punto de traducción, imagen NUEVA con nombre nuevo"
-status = "ready"
+status = "done"
 priority = 2
 owner = "ingeniero"
 depends_on = ["T-0003"]
 actions = ["pc-implementation", "host-tests", "local-commit"]
 requires_decisions = ["D-0017", "D-0018"]
-acceptance = "Cambio en las herramientas del root con pruebas de host (sin montar, sin sudo); los 32 nombres coinciden con la tabla de XNU según hfs_names; una imagen nueva con nombre nuevo SOLO si se puede generar sin montar ni sudo (si no, queda como tarea roja con su solicitud); la imagen anterior y sus hashes intactos; informe en docs/ con los resultados y lo no verificado."
+acceptance = "Hecho: tools/hfsplus-names/xnu_names_stage.py + 8 pruebas; medida sobre los 32 nombres (30 resueltos solo renombrando, 2 con U+0E33 necesitan nodecompose); informe docs/herolte-unicode-aplicacion.md. La imagen nueva es T-0025 (roja)."
 resume = "Ver docs/herolte-unicode-hfsplus.md §3 puntos 2-5 (el punto 1, nodecompose en attach(), es de montaje y NO entra: D-0018 no autoriza montar ni R2). Herramientas del laboratorio en scratchpad t04r (copia en E-0014)."
+
+[[task]]
+id = "T-0025"
+title = "Generar la imagen de laboratorio NUEVA con los nombres en forma XNU (monta HFS+: acción roja) y verificarla"
+status = "blocked"
+priority = 3
+owner = "ingeniero"
+depends_on = ["T-0024"]
+actions = ["privileged-or-mount", "pc-implementation", "host-tests"]
+blocked_on = "autorización roja del Director que nombre privileged-or-mount, la imagen y los comandos (D-0017/D-0018 no la dan) y decisión sobre los 2 nombres con U+0E33 (nodecompose o excluirlos)"
+acceptance = "Imagen con nombre nuevo, hashes de la anterior intactos, hfsx_check esperando forma XNU, fsck_hfs -n rc=0 si procede, evidencias nuevas con SHA-256."
 
