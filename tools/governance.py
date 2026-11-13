@@ -207,7 +207,7 @@ def _check(root, use_git=True, strict=False):
                 if ab == d.get('proposer') == 'ingeniero': E('%s: el ingeniero no aprueba sus propias propuestas' % i)
             for k in ('approval_date', 'approval_ref'):
                 if not d.get(k): E('%s: APPROVED sin %s' % (i, k))
-        elif d.get('approved_by'): E('%s: tiene aprobador pero estado %s' % (i, d.get('status')))
+        elif d.get('approved_by') and d.get('status') != 'SUPERSEDED': E('%s: tiene aprobador pero estado %s' % (i, d.get('status')))   # una decisión aprobada y luego sustituida conserva su aprobador (historia); ya no autoriza nada
     for i, d in dec.items():
         for s in lst(d.get('supersedes')):
             if s not in dec: E('%s supersede una decisión inexistente %s' % (i, s))

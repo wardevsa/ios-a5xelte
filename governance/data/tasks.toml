@@ -30,13 +30,14 @@ evidence = ["E-0010", "E-0015", "E-0016", "E-0017"]
 [[task]]
 id = "T-0003"
 title = "Decidir el bloqueo Unicode: aplicar la corrección 1-5 (nodecompose + nombres en forma XNU), la alternativa (B) o la (C)"
-status = "blocked"
+status = "done"
 priority = 3
 owner = "director"
 depends_on = ["T-0002"]
 actions = ["architecture-change"]
-blocked_on = "decisión del director (D-0006 mantiene el generador sin cambios hasta entonces)"
-acceptance = "Decisión APPROVED en decisions.toml que elija la opción; si es la 1-5, requiere antes el resultado de T-0004."
+acceptance = "Decidido por el Director el 2026-11-13: D-0017 (corrección: nombres en forma XNU en el generador, sin tocar el kernel) y D-0018 (sin R2 previo, imagen nueva). La implementación es T-0024."
+review_ref = "D-0017"
+requires_decisions = ["D-0017"]
 
 [[task]]
 id = "T-0004"
@@ -44,7 +45,7 @@ title = "R2: experimento nodecompose con imágenes de 512 MiB A/B/C (monta imág
 status = "blocked"
 priority = 6
 owner = "ingeniero"
-depends_on = ["T-0005", "T-0006"]
+depends_on = ["T-0005", "T-0006", "T-0024"]
 actions = ["privileged-or-mount"]
 blocked_on = "autorización explícita del director (D-0005) y cierre de T-0005/T-0006"
 acceptance = "fsck_hfs -n rc=0 sobre B/C con nombres en forma XNU, hashes de las imágenes originales intactos, evidencias nuevas con nombre nuevo."
@@ -262,4 +263,16 @@ actions = ["patch-series-change", "architecture-change", "local-commit"]
 requires_decisions = ["D-0015"]
 blocked_on = "aprobación de D-0015 por el jefe técnico y auditoría previa de qué mapea AS0 (T-0010)"
 acceptance = "Parches nuevos (rango 0400+ si D-0007 se aprueba) con un banco de pruebas de host con doble de herolte_gpu_* para handles, presupuesto y validación; la candidata N2 no cambia salvo reconstrucción deliberada."
+
+[[task]]
+id = "T-0024"
+title = "Aplicar la corrección Unicode (D-0017): el generador entrega a Linux los nombres ya en forma XNU (hfs_component), un único punto de traducción, imagen NUEVA con nombre nuevo"
+status = "ready"
+priority = 2
+owner = "ingeniero"
+depends_on = ["T-0003"]
+actions = ["pc-implementation", "host-tests", "local-commit"]
+requires_decisions = ["D-0017", "D-0018"]
+acceptance = "Cambio en las herramientas del root con pruebas de host (sin montar, sin sudo); los 32 nombres coinciden con la tabla de XNU según hfs_names; una imagen nueva con nombre nuevo SOLO si se puede generar sin montar ni sudo (si no, queda como tarea roja con su solicitud); la imagen anterior y sus hashes intactos; informe en docs/ con los resultados y lo no verificado."
+resume = "Ver docs/herolte-unicode-hfsplus.md §3 puntos 2-5 (el punto 1, nodecompose en attach(), es de montaje y NO entra: D-0018 no autoriza montar ni R2). Herramientas del laboratorio en scratchpad t04r (copia en E-0014)."
 

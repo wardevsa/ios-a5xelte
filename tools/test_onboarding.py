@@ -63,8 +63,12 @@ class Onboarding(unittest.TestCase):
     def test_resume_drill_after_an_interruption(self):
         c = tg.make_clone(tempfile.mkdtemp(prefix='gov-resume.', dir=self.tmp))                      # its own clone: this test changes state
         g = lambda *a: self.gov(*a, cwd=c); git = lambda *a: self.sh(['git', '-c', 'commit.gpgsign=false'] + list(a), cwd=c)
-        policy, tasks, decs = (gov.load(c, f) for f in ('policy.toml', 'tasks.toml', 'decisions.toml')); first, _ = gov.next_task(policy, tasks, decs); fid = first['id']
         tp = os.path.join(c, 'governance', 'data', 'tasks.toml')
+        with open(tp, 'a', encoding='utf-8') as f:         # a spare ready task so "another one is offered" does not depend on how many real ones are left
+            f.write('\n[[task]]\nid = "T-0900"\ntitle = "tarea de relleno del simulacro"\nstatus = "ready"\npriority = 99\nowner = "ingeniero"\ndepends_on = []\nactions = ["docs-write"]\nacceptance = "sin efecto"\n')
+        self.assertEqual(g('render').returncode, 0)
+        policy, tasks, decs = (gov.load(c, f) for f in ('policy.toml', 'tasks.toml', 'decisions.toml')); first, _ = gov.next_task(policy, tasks, decs); fid = first['id']
+        self.assertNotEqual(fid, 'T-0900')
         tg.mutate(tp, 'task', fid, 'status', '"in_progress"'); tg.mutate(tp, 'task', fid, 'resume', '"Paso 3 de 5: falta aplicar el parche; ver el checkpoint."')
         open(os.path.join(c, 'governance', 'checkpoints', '2026-11-13-%s-01.md' % fid), 'w').write('# Checkpoint %s #01\n- Siguiente paso exacto: aplicar el parche.\n' % fid)
         self.assertEqual(g('render').returncode, 0); self.assertEqual(g('check').returncode, 0)

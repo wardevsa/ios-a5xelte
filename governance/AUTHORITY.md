@@ -11,6 +11,8 @@ Fuente de verdad legible por máquina: `data/policy.toml` (roles, niveles, accio
 
 Un modelo distinto que se incorpore **hereda el rol de ingeniero**, no una autoridad mayor.
 
+**Cambio de titular (D-0019, 2026-11-13):** el Director confirma que la jefatura técnica la ocupa **Qwen** y que sus directivas responden por él en lo técnico; él lee todo e interviene de forma extraordinaria. Donde esta tabla dice "ChatGPT", léase "quien ocupe la jefatura técnica". **No cambia** lo que exige una decisión del Director con la acción nombrada (nivel C, nivel X): ver D-0019.
+
 ## 2. Matriz de decisión
 | Asunto | Propone | Revisa | Aprueba |
 |---|---|---|---|

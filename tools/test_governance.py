@@ -552,7 +552,18 @@ class PolicyPin(Base):
         self.repin(); self.assertNoErr('policy.pin.toml')
 
     def test_the_pin_does_not_ratify_the_policy(self):
-        warns = gov.check(REPO, use_git=False)[1]; self.assertTrue(any('PROPUESTA' in w and 'D-0001' in w for w in warns), warns)
+        # el pin no ratifica nada: si D-0001 deja de estar APPROVED, la herramienta avisa de que la política es una propuesta
+        def unratify(s):
+            i = s.index('id = "D-0001"'); j = s.index('status = "APPROVED"', i)
+            k = s.find('[[decision]]', i); k = len(s) if k < 0 else k
+            assert j < k
+            return s[:j] + 'status = "PROPOSED"' + s[j + len('status = "APPROVED"'):]
+        self.edit('data/decisions.toml', unratify); self.render()
+        warns = gov.check(self.d, use_git=False)[1]
+        self.assertTrue(any('PROPUESTA' in w and 'D-0001' in w for w in warns), warns)
+
+    def test_an_approved_governance_decision_clears_the_proposal_warning(self):
+        warns = gov.check(REPO, use_git=False)[1]; self.assertFalse(any('PROPUESTA' in w for w in warns), warns)
 
     def test_a_tier_colour_must_match(self):
         self.edit('data/policy.toml', lambda s: s.replace('color = "rojo"\nname = "autorización explícita del Director"', 'color = "verde"\nname = "autorización explícita del Director"', 1)); self.repin()

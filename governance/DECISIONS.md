@@ -6,12 +6,12 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 
 | ID | Estado | Ámbito | Fecha | Título | Propone | Aprueba | Autoriza | Referencia |
 |---|---|---|---|---|---|---|---|---|
-| D-0001 | PROPOSED | process | 2026-11-13 | Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py) | ingeniero | — | — | — |
+| D-0001 | APPROVED | process | 2026-11-13 | Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py) | ingeniero | director | — | Mensaje del Director, 2026-11-13: 'Apruebo D-0001 y D-0017, autorizo cambiar el generador sin R2. Y si, la directiva responde por mi, por razones de seguridad yo seguire leyendo todo para que no haya problemas e intervendre de forma extraordinaria si se requiere.' |
 | D-0002 | APPROVED | policy | 2026-11-13 | Política de almacenamiento: ext4 para trabajo activo, NTFS para archivo histórico; NTFS nunca como scratchpad de Claude | ingeniero | director | — | Mensaje del Director 'Recuperar espacio real y completar la organización' (apartado 4, configuración permanente), 2026-11-13; documento IOS-S7-archive/05-manifests-and-hashes/POLITICA_ALMACENAMIENTO.md |
 | D-0003 | APPROVED | architecture | 2026-11-13 | Dirección de S7GE: Metal como interfaz principal, IR común S7GIR, backend Midgard específico T880, OpenGL ES como API adicional, GPU física como ruta objetivo | jefe-tecnico | jefe-tecnico | — | S7GE_ARCHITECTURE.md Parte XXII 'Decisiones oficiales de dirección' (el jefe técnico define la arquitectura); el Director lo recibió y ordenó conservarlo para el proyecto el 2026-11-13. No es una autorización de ninguna acción de nivel C |
 | D-0004 | APPROVED | process | 2026-11-13 | Criterios de la candidata N2 de solo lectura: sin ufsrw/rootrw distintos de =0, con ufsrw=0 herolog=0 herodrop=0 explícitos, verificada con herolte-verify-boot.py --profile n2-readonly | ingeniero | director | — | Mensaje del Director 'cerrar correctamente el verificador BOOT y producir una candidata N2 inequívocamente de solo lectura', 2026-11-13 |
 | D-0005 | APPROVED | operation | 2026-11-13 | El experimento R2 (monta imágenes, usa sudo) no está autorizado | ingeniero | director | — | Restricciones reiteradas del Director en todos los mensajes de la serie T04-R2/Unicode: 'No ejecutes R2', 'No autorices R2', 'No monta imágenes' |
-| D-0006 | APPROVED | operation | 2026-11-13 | Generación del root: no cambiar el generador ni regenerar lab-full.img.partial hasta decidir sobre el bloqueo Unicode | ingeniero | director | — | Mensajes del Director 'Espera mi decisión antes de implementar cambios que afecten a la generación del root filesystem' y 'No repares, regeneres ni sustituyas esa imagen todavía', 2026-11-13 |
+| D-0006 | SUPERSEDED | operation | 2026-11-13 | Generación del root: no cambiar el generador ni regenerar lab-full.img.partial hasta decidir sobre el bloqueo Unicode | ingeniero | director | — | Mensajes del Director 'Espera mi decisión antes de implementar cambios que afecten a la generación del root filesystem' y 'No repares, regeneres ni sustituyas esa imagen todavía', 2026-11-13 |
 | D-0007 | PROPOSED | architecture | 2026-11-13 | Reservar el rango de parches 0400+ para S7GE (el 0300-0309 propuesto en S7GE_ARCHITECTURE.md ya está ocupado) | ingeniero | — | — | — |
 | D-0008 | SUPERSEDED | architecture | 2026-11-13 | Renumerar nuestros 0332 (marcador DROP), 0334 (DROP v2) y 0335 (splash) antes de fusionar con origin/herolte, que ya usa 0332-0334 para gráficos | ingeniero | — | — | — |
 | D-0009 | PROPOSED | architecture | 2026-11-13 | Ratificar las decisiones D1-D12 de DROP v2 de xnu/drop-v2/DECISIONES.md, tomadas por el jefe de proyecto suplente | ingeniero | — | — | — |
@@ -22,10 +22,12 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0014 | PROPOSED | architecture | 2026-11-13 | Renumerar solo los dos parches nuestros que colisionan con origin/herolte (0332 marcador -> 0336, 0334 DROP v2 -> 0337, manteniendo el orden relativo) y hacer que ci_check/preflight identifiquen el parche por nombre completo | ingeniero | — | — | — |
 | D-0015 | PROPOSED | architecture | 2026-11-13 | Aislamiento de clientes de HeroGPU: address space por cliente, jc_va validada contra los BO del cliente, entitlement en initWithTask, presupuesto de memoria y SurfaceBO con comprobación de propiedad | ingeniero | — | — | — |
 | D-0016 | APPROVED | architecture | 2026-11-13 | Cargador de las pruebas: usar el compilado con clang (loader-clang/, E-0008); no ejecutar el GCC descargado | ingeniero | jefe-tecnico | — | Directiva de jefatura técnica del 2026-11-13 (Qwen, relayada por el Director), apartado 'D-0013: Cargador para xnu_boot: clang'. La directiva la numeró D-0013, que ya existe (permisos de Claude Code): registrada aquí como D-0016. No autoriza ninguna acción de nivel C |
-| D-0017 | PROPOSED | architecture | 2026-11-13 | Corrección Unicode: regenerar en el generador del root los nombres en forma XNU (sin tocar el kernel), antes de repetir R2 | jefe-tecnico | — | — | — |
+| D-0017 | APPROVED | architecture | 2026-11-13 | Corrección Unicode: regenerar en el generador del root los nombres en forma XNU (sin tocar el kernel), antes de repetir R2 | jefe-tecnico | director | — | Mensaje del Director, 2026-11-13: 'Apruebo D-0001 y D-0017, autorizo cambiar el generador sin R2. Y si, la directiva responde por mi, por razones de seguridad yo seguire leyendo todo para que no haya problemas e intervendre de forma extraordinaria si se requiere.' |
+| D-0018 | APPROVED | operation | 2026-11-13 | Levantar la congelación del generador del root (D-0006) solo para aplicar D-0017: imagen NUEVA con nombre nuevo, sin R2 previo y sin tocar la anterior | ingeniero | director | — | Mensaje del Director, 2026-11-13: 'Apruebo D-0001 y D-0017, autorizo cambiar el generador sin R2. Y si, la directiva responde por mi, por razones de seguridad yo seguire leyendo todo para que no haya problemas e intervendre de forma extraordinaria si se requiere.' |
+| D-0019 | APPROVED | process | 2026-11-13 | Delegación: la jefatura técnica (Qwen) decide lo técnico en nombre del Director; el Director lee todo e interviene de forma extraordinaria | director | director | — | Mensaje del Director, 2026-11-13: 'Apruebo D-0001 y D-0017, autorizo cambiar el generador sin R2. Y si, la directiva responde por mi, por razones de seguridad yo seguire leyendo todo para que no haya problemas e intervendre de forma extraordinaria si se requiere.' |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
-- **Estado:** PROPOSED
+- **Estado:** APPROVED (director, 2026-11-13)
 - **Razón:** La Misión 0 pide una estructura permanente y verificable para continuar el proyecto entre sesiones y modelos. Se implanta como propuesta: ningún modelo debe darla por aprobada hasta que la revise el jefe técnico y la ratifique el director.
 - **Consecuencias:** Si se aprueba, las reglas de AUTONOMY_POLICY.md y policy.toml pasan a vincular a cualquier ingeniero que trabaje en el repositorio. Si se rechaza, se retira la carpeta y el puntero de AGENTS.md.
 - **Cómo se revierte:** git revert del commit de implantación; quitar el puntero a governance/ en AGENTS.md.
@@ -55,7 +57,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Cómo se revierte:** Una decisión posterior del director que autorice R2 y cite la lista exacta de comandos.
 
 ## D-0006 — Generación del root: no cambiar el generador ni regenerar lab-full.img.partial hasta decidir sobre el bloqueo Unicode
-- **Estado:** APPROVED (director, 2026-11-13)
+- **Estado:** SUPERSEDED
 - **Razón:** Hay 32 nombres Unicode que Linux escribió distinto de XNU (docs/herolte-unicode-hfsplus.md); las opciones son la corrección 1-5, la alternativa (B) o la (C).
 - **Consecuencias:** T-0003 es una decisión pendiente; hasta entonces el generador y la imagen de laboratorio no cambian.
 - **Cómo se revierte:** Decisión del director que elija una de las opciones.
@@ -122,8 +124,21 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Cómo se revierte:** Nueva decisión que elija GCC (requeriría host-config-change, roja).
 
 ## D-0017 — Corrección Unicode: regenerar en el generador del root los nombres en forma XNU (sin tocar el kernel), antes de repetir R2
-- **Estado:** PROPOSED
+- **Estado:** APPROVED (director, 2026-11-13)
 - **Razón:** La directiva de jefatura técnica del 2026-11-13 elige 'Opción 3: regenerar nombres en el generador del root usando la tabla de XNU' (sin cambios de kernel, reversible). La numeró D-0003, que ya es la dirección de S7GE; el texto no mapea con exactitud a las opciones de docs/herolte-unicode-hfsplus.md (1-5, B, C, D): se interpreta como la corrección 1-5 sin la parte del kernel.
 - **Consecuencias:** Cambiar el generador del root es decisión del DIRECTOR (AUTHORITY.md §2) y D-0006 lo mantiene congelado hasta que decida: por eso queda PROPUESTA y T-0003 sigue bloqueada. Además, mi informe (sección 3) recomienda la corrección solo si R2 la confirma, y R2 sigue sin autorizar (D-0005, de nivel rojo): se necesita la confirmación del Director de si acepta aplicarla sin R2 previo.
 - **Cómo se revierte:** git revert del cambio del generador; las imágenes viejas se conservan (E-0010).
+
+## D-0018 — Levantar la congelación del generador del root (D-0006) solo para aplicar D-0017: imagen NUEVA con nombre nuevo, sin R2 previo y sin tocar la anterior
+- **Estado:** APPROVED (director, 2026-11-13)
+- **Razón:** El Director aprueba D-0017 y autoriza cambiar el generador sin R2. Mantiene las demás restricciones de la serie (D-0005: no se autoriza R2).
+- **Consecuencias:** Permite modificar el generador/herramientas del root en el árbol de trabajo y generar una imagen nueva con nombre nuevo. NO autoriza: R2, montar imágenes, sudo, sustituir o borrar lab-full.img.partial, escribir en el teléfono. La imagen anterior y sus hashes quedan intactos.
+- **Cómo se revierte:** git revert del cambio del generador; las imágenes anteriores se conservan (E-0010).
+- **Sustituye a:** D-0006
+
+## D-0019 — Delegación: la jefatura técnica (Qwen) decide lo técnico en nombre del Director; el Director lee todo e interviene de forma extraordinaria
+- **Estado:** APPROVED (director, 2026-11-13)
+- **Razón:** El Director lo dispone por razones de seguridad y rapidez. Qwen ocupa el puesto de jefe técnico.
+- **Consecuencias:** Las directivas de la jefatura técnica valen para objetivos, arquitectura, prioridades y decisiones técnicas sin nueva confirmación. LECTURA DEL INGENIERO (conservadora, a confirmar si se discrepa): no incluye autorizar acciones de nivel C (sudo, montar, publicar, borrar, tocar el teléfono) ni cambiar reglas X: esas siguen exigiendo una decisión del Director que nombre la acción (AUTHORITY.md §4), y la herramienta lo comprueba. Las directivas de jefatura que piden tocar el S7 ya dicen que necesitan 'autorización ROJO explícita'.
+- **Cómo se revierte:** Nueva decisión del Director.
 
