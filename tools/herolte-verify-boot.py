@@ -12,8 +12,15 @@ Checks (each prints PASS/FAIL, exit status 1 if any FAIL):
            ADT parses and its dram-base/dram-size equal the payload's phys_base/mem_size, command line < 608 and printable
   rebuild  with --kernel: mkpayload.build(kernel, embedded ADT, embedded cmdline) gives EXACTLY the embedded payload
   stock    with --stock: DTBH and ramdisk equal the stock BOOT's, header fields other than sizes/id/cmdline unchanged
---profile n2-readonly (test ladder step N2, docs/estado-y-camino-a-flashear.md): forbids ufsrw=1 and rootrw=1, the arguments that let
-the UFS driver write; without them USERDATA (Android) stays untouched. It also requires the stock-derived header to be unchanged.
+--profile n2-readonly (test ladder step N2, docs/estado-y-camino-a-flashear.md): USERDATA (Android) must stay untouched. The kernel writes
+only when ufsrw != 0 (su.writable = (rw != 0), patches 0030/0204) and mounts root read-write when rootrw != 0 (0031), so ANY form that is
+not exactly "=0" counts as enabling: ufsrw=1, ufsrw=2, ufsrw=0x1, ufsrw=abc and a bare ufsrw. The profile
+  - FAILs if ufsrw, rootrw or emmcwrite is enabled in the effective command line (payload) or anywhere outside the kernel segments
+    (header command line, loader, ADT, ramdisk, DTBH, second, tail),
+  - requires the explicit read-only arguments ufsrw=0 herolog=0 herodrop=0 (belt and braces: herolog and herodrop only write with ufsrw)
+    and the N2 arguments rd=ufsroot0 ufsroot=USERDATA cpus=8,
+  - FAILs on a duplicated argument name (a repeated or contradictory argument, e.g. ufsrw=0 ufsrw=1) and on an ADT /chosen boot-args property
+    (the shim takes the command line from the payload only; a second source would be an unreviewed one).
 This does not prove the image boots; it proves the image is what the build chain says it is and is internally consistent.
 """
 import argparse, hashlib, importlib.util, os, struct, sys, tempfile
@@ -56,10 +63,32 @@ def parse_boot(boot):
                 end=do + al(dts), id=boot[576:596], name=boot[48:64], cmdline=boot[64:576])
 
 
-READONLY_FORBID = ('ufsrw=1', 'rootrw=1')
+import re
+
+WRITE_ARGS = ('ufsrw', 'rootrw', 'emmcwrite')
+READONLY_FORBID = ()           # kept for callers; the profile now uses write_enabled()
+N2_REQUIRE = ('ufsrw=0', 'herolog=0', 'herodrop=0', 'rd=ufsroot0', 'ufsroot=USERDATA', 'cpus=8')
+WRITE_RE = re.compile(rb'(ufsrw|rootrw|emmcwrite)(=[^\s\x00]*)?')   # no look-behind: text glued to other bytes is still reported
 
 
-def verify(boot_path, kernel=None, loader=None, stock=None, partition=PART, expect_args=(), forbid_args=()):
+def tokens(cmdline):
+    out = []
+    for t in cmdline.split():
+        name, eq, val = t.partition('=')
+        out.append((t, name, bool(eq), val))
+    return out
+
+
+def write_enabled(name, has_eq, val):
+    # conservative: only an explicit "=0" disables; a bare name, =1, =2, =0x1, =abc, = (empty) all count as enabling
+    return name in WRITE_ARGS and not (has_eq and val == '0')
+
+
+def write_hits(blob):
+    return [m for m in WRITE_RE.finditer(blob) if write_enabled(m.group(1).decode(), m.group(2) is not None, (m.group(2) or b'')[1:].decode('latin1'))]
+
+
+def verify(boot_path, kernel=None, loader=None, stock=None, partition=PART, expect_args=(), forbid_args=(), profile=None):
     r = R()
     boot = open(boot_path, 'rb').read()
     r.info('image %s  %d bytes  sha256 %s' % (os.path.basename(boot_path), len(boot), hashlib.sha256(boot).hexdigest()))
@@ -125,8 +154,20 @@ def verify(boot_path, kernel=None, loader=None, stock=None, partition=PART, expe
     r.info('cmdline: ' + cmdline)
     for a in expect_args:
         r.ok(a in cmdline.split(), 'payload: command line contains %r' % a)
+    toks = tokens(cmdline)
+    names = [t[1] for t in toks]
+    dups = sorted({n for n in names if names.count(n) > 1})
+    r.ok(not dups, 'payload: no duplicated argument names%s' % (' (repeated: %s)' % ', '.join(dups) if dups else ''))
     for a in forbid_args:
         r.ok(a not in cmdline.split(), 'payload: command line does NOT contain %r' % a)
+    n2 = profile == 'n2-readonly'
+    enabled = [t[0] for t in toks if write_enabled(t[1], t[2], t[3])]
+    if n2:
+        r.ok(not enabled, 'n2: no write-enabling argument in the effective command line%s' % (' (found: %s)' % ' '.join(enabled) if enabled else ''))
+        for a in N2_REQUIRE:
+            r.ok(a in cmdline.split(), 'n2: required argument %r is present' % a)
+    else:
+        r.info('write-enabling arguments in the command line: %s' % (' '.join(enabled) or 'none'))
     adt_blob = pay[adt_off:adt_off + adt_size]
     try:
         base, size = mkpayload.adt_dram(adt_blob)
@@ -135,6 +176,26 @@ def verify(boot_path, kernel=None, loader=None, stock=None, partition=PART, expe
         r.ok(any(c.name == 'chosen' for c in root.children), 'payload: ADT has /chosen')
     except Exception as e:  # noqa: BLE001
         r.ok(False, 'payload: ADT parses (%s)' % e)
+    seg_lo = hdr
+    regions = [('BOOT header page', boot[:b['page']]), ('loader', ld), ('payload header+segment table', pay[:hdr]), ('ADT', adt_blob),
+               ('ramdisk', b['ramdisk']), ('second', b['second']), ('DTBH', b['dt']), ('tail', boot[b['end']:])]
+    for name, blob in regions:
+        if name == 'payload header+segment table':
+            blob = blob[:mkpayload.CMDLINE] + b'\0' * mkpayload.BOOT_LINE_LENGTH + blob[mkpayload.SEG_TABLE:]   # the command line is judged above
+        hits = write_hits(blob)
+        if n2:
+            r.ok(not hits, 'n2: no write-enabling argument inside the %s%s' % (name, ' (found: %s)' % b', '.join(m.group(0) for m in hits).decode('latin1') if hits else ''))
+        elif hits:
+            r.info('write-enabling text inside the %s: %s' % (name, b', '.join(m.group(0) for m in hits).decode('latin1')))
+    kern_hits = write_hits(pay[seg_lo:adt_off]) if segs else []
+    r.info('kernel segments: %d occurrences of write-enabling argument text (the kernel carries its own boot-arg names/messages; not an argument)' % len(kern_hits))
+    try:
+        root2, _ = adt.parse(adt_blob)
+        chosen = next(c for c in root2.children if c.name == 'chosen')
+        has_ba = any(pn in ('boot-args', 'bootargs') for pn, *_ in chosen.props)
+        r.ok(not has_ba, 'payload: ADT /chosen has no boot-args property (the command line has a single source)')
+    except Exception as e:  # noqa: BLE001
+        r.ok(False, 'payload: ADT /chosen readable (%s)' % e)
     if kernel:
         r.info('kernel %s sha256 %s' % (os.path.basename(kernel), hashlib.sha256(open(kernel, 'rb').read()).hexdigest()))
         with tempfile.TemporaryDirectory(prefix='verify-boot.') as d:
@@ -162,8 +223,9 @@ def main():
     ap.add_argument('--partition-size', type=int, default=PART); ap.add_argument('--expect-arg', action='append', default=[]); ap.add_argument('--forbid-arg', action='append', default=[])
     ap.add_argument('--profile', choices=['n2-readonly'])
     a = ap.parse_args()
-    forbid = list(a.forbid_arg) + (list(READONLY_FORBID) if a.profile == 'n2-readonly' else [])
-    r = verify(a.boot, a.kernel, a.loader, a.stock, a.partition_size, a.expect_arg, forbid)
+    if not os.path.isfile(a.boot):
+        print('herolte-verify-boot: %s: not a file' % a.boot, file=sys.stderr); return 2
+    r = verify(a.boot, a.kernel, a.loader, a.stock, a.partition_size, a.expect_arg, a.forbid_arg, a.profile)
     print('\n'.join(r.lines))
     print('RESULTADO: %d fallos' % r.fail)
     return 1 if r.fail else 0
