@@ -1,5 +1,10 @@
 # Bloqueo Unicode del root HFS+: causa, corrección propuesta y lo que falta (2026-11-13)
 
+**ESTADO DE LA TAREA (2026-11-13): CERRADA, A LA ESPERA DE DECISIÓN.** Auditoría Unicode HFS+ terminada y documentada; no queda ninguna comparación pendiente. Verificación final de solo lectura: las 7 tablas de XNU están en el kernel desplegado (una vez cada una, `__TEXT,__const`);
+24/24 comprobaciones PASS; 16 + 22 pruebas OK (`tools/hfsplus-names`, `tools/test_verify_boot.py`); los 8 archivos del NTFS verifican con su SHA-256; los 10 artefactos de entrada y los 4 scripts de la ejecución v3 conservan su hash; `lab-full.img.partial` recalculada = `e724f981…c79496`, sin `.valid`, sin bucles asociados.
+Nada se ha cambiado en el generador del root, el volumen ni DROP. **Siguiente paso (decisión del responsable):** autorizar R2 con `sudo`, o elegir entre aplicar la corrección 1-5 (sección 3), la alternativa (B) o la (C).
+
+
 **Estado:** análisis de solo lectura. No se ha montado nada, no se ha ejecutado R2 ni `sudo`, no se ha tocado `lab-full.img.partial` (SHA-256 `e724f981…c79496`, intacto) ni ninguna herramienta de generación del root. Todo lo que sigue sale de la
 imagen ya poblada, de los manifiestos, del **código de XNU compilado en el PC** y de la **tabla del módulo `hfsplus.ko` del kernel de este PC** (el mismo con el que se pobló la imagen).
 
