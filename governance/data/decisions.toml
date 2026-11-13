@@ -265,3 +265,19 @@ rationale = "La tabla de Linux descompone U+0E33 y XNU lo conserva (docs/herolte
 consequences = "Los 2 ficheros no estarán en el root (KI-0006). NO autoriza ninguna acción roja: generar la imagen sigue necesitando la autorización del Director que nombre privileged-or-mount (T-0025)."
 reversal = "Nueva decisión que elija nodecompose (roja) o el parche de la tabla."
 
+[[decision]]
+id = "D-0021"
+title = "Autorización roja de un solo uso: privileged-or-mount para generar la imagen NUEVA de T-0025 (perfil full-xnu) con los comandos del laboratorio"
+date = "2026-11-13"
+scope = "operation"
+status = "APPROVED"
+proposer = "ingeniero"
+approved_by = "director"
+approval_date = "2026-11-13"
+approval_ref = "Mensaje del Director, 2026-11-13: 'Autorizo privileged-or-mount para generar la imagen nueva de T-0025 con los comandos de COMANDOS_SUDO.md, usándola con nombre nuevo y sin tocar la anterior'"
+authorizes = ["privileged-or-mount"]
+valid_until = "2026-11-20"
+rationale = "Aplicar D-0017/D-0020: imagen con los nombres en forma XNU y los 2 con U+0E33 excluidos."
+consequences = "ALCANCE (lectura del ingeniero): solo los comandos de COMANDOS_SUDO.md (populate_image.sh, verify_image.sh), con el perfil NUEVO full-xnu (imagen lab-full-xnu.img.partial; make_image.sh full-xnu no necesita sudo); los ejecuta el Director con sudo, o el ingeniero solo si la sesión dispone de sudo y el Director lo pide. NO incluye: tocar lab-full.img.partial ni sus .populated/.sha256 (populate_image.sh se niega por diseño a repoblar una imagen con .populated), r6_failure_tests.sh (otros ~12 GB), R2, borrar sandboxes (T-0007), ni tocar el teléfono. Un solo uso; caduca el 2026-11-20."
+reversal = "Desmontar y desasociar el loop con cleanup_image; la imagen nueva es desechable; la anterior no se toca."
+

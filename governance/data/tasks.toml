@@ -283,8 +283,9 @@ status = "blocked"
 priority = 3
 owner = "ingeniero"
 depends_on = ["T-0024"]
-requires_decisions = ["D-0020"]
+requires_decisions = ["D-0020", "D-0021"]
+authorization_ref = "D-0021"
 actions = ["privileged-or-mount", "pc-implementation", "host-tests"]
-blocked_on = "autorización roja del Director que nombre privileged-or-mount, la imagen nueva y los comandos (COMANDOS_SUDO.md del laboratorio) — la directiva 'T-0025 autorizada' no los nombra; D-0020 ya decidió los 2 nombres (excluirlos). Además el montaje lo hacen los scripts del laboratorio, que la directiva dice no tocar"
+blocked_on = "la autorización roja ya existe (D-0021) pero la ejecución es IMPOSIBLE hoy: (1) faltan ~25 GiB libres en ext4 (quedan ~7 GiB; imagen ~12 GiB reales + árboles de staging), (2) los árboles de staging (r3/work) ya no están en el scratchpad (archivados en NTFS, E-0011..E-0017), (3) apply_meta_img/stage_links/verify_meta/hfsx_check buscan el nombre del manifiesto: sin tocarlos la imagen saldría inconsistente. Ver el informe al Director"
 acceptance = "Imagen con nombre nuevo con 30 nombres en forma XNU y los 2 de U+0E33 excluidos (KI-0006); hashes de la anterior intactos; hfsx_check esperando forma XNU; evidencias nuevas con SHA-256."
 
