@@ -26,23 +26,27 @@ def plan(tree, table=None):
     ren, dirs_changed, bydir = [], [], {}
     for d, n, isdir in walk(tree):
         bydir.setdefault(d, []).append(n)
-        new = h.hfs_component(n)
+        new = h.xnu_nfd(n)                       # NO hfs_component: el ':' POSIX lo convierte en '/' el propio hfsplus de Linux al escribir
         if new != n:
             (dirs_changed if isdir else ren).append((d, n, new))
     coll = []
     for d, names in bydir.items():
-        for a, b in h.find_collisions(names): coll.append((d, a, b))
+        seen = {}
+        for n in names:
+            k = h.xnu_nfd(n)
+            if k in seen and seen[k] != n: coll.append((d, seen[k], n))
+            seen.setdefault(k, n)
         # un nombre renombrado no puede coincidir con otro existente distinto
         existing = set(names)
         for dd, o, nw in ren:
             if dd == d and nw in existing and nw != o: coll.append((d, o, nw))
-    long_ = [(d, n) for d, ns in bydir.items() for n in ns if h.too_long(n)]
+    long_ = [(d, n) for d, ns in bydir.items() for n in ns if len(h.xnu_nfd(n.replace(':', '/')).encode('utf-16-le')) // 2 > 255]
     needs = []
     if table is not None:
         for d, ns in bydir.items():                       # el nombre FINAL de cada hoja (renombrada o no) frente a la tabla de Linux
             for n in ns:
                 if os.path.isdir(os.path.join(d, n)) and not os.path.islink(os.path.join(d, n)): continue
-                fin = h.hfs_component(n)
+                fin = h.xnu_nfd(n)
                 if h.linux_nfd(fin, table) != fin: needs.append((d, n, fin))
     return dict(renames=ren, dir_changes=dirs_changed, collisions=coll, too_long=long_, needs_nodecompose=needs)
 

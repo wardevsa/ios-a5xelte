@@ -50,8 +50,12 @@ class T(unittest.TestCase):
             s.apply(self.t, p); self.assertEqual(os.listdir(outside), [NFC_E])
         finally: shutil.rmtree(outside, ignore_errors=True)
 
-    def test_colon_in_name_becomes_slash_form_is_reported(self):
-        self.assertEqual(h.hfs_component('a:b'), 'a/b')                                       # ':' POSIX = '/' en HFS+; un nombre con '/' no es creable en ext4: documentado, no se renombra aquí
+    def test_colon_names_are_never_turned_into_paths(self):
+        # el ':' POSIX lo convierte en '/' el hfsplus de Linux al escribir; renombrar a 'a/b' movería el fichero a un subdirectorio
+        self.touch('d', 'a:b'); self.touch('d', 'caf\u00e9:x'); p = s.plan(self.t)
+        self.assertEqual([(o, n) for _, o, n in p['renames']], [('caf\u00e9:x', unicodedata.normalize('NFD', 'caf\u00e9') + ':x')])
+        s.apply(self.t, p); self.assertEqual(sorted(os.listdir(os.path.join(self.t, 'd'))), sorted(['a:b', unicodedata.normalize('NFD', 'caf\u00e9') + ':x']))
+        self.assertEqual([e for e in os.listdir(self.t)], ['d'])
 
     @unittest.skipUnless(os.path.exists(KO), 'sin hfsplus.ko del kernel en ejecución')
     def test_thai_sara_am_still_needs_nodecompose(self):
