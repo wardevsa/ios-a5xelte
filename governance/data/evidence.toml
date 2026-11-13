@@ -368,3 +368,19 @@ sha256 = "c50853efe1f746edd962e79430ec5776e80c0323db1109f0ab1c6ea55f9442df"
 size = 2863
 immutable = true
 note = "Sustituye en valor probatorio a E-0021 y E-0023 (se reescribieron las pruebas de selección). Reproducible: python3 tools/governance_mutation.py"
+
+[[evidence]]
+id = "E-0026"
+title = "Registro del borrado de 224 sandboxes archivados (T-0007, D-0023): TAR verificado antes y después, comparación byte a byte, lista exacta"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/t0007-sandboxes-deletion-20261113.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "772c02a2500fcd8fab370c755f89f8707743fd6ef52e5ff66d11a76ba4f8ed7e"
+size = 10000
+immutable = true
+note = "Espacio libre en ext4: 5244 -> 30360 MiB. Los 224 sandboxes siguen en el TAR E-0011."
+

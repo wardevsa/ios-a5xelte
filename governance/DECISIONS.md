@@ -27,6 +27,9 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0019 | APPROVED | process | 2026-11-13 | Delegación: la jefatura técnica (Qwen) decide lo técnico en nombre del Director; el Director lee todo e interviene de forma extraordinaria | director | director | — | Mensaje del Director, 2026-11-13: 'Apruebo D-0001 y D-0017, autorizo cambiar el generador sin R2. Y si, la directiva responde por mi, por razones de seguridad yo seguire leyendo todo para que no haya problemas e intervendre de forma extraordinaria si se requiere.' |
 | D-0020 | APPROVED | architecture | 2026-11-13 | Excluir del root los 2 ficheros con U+0E33 (WorkflowKit th.lproj): sin nodecompose y sin parchear XNU | jefe-tecnico | director | — | Mensaje del Director, 2026-11-13: 'He aprobado el siguiente informe' (directiva de jefatura técnica: excluir del root los 2 nombres con U+0E33, sin nodecompose ni parche de XNU) |
 | D-0021 | APPROVED | operation | 2026-11-13 | Autorización roja de un solo uso: privileged-or-mount para generar la imagen NUEVA de T-0025 (perfil full-xnu) con los comandos del laboratorio | ingeniero | director | privileged-or-mount | Mensaje del Director, 2026-11-13: 'Autorizo privileged-or-mount para generar la imagen nueva de T-0025 con los comandos de COMANDOS_SUDO.md, usándola con nombre nuevo y sin tocar la anterior' |
+| D-0022 | APPROVED | policy | 2026-11-13 | Reformulación de niveles: nuevo nivel NARANJA (la jefatura técnica puede autorizar operaciones privilegiadas de host) y ROJO CRÍTICO solo para el dispositivo físico | jefe-tecnico | director | — | Mensaje del Director (pioxi), 2026-11-13: 'Yo el director pioxi, autorizo el siguiente informe' (directiva de jefatura técnica: nivel NARANJA, autorización de T-0007, copia de scripts del laboratorio y continuación de T-0025) |
+| D-0023 | APPROVED | operation | 2026-11-13 | Autorización roja de un solo uso: borrar de ext4 los 224 sandboxes ya archivados en NTFS (T-0007) | jefe-tecnico | director | delete-or-overwrite | Mensaje del Director (pioxi), 2026-11-13: 'Yo el director pioxi, autorizo el siguiente informe' (directiva de jefatura técnica: nivel NARANJA, autorización de T-0007, copia de scripts del laboratorio y continuación de T-0025) |
+| D-0024 | APPROVED | architecture | 2026-11-13 | Copiar los scripts del laboratorio a tools/ios-root-lab/ con un adaptador de nombres XNU en un solo punto | jefe-tecnico | director | — | Mensaje del Director (pioxi), 2026-11-13: 'Yo el director pioxi, autorizo el siguiente informe' (directiva de jefatura técnica: nivel NARANJA, autorización de T-0007, copia de scripts del laboratorio y continuación de T-0025) |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
 - **Estado:** APPROVED (director, 2026-11-13)
@@ -155,4 +158,22 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Razón:** Aplicar D-0017/D-0020: imagen con los nombres en forma XNU y los 2 con U+0E33 excluidos.
 - **Consecuencias:** ALCANCE (lectura del ingeniero): solo los comandos de COMANDOS_SUDO.md (populate_image.sh, verify_image.sh), con el perfil NUEVO full-xnu (imagen lab-full-xnu.img.partial; make_image.sh full-xnu no necesita sudo); los ejecuta el Director con sudo, o el ingeniero solo si la sesión dispone de sudo y el Director lo pide. NO incluye: tocar lab-full.img.partial ni sus .populated/.sha256 (populate_image.sh se niega por diseño a repoblar una imagen con .populated), r6_failure_tests.sh (otros ~12 GB), R2, borrar sandboxes (T-0007), ni tocar el teléfono. Un solo uso; caduca el 2026-11-20.
 - **Cómo se revierte:** Desmontar y desasociar el loop con cleanup_image; la imagen nueva es desechable; la anterior no se toca.
+
+## D-0022 — Reformulación de niveles: nuevo nivel NARANJA (la jefatura técnica puede autorizar operaciones privilegiadas de host) y ROJO CRÍTICO solo para el dispositivo físico
+- **Estado:** APPROVED (director, 2026-11-13)
+- **Razón:** El sistema de niveles resultaba demasiado burocrático para operaciones rutinarias de desarrollo.
+- **Consecuencias:** Nivel NARANJA (autorizador: jefatura técnica): sudo y montaje en el host, compilación pesada, generación de imágenes de prueba, uso intensivo de recursos, sin tocar el dispositivo. ROJO CRÍTICO (solo Director): flashear el S7, particiones reales, bootloader o firmware, borrar datos del dispositivo, toda operación física irreversible. La directiva NO reclasifica el borrado de ficheros del host ni la publicación (push/CI): el ingeniero los mantiene en rojo hasta que se diga lo contrario. AGENTS.md sigue mandando (EFS, RECOVERY y bootloader no se escriben nunca).
+- **Cómo se revierte:** Nueva decisión del Director; restaurar policy.toml anterior (git revert).
+
+## D-0023 — Autorización roja de un solo uso: borrar de ext4 los 224 sandboxes ya archivados en NTFS (T-0007)
+- **Estado:** APPROVED (director, 2026-11-13)
+- **Razón:** Los sandboxes están en el TAR E-0011 (sha256 verificado y comparados byte a byte con el disco antes de borrar). Hacen falta ~25 GiB para T-0025.
+- **Consecuencias:** ALCANCE (lectura del ingeniero): solo los 224 directorios sandboxes-* que son miembros del TAR (tests/ y rev2/tests/ bajo t04r/r2/v2), sin sudo ni comodines (lista exacta, rm solo de esos directorios). NO se borra: results-*, battery*, mutants3-*, mutation_summary*, los sandboxes posteriores al TAR (ronda 2 de T-0005 en curso), review-independiente/prod, ni nada fuera de la lista.
+- **Cómo se revierte:** Restaurar desde el TAR E-0011.
+
+## D-0024 — Copiar los scripts del laboratorio a tools/ios-root-lab/ con un adaptador de nombres XNU en un solo punto
+- **Estado:** APPROVED (director, 2026-11-13)
+- **Razón:** Los originales (fuera de git, con sumas fijadas) no se tocan; la adaptación vive en el repositorio con pruebas.
+- **Consecuencias:** Resuelve el obstáculo 3 de T-0025. Los originales del laboratorio quedan intactos.
+- **Cómo se revierte:** Borrar tools/ios-root-lab/ (git revert).
 

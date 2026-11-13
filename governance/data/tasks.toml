@@ -76,14 +76,15 @@ acceptance = "Informe A-I con veredicto R2_REV2_VALIDADO o NO_VALIDADO; el ingen
 [[task]]
 id = "T-0007"
 title = "Retirar los originales de 224 sandboxes (~24 GiB) ya archivados y verificados"
-status = "blocked"
+status = "done"
 priority = 12
 owner = "ingeniero"
 depends_on = []
+requires_decisions = ["D-0023"]
+authorization_ref = "D-0023"
 actions = ["delete-or-overwrite"]
-blocked_on = "autorización explícita del director (borrado); copia verificada en E-0011"
 acceptance = "sha256 -c del TAR correcto antes y después; solo los sandboxes-*; results/battery/mutants intactos; espacio libre medido."
-evidence = ["E-0011"]
+evidence = ["E-0011", "E-0026"]
 
 [[task]]
 id = "T-0008"

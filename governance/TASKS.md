@@ -28,7 +28,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 | T-0016 | blocked | 9 | ingeniero | Aplicar la renumeración de parches y fusionar con origin/herolte (si el jefe técnico aprueba D-0008) | T-0009 | B amarillo | decisión: revisión del jefe técnico de D-0007 y D-0014 (PROPOSED) |
 | T-0014 | blocked | 10 | director | Decidir qué argumento quitar de la línea diaria (604/607 caracteres) para poder añadir herodrop=0 y herosplash=1 | — | B amarillo | decisión del director o del jefe técnico |
 | T-0015 | blocked | 11 | ingeniero | Root de iOS de 20 GiB válido y verificable (fsck_hfs sin errores, nombres coherentes con XNU) | T-0003, T-0004 | B amarillo | T-0003 (decisión) y T-0004 (R2) |
-| T-0007 | blocked | 12 | ingeniero | Retirar los originales de 224 sandboxes (~24 GiB) ya archivados y verificados | — | C rojo | autorización explícita del director (borrado); copia verificada en E-0011 |
+| T-0007 | done | 12 | ingeniero | Retirar los originales de 224 sandboxes (~24 GiB) ya archivados y verificados | — | C rojo | — |
 | T-0017 | blocked | 13 | ingeniero | Publicar las ramas de trabajo (git push) tras la revisión del gobierno | T-0001 | C rojo | autorización explícita del director (nombrando rama y remoto) |
 | T-0018 | blocked | 14 | ingeniero | Arreglar tools/validate-repo.py (huecos y duplicados en la numeración de parches, M3 de la auditoría) | T-0016 | B amarillo | T-0016 (la numeración definitiva de la serie) |
 
