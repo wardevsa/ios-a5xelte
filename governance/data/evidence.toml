@@ -4,6 +4,9 @@
 
 [[evidence]]
 id = "E-0001"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Candidata N2 de solo lectura (imagen BOOT, run2): 47-50 PASS, 0 FAIL"
 kind = "image"
 path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.img"
@@ -16,6 +19,9 @@ note = "La construcción es determinista: idéntica byte a byte a la candidata a
 
 [[evidence]]
 id = "E-0002"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Payload SWEETXNU de la candidata N2"
 kind = "artifact"
 path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.payload.bin"
@@ -27,6 +33,9 @@ immutable = true
 
 [[evidence]]
 id = "E-0003"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Procedencia de la candidata N2 (entradas con SHA-256, comando, commit de herramientas)"
 kind = "log"
 path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.PROVENANCE.txt"
@@ -38,6 +47,9 @@ immutable = true
 
 [[evidence]]
 id = "E-0004"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Verificación independiente de la candidata N2 (50 PASS, 0 FAIL, salida 0)"
 kind = "result"
 path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.verify-independent.txt"
@@ -49,6 +61,9 @@ immutable = true
 
 [[evidence]]
 id = "E-0005"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Resultados consolidados de la ejecución N2 run2 (hashes, argumentos efectivos, originales, preflight)"
 kind = "result"
 path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/RESULTS-run2.txt"
@@ -60,6 +75,9 @@ immutable = true
 
 [[evidence]]
 id = "E-0006"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Preflight del kit y del kernel DROP v2 (14 correctas, 1 aviso, 0 fallos)"
 kind = "result"
 path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/preflight-run2.txt"
@@ -72,6 +90,9 @@ note = "El aviso es la falta de GCC aarch64 (limitación del entorno)."
 
 [[evidence]]
 id = "E-0007"
+domain = "build"
+level = "L1"
+device = "none"
 title = "Kernel con DROP v2 (CI run 43223873690, 0334 aplicado)"
 kind = "artifact"
 path = "~/HackiOS/builds/device-day/artifacts/kernel-0334-v2-herolte-drop-v2/kernel.development.herolte"
@@ -84,6 +105,9 @@ note = "Producto de Apple/XNU: no va a git."
 
 [[evidence]]
 id = "E-0008"
+domain = "build"
+level = "L1"
+device = "none"
 title = "Cargador xnu_boot.Image compilado con clang (de conveniencia, no el validado con GCC)"
 kind = "artifact"
 path = "~/HackiOS/builds/device-day/loader-clang/xnu_boot.Image"
@@ -95,6 +119,9 @@ immutable = true
 
 [[evidence]]
 id = "E-0009"
+domain = "device"
+level = "n/a"
+device = "this-unit"
 title = "BOOT original de Samsung copiado del teléfono (base de las candidatas)"
 kind = "image"
 path = "~/HackiOS/backups/device-herolte/2026-11-12/BOOT.img"
@@ -108,6 +135,9 @@ note = "PRIVADO: puede contener datos del dispositivo; fuera de git; copia de se
 
 [[evidence]]
 id = "E-0010"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Imagen de laboratorio HFSX poblada lab-full.img.partial (verificación FAILED por 32 nombres Unicode)"
 kind = "image"
 path = "/tmp/claude-1000/-home-pioxi-HackiOS-repos-wardevsa-ios-a5xelte/2013331e-f694-44e9-97ca-fda8e240f915/scratchpad/t04r/image/lab-full.img.partial"
@@ -120,6 +150,9 @@ note = "20 GiB aparentes, ~11,5 GiB asignados. Vive en /tmp (se pierde al reinic
 
 [[evidence]]
 id = "E-0011"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Archivo TAR de 224 sandboxes de las baterías R2 y las carpetas tests/ (24,1 GiB)"
 kind = "archive"
 path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/01-test-sandboxes/r2-v2-tests-sandboxes-20261113.tar"
@@ -132,6 +165,9 @@ note = "tar --compare rc=0, 265 873 ficheros."
 
 [[evidence]]
 id = "E-0012"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Archivo TAR de t02/ex (extracción de os.dmg), 6 861 de 6 862 ficheros"
 kind = "archive"
 path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/t02-ex.tar"
@@ -144,6 +180,9 @@ note = "Falta ex/os/.file (0 bytes, modo 000); documentado."
 
 [[evidence]]
 id = "E-0013"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Archivo TAR de t04r/r3/work (extracción completa os/systemos/appos, 184 026 ficheros)"
 kind = "archive"
 path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/t04r-r3-work.tar"
@@ -156,6 +195,9 @@ note = "El original se retiró tras verificar."
 
 [[evidence]]
 id = "E-0014"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Copia de herramientas y evidencias del laboratorio T04-R (pipeline, auditoría, rev2 sin sandboxes)"
 kind = "archive"
 path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/06-session-backups/t04r-tools-evidence-20261113.tar"
@@ -168,6 +210,9 @@ note = "Contiene rev2 (ejecutor R2) y el pipeline de población y verificación.
 
 [[evidence]]
 id = "E-0015"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Material de análisis Unicode (tabla de Linux extraída, arnés, JSON)"
 kind = "archive"
 path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/unicode-analysis-20261113.tar"
@@ -179,6 +224,9 @@ immutable = true
 
 [[evidence]]
 id = "E-0016"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Comparación Unicode en tres niveles, primera pasada (con el filtro por bytes defectuoso, marcada)"
 kind = "archive"
 path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/unicode-3niveles-20261113.tar"
@@ -191,6 +239,9 @@ note = "Contiene results-3niveles-20261113 (defectuoso) y -v2."
 
 [[evidence]]
 id = "E-0017"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Comparación Unicode en tres niveles v3 (unidades UTF-16, 7 tablas XNU vs kernel, 24/24 comprobaciones)"
 kind = "archive"
 path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/unicode-3niveles-v3-20261113.tar"
@@ -203,6 +254,9 @@ note = "Resultado válido de la auditoría Unicode."
 
 [[evidence]]
 id = "E-0018"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Manifiesto SHA-256 del kit del día del dispositivo (199 ficheros)"
 kind = "log"
 path = "~/HackiOS/builds/device-day/MANIFEST.sha256"
@@ -214,6 +268,9 @@ immutable = true
 
 [[evidence]]
 id = "E-0019"
+domain = "host"
+level = "L2"
+device = "none"
 title = "Resultados del verificador sobre todas las candidatas (la vigente 47 PASS; las anteriores, 3 o 4 FAIL por no llevar ufsrw=0 etc.)"
 kind = "result"
 path = "~/HackiOS/builds/device-day/boot-candidates-n2/verify-all-20261113.txt"
@@ -225,6 +282,9 @@ immutable = true
 
 [[evidence]]
 id = "E-0020"
+domain = "doc"
+level = "n/a"
+device = "none"
 title = "Política de almacenamiento (ext4 activo, NTFS archivo)"
 kind = "doc"
 path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/05-manifests-and-hashes/POLITICA_ALMACENAMIENTO.md"
@@ -234,3 +294,47 @@ sha256 = "e38ac5d2a868738221bb2e6f1d0bed220dd6e0725ea137e406a958bc0ae7dce9"
 size = 916
 immutable = false
 note = "Aprobada en D-0002."
+
+[[evidence]]
+id = "E-0021"
+title = "Resultado de la batería de 22 mutantes de tools/governance.py: 22 detectados, 0 sobreviven"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/governance-mutation-20261113.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "123c0dc014dc84f0ab3ed73c355f126ed53c7da88ad5ccf7d6b2daf331dc950f"
+size = 2789
+immutable = true
+note = "Reproducible: python3 tools/governance_mutation.py"
+
+[[evidence]]
+id = "E-0022"
+title = "Procedencia de la batería de mutantes (hashes de la herramienta y de las pruebas evaluadas)"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/governance-mutation-20261113.PROVENANCE.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "eb5c01bcc26a2bc4d4a8561ff4e811597dee48e2152cce80c4529b7e03ee7951"
+size = 870
+immutable = true
+
+[[evidence]]
+id = "E-0023"
+title = "Batería de mutantes de tools/governance.py CON control sin mutar (el control pasa; 22 mutantes, 22 detectados)"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/governance-mutation-20261113-control.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "c50853efe1f746edd962e79430ec5776e80c0323db1109f0ab1c6ea55f9442df"
+size = 2863
+immutable = true
+note = "Sustituye en valor probatorio a E-0021: la herramienta exige ahora que un clon SIN mutar pase antes de contar mutantes. Reproducible: python3 tools/governance_mutation.py"

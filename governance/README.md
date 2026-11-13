@@ -10,7 +10,7 @@ Sistema de ingeniería autónoma del proyecto: reglas, estado y memoria que perm
    ```
    python3 tools/governance.py check        # el gobierno es coherente (0 errores)
    python3 tools/governance.py status       # rama, HEAD, cambios sin confirmar, tarea en curso, bloqueos
-   python3 tools/governance.py next         # qué puedes empezar sin pedir permiso
+   python3 tools/governance.py next         # qué puedes empezar (o reanudar) sin pedir permiso
    python3 tools/governance.py evidence     # los hashes de las evidencias presentes en esta máquina
    ```
 5. Mira `ACTIVE_TASK.md` (y el último fichero de `checkpoints/`) para reanudar, o toma `next`. Antes de actuar sobre algo irreversible, `python3 tools/governance.py can <acción>`.
@@ -20,7 +20,7 @@ Sistema de ingeniería autónoma del proyecto: reglas, estado y memoria que perm
 ## Qué hay en esta carpeta
 | Fichero | Para qué sirve | Se edita a mano |
 |---|---|---|
-| `CONSTITUTION.md` | Principios inviolables (I-1…I-22): veracidad, evidencia, seguridad, autoridad, continuidad, control de cambios | sí (solo el Director la enmienda) |
+| `CONSTITUTION.md` | Principios inviolables (I-1…I-23): veracidad, evidencia, seguridad, autoridad, continuidad, control de cambios | sí (solo el Director la enmienda) |
 | `AUTHORITY.md` | Roles, matriz de decisión, procedencia de los mensajes, autorizaciones, escalada | sí |
 | `AUTONOMY_POLICY.md` | Niveles A/B/C/X, bucle de trabajo, cuándo preguntar, definición de "hecho" | sí |
 | `SECURITY_POLICY.md` | Teléfono, datos privados, cadena de suministro, evidencia, privilegios, Git, incidentes | sí |
@@ -28,6 +28,9 @@ Sistema de ingeniería autónoma del proyecto: reglas, estado y memoria que perm
 | `ROADMAP.md` | Hitos con puertas de salida y dependencias | sí |
 | `STATE.md` | Estado verificado a un commit; hechos frente a hipótesis; riesgos | sí (cada vez que cambie el panorama) |
 | `HANDOFF.md` | Relevo entre sesiones/modelos; relevos pasados (solo se añaden) | sí |
+| `KNOWN_ISSUES.md` | Fallos preexistentes y deuda **documentada sin corregir** (p. ej. `validate-repo.py`) | sí |
+| `AUDIT_GOVERNANCE_TOOL.md` | Auditoría de `tools/governance.py`: hallazgos, correcciones, pruebas y límites | sí |
+| `ONBOARDING_DRILL.md` | Prueba reproducible de que otro agente puede retomar el proyecto | sí |
 | `checkpoints/` | Puntos de reanudación de la tarea en curso (solo se añaden) | sí |
 | `data/policy.toml` | Roles, niveles y catálogo de acciones (fuente de verdad) | sí (nivel B, revisor: director) |
 | `data/tasks.toml` · `decisions.toml` · `evidence.toml` · `regression.toml` | Cola, decisiones, índice de evidencias, suites de regresión (fuente de verdad) | sí |
@@ -48,9 +51,13 @@ Sistema de ingeniería autónoma del proyecto: reglas, estado y memoria que perm
 
 ## Comandos de mantenimiento
 ```
-python3 tools/governance.py render           # regenerar las vistas tras editar data/*.toml
+python3 tools/governance.py can <acción>      # ¿verde/amarillo/rojo/prohibida? (consulta, no autorización)
+python3 tools/governance.py gate <acción> --task T-NNNN [--consolidate]   # ¿hay una autorización o revisión REGISTRADA? (no ejecuta nada)
+python3 tools/governance.py render           # regenerar las vistas tras editar data/*.toml (único comando que escribe, solo las 4 vistas)
 python3 tools/governance.py render --check   # ¿están al día?
 python3 tools/governance.py regress --list   # las suites de regresión y sus líneas base
 python3 tools/governance.py regress          # ejecutarlas (las de requisitos ausentes se saltan)
-python3 tools/test_governance.py             # pruebas negativas del propio validador
+python3 -W ignore tools/test_governance.py   # pruebas del propio gobierno (permisos, evidencias, selección, solo lectura…)
+python3 -W ignore tools/test_onboarding.py   # prueba de incorporación (parte determinista)
+python3 tools/onboarding_drill.py prompt     # enunciado de la parte 2, para un modelo en frío
 ```

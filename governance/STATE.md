@@ -1,7 +1,7 @@
 # Estado actual de IOS S7
 
-<!-- state-commit: bdf7c53 -->
-**Verificado el 2026-11-13 sobre el commit `bdf7c53`** (HEAD de `herolte-drop-v2` antes de implantar el gobierno). `python3 tools/governance.py check` avisa si HEAD se ha alejado de este commit. Cuando el panorama cambie, actualiza este fichero **y** la marca de arriba.
+<!-- state-commit: a7e9138 -->
+**Verificado el 2026-11-13 sobre el commit `a7e9138`** (primer commit del gobierno; la auditoría de la herramienta y sus correcciones van en el commit siguiente). `python3 tools/governance.py check` avisa si HEAD se ha alejado de este commit. Cuando el panorama cambie, actualiza este fichero **y** la marca de arriba.
 
 ## 1. En una frase
 Todo el trabajo hecho hasta hoy es **en el PC**: hay una candidata BOOT N2 de solo lectura verificada, un pipeline de root portable a Linux con una verificación fallida por 32 nombres Unicode, herramientas probadas y un estudio de la arquitectura gráfica S7GE. **Nada se ha escrito ni probado en el Galaxy S7** (BOOT original de Samsung, Android intacto).
@@ -16,6 +16,8 @@ Todo el trabajo hecho hasta hoy es **en el PC**: hay una candidata BOOT N2 de so
 | Las 7 tablas CoreFoundation de XNU (compiladas desde su fuente) están byte a byte en el kernel desplegado | E-0017 | L2 |
 | El árbol ya contiene un driver de GPU T880 y un cliente de usuario (parches 0225-0267, 0307), Mesa Panfrost en OSMesa y un puente EAGL; **no hay proveedor de Metal** | `docs/S7GE_STATUS.md` | L1 |
 | DROP v2: 36/36 comprobaciones del núcleo (81 510 casos de doble fallo), `test_host_pack` y sintaxis del núcleo correctos | `regression.toml` | L2 |
+| **`tools/governance.py` auditada línea a línea**: 17 hallazgos corregidos, 96 pruebas propias en OK, 6 de incorporación en OK y una batería de 22 mutantes con control sin mutar: 22 detectados y 0 supervivientes; los comandos de validación dejan el árbol y `.git` byte-idénticos | `AUDIT_GOVERNANCE_TOOL.md`, E-0021..E-0023 | L2 |
+| Los 10 elementos sin confirmar del árbol principal (28 ficheros) tienen el mismo SHA-256 antes y después de la auditoría; su HEAD (`8d1cf43`) no cambió | comprobado al cerrar la misión | L2 |
 
 ## 3. Hipótesis (no demostradas)
 - Que la candidata N2 **arranque** en el S7: solo hay comprobaciones de consistencia del PC.
@@ -39,7 +41,9 @@ Remotos: `origin` = `wardevsa/ios-a5xelte` (upstream), `mio` = fork del responsa
 | Autorizar escribir BOOT en el S7 (N1/N2) | Director | T-0012 |
 | Autorizar retirar 24 GiB de sandboxes originales (copia verificada) | Director | T-0007 |
 | Confirmar el archivo en NTFS de `lab-full.img.partial` y `os.apfs` | Director | T-0019 |
-| Ratificar D-0001 (este gobierno), D-0007 (rango 0400+), D-0008 (renumerar), D-0009 (DROP v2) | Jefe técnico / Director | T-0001, T-0016 |
+| Ratificar D-0001 (este gobierno), D-0011, D-0012, D-0013, D-0007 (rango 0400+), D-0008 (renumerar), D-0009 (DROP v2) | Jefe técnico / Director | T-0001, T-0016, T-0021 |
+| Alinear los permisos de Claude Code con `policy.toml` (convierte la disciplina asistida en control técnico) | Director | T-0021 |
+| Ejecutar la parte 2 de la prueba de incorporación con un modelo en frío | Jefe técnico / Director | T-0020 |
 
 ## 6. Riesgos
 1. **Evidencia volátil:** `lab-full.img.partial` y el scratchpad viven en `/tmp` (se pierden al reiniciar). Copias de seguridad: E-0011..E-0017; la imagen de laboratorio **no está archivada** (T-0019).
@@ -49,7 +53,8 @@ Remotos: `origin` = `wardevsa/ios-a5xelte` (upstream), `mio` = fork del responsa
 5. **Solo hay un teléfono y un camino de vuelta:** BOOT original copiado (E-0009); el EFS (IMEI) está respaldado fuera del teléfono (`~/HackiOS/backups/device-herolte/2026-11-12/`).
 
 ## 7. Verificación de esta línea base (2026-11-13)
-`governance-tests` y `check`: ver `python3 tools/governance.py regress`. Suites ejecutadas aparte: verify-boot 22 OK · plutil-lite 7 OK · tune-root 30 PASS · stage-portable 20 PASS · hfsplus-names 16 OK · drop-v2-core 36/36 (1 min 56 s) · drop-v2-host-pack OK · drop-v2-kernel-syntax OK · preflight-kit 14/1/0 · validate-repo **XFAIL** (deuda T-0018: huecos y duplicados en la numeración de parches).
+`python3 tools/governance.py regress` (suites y líneas base en `data/regression.toml`): governance-tests **96 OK** · governance-onboarding **6 OK** · governance-mutation **22/22 detectados** (E-0021) · verify-boot 22 OK · plutil-lite 7 OK · tune-root 30 PASS · stage-portable 20 PASS · hfsplus-names 16 OK · drop-v2-core 36/36 (1 min 56 s) · drop-v2-host-pack OK · drop-v2-kernel-syntax OK · preflight-kit 14/1/0 · validate-repo **XFAIL cuantificado: 5 errores `Gap in patch sequence`** (KI-0001, T-0018; se vigila que no aumente).
+**Evidencias** (`python3 tools/governance.py evidence --all --strict`): **22 OK, 0 sin verificar** (hash y tamaño reales, incluida la imagen de laboratorio de 20 GiB). **Nivel:** todo lo anterior es **host L2** o compilación **L1**; no hay ninguna evidencia L3/L4 de esta unidad.
 
 ## 8. Dónde mirar
-`TASKS.md` · `ACTIVE_TASK.md` · `DECISIONS.md` · `EVIDENCE.md` · `ROADMAP.md` · `ARCHITECTURE.md` · `docs/herolte-preparacion-pruebas.md` · `docs/herolte-unicode-hfsplus.md` · `docs/S7GE_STATUS.md` · `HANDOFF.md`.
+`KNOWN_ISSUES.md` (deuda sin ocultar) · `AUDIT_GOVERNANCE_TOOL.md` · `ONBOARDING_DRILL.md` · `TASKS.md` · `ACTIVE_TASK.md` · `DECISIONS.md` · `EVIDENCE.md` · `ROADMAP.md` · `ARCHITECTURE.md` · `docs/herolte-preparacion-pruebas.md` · `docs/herolte-unicode-hfsplus.md` · `docs/S7GE_STATUS.md` · `HANDOFF.md`.

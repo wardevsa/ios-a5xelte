@@ -132,3 +132,36 @@ approval_ref = "Mensaje del Director 'Todavía NO hemos comenzado las pruebas re
 rationale = "Nada se ha probado en hardware: las candidatas pasan comprobaciones de consistencia del PC, no arrancan."
 consequences = "T-0012 queda bloqueada hasta que el director autorice la escritura de BOOT con imagen, hash y copias previas nombrados."
 reversal = "Decisión posterior del director que autorice la prueba."
+
+[[decision]]
+id = "D-0011"
+title = "Mecanismo de autorización roja y de revisión amarilla: authorizes + valid_until + gate; review_ref antes de pasar a done"
+date = "2026-11-13"
+scope = "process"
+status = "PROPOSED"
+proposer = "ingeniero"
+rationale = "La auditoría de tools/governance.py (F-09, F-10) encontró que cualquier decisión del director servía de autorización para cualquier acción roja y que una tarea amarilla podía pasar a done sin revisión. La corrección exige que la decisión nombre la acción, sea vigente y del director, y que lo amarillo tenga review_ref del revisor que fija la política."
+consequences = "Cambia cómo se registran las autorizaciones del Director (campo authorizes en decisions.toml) y las revisiones del jefe técnico (review_ref en tasks.toml). Ninguna herramienta ejecuta nada por ello."
+reversal = "Quitar los campos y las comprobaciones de tools/governance.py (git revert)."
+
+[[decision]]
+id = "D-0012"
+title = "Los niveles de evidencia (domain, level, device) se declaran y nunca se elevan automáticamente; una suite del PC no puede declarar hardware"
+date = "2026-11-13"
+scope = "process"
+status = "PROPOSED"
+proposer = "ingeniero"
+rationale = "El director pidió separar pruebas del host, compilación, GPU física e integración iOS y prohibió elevar un nivel automáticamente (F-13). Se codifica en el esquema de evidence.toml y regression.toml y en check."
+consequences = "Toda evidencia nueva debe llevar dominio, nivel y dispositivo; una tarea puede exigir min_evidence (p. ej. L3 en this-unit para las pruebas en el S7)."
+reversal = "Retirar los campos y las reglas de check."
+
+[[decision]]
+id = "D-0013"
+title = "Alinear los permisos de Claude Code (settings.json) con policy.toml para convertir la disciplina asistida en un control técnico"
+date = "2026-11-13"
+scope = "policy"
+status = "PROPOSED"
+proposer = "ingeniero"
+rationale = "La herramienta informa pero no puede impedir que un agente ejecute un comando (KI-0004, límite 1 de la auditoría). Solo la configuración de permisos del propio agente lo impide."
+consequences = "Requiere cambiar la configuración del agente: acción roja host-config-change; no se ha tocado."
+reversal = "Restaurar el settings.json anterior (copia previa obligatoria)."

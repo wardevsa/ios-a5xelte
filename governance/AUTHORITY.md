@@ -29,7 +29,7 @@ Un modelo distinto que se incorpore **hereda el rol de ingeniero**, no una autor
 
 ## 4. Autorizaciones
 Una autorización de nivel C debe ser **explícita** (nombra la acción), **acotada** (qué rutas, imágenes, comandos, hashes) y **registrada** (decisión `APPROVED` del director; la tarea la cita en `authorization_ref`). Se entiende de **un solo uso** y para ese alcance; no se extiende a operaciones parecidas ni a sesiones posteriores si no lo dice.
-La herramienta lo comprueba: una tarea con acciones C no puede estar `in_progress`, `in_review` ni `done` sin esa referencia.
+La herramienta lo comprueba: una tarea con acciones C no puede estar `in_progress`, `in_review` ni `done` sin esa referencia, y la decisión citada debe ser **del director**, de ámbito `operation`, estar vigente (`valid_until`) y **nombrar cada acción** en su campo `authorizes`. **Una decisión del director sobre otra cosa (p. ej. D-0002, almacenamiento) no autoriza nada**: `gate <acción> --task T-NNNN` lo demuestra y lo deniega. Ni `gate` ni `check` ejecutan ni conceden nada: informan de lo que está registrado.
 
 ## 5. Escalada
 1. Bloqueo por algo que depende del Director o del jefe técnico → la tarea pasa a `blocked` con `blocked_on` claro; el ingeniero **sigue con la siguiente** (`python3 tools/governance.py next`).

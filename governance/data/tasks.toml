@@ -135,6 +135,7 @@ actions = ["device-read", "device-write-boot"]
 blocked_on = "autorización explícita del director (D-0010); candidata y verificación en E-0001..E-0006"
 acceptance = "Imagen con SHA-256 y verificador PASS nombrada en la autorización; copias de BOOT y EFS fuera del teléfono; resultado registrado como evidencia del dispositivo, separado de las comprobaciones del PC."
 evidence = ["E-0001", "E-0003", "E-0004", "E-0009"]
+min_evidence = { level = "L3", device = "this-unit" }
 
 [[task]]
 id = "T-0013"
@@ -178,6 +179,7 @@ priority = 9
 owner = "ingeniero"
 depends_on = ["T-0009"]
 actions = ["patch-series-change", "local-commit"]
+requires_decisions = ["D-0007", "D-0008"]
 blocked_on = "decisión: revisión del jefe técnico de D-0007 y D-0008 (PROPOSED)"
 acceptance = "Serie sin colisiones; ci_check aplicable; kernel candidato reconstruido y candidata N2 reverificada con nombre nuevo."
 
@@ -214,3 +216,26 @@ actions = ["archive-copy"]
 blocked_on = "confirmación del director: ambos ficheros se reservaron a su decisión en el informe de almacenamiento (la copia no los mueve ni toca)"
 acceptance = "Copia dispersa (--sparse) con compare y SHA-256 igual al registrado en E-0010; origen intacto; entrada nueva en evidence.toml."
 evidence = ["E-0010"]
+
+[[task]]
+id = "T-0020"
+title = "Ejecutar la parte 2 de la prueba de incorporación (governance/ONBOARDING_DRILL.md) con un modelo en frío distinto del autor"
+status = "blocked"
+priority = 5
+owner = "jefe-tecnico"
+depends_on = ["T-0001"]
+actions = ["read-analysis"]
+blocked_on = "requiere un modelo que no haya escrito el gobierno y acceso de solo lectura a un clon: lo ejecuta el jefe técnico o el director"
+acceptance = "python3 tools/onboarding_drill.py grade answers.json sale con 0 (10 de 10); el resultado y el modelo usado se anotan en un checkpoint."
+
+[[task]]
+id = "T-0021"
+title = "Alinear los permisos de Claude Code con policy.toml (lista de órdenes permitidas/denegadas por nivel)"
+status = "blocked"
+priority = 6
+owner = "director"
+depends_on = ["T-0001"]
+actions = ["host-config-change"]
+requires_decisions = ["D-0013"]
+blocked_on = "autorización del director (acción roja) y aprobación de D-0013; el ingeniero prepara la propuesta de lista, no la aplica"
+acceptance = "Propuesta de configuración revisada por el jefe técnico, aplicada por el director con copia previa del fichero, y una prueba de que una orden roja es rechazada por el propio agente."

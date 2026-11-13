@@ -1,0 +1,4 @@
+# Pin de la política: el hash de policy.toml que está vigente. `governance.py check` falla si policy.toml cambia sin actualizar este fichero.
+# Cambiar la política es la acción `policy-change` (nivel B, revisor: director). El pin NO sustituye la ratificación: ver `ratification`.
+sha256 = "5a18cd6f8cfb9664f1d3fa14c36f17346b33ea016dbbe3d455e4e24cea41553e"
+ratification = "D-0001"

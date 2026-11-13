@@ -2,29 +2,31 @@
 
 # Cola de tareas
 
-Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acciones (`policy.toml`): **A** autónomo, **B** revisión antes de consolidar, **C** autorización explícita del Director, **X** prohibido.
+Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acciones (`policy.toml`): **A** verde (autónomo), **B** amarillo (revisión antes de consolidar), **C** rojo (autorización explícita del Director), **X** rojo/prohibido. Una acción desconocida cuenta como X.
 
-| ID | Estado | Prio | Título | Depende de | Nivel | Bloqueo |
-|---|---|---|---|---|---|---|
-| T-0001 | in_review | 1 | Misión 0: implantar el sistema de gobierno de ingeniería autónoma (governance/, tools/governance.py, puntero en AGENTS.md) | — | B | — |
-| T-0002 | done | 2 | Auditoría Unicode HFS+ (XNU frente a Linux): causa, tabla de los 32 nombres, corrección propuesta | — | A | — |
-| T-0009 | ready | 2 | Plan de integración con origin/herolte: aplicabilidad de sus 0332-0334 sobre nuestra rama y propuesta de renumeración (informe) | — | A | — |
-| T-0003 | blocked | 3 | Decidir el bloqueo Unicode: aplicar la corrección 1-5 (nodecompose + nombres en forma XNU), la alternativa (B) o la (C) | T-0002 | B | decisión del director (D-0006 mantiene el generador sin cambios hasta entonces) |
-| T-0008 | ready | 3 | S7GE_ABI.md: el ABI real de HeroGPU (selectores 0-7), qué valida el kernel y la brecha frente al §23 de S7GE | — | A | — |
-| T-0005 | ready | 4 | rev2: ronda 2 de mutación (49 mutantes) sobre las pruebas reforzadas, con presupuesto de disco | — | A | — |
-| T-0019 | blocked | 4 | Archivar en el NTFS la imagen de laboratorio lab-full.img.partial (y os.apfs): hoy solo existen en /tmp, que se pierde al reiniciar | — | A | confirmación del director: ambos ficheros se reservaron a su decisión en el informe de almacenamiento (la copia no los mueve ni toca) |
-| T-0006 | blocked | 5 | rev2: revisión independiente nueva, PINNED/APPROVED.sha256 como artefactos de revisión e informe A-I | T-0005 | A | T-0005 |
-| T-0004 | blocked | 6 | R2: experimento nodecompose con imágenes de 512 MiB A/B/C (monta imágenes, sudo) | T-0005, T-0006 | C | autorización explícita del director (D-0005) y cierre de T-0005/T-0006 |
-| T-0010 | ready | 7 | S7GE_HARDWARE.md: mapa de registros y erratas T880 r2p0 con el checklist de la auditoría Panfrost, y propuesta de nodo de GPU en el ADT | — | A | — |
-| T-0011 | ready | 8 | Auditoría de licencias de lo que se pretende reutilizar (Mesa, metal2vulkan, hakios-gl, A5XELTE) | — | A | — |
-| T-0012 | blocked | 9 | Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP | T-0013 | C | autorización explícita del director (D-0010); candidata y verificación en E-0001..E-0006 |
-| T-0013 | blocked | 9 | Decidir el cargador de las pruebas: el de clang (conveniencia) o compilar con el GCC aarch64 de Arm | — | C | decisión del director (autorizar ejecutar el GCC descargado o compilarlo él; aviso del preflight) |
-| T-0016 | blocked | 9 | Aplicar la renumeración de parches y fusionar con origin/herolte (si el jefe técnico aprueba D-0008) | T-0009 | B | decisión: revisión del jefe técnico de D-0007 y D-0008 (PROPOSED) |
-| T-0014 | blocked | 10 | Decidir qué argumento quitar de la línea diaria (604/607 caracteres) para poder añadir herodrop=0 y herosplash=1 | — | B | decisión del director o del jefe técnico |
-| T-0015 | blocked | 11 | Root de iOS de 20 GiB válido y verificable (fsck_hfs sin errores, nombres coherentes con XNU) | T-0003, T-0004 | B | T-0003 (decisión) y T-0004 (R2) |
-| T-0007 | blocked | 12 | Retirar los originales de 224 sandboxes (~24 GiB) ya archivados y verificados | — | C | autorización explícita del director (borrado); copia verificada en E-0011 |
-| T-0017 | blocked | 13 | Publicar las ramas de trabajo (git push) tras la revisión del gobierno | T-0001 | C | autorización explícita del director (nombrando rama y remoto) |
-| T-0018 | blocked | 14 | Arreglar tools/validate-repo.py (huecos y duplicados en la numeración de parches, M3 de la auditoría) | T-0016 | B | T-0016 (la numeración definitiva de la serie) |
+| ID | Estado | Prio | Propietario | Título | Depende de | Nivel | Bloqueo |
+|---|---|---|---|---|---|---|---|
+| T-0001 | in_review | 1 | ingeniero | Misión 0: implantar el sistema de gobierno de ingeniería autónoma (governance/, tools/governance.py, puntero en AGENTS.md) | — | B amarillo | — |
+| T-0002 | done | 2 | ingeniero | Auditoría Unicode HFS+ (XNU frente a Linux): causa, tabla de los 32 nombres, corrección propuesta | — | A verde | — |
+| T-0009 | ready | 2 | ingeniero | Plan de integración con origin/herolte: aplicabilidad de sus 0332-0334 sobre nuestra rama y propuesta de renumeración (informe) | — | A verde | — |
+| T-0003 | blocked | 3 | director | Decidir el bloqueo Unicode: aplicar la corrección 1-5 (nodecompose + nombres en forma XNU), la alternativa (B) o la (C) | T-0002 | B amarillo | decisión del director (D-0006 mantiene el generador sin cambios hasta entonces) |
+| T-0008 | ready | 3 | ingeniero | S7GE_ABI.md: el ABI real de HeroGPU (selectores 0-7), qué valida el kernel y la brecha frente al §23 de S7GE | — | A verde | — |
+| T-0005 | ready | 4 | ingeniero | rev2: ronda 2 de mutación (49 mutantes) sobre las pruebas reforzadas, con presupuesto de disco | — | A verde | — |
+| T-0019 | blocked | 4 | ingeniero | Archivar en el NTFS la imagen de laboratorio lab-full.img.partial (y os.apfs): hoy solo existen en /tmp, que se pierde al reiniciar | — | A verde | confirmación del director: ambos ficheros se reservaron a su decisión en el informe de almacenamiento (la copia no los mueve ni toca) |
+| T-0006 | blocked | 5 | ingeniero | rev2: revisión independiente nueva, PINNED/APPROVED.sha256 como artefactos de revisión e informe A-I | T-0005 | A verde | T-0005 |
+| T-0020 | blocked | 5 | jefe-tecnico | Ejecutar la parte 2 de la prueba de incorporación (governance/ONBOARDING_DRILL.md) con un modelo en frío distinto del autor | T-0001 | A verde | requiere un modelo que no haya escrito el gobierno y acceso de solo lectura a un clon: lo ejecuta el jefe técnico o el director |
+| T-0004 | blocked | 6 | ingeniero | R2: experimento nodecompose con imágenes de 512 MiB A/B/C (monta imágenes, sudo) | T-0005, T-0006 | C rojo | autorización explícita del director (D-0005) y cierre de T-0005/T-0006 |
+| T-0021 | blocked | 6 | director | Alinear los permisos de Claude Code con policy.toml (lista de órdenes permitidas/denegadas por nivel) | T-0001 | C rojo | autorización del director (acción roja) y aprobación de D-0013; el ingeniero prepara la propuesta de lista, no la aplica |
+| T-0010 | ready | 7 | ingeniero | S7GE_HARDWARE.md: mapa de registros y erratas T880 r2p0 con el checklist de la auditoría Panfrost, y propuesta de nodo de GPU en el ADT | — | A verde | — |
+| T-0011 | ready | 8 | ingeniero | Auditoría de licencias de lo que se pretende reutilizar (Mesa, metal2vulkan, hakios-gl, A5XELTE) | — | A verde | — |
+| T-0012 | blocked | 9 | director | Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP | T-0013 | C rojo | autorización explícita del director (D-0010); candidata y verificación en E-0001..E-0006 |
+| T-0013 | blocked | 9 | director | Decidir el cargador de las pruebas: el de clang (conveniencia) o compilar con el GCC aarch64 de Arm | — | C rojo | decisión del director (autorizar ejecutar el GCC descargado o compilarlo él; aviso del preflight) |
+| T-0016 | blocked | 9 | ingeniero | Aplicar la renumeración de parches y fusionar con origin/herolte (si el jefe técnico aprueba D-0008) | T-0009 | B amarillo | decisión: revisión del jefe técnico de D-0007 y D-0008 (PROPOSED) |
+| T-0014 | blocked | 10 | director | Decidir qué argumento quitar de la línea diaria (604/607 caracteres) para poder añadir herodrop=0 y herosplash=1 | — | B amarillo | decisión del director o del jefe técnico |
+| T-0015 | blocked | 11 | ingeniero | Root de iOS de 20 GiB válido y verificable (fsck_hfs sin errores, nombres coherentes con XNU) | T-0003, T-0004 | B amarillo | T-0003 (decisión) y T-0004 (R2) |
+| T-0007 | blocked | 12 | ingeniero | Retirar los originales de 224 sandboxes (~24 GiB) ya archivados y verificados | — | C rojo | autorización explícita del director (borrado); copia verificada en E-0011 |
+| T-0017 | blocked | 13 | ingeniero | Publicar las ramas de trabajo (git push) tras la revisión del gobierno | T-0001 | C rojo | autorización explícita del director (nombrando rama y remoto) |
+| T-0018 | blocked | 14 | ingeniero | Arreglar tools/validate-repo.py (huecos y duplicados en la numeración de parches, M3 de la auditoría) | T-0016 | B amarillo | T-0016 (la numeración definitiva de la serie) |
 
 ## Criterios de aceptación
 
@@ -36,7 +38,9 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 - **T-0005** rev2: ronda 2 de mutación (49 mutantes) sobre las pruebas reforzadas, con presupuesto de disco: Cada mutante clasificado DETECTADO / EQUIVALENTE DEMOSTRADO / SOBREVIVE con evidencia; N25 en el resumen final; 5 baterías consecutivas; sin llenar el disco.
 - **T-0019** Archivar en el NTFS la imagen de laboratorio lab-full.img.partial (y os.apfs): hoy solo existen en /tmp, que se pierde al reiniciar: Copia dispersa (--sparse) con compare y SHA-256 igual al registrado en E-0010; origen intacto; entrada nueva en evidence.toml.
 - **T-0006** rev2: revisión independiente nueva, PINNED/APPROVED.sha256 como artefactos de revisión e informe A-I: Informe A-I con veredicto R2_REV2_VALIDADO o NO_VALIDADO; el ingeniero no autoriza R2.
+- **T-0020** Ejecutar la parte 2 de la prueba de incorporación (governance/ONBOARDING_DRILL.md) con un modelo en frío distinto del autor: python3 tools/onboarding_drill.py grade answers.json sale con 0 (10 de 10); el resultado y el modelo usado se anotan en un checkpoint.
 - **T-0004** R2: experimento nodecompose con imágenes de 512 MiB A/B/C (monta imágenes, sudo): fsck_hfs -n rc=0 sobre B/C con nombres en forma XNU, hashes de las imágenes originales intactos, evidencias nuevas con nombre nuevo.
+- **T-0021** Alinear los permisos de Claude Code con policy.toml (lista de órdenes permitidas/denegadas por nivel): Propuesta de configuración revisada por el jefe técnico, aplicada por el director con copia previa del fichero, y una prueba de que una orden roja es rechazada por el propio agente.
 - **T-0010** S7GE_HARDWARE.md: mapa de registros y erratas T880 r2p0 con el checklist de la auditoría Panfrost, y propuesta de nodo de GPU en el ADT: Cada punto del checklist marcado verificado / no verificado con referencia; el nodo ADT propuesto solo en documento.
 - **T-0011** Auditoría de licencias de lo que se pretende reutilizar (Mesa, metal2vulkan, hakios-gl, A5XELTE): Tabla componente / licencia / evidencia / compatibilidad con APSL-2.0 y MIT; lo no verificado queda marcado.
 - **T-0012** Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP: Imagen con SHA-256 y verificador PASS nombrada en la autorización; copias de BOOT y EFS fuera del teléfono; resultado registrado como evidencia del dispositivo, separado de las comprobaciones del PC.

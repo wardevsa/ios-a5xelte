@@ -1,15 +1,15 @@
 # Política de autonomía
 
 Catálogo completo de acciones y su nivel: `data/policy.toml`. Consulta rápida: `python3 tools/governance.py can <acción>`
-(salida 0 = autónomo, 10 = revisar antes de consolidar, 20 = autorización del Director, 30 = prohibido).
+(salida 0 = autónomo, 10 = revisar antes de consolidar, 20 = autorización del Director, 30 = prohibido). **Colores del Director:** nivel A = **verde**, B = **amarillo**, C y X = **rojo**.
 
 ## 1. Los cuatro niveles
 | Nivel | Qué es | Ejemplos | Regla |
 |---|---|---|---|
-| **A** autónomo | No se pregunta | leer y medir; escribir código y pruebas en el worktree; commits locales; construir candidatas con nombre nuevo; archivar copias verificadas; documentación y gobierno | Se hace, se prueba, se documenta, se anota en un checkpoint |
-| **B** revisión antes de consolidar | Se implementa y se confirma en local, **no se consolida** | arquitectura e interfaces críticas, serie de parches y kernel, generador del root, política | Registrar como decisión `PROPOSED`; el revisor (`policy.toml`) la revisa; solo entonces se fusiona/publica/congela |
-| **C** autorización del Director | Antes de ejecutar | `sudo` y montajes (R2), push/PR/CI, borrar o mover datos, tocar el teléfono (leer o escribir BOOT/USERDATA), instalar herramientas, cambiar el PC | Decisión `APPROVED` del director, acotada; la tarea la cita en `authorization_ref` |
-| **X** prohibido | Nunca | escribir EFS/RECOVERY/bootloader; saltarse permisos; Git destructivo; reparar con escritura evidencias; filtrar datos privados | Ni con autorización verbal: solo el Director, por escrito, cambiando la regla |
+| **A** verde, autónomo | No se pregunta | leer y medir; escribir código y pruebas en el worktree; commits locales; construir candidatas con nombre nuevo; archivar copias verificadas; documentación y gobierno | Se hace, se prueba, se documenta, se anota en un checkpoint |
+| **B** amarillo, revisión antes de consolidar | Se implementa y se confirma en local, **no se consolida** | arquitectura e interfaces críticas, serie de parches y kernel, generador del root, política | Registrar como decisión `PROPOSED`; el revisor (`policy.toml`) la revisa; solo entonces se fusiona/publica/congela |
+| **C** rojo, autorización del Director | Antes de ejecutar | `sudo` y montajes (R2), push/PR/CI, borrar o mover datos, tocar el teléfono (leer o escribir BOOT/USERDATA), instalar herramientas, cambiar el PC | Decisión `APPROVED` del director, acotada; la tarea la cita en `authorization_ref` |
+| **X** rojo, prohibido | Nunca | escribir EFS/RECOVERY/bootloader; saltarse permisos; Git destructivo; reparar con escritura evidencias; filtrar datos privados | Ni con autorización verbal: solo el Director, por escrito, cambiando la regla |
 
 ## 2. El bucle de trabajo del ingeniero
 1. `python3 tools/governance.py status` y `check`. Leer `STATE.md`, `ACTIVE_TASK.md` y el último checkpoint.
@@ -41,3 +41,20 @@ Una tarea de nivel B o de gobierno queda `in_review`, no `done`, hasta su revisi
 
 ## 7. Qué hacer si algo sale mal
 Ver `SECURITY_POLICY.md` §9: parar, conservar, no "arreglar" borrando, informar con los hechos y la hipótesis más probable, y marcar el nivel de confianza.
+
+## 8. Qué aplica la herramienta (y qué no)
+`tools/governance.py` **aplica** la política donde puede; `AUDIT_GOVERNANCE_TOOL.md` detalla cada control y su prueba.
+| Control | Cómo se aplica |
+|---|---|
+| Rojo bloqueado salvo autorización expresa | `gate <acción> --task T-NNNN` solo informa de una autorización **registrada** (`authorization_ref` → decisión APPROVED del director, ámbito `operation`, que **nombra la acción** en `authorizes` y está vigente). Sin eso: 20 (rojo) o 30 (prohibida). `check` impide tareas rojas en curso o hechas sin esa referencia |
+| Amarillo no se integra solo | `gate --consolidate` y `check` exigen `review_ref` a una decisión APPROVED del revisor de esa acción antes de `done`; una `PROPOSED` no cuenta |
+| Falla cerrada | una acción desconocida es nivel X, nunca verde |
+| Ninguna comprobación es una autorización | `can`, `gate`, `check`, `next` y `status` lo dicen en su salida y no ejecutan nada |
+| `check` es de solo lectura | no escribe ficheros ni cambia el estado de Git (`--no-optional-locks`); lo comprueba una prueba sobre el clon completo, `.git` incluido |
+| `render` escribe solo las 4 vistas | de forma atómica; se niega a sobrescribir un fichero que no sea generado o un enlace simbólico |
+| Selección de tareas | `next` reanuda la tarea en curso; si no, elige entre las `ready` del ingeniero, sin bloqueo, con dependencias `done` y decisiones requeridas APPROVED, solo verdes o amarillas (amarillas: "solo en local"); nunca rojas ni prohibidas |
+| Evidencias | `evidence` marca `OK` solo si hash y tamaño coinciden; todo lo demás es un estado propio y `--strict` falla si algo no se pudo verificar |
+| Niveles de evidencia | se **declaran** (`domain`, `level`, `device`); nada los infiere ni los eleva; una prueba del PC no puede declarar hardware |
+| Regresión | `regress` pasa cada suite por una pantalla de seguridad y falla si una suite modifica el árbol Git |
+| Política inmutable en silencio | `policy.pin.toml` fija el hash de `policy.toml` |
+**Límite:** esto es disciplina asistida por herramienta, no un cortafuegos (KI-0004): no impide que un agente ejecute un comando en su terminal. Para eso hay que alinear los permisos de Claude Code (acción roja `host-config-change`).

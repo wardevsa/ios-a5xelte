@@ -4,6 +4,8 @@
 
 [[suite]]
 id = "governance-check"
+domain = "host"
+level = "L2"
 title = "Validación del sistema de gobierno (datos, vistas, enlaces, STATE.md)"
 command = ["python3", "-I", "tools/governance.py", "check"]
 cost = "1 s"
@@ -11,13 +13,36 @@ baseline = "0 errores"
 
 [[suite]]
 id = "governance-tests"
+domain = "host"
+level = "L2"
 title = "Pruebas negativas del validador de gobierno"
 command = ["python3", "-W", "ignore", "tools/test_governance.py"]
 cost = "2 s"
-baseline = "37 pruebas OK (incluye mutaciones del propio validador)"
+baseline = "96 pruebas OK: permisos, operaciones prohibidas, integridad de evidencias, generación de vistas, recuperación ante errores, selección de tareas, solo lectura e independencia de rutas"
+
+[[suite]]
+id = "governance-onboarding"
+domain = "host"
+level = "L2"
+title = "Prueba de incorporación (parte determinista): README literal en un clon con HOME vacío, afirmaciones de STATE/HANDOFF frente al estado real, simulacro de reanudación, simulacro en frío"
+command = ["python3", "-W", "ignore", "tools/test_onboarding.py"]
+cost = "5 s"
+baseline = "6 pruebas OK"
+
+[[suite]]
+id = "governance-mutation"
+domain = "host"
+level = "L2"
+title = "Batería de 22 mutantes de tools/governance.py (cada uno desactiva una regla; la suite debe caer)"
+command = ["python3", "tools/governance_mutation.py"]
+timeout = 1500
+cost = "5 min"
+baseline = "control sin mutar: pasa; 22 mutantes, 22 detectados, 0 sobreviven (E-0023)"
 
 [[suite]]
 id = "verify-boot"
+domain = "host"
+level = "L2"
 title = "Verificador de imágenes BOOT (perfil N2 de solo lectura), positivas y negativas"
 command = ["python3", "-W", "ignore", "tools/test_verify_boot.py"]
 requires = ["~/HackiOS/builds/device-day/boot-candidates-n2-run2", "~/HackiOS/backups/device-herolte/2026-11-12/BOOT.img"]
@@ -26,6 +51,8 @@ baseline = "22 pruebas OK"
 
 [[suite]]
 id = "plutil-lite"
+domain = "host"
+level = "L2"
 title = "plutil_lite: tipos, estructuras y formatos"
 command = ["python3", "-W", "ignore", "tools/test_plutil_lite.py"]
 cost = "2 s"
@@ -33,6 +60,8 @@ baseline = "7 pruebas OK"
 
 [[suite]]
 id = "tune-root"
+domain = "host"
+level = "L2"
 title = "Tuning del root bajo fakeroot (entradas y salidas del árbol)"
 command = ["bash", "tools/test_tune_ios_root.sh"]
 requires = ["/usr/bin/fakeroot"]
@@ -41,6 +70,8 @@ baseline = "30 PASS, 0 FALLA"
 
 [[suite]]
 id = "stage-portable"
+domain = "host"
+level = "L2"
 title = "Staging del root portable a Linux bajo fakeroot"
 command = ["bash", "tools/test_stage_portable.sh"]
 requires = ["/usr/bin/fakeroot"]
@@ -49,6 +80,8 @@ baseline = "20 PASS, 0 FALLA"
 
 [[suite]]
 id = "hfsplus-names"
+domain = "host"
+level = "L2"
 title = "Nombres Unicode HFS+: modelo XNU frente a XNU real y a la tabla de Linux"
 command = ["python3", "-W", "ignore", "tools/hfsplus-names/test_hfs_names.py"]
 requires = ["~/HackiOS/builds/device-day/artifacts/buildtree-0332-fork-8d1cf43/buildtree.tgz", "/usr/bin/gcc"]
@@ -57,6 +90,8 @@ baseline = "16 pruebas OK (las de evidencia se omiten si no existe el catálogo 
 
 [[suite]]
 id = "drop-v2-core"
+domain = "host"
+level = "L2"
 title = "Núcleo de DROP v2 (C real por ctypes, cortes de alimentación, doble fallo)"
 command = ["python3", "-I", "xnu/drop-v2/test/test_core.py"]
 timeout = 600
@@ -65,6 +100,8 @@ baseline = "36/36 comprobaciones correctas (81 510 casos de doble fallo)"
 
 [[suite]]
 id = "drop-v2-host-pack"
+domain = "host"
+level = "L2"
 title = "Empaquetado de DROP v2 en el anfitrión"
 command = ["python3", "-I", "xnu/drop-v2/test/test_host_pack.py"]
 cost = "2 s"
@@ -72,6 +109,8 @@ baseline = "todo correcto"
 
 [[suite]]
 id = "drop-v2-kernel-syntax"
+domain = "build"
+level = "L1"
 title = "Sintaxis del núcleo de DROP v2 contra cabeceras simuladas"
 command = ["python3", "-I", "xnu/drop-v2/test/check_kernel_syntax.py"]
 cost = "1 s"
@@ -79,6 +118,8 @@ baseline = "OK"
 
 [[suite]]
 id = "preflight-kit"
+domain = "host"
+level = "L2"
 title = "Preflight del kit del día del dispositivo y del kernel DROP v2 (sin teléfono)"
 command = ["python3", "-I", "xnu/drop-v2/deviceday/preflight.py", "--kernel", "~/HackiOS/builds/device-day/artifacts/kernel-0334-v2-herolte-drop-v2/kernel.development.herolte"]
 requires = ["~/HackiOS/builds/device-day/artifacts/kernel-0334-v2-herolte-drop-v2/kernel.development.herolte"]
@@ -87,8 +128,12 @@ baseline = "14 correctas, 1 aviso (no hay GCC aarch64), 0 fallos"
 
 [[suite]]
 id = "validate-repo"
+domain = "host"
+level = "L2"
 title = "Integridad del repositorio (sintaxis de herramientas, numeración de parches)"
 command = ["python3", "-I", "tools/validate-repo.py"]
 known_failing = true
+known_failure_count = 5
+known_failure_pattern = "Gap in patch sequence"
 cost = "5 s"
-baseline = "FALLA: huecos y duplicados en la numeración de parches (deuda M3 de la auditoría 2026-11-12, tarea T-0018); las 36 herramientas Python y 15 scripts de shell pasan la sintaxis"
+baseline = "FALLA con 5 errores 'Gap in patch sequence' (0106→0108, 0112→0114, 0115→0117, 0129→0200, 0333→0334); las herramientas Python y los scripts de shell pasan la sintaxis. Deuda registrada en KNOWN_ISSUES.md (KI-0001) y T-0018; no se corrige fuera de alcance"

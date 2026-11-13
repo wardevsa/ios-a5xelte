@@ -19,18 +19,22 @@ can_approve = []
 notes = "Investiga, planifica, implementa, prueba, depura y documenta. Decide por sí mismo dentro del nivel A. Propone; no aprueba decisiones."
 
 [tiers.A]
+color = "verde"
 name = "autónomo"
 description = "Se hace sin pedir permiso, se registra y se puede revertir."
 
 [tiers.B]
+color = "amarillo"
 name = "revisión antes de consolidar"
 description = "Se puede investigar e implementar en una rama o worktree de trabajo y confirmar en local, pero no se consolida (fusión, publicación, congelar interfaz) sin la revisión del revisor indicado."
 
 [tiers.C]
+color = "rojo"
 name = "autorización explícita del Director"
 description = "Exige una autorización expresa, acotada (qué, dónde, cuánto tiempo) y registrada como decisión APPROVED del director antes de ejecutarla."
 
 [tiers.X]
+color = "rojo"
 name = "prohibida"
 description = "Prohibida por las reglas del proyecto (AGENTS.md y esta política). No se ejecuta ni con autorización verbal; solo el Director puede cambiar la regla, por escrito."
 
