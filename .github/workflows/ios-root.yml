@@ -26,7 +26,7 @@ permissions:
 jobs:
   root:
     if: github.event.repository.private == true
-    runs-on: macos-14
+    runs-on: macos-15-intel
     timeout-minutes: 180
     env:
       GH_TOKEN: ${{ github.token }}
@@ -91,6 +91,10 @@ jobs:
           sudo env STAGE_ALL_APPS=1 STAGE_FULL=1 bash tools/a5xelte-stage-ios-root.sh "$os" "$sys" "$app" "$root"
           build=$(/usr/libexec/PlistBuddy -c 'Print :ProductBuildVersion' ipsw/BuildManifest.plist)
           sudo bash tools/herolte-tune-ios-root.sh "$root" "$build"
+          # the wallpapers' HEIC pictures as PNG (no HEVC decoder on the phone), and a copy for the drop zone
+          sudo bash tools/herolte-wallpaper-png.sh "$root" "$PWD/wallout"
+          sudo chown -R "$(id -u)" wallout
+          tar -C wallout -czf walls.tar.gz walls
           hdiutil detach "$root"; hdiutil detach "$os"; hdiutil detach "$sys"; hdiutil detach "$app"
           rm -f ipsw/os.dmg ipsw/systemos.dmg ipsw/appos.dmg
           df -h /
@@ -107,12 +111,12 @@ jobs:
           ls -l root.img.gz
           split -b 1900m -d -a 2 root.img.gz root.img.gz.part
           rm root.img.gz
-          shasum -a 256 root.img.gz.part* d22ap.adt | tee SHA256SUMS
+          shasum -a 256 root.img.gz.part* d22ap.adt walls.tar.gz | tee SHA256SUMS
 
       - name: Publish as a private release
         run: |
           set -euo pipefail
           tag="ios-root-${{ inputs.ios_version || '16.7.16' }}-${{ github.run_id }}"
-          gh release create "$tag" root.img.gz.part* d22ap.adt SHA256SUMS \
+          gh release create "$tag" root.img.gz.part* d22ap.adt walls.tar.gz SHA256SUMS \
             --title "iOS ${{ inputs.ios_version || '16.7.16' }} root for herolte (${{ inputs.size_mb || '20480' }} MiB)" \
             --notes "Apple software for personal use on the owner's device. Do not make this repository or release public."

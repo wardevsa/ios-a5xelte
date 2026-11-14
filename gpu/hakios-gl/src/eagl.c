@@ -236,6 +236,8 @@ struct image {
 	bool painted;                   /* something has been drawn into it (it is a target in fact, not only in name) */
 	unsigned looked;                /* ... the frame in which that memory was last looked at, */
 	uint64_t sum;                   /* ... and what it added up to */
+	bool sums_known;                /* (Galaxy S7 port) sums[] hold what each eighth of the rows adds up to */
+	uint64_t sums[8];               /* ... rows y with y % 8 == i: one eighth is looked at a frame, see surface_changed() */
 	unsigned cleaned;               /* (Galaxy S7 port) a shared picture: the frame its caches were last cleaned for the GPU */
 	GLenum to, internal, format, type;
 	uint32_t plane, seed;
@@ -679,28 +681,51 @@ surface_shared(struct eagl *e, struct image *image)
  * a frame, when the texture is about to be drawn with, the memory is added up, and copied again
  * if the sum has changed.
  */
+/*
+ * Galaxy S7 port: adding up the whole surface every frame for every such texture was 12.5% of backboardd's
+ * time (HERO_PROF, scrolling the home screen). One eighth of the rows is looked at a frame, a different eighth
+ * each frame, against what those rows added up to before; when any eighth has changed, all eight are added up
+ * again (the texture is about to be copied again anyway). A change is seen within eight frames.
+ */
+static uint64_t
+rows_sum(const uint8_t *base, size_t row, size_t used, GLsizei height, unsigned phase)
+{
+	uint64_t sum = used ^ phase, word;
+
+	for (GLsizei y = (GLsizei)phase; y < height; y += 8) {
+		const uint8_t *line = base + row * (size_t)y;
+		for (size_t at = 0; at + 8 <= used; at += 8) {
+			memcpy(&word, line + at, 8);
+			sum = (sum ^ word) * 0x9e3779b97f4a7c15ull;
+			sum ^= sum >> 29;
+		}
+	}
+	return sum;
+}
+
 static bool
 surface_changed(struct eagl *e, struct image *image)
 {
 	IOSurfaceRef surface = image->surface;
-	size_t size = IOSurfaceGetBytesPerRow(surface) * (size_t)(image->height - 1) +
-	    (size_t)image->width * bytes_a_pixel(image->format, image->type);
+	size_t row = IOSurfaceGetBytesPerRow(surface);
+	size_t used = (size_t)image->width * bytes_a_pixel(image->format, image->type);
 	const uint8_t *base = IOSurfaceGetBaseAddress(surface);
-	uint64_t sum = size, word;
 
-	if (image->looked == e->frames + 1 || base == NULL || IOSurfaceGetPlaneCount(surface) > 0) {
+	if (image->looked == e->frames + 1 || base == NULL || IOSurfaceGetPlaneCount(surface) > 0 || image->height <= 0) {
 		return false;
 	}
 	image->looked = e->frames + 1;
-	for (size_t at = 0; at + 8 <= size; at += 8) {
-		memcpy(&word, base + at, 8);
-		sum = (sum ^ word) * 0x9e3779b97f4a7c15ull;
-		sum ^= sum >> 29;
+	if (used > row) {
+		used = row;
 	}
-	if (sum == image->sum) {
+	unsigned phase = e->frames % 8;
+	if (image->sums_known && rows_sum(base, row, used, image->height, phase) == image->sums[phase]) {
 		return false;
 	}
-	image->sum = sum;
+	for (unsigned i = 0; i < 8; i++) {
+		image->sums[i] = rows_sum(base, row, used, image->height, i);
+	}
+	image->sums_known = true;
 	return true;
 }
 
@@ -4200,6 +4225,56 @@ my_getMacroContextPrivate(id self, SEL selector)
 	return e ? e->table : NULL;
 }
 
+/*
+ * Galaxy S7 port (wallpaper census): the original wallpaper and the gallery's previews come to backboardd as
+ * surfaces with no pixel format (1105x1160, 400x400), made by the kernel over -- or copied from -- another
+ * process's memory, and shown black. What is in them, once each for the first few: how much of the memory is
+ * zero, and which byte of the four is 255 most often (where the opacity is, if the picture is opaque).
+ */
+static void
+wrapped_census(struct image *image, const char *how)
+{
+	static unsigned told;
+	IOSurfaceRef surface = image->surface;
+
+	if (told >= 16 || IOSurfaceLock(surface, kIOSurfaceLockReadOnly, NULL) != 0) {
+		return;
+	}
+	told++;
+	const uint8_t *base = IOSurfaceGetBaseAddress(surface);
+	size_t row = IOSurfaceGetBytesPerRow(surface), width = IOSurfaceGetWidth(surface), height = IOSurfaceGetHeight(surface);
+	size_t zero = 0, all = 0, full[4] = { 0 }, sum[4] = { 0 };
+	uint32_t first = 0;
+	bool found = false;
+
+	for (size_t y = 0; base != NULL && y < height; y++) {
+		const uint8_t *p = base + row * y;
+		for (size_t x = 0; x + 1 <= width && (x + 1) * 4 <= row; x++, p += 4) {
+			uint32_t px;
+			memcpy(&px, p, 4);
+			all++;
+			if (px == 0) {
+				zero++;
+				continue;
+			}
+			if (!found) {
+				first = px;
+				found = true;
+			}
+			for (int c = 0; c < 4; c++) {
+				full[c] += p[c] == 255;
+				sum[c] += p[c];
+			}
+		}
+	}
+	IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
+	size_t lit = all - zero ? all - zero : 1;
+	say("hakios-gl: wrapped census (%s): surface %u %zu x %zu, %zu bytes a row, base %s: %zu of %zu pixels zero; "
+	    "first other %08x; bytes 0-3 at 255: %zu %zu %zu %zu; means %zu %zu %zu %zu\n", how, IOSurfaceGetID(surface), width,
+	    height, row, base ? "mapped" : "NULL", zero, all, first, full[0], full[1], full[2], full[3], sum[0] / lit,
+	    sum[1] / lit, sum[2] / lit, sum[3] / lit);
+}
+
 /* (the types are the method's own: the last three arrive on the stack, where sizes matter) */
 static BOOL
 my_texImageIOSurface(id self, SEL selector, IOSurfaceRef surface, unsigned long target, unsigned long internal,
@@ -4239,6 +4314,9 @@ my_texImageIOSurface(id self, SEL selector, IOSurfaceRef surface, unsigned long 
 		    height, plane, invert ? ", inverted" : "");
 	}
 	image->wrapped = IOSurfaceGetPixelFormat(surface) == 0;
+	if (image->wrapped) {
+		wrapped_census(image, format == GL_BGRA ? "shown, BGRA" : format == GL_RGBA ? "shown, RGBA" : "shown, other");
+	}
 	began = now_us();
 	if (!surface_shared(e, image)) {
 		surface_changed(e, image);              /* (what it adds up to now) */

@@ -1,0 +1,72 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 03ec822..b256f8f 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -81,6 +81,24 @@ hg_msleep(unsigned ms)
+ 	thread_block(THREAD_CONTINUE_NULL);
+ }
+ 
++/*
++ * (0333) A client's job is waited for asleep, not by spinning: backboardd's ~1100 jobs a second kept its submit
++ * thread on a Mongoose core in delay(10) for as long as the GPU worked -- a third of all its samples
++ * (HERO_PROF: mach_msg2_trap 32.7%). The first polls still spin, for the shortest jobs.
++ * herogpu_sleep_us=0 spins as before.
++ */
++static uint32_t hg_sleep_us = 50;
++static bool hg_run_nap;         /* set by herolte_gpu_submit() alone: a client's IOKit call, holding only hg_mtx */
++
++static void
++hg_usleep(unsigned us)
++{
++	uint64_t deadline;
++	clock_interval_to_deadline(us, NSEC_PER_USEC, &deadline);
++	(void)assert_wait_deadline(&hg_sleep, THREAD_UNINT, deadline);
++	thread_block(THREAD_CONTINUE_NULL);
++}
++
+ static bool
+ hg_powered(vm_offset_t pmu)
+ {
+@@ -762,6 +780,8 @@ hg_run(unsigned js, const char *what)
+ 	hg_wr(hg_gpu, slot + 0x60, 1);                          /* START */
+ 
+ 	uint32_t jirq = 0, mirq = 0, girq = 0;
++	/* (0333) only a client's job (herolte_gpu_submit: an IOKit call, where blocking is allowed) is waited for asleep */
++	unsigned nap = (hg_run_nap && hg_sleep_us >= 10 && hg_sleep_us <= 5000) ? hg_sleep_us : 0;
+ 	for (unsigned i = 0; i < 20000; i++) {
+ 		jirq = hg_rd(hg_gpu, JOB_IRQ_RAWSTAT);
+ 		mirq = hg_rd(hg_gpu, MMU_IRQ_RAWSTAT);
+@@ -769,7 +789,12 @@ hg_run(unsigned js, const char *what)
+ 		if ((jirq & ((1u << js) | (1u << (js + 16)))) || mirq || (girq & 0x81)) {
+ 			break;
+ 		}
+-		delay(10);
++		if (nap && i >= 4) {
++			hg_usleep(nap);
++			i += nap / 10 - 1;      /* the same ~200 ms bound as the spinning loop */
++		} else {
++			delay(10);
++		}
+ 	}
+ 	volatile uint32_t *hdr = (volatile uint32_t *)(hg_job_cpu ? hg_job_cpu : hg_mem + HG_DATA_OFF);
+ 	bool ok = (jirq & (1u << js)) && !(jirq & (1u << (js + 16))) && !mirq && !(girq & 0x81);
+@@ -2031,7 +2056,9 @@ herolte_gpu_submit(unsigned js, uint64_t jc, uint64_t *us)
+ 		hg_job_va = jc;
+ 		hg_job_cpu = 0;
+ 		hg_run_quiet = true;
++		hg_run_nap = true;
+ 		bool ok = hg_run(js, js ? "HEROGPU job JS1" : "HEROGPU job JS0");
++		hg_run_nap = false;
+ 		hg_run_quiet = false;
+ 		hg_job_va = HG_TEST_VA;
+ 		hg_affinity = 1;
+@@ -3391,7 +3418,8 @@ herolte_gpu_probe(void)
+ 	uint32_t twrp = 0;
+ 
+ 	PE_parse_boot_argn("herogpu_flush", &hg_flush_mode, sizeof(hg_flush_mode));
+-	int wifi = 1;                                           /* herowifi=0: no Wi-Fi */
++	PE_parse_boot_argn("herogpu_sleep_us", &hg_sleep_us, sizeof(hg_sleep_us));
++	int wifi = 1;                                          /* herowifi=0: no Wi-Fi */
+ 	PE_parse_boot_argn("herowifi", &wifi, sizeof(wifi));
+ 	if (wifi &&
+ 	    kernel_thread_start(hg_wifi_thread, NULL, &thread) == KERN_SUCCESS) {

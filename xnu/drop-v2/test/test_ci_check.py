@@ -4,7 +4,7 @@ import os, sys, unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'deviceday'))
 import ci_check as c
 
-OURS, THEIRS = '0337-herolte-drop-v2.patch', '0334-present-wait-asleep.patch'
+OURS, THEIRS = '0337-herolte-drop-v2.patch', '0337-other-series.patch'   # dos series con el MISMO número (fixture; tras D-0014 ya no coinciden con upstream)
 
 
 class V(unittest.TestCase):
@@ -23,7 +23,7 @@ class V(unittest.TestCase):
         self.assertEqual(code, 1); self.assertIn(THEIRS[:-6], lines[0])
 
     def test_bare_number_is_rejected_as_ambiguous(self):
-        for w in ('0334', '0334-'):
+        for w in ('0337', '0337-'):
             code, lines = c.verdict([OURS, THEIRS], [], w)
             self.assertEqual(code, 2, w); self.assertIn('incompleto', lines[0])
 
