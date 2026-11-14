@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0051 — min12 ya no cuelga ni panica: acaba en reinicio; bisección con herostop 22-28 (2026-11-14)
+## Relevo vigente: H-0052 — min12h24 ESCRITA (D-0043, 6/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min12h24-20261114.img` (sha256 `a6942183…df0c`); EFS intacto (E-0132).
+- **Siguiente (Director):** `adb reboot`, mirar. **Congela** con la página de stages, las líneas `A5V` y la columna de bloques hasta el 24 (20 verde = sonda ok, 21…24) ⇒ el reinicio es posterior al bloque 24 (siguiente h26, luego h28). **No congela** (azul/cian/magenta + XNU MMU ON) ⇒ el reinicio es anterior (siguiente h22).
+- Restaurar BOOT original (E-0009) cubierto por D-0043.
+
+## Relevo anterior: H-0051 — min12 ya no cuelga ni panica: acaba en reinicio; bisección con herostop 22-28 (2026-11-14)
 - **Tarea en curso: T-0012** (D-0043, 5/20 usadas). E-0131: sin página de stages, sin A5V, sin pánico; pantalla de reinicio. Lectura: la sonda del alias pasa; el kernel sigue y se reinicia como en min2-min7.
 - **Siguiente:** escribir **h24** (E-0128; kernel 0347; congela tras el bloque 24 = antes de `pmap_bootstrap`) y ver: congela con bloques 20…24 ⇒ el reinicio es posterior a 24 (h26, h28); no congela ⇒ anterior (h22).
 - Restaurar BOOT original (E-0009) cubierto por D-0043.

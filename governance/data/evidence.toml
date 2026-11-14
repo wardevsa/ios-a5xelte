@@ -1929,3 +1929,18 @@ sha256 = "a1b3062865b59d8287c0303636f2f4ab8185bbd2cd9c76ab06021786959e8f88"
 size = 444
 immutable = true
 note = "Lectura: con el alias de 8 bloques la sonda ya no falla (ni cuelga ni entra en pánico), así que el kernel avanza más allá del bloque 19 y vuelve a ocurrir el reinicio original (por eso el texto y los bloques desaparecen: la pantalla es la de DESPUÉS del reinicio, como en min2-min7). Falta saber en qué punto exacto; herostop 22-28 (E-0127..E-0130)."
+
+[[evidence]]
+id = "E-0132"
+title = "Tanda amplia D-0043, imagen 6: BOOT del S7 escrito con xnu-boot-v2-s7-min12h24-20261114.img (kernel 0347, herostop=24) y leído de vuelta (sha256 a6942183…df0c); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min12h24-out.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "fbcb7250f445ebe7a58c53daf77a98e155d494ff2907386e6c3b65848b515c13"
+size = 727
+immutable = true
+note = "Solo escritura y lectura de vuelta (D-0043; hash registrado antes en E-0128). Difiere de min12 solo en herostop=24 (diff comprobado)."
