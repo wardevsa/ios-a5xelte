@@ -496,7 +496,10 @@ def cmd_gate(root, action, task_id, consolidate):
 def cmd_next(root):
     policy, tasks, decs = load(root, 'policy.toml'), load(root, 'tasks.toml'), load(root, 'decisions.toml')
     n, mode = next_task(policy, tasks, decs)
-    if not n: print('ninguna tarea autónoma disponible: todo está bloqueado, depende de decisiones sin aprobar o necesita autorización (ver governance/TASKS.md)'); return 1
+    if not n:
+        # una cola sin tareas autónomas NO es un error (todo espera una decisión o una autorización): salida 0 con el motivo
+        print('ninguna tarea autónoma disponible: todo está bloqueado, depende de decisiones sin aprobar o necesita autorización (ver governance/TASKS.md)')
+        print('  NOTA: seleccionar una tarea no es una autorización de ninguna acción roja.'); return 0
     tr = tier_of_actions(policy, n['actions'])
     print('%s %s  %s\n  nivel %s (%s)%s\n  aceptación: %s' % ('REANUDAR' if mode == 'resume' else 'EMPEZAR', n['id'], n['title'], tr, COLOR[tr].split(' ')[0],
                                                            ' — solo en local, NO consolidar sin revisión' if tr == 'B' else '', n['acceptance']))

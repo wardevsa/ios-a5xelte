@@ -49,7 +49,8 @@ class Onboarding(unittest.TestCase):
         evid = {e['id']: e for e in gov.load(self.c, 'evidence.toml')['evidence']}
         self.assertIn(evid['E-0001']['sha256'][:8], rd('STATE.md'))
         policy, tasks, decs = (gov.load(self.c, f) for f in ('policy.toml', 'tasks.toml', 'decisions.toml')); n, mode = gov.next_task(policy, tasks, decs)
-        self.assertIn(n['id'], rd('ACTIVE_TASK.md')); self.assertIn(n['id'], rd('HANDOFF.md').split('Relevo anterior')[0])         # the CURRENT handoff names the next task
+        if n is not None: self.assertIn(n['id'], rd('ACTIVE_TASK.md')); self.assertIn(n['id'], rd('HANDOFF.md').split('Relevo anterior')[0])         # the CURRENT handoff names the next task
+        else: self.assertIn('ninguna tarea', rd('ACTIVE_TASK.md').lower() + rd('HANDOFF.md').lower())                                 # empty queue: the documents must say so
         sha = re.search(r'state-commit: ([0-9a-f]+)', rd('STATE.md')).group(1); self.assertEqual(self.sh(['git', 'cat-file', '-t', sha]).stdout.strip(), 'commit')
         for t in tasks['task']:                                                     # every blocked task the state document names is really blocked
             if t['status'] == 'blocked': self.assertIn(t['id'], rd('STATE.md') + rd('TASKS.md'))

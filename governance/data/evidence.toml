@@ -564,3 +564,18 @@ size = 52776960
 immutable = true
 note = "Imagen BOOT xnu-boot-v2-s7-20261114.img (sha256 2c155829b1c6c7c5161b0bf245ae4015e5b041a01ad907507c84f3b70a648f40). Mismas entradas que E-0001 salvo el kernel (E-0037); línea de arranque con ufsrw=0 herolog=0 herodrop=0. Solo comprobaciones de consistencia del PC: NO se ha escrito en el teléfono ni arrancado (el nivel real lo da el S7, L3)."
 
+[[evidence]]
+id = "E-0039"
+title = "rev3: ronda completa de 49 mutantes con el stub de udev corregido: 47 detectados (R07 incluido), 2 sobreviven (M16 y N02, equivalentes conocidos)"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/rev3-mutation-summary-20261114.txt"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "8e602c65fbc9c8adc25495a2e373a56a27e6cb3dc311a4963cb8addc45867aa8"
+size = 8488
+immutable = true
+note = "Sustituye a E-0027 como referencia de rev3. Sin montar nada ni sudo; r2_lib.sh idéntico al de rev2. Salida íntegra en rev3-mutation-stdout-20261114.txt. No valida R2 ni autoriza nada."
+
