@@ -1,0 +1,82 @@
+diag(min4): visible progress marks between stage 6 and 7 (C) and between the magenta and yellow blocks (assembly)
+
+Only draws to the framebuffer; no logic changes. C: three 'STAGE 6' lines after processor_bootstrap, after the maxmem/hygiene section and after the boot-args/PAN section. Assembly: orange block at y=312 after the warm-reset branch, light-orange block at y=344 after the boot-args address is computed (x10-x15 only, same clobbers as the existing yellow block).
+
+--- a/osfmk/arm/arm_init.c	2026-11-14 13:22:24.447232307 +0100
++++ b/osfmk/arm/arm_init.c	2026-11-14 13:22:24.463190007 +0100
+@@ -497,6 +497,7 @@
+ 
+ 	sweet_early_mark(6, "cpu_init done");
+ 	processor_bootstrap();
++	sweet_early_mark(6, "6a processor_bootstrap done");
+ 
+ 	if (PE_parse_boot_argn("maxmem", &maxmem, sizeof(maxmem))) {
+ 		xmaxmem = (uint64_t) maxmem * (1024 * 1024);
+@@ -530,6 +531,7 @@
+ 	}
+ #endif /* SCHED_HYGIENE_DEBUG */
+ 
++	sweet_early_mark(6, "6b maxmem and hygiene done");
+ 	nanoseconds_to_absolutetime(XCALL_ACK_TIMEOUT_NS, &xcall_ack_timeout_abstime);
+ 
+ #if HAS_BP_RET
+@@ -543,6 +545,7 @@
+ 	__builtin_arm_wsr("pan", 1);
+ #endif  /* __ARM_PAN_AVAILABLE__ */
+ 
++	sweet_early_mark(6, "6c boot-args parsed, PAN set");
+ 	sweet_early_mark(7, "entering arm_vm_init");
+ 	arm_vm_init(xmaxmem, args);
+ 	sweet_early_mark(15, "arm_vm_init returned");
+--- a/osfmk/arm64/start.s	2026-11-14 13:22:24.449162005 +0100
++++ b/osfmk/arm64/start.s	2026-11-14 13:22:24.463423119 +0100
+@@ -1000,10 +1000,49 @@
+ 	// If x21 != 0, we're doing a warm reset, so we need to trampoline to the kernel pmap.
+ 	cbnz	x21, Ltrampoline
+ 
++#if defined(A5XELTE)
++	/* min4_after_cbnz: diagnostic block (min4). */
++	MOV64	x10, (A5XELTE_FB_PA+312*A5XELTE_FB_STRIDE+960)
++	MOV64	x11, 0xffff8000
++	mov	x12, #21
++	mov	x15, #A5XELTE_FB_STRIDE
++La5_min4_after_cbnz_row:
++	mov	x14, x10
++	mov	x13, #36
++La5_min4_after_cbnz_pixel:
++	str	w11, [x14], #4
++	subs	x13, x13, #1
++	b.ne	La5_min4_after_cbnz_pixel
++	add	x10, x10, x15
++	subs	x12, x12, #1
++	b.ne	La5_min4_after_cbnz_row
++	dsb	sy
++#endif
++
++
+ 	// Set KVA of boot args as first arg
+ 	add		x0, x20, x22
+ 	sub		x0, x0, x23
+ 
++#if defined(A5XELTE)
++	/* min4_bootargs_ready: diagnostic block (min4). */
++	MOV64	x10, (A5XELTE_FB_PA+344*A5XELTE_FB_STRIDE+960)
++	MOV64	x11, 0xffff80c0
++	mov	x12, #21
++	mov	x15, #A5XELTE_FB_STRIDE
++La5_min4_bootargs_ready_row:
++	mov	x14, x10
++	mov	x13, #36
++La5_min4_bootargs_ready_pixel:
++	str	w11, [x14], #4
++	subs	x13, x13, #1
++	b.ne	La5_min4_bootargs_ready_pixel
++	add	x10, x10, x15
++	subs	x12, x12, #1
++	b.ne	La5_min4_bootargs_ready_row
++	dsb	sy
++#endif
++
+ #if KASAN
+ 	mov	x20, x0
+ 	mov	x21, lr
