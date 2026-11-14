@@ -56,6 +56,12 @@ class Base(unittest.TestCase):
         self.d = tempfile.mkdtemp(prefix='gov-test.')
         shutil.copytree(os.path.join(REPO, 'governance'), os.path.join(self.d, 'governance'), ignore=shutil.ignore_patterns('__pycache__'))
         shutil.copy(os.path.join(REPO, 'AGENTS.md'), self.d)
+        # Las pruebas de autorización usan T-0007 como tarea ROJA SIN AUTORIZAR. T-0007 real ya se ejecutó (D-0023): en la copia temporal se
+        # le devuelve el estado de fixture, para que las pruebas no dependan de cómo evolucione la cola real.
+        tp = os.path.join(self.d, 'governance', 'data', 'tasks.toml')
+        mutate(tp, 'task', 'T-0007', 'status', '"blocked"'); mutate(tp, 'task', 'T-0007', 'blocked_on', '"fixture de pruebas"')
+        mutate(tp, 'task', 'T-0007', 'authorization_ref', None); mutate(tp, 'task', 'T-0007', 'requires_decisions', None); mutate(tp, 'task', 'T-0007', 'evidence', '["E-0011"]')
+        self.render()                                              # las vistas generadas siguen al dato (las pruebas de independencia comprueban 'render --check')
 
     def tearDown(self): shutil.rmtree(self.d, ignore_errors=True)       # only this test's own temporary copy
 

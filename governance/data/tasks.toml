@@ -287,8 +287,9 @@ depends_on = ["T-0024"]
 requires_decisions = ["D-0020", "D-0021"]
 authorization_ref = "D-0021"
 actions = ["privileged-or-mount", "pc-implementation", "host-tests"]
-blocked_on = "la autorización roja ya existe (D-0021) pero la ejecución es IMPOSIBLE hoy: (1) faltan ~25 GiB libres en ext4 (quedan ~7 GiB; imagen ~12 GiB reales + árboles de staging), (2) los árboles de staging (r3/work) ya no están en el scratchpad (archivados en NTFS, E-0011..E-0017), (3) apply_meta_img/stage_links/verify_meta/hfsx_check buscan el nombre del manifiesto: sin tocarlos la imagen saldría inconsistente. Ver el informe al Director"
+blocked_on = "el Director debe ejecutar con sudo los 2 comandos de COMANDOS_SUDO_XNU.md (el ingeniero no tiene sudo); todo lo previo está hecho y verificado sin montar (docs/herolte-unicode-imagen.md, E-0028)"
 acceptance = "Imagen con nombre nuevo con 30 nombres en forma XNU y los 2 de U+0E33 excluidos (KI-0006); hashes de la anterior intactos; hfsx_check esperando forma XNU; evidencias nuevas con SHA-256."
+evidence = ["E-0026", "E-0028"]
 
 [[task]]
 id = "T-0027"
@@ -299,4 +300,15 @@ owner = "ingeniero"
 depends_on = ["T-0005"]
 actions = ["host-tests", "pc-implementation", "local-commit"]
 acceptance = "Una prueba nueva que falle con R07 y pase con rev2, o una demostración de equivalencia; sin tocar el rev2 aprobado (nueva revisión con sus sumas) y sin ejecutar el runner real ni montar nada."
+
+[[task]]
+id = "T-0026"
+title = "Implementar D-0022 en policy.toml, AUTHORITY y governance.py: nivel NARANJA (autorizador: jefatura técnica) y ROJO CRÍTICO (solo Director), con pruebas y mutantes"
+status = "ready"
+priority = 5
+owner = "ingeniero"
+depends_on = []
+actions = ["policy-change", "pc-implementation", "host-tests", "local-commit"]
+requires_decisions = ["D-0022"]
+acceptance = "Un nivel nuevo en policy.toml con sus acciones (privileged-or-mount y las de compilación pesada/imágenes; NO borrar ficheros del host ni publicar, que D-0022 no reclasifica), gate con su código de salida, validación en check, pruebas (incluida la negativa: una acción naranja sin decisión del jefe técnico/Director se deniega), batería de mutantes con control y documentación. Cambiar policy.toml es nivel B con revisor director: el Director aprobó D-0022."
 

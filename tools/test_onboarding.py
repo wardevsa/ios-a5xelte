@@ -66,9 +66,10 @@ class Onboarding(unittest.TestCase):
         tp = os.path.join(c, 'governance', 'data', 'tasks.toml')
         with open(tp, 'a', encoding='utf-8') as f:         # a spare ready task so "another one is offered" does not depend on how many real ones are left
             f.write('\n[[task]]\nid = "T-0900"\ntitle = "tarea de relleno del simulacro"\nstatus = "ready"\npriority = 99\nowner = "ingeniero"\ndepends_on = []\nactions = ["docs-write"]\nacceptance = "sin efecto"\n')
+            f.write('\n[[task]]\nid = "T-0901"\ntitle = "tarea verde del simulacro (siempre la primera)"\nstatus = "ready"\npriority = 0\nowner = "ingeniero"\ndepends_on = []\nactions = ["docs-write"]\nacceptance = "sin efecto"\n')
         self.assertEqual(g('render').returncode, 0)
         policy, tasks, decs = (gov.load(c, f) for f in ('policy.toml', 'tasks.toml', 'decisions.toml')); first, _ = gov.next_task(policy, tasks, decs); fid = first['id']
-        self.assertNotEqual(fid, 'T-0900')
+        self.assertEqual(fid, 'T-0901')       # verde y sin revision: el simulacro no depende de que la cola real tenga una tarea verde
         tg.mutate(tp, 'task', fid, 'status', '"in_progress"'); tg.mutate(tp, 'task', fid, 'resume', '"Paso 3 de 5: falta aplicar el parche; ver el checkpoint."')
         open(os.path.join(c, 'governance', 'checkpoints', '2026-11-13-%s-01.md' % fid), 'w').write('# Checkpoint %s #01\n- Siguiente paso exacto: aplicar el parche.\n' % fid)
         self.assertEqual(g('render').returncode, 0); self.assertEqual(g('check').returncode, 0)

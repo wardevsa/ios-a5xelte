@@ -8,7 +8,15 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0005 — el Director aprueba el gobierno; Unicode: herramienta lista, imagen pendiente (2026-11-13)
+## Relevo vigente: H-0006 — T-0025 lista salvo los 2 sudo (2026-11-13)
+- **Hecho:** T-0007 (E-0026), T-0005 (E-0027: 46/49 detectados; R07 abierto → T-0027), D-0020 (excluir los 2 `U+0E33`, KI-0006), D-0021 (autorización roja `privileged-or-mount`, un solo uso), D-0022 (nivel NARANJA: **solo registrado; implementarlo es T-0026**), D-0023, D-0024, `tools/ios-root-lab/` (copia con adaptador, 17 pruebas), staging restaurado y renombrado, imagen nueva vacía `lab-full-xnu.img.partial`. Ver `docs/herolte-unicode-imagen.md`.
+- **Pendiente de una persona:** ejecutar `COMANDOS_SUDO_XNU.md` (populate y verify). El ingeniero no tiene sudo. Después: leer `ver.full-xnu.*` en `r3/out`, archivar, registrar evidencia y cerrar T-0025.
+- **Siguiente (verde):** T-0026 (política NARANJA), T-0027 (R07), `python3 tools/governance.py next`.
+- **Cuidado:** el scratchpad de /tmp es volátil: `r3/work`, la imagen nueva y sus logs deben archivarse en NTFS tras la verificación.
+
+---
+
+## Relevo anterior: H-0005 — el Director aprueba el gobierno; Unicode: herramienta lista, imagen pendiente (2026-11-13)
 - **Decisiones del Director (sus palabras en `approval_ref`):** D-0001 (gobierno) y D-0017 (Unicode) **APPROVED**; D-0018 levanta la congelación del generador (D-0006 sustituida) solo para esto; **D-0019**: la jefatura técnica (Qwen) decide lo técnico en su nombre. **No** autoriza por sí sola acciones rojas ni toca reglas X: el S7 sigue prohibido hasta una autorización roja explícita.
 - **Hecho:** T-0013 (cargador clang, D-0016), T-0003, T-0010 (`S7GE_HARDWARE.md`: tablas de página de AS0 escribibles desde un job, por lectura de código), T-0011 (`S7GE_LICENCIAS.md`), T-0022, T-0024 (`xnu_names_stage.py`; 30 de 32 nombres se arreglan solo renombrando, 2 con U+0E33 necesitan `nodecompose`).
 - **En curso:** T-0005 (mutación rev2 ronda 2, en segundo plano en el scratchpad; guardia de disco 3 GiB; salida `t0005_ronda2b_out.txt`). Si el proceso ya no existe, ver `mutation_summary3-*` más reciente y registrar el resultado.
