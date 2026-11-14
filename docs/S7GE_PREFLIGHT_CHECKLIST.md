@@ -22,6 +22,7 @@
 | 16 | La **autorización roja** del Director, con imagen y hash nombrados, registrada como decisión `APPROVED` y `authorization_ref` en T-0012 | `governance.py gate device-write-boot --task T-0012` = 0 | **pendiente (Director)** |
 | 17 | Vídeo/cámara listos para registrar la pantalla; reloj; hoja para transcribir | prueba previa | **pendiente** (Director) |
 | 18 | Decidido qué hacer **después** de cada resultado (restaurar BOOT o no) | `S7GE_MIN_BOOT_VALIDATION.md` §4 | **cumplido en el plan** |
+| 20 | **La línea de arranque y el ADT coinciden con la configuración que el upstream documentó como funcional** (RAM del ADT, `vm_compression_limit`, `vm_compressor`, `-noprogress`, `cpus=8`) | comparar con `docs/herolte-howto.md` y `HEROLTE_PROGRESS.md`; leer `dram-size` del ADT | **añadido tras el primer arranque** (KI-0009): NO se hizo en la fase 1 y la imagen panicó en `kmem_range_init` |
 | 19 | **Riesgo residual aceptado**: sin camino de restauración por Download/Odin documentado si TWRP no responde | decisión expresa del Director | **pendiente (Director)** |
 
 ## Qué no es esta lista

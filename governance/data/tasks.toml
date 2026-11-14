@@ -136,11 +136,11 @@ owner = "ingeniero"
 depends_on = ["T-0013"]
 actions = ["device-read", "device-write-boot"]
 acceptance = "Imagen con SHA-256 y verificador PASS nombrada en la autorización; copias de BOOT y EFS fuera del teléfono; resultado registrado como evidencia del dispositivo, separado de las comprobaciones del PC."
-evidence = ["E-0036", "E-0037", "E-0038"]
+evidence = ["E-0036", "E-0037", "E-0038", "E-0043", "E-0044"]
 min_evidence = { level = "L3", device = "this-unit" }
 requires_decisions = ["D-0033"]
 authorization_ref = "D-0033"
-resume = "Fase 1 del primer arranque N2 autorizada (D-0033, hasta 2026-11-16). Escribir con tools/herolte-flash-boot.sh (ensayo y luego --execute); NO reiniciar sin que el Director esté listo para grabar; después S7GE_MIN_BOOT_VALIDATION.md. Ver docs/S7GE_FLASH_PROCEDURE.md."
+resume = "Fase 1 EJECUTADA (E-0043); primer arranque = panic en kmem_range_init, clase B (E-0044, transcripción de terceros). D-0033 cubre SOLO la imagen mínima 1 y la restauración de BOOT. Siguiente intento: candidata min2 (E-0045), que necesita una autorización NUEVA con su hash. Ver docs/S7GE_FIRST_BOOT_ANALYSIS.md."
 
 [[task]]
 id = "T-0013"
@@ -444,4 +444,15 @@ owner = "ingeniero"
 depends_on = ["T-0038"]
 actions = ["read-analysis", "docs-write", "local-commit"]
 acceptance = "Hecho: docs/S7GE_FLASH_PROCEDURE.md (camino con tools/herolte-flash-boot.sh y equivalente manual corregido, vuelta atrás, qué se anota, tabla de 8 errores del borrador) e INCONSISTENCIES con 19 filas. NO hecho (rojo): ningún comando contra el teléfono, ni siquiera de lectura (la comprobación de si el BOOT original está en el móvil exigiría adb)."
+
+[[task]]
+id = "T-0040"
+title = "Analizar el primer arranque (panic en kmem_range_init), corregir las lecturas del informe de terceros, y construir y verificar en el PC la candidata min2 (vm_compression_limit=98304 vm_compressor=2)"
+status = "done"
+priority = 3
+owner = "ingeniero"
+depends_on = ["T-0039"]
+actions = ["read-analysis", "docs-write", "build-candidates", "local-commit"]
+evidence = ["E-0044", "E-0045"]
+acceptance = "Hecho: docs/S7GE_FIRST_BOOT_ANALYSIS.md; E-0044 (observación de segunda mano) y E-0045 (candidata min2, 47/56 PASS). NO hecho (rojo, no autorizado): escribir min2 (D-0033 cubre solo la imagen mínima 1 y la restauración)."
 

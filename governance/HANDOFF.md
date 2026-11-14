@@ -8,7 +8,17 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0020 — FASE 1 AUTORIZADA Y BOOT ESCRITO; el teléfono sigue en TWRP, SIN reiniciar (2026-11-14 12:00)
+## Relevo vigente: H-0021 — primer arranque real: PANIC en kmem_range_init (clase B); causa probable = la configuración de RAM ya documentada (2026-11-14)
+- **Observación (E-0044, transcripción de terceros; yo no vi el vídeo):** cargador → `COPYING KERNEL` → `RAM BASE 0x80000000` → **XNU hace panic en `kmem_range_init`** (`vm_map_locate_space failing…`) + `handshake structure not initialized` (que es del volcado de core, no la causa). El cargador y el kernel **ejecutan en esta unidad**; el kernel **no completó el arranque**. La transcripción dice `kext_range_init`: lectura defectuosa de `kmem_range_init` (medido con `strings` en el kernel del CI).
+- **Causa más probable (hipótesis fuerte):** nuestro ADT declara **2 GiB** (`dram-size 0x80000000`, leído del fichero) y la línea **no lleva `vm_compression_limit=98304`**: es el pánico que `HEROLTE_PROGRESS.md` (2026-10-23/24) ya documentó (compresor de 16×RAM). **Error de proceso mío:** el verificador no compara contra la configuración funcional (KI-0009; punto 20 de la lista previa).
+- **Candidata min2** (solo añade `vm_compression_limit=98304 vm_compressor=2`): `xnu-boot-v2-s7-min2-20261114.img`, SHA-256 `595316aa…edae21`, 47/56 PASS (E-0045). **NO escrita; requiere una autorización NUEVA con ese hash** (D-0033 cubre solo la imagen mínima 1 y la restauración).
+- **Estado del teléfono:** tiene escrita la imagen que da panic (y no sé si está en TWRP o en bucle: lo sabe el Director). Para usar Android: restaurar BOOT (`S7GE_FLASH_PROCEDURE.md` §4; cubierto por D-0033).
+- **Tarea en curso: T-0012** (primer arranque N2; fase 1 ejecutada, siguiente intento pendiente de autorización).
+- **Pedir al Director:** (1) fotogramas del vídeo con las líneas `HEROLTE KMEM:` anteriores al panic y el texto completo del panic; (2) archivar el vídeo con su hash; (3) decidir: restaurar Android ya, o autorizar min2.
+
+---
+
+## Relevo anterior: H-0020 — FASE 1 AUTORIZADA Y BOOT ESCRITO; el teléfono sigue en TWRP, SIN reiniciar (2026-11-14 12:00)
 - **Director:** "Autorizo la fase 1, firmado PioXI" → **D-0033** (`device-write-boot` + `device-read`, imagen mínima `07ddfa06…5db3`, hasta 2026-11-16), colgada de **T-0012** (en curso). **Ejecutado por el ingeniero** con `tools/herolte-flash-boot.sh --execute`: `OK: BOOT escrito y leído de vuelta (18 618 384 bytes, sha256 07ddfa06…5db3); EFS intacto (eb8912ad…7817)` (E-0043; el EFS del teléfono coincide con el `EFS.img` del snapshot).
 - **Estado exacto del teléfono ahora:** en **TWRP**, con el BOOT **nuevo** (la variante mínima) escrito y verificado; **NO se ha reiniciado**: el experimento empieza cuando el Director reinicie, **con la pantalla grabada** (`adb reboot`). Nada más se ha escrito (ni `/sdcard`, ni EFS, ni RECOVERY, ni USERDATA).
 - **Siguiente (Director):** grabar, reiniciar, observar ≥ 2 min y, si no arranca, forzar TWRP (Vol− + Power ~7 s, luego Vol+ + Home + Power); transcribir la pantalla y pasársela al ingeniero: `tools/herolte-boot-transcript-check.py … --min`, criterios A-E en `S7GE_MIN_BOOT_VALIDATION.md`. Después **restaurar BOOT** (`S7GE_FLASH_PROCEDURE.md` §4) mientras no haya raíz.

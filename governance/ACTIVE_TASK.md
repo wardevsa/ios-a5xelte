@@ -8,7 +8,7 @@
 - Acciones: device-read, device-write-boot
 - Depende de: T-0013
 - Aceptación: Imagen con SHA-256 y verificador PASS nombrada en la autorización; copias de BOOT y EFS fuera del teléfono; resultado registrado como evidencia del dispositivo, separado de las comprobaciones del PC.
-- Notas de reanudación: Fase 1 del primer arranque N2 autorizada (D-0033, hasta 2026-11-16). Escribir con tools/herolte-flash-boot.sh (ensayo y luego --execute); NO reiniciar sin que el Director esté listo para grabar; después S7GE_MIN_BOOT_VALIDATION.md. Ver docs/S7GE_FLASH_PROCEDURE.md.
+- Notas de reanudación: Fase 1 EJECUTADA (E-0043); primer arranque = panic en kmem_range_init, clase B (E-0044, transcripción de terceros). D-0033 cubre SOLO la imagen mínima 1 y la restauración de BOOT. Siguiente intento: candidata min2 (E-0045), que necesita una autorización NUEVA con su hash. Ver docs/S7GE_FIRST_BOOT_ANALYSIS.md.
 
 ## Cómo reanudar
 1. Lee `README.md` y `HANDOFF.md`; ejecuta `python3 tools/governance.py check` y `status`.

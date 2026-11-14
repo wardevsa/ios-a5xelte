@@ -639,3 +639,33 @@ size = 946
 immutable = true
 note = "Es la ESCRITURA y su lectura de vuelta (D-0033). NO prueba que el kernel arranque: el teléfono no se había reiniciado al registrarla. El EFS leído del teléfono (eb8912ad…7817) coincide con el EFS.img del snapshot del 2026-11-14 (compara copia con teléfono)."
 
+[[evidence]]
+id = "E-0044"
+title = "Primer arranque en el S7 (fase 1, variante mínima 1): el cargador y el kernel ejecutan y XNU hace panic en kmem_range_init (transcripción de terceros del vídeo del Director)"
+kind = "result"
+path = "~/HackiOS/builds/device-day/phase1-20261114/first-boot-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "54b52a54206f70a3a2064e8342cd854937d91255cce74686497e4fbe10379f4c"
+size = 686
+immutable = true
+note = "Transcripción de Gemini resumida por la jefatura; el ingeniero no ha visto el vídeo, que debe archivarse (con hash) para elevar esta evidencia. La línea del panic parece mal leída (kext_range_init en lugar de kmem_range_init). No prueba nada más allá de que el kernel ejecuta hasta kmem_range_init."
+
+[[evidence]]
+id = "E-0045"
+title = "Candidata min2: la variante mínima + vm_compression_limit=98304 vm_compressor=2 (documentado por el upstream para 2 GiB); 47 PASS constructor y 56 PASS independiente, 0 FAIL"
+kind = "image"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2-run4-min2/xnu-boot-v2-s7-min2-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "595316aae927b3e7c960301790fa34557e5a296073a29df62522b67050edae21"
+size = 18618384
+immutable = true
+note = "Mismo kernel (62ea7501...), cargador y ADT que E-0040; solo cambia la línea de arranque. NO escrita en el teléfono: exige una autorización nueva del Director con este hash."
+
