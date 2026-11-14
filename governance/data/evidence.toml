@@ -2079,3 +2079,78 @@ sha256 = "735dbf2b397a9ae6c36b8b7dd82c75057d37e816919ba389cc1c84479f9c1941"
 size = 622
 immutable = true
 note = "Sustituye la lectura 'pantalla negra' de E-0140 (que no se modifica). El bloque 29 (x=1300, y=1016) se dibuja DESPUÉS de serial_init y sobrevive; todo lo anterior se borra en una fracción de segundo aunque la CPU esté parada (herostop=29): lo borra algo que no es el hilo de arranque (un trabajo asíncrono o el hardware de pantalla iniciado por serial_init). Sin vídeo."
+
+[[evidence]]
+id = "E-0142"
+title = "Revisión D-0043 del kernel 8353b929…a339 (CI 43643415750, parches 0338-0348): solo diagnóstico de arranque temprano; 0332-0337 intactos; ci_check aplica 0348"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/review-kernel-0348.txt"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "2cf4a14d616212a7c61de9d0c9e44de7effdff58fbb3699f0c4f35c9a3863f87"
+size = 1956
+immutable = true
+note = "Condición (1) de D-0043. Kernel sha256 8353b929f1300780975efe7684e431af32a5242b6c846bb30d2abba7f9e9a339."
+
+[[evidence]]
+id = "E-0143"
+title = "Imagen preparada (kernel 0348, CI 43643415750; D-0043): xnu-boot-v2-s7-min13-20261114 = línea de min2; 47 PASS constructor y 57 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run14-min13/xnu-boot-v2-s7-min13-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "e8da2c00eb6efb3b07ba92a88903219d812d17c78e4a1648dd2072ea3c3a6073"
+size = 18618384
+immutable = true
+note = "Kernel 8353b929f1300780975efe7684e431af32a5242b6c846bb30d2abba7f9e9a339 (revisión E-0142), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff)."
+
+[[evidence]]
+id = "E-0144"
+title = "Imagen preparada (kernel 0348, CI 43643415750; D-0043): xnu-boot-v2-s7-min13h40-20261114 = línea de min2 herostop=40; 47 PASS constructor y 58 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run14-min13/xnu-boot-v2-s7-min13h40-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "94bd307fa5cab79dc52afbd9c061c7760582a349175d9ff5bc4c29b9b51297b7"
+size = 18618384
+immutable = true
+note = "Kernel 8353b929f1300780975efe7684e431af32a5242b6c846bb30d2abba7f9e9a339 (revisión E-0142), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff)."
+
+[[evidence]]
+id = "E-0145"
+title = "Imagen preparada (kernel 0348, CI 43643415750; D-0043): xnu-boot-v2-s7-min13h37-20261114 = línea de min2 herostop=37; 47 PASS constructor y 58 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run14-min13/xnu-boot-v2-s7-min13h37-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "d86146c4493e86bc820f7dd59d933ec2d740a3e04ae83812171c15fc8efa2da7"
+size = 18618384
+immutable = true
+note = "Kernel 8353b929f1300780975efe7684e431af32a5242b6c846bb30d2abba7f9e9a339 (revisión E-0142), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff)."
+
+[[evidence]]
+id = "E-0146"
+title = "Imagen preparada (kernel 0348, CI 43643415750; D-0043): xnu-boot-v2-s7-min13h34-20261114 = línea de min2 herostop=34; 47 PASS constructor y 58 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run14-min13/xnu-boot-v2-s7-min13h34-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "8c7ad9878ab0955fe5e0d2e10115a8d963bbe982912d42325ebccdcad69eda5b"
+size = 18618384
+immutable = true
+note = "Kernel 8353b929f1300780975efe7684e431af32a5242b6c846bb30d2abba7f9e9a339 (revisión E-0142), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff)."
