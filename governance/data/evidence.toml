@@ -2169,3 +2169,18 @@ sha256 = "b6f3a91a0ee910b0563628aeaa7a274302824dc4dc00d28368bc6aeca9389519"
 size = 727
 immutable = true
 note = "Solo escritura y lectura de vuelta (D-0043; hash registrado antes en E-0144). Difiere de la línea de min2 solo en herostop=40 (diff comprobado)."
+
+[[evidence]]
+id = "E-0148"
+title = "Observación de min13h40 (Director): pantalla negra con la columna de bloques 30-40 completa (11 bloques: naranja, oro, verde, azul, magenta, naranja, verde, violeta, azul verdoso, rojo, blanco): arm_init llega a su final, justo antes de machine_startup(args)"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min13h40-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "f85d6afb2ad0050c01843c4261aaf90a3a12a9039e8bdcd29ef1c4a6da4824cc"
+size = 621
+immutable = true
+note = "Los 11 colores coinciden en orden con los de 0348: 30 ff4500, 31 ffd700, 32 00ff7f, 33 00bfff, 34 ff1493, 35 7fff00, 36 ffa500, 37 9370db, 38 20b2aa, 39 dc143c, 40 ffffff. La pausa de 700 ms funcionó: la pantalla estaba limpia y los bloques sobreviven. Resultado: arm_init TERMINA; el reinicio de min2-min7 está en machine_startup o después (kernel_bootstrap / STARTUP_SUB_*). Sin vídeo."
