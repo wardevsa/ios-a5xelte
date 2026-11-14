@@ -1989,3 +1989,18 @@ sha256 = "e7ae8f23939581f1a4c55d02d6a13a16bfc82d9af2f30a2b302ebbd6bc2d3444"
 size = 444
 immutable = true
 note = "Colores por posición coherentes con 0343: 25 = 0x32cd32 (lima), 26 = 0x1e90ff (azul). Las líneas A5V igual que antes. Sin vídeo."
+
+[[evidence]]
+id = "E-0136"
+title = "Tanda amplia D-0043, imagen 8: BOOT del S7 escrito con xnu-boot-v2-s7-min12h28-20261114.img (kernel 0347, herostop=28) y leído de vuelta (sha256 453009ce…4e5f); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min12h28-out.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "c0ea00c047a912c31bf92549635d024bbfb4968640b20bed00821c2791019ae4"
+size = 727
+immutable = true
+note = "Solo escritura y lectura de vuelta (D-0043; hash registrado antes en E-0130). Difiere de min12 solo en herostop=28 (diff comprobado). El primer intento esperó a que adb viera el teléfono (reenumeración USB); el segundo escribió."
