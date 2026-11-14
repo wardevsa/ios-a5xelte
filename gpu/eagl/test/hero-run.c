@@ -511,9 +511,31 @@ remove_mg_cache_once(void)
 {
    const char *groups = "/private/var/containers/Shared/SystemGroup";
    int removed = 0;
-   if (access(MG_CACHE_GONE, F_OK) == 0)
-      return;
-   close(open(MG_CACHE_GONE, O_WRONLY | O_CREAT, 0644));
+   /*
+    * Once per token: the drop's mgcache.token (any short text, e.g. "haptics") names a change of the device tree
+    * (the iPhone X's /product/haptics, boot-0339); the marker keeps the token it was removed for. No token: once.
+    */
+   char want[64] = "", have[64] = "";
+   int fd = open(DROP_DIR "mgcache.token", O_RDONLY);
+   if (fd >= 0) {
+      ssize_t n = read(fd, want, sizeof(want) - 1);
+      want[n > 0 ? n : 0] = 0;
+      close(fd);
+   }
+   fd = open(MG_CACHE_GONE, O_RDONLY);
+   if (fd >= 0) {
+      ssize_t n = read(fd, have, sizeof(have) - 1);
+      have[n > 0 ? n : 0] = 0;
+      close(fd);
+      if (strcmp(want, have) == 0)
+         return;
+   }
+   fd = open(MG_CACHE_GONE, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+   if (fd >= 0) {
+      (void)write(fd, want, strlen(want));
+      close(fd);
+   }
+   herodrm_log("hero-run: MobileGestalt cache: token '%s' (was '%s')", want, have);
    DIR *d = opendir(groups);
    struct dirent *e;
    while (d && (e = readdir(d))) {
