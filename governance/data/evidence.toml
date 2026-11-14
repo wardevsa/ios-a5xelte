@@ -1944,3 +1944,18 @@ sha256 = "fbcb7250f445ebe7a58c53daf77a98e155d494ff2907386e6c3b65848b515c13"
 size = 727
 immutable = true
 note = "Solo escritura y lectura de vuelta (D-0043; hash registrado antes en E-0128). Difiere de min12 solo en herostop=24 (diff comprobado)."
+
+[[evidence]]
+id = "E-0133"
+title = "Observación de min12h24 (Director): congela con líneas A5V sin pánico y bloques 19 blanco, 20 VERDE (sonda del alias correcta), 21 oro, 22 rojo, 23 oro, 24 rosa: el kernel pasa por apagar TTBR0 y llega al bloque 24; el reinicio es posterior"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min12h24-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "4e4f6f0d14cbf02fc2a0dc64b3955b47f46edeafa1efaa0a5152e5b41832ac2f"
+size = 498
+immutable = true
+note = "Colores coherentes con los de 0345-0347 (20 verde = sonda ok; 21 oro dibujado por el alias con TTBR0 vivo; 22 rojo-naranja justo tras apagar TTBR0; 23 oro; 24 rosa antes de pmap_bootstrap). Es la primera vez que se ve el kernel ejecutar DESPUÉS de apagar TTBR0. Sin vídeo."
