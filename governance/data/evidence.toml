@@ -2439,3 +2439,33 @@ sha256 = "67d172f000b3b668b6cfb093830bf666ad75a7613f3d5bf1456af7d51aa2f27f"
 size = 1092
 immutable = true
 note = "Las 36 fases ocupan exactamente los slots 41-76, que es el tope de sweet_early_block (slot > 76 no dibuja): el listado termina en la última FILA de pantalla, no necesariamente donde ocurre el fallo. Tras thread_init el código llama a thread_init() y anuncia restartable_init, workq_init, turnstiles_init, mach_init_activity_id, exception_init, sfi_init, kernel_thread_create, 'load_context - done' y luego kernel_bootstrap_thread (idle_thread_create, sched_startup, …). El 'XNU MMU ON' + 3 bloques muestra que start.s volvió a ejecutarse (reinicio) sin borrar el framebuffer. Lista transcrita por IA de una foto no archivada."
+
+[[evidence]]
+id = "E-0166"
+title = "Revisión D-0043/D-0045 del kernel adfe1249…7b6b (CI 43649025144, parches 0338-0350): solo diagnóstico; 0332-0337 intactos; ci_check aplica 0350"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/review-kernel-0350.txt"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "f95b253fd068e37e577bfed0c0fd107732a06ed27cf7cf68c91cc404e398cfca"
+size = 2112
+immutable = true
+note = "Condición (1) de D-0043 ampliada por D-0045. Kernel sha256 adfe1249ce911aaa2fcc8e4b304368fa2e31c3c334f867a9fecb87a8268d7b6b."
+
+[[evidence]]
+id = "E-0167"
+title = "Imagen preparada (kernel 0350, CI 43649025144; D-0043/D-0045): xnu-boot-v2-s7-min15-20261114 = línea de min2, sin herostop; 47 PASS constructor y 57 PASS independiente, 0 FAIL"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run16-min15/xnu-boot-v2-s7-min15-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "7337370f5e10320ef8c4e54079f0de8d690ae37728ac3e3a2f5dcc85a2eb5675"
+size = 18620432
+immutable = true
+note = "Kernel adfe1249ce911aaa2fcc8e4b304368fa2e31c3c334f867a9fecb87a8268d7b6b (revisión E-0166), ADT dc817436… y cargador 0a68abbd… como antes; línea idéntica a min2 (diff)."
