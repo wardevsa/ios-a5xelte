@@ -130,15 +130,17 @@ acceptance = "Tabla componente / licencia / evidencia / compatibilidad con APSL-
 [[task]]
 id = "T-0012"
 title = "Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP"
-status = "blocked"
+status = "in_progress"
 priority = 9
 owner = "director"
 depends_on = ["T-0013"]
 actions = ["device-read", "device-write-boot"]
-blocked_on = "autorización explícita del Director (device-write-boot, D-0010) nombrando imagen, hash y copias; la candidata reconstruida está LISTA en el PC (E-0038, solicitud en docs/herolte-solicitud-n2.md)"
 acceptance = "Imagen con SHA-256 y verificador PASS nombrada en la autorización; copias de BOOT y EFS fuera del teléfono; resultado registrado como evidencia del dispositivo, separado de las comprobaciones del PC."
 evidence = ["E-0036", "E-0037", "E-0038"]
 min_evidence = { level = "L3", device = "this-unit" }
+requires_decisions = ["D-0033"]
+authorization_ref = "D-0033"
+resume = "Fase 1 del primer arranque N2 autorizada (D-0033, hasta 2026-11-16). Escribir con tools/herolte-flash-boot.sh (ensayo y luego --execute); NO reiniciar sin que el Director esté listo para grabar; después S7GE_MIN_BOOT_VALIDATION.md. Ver docs/S7GE_FLASH_PROCEDURE.md."
 
 [[task]]
 id = "T-0013"

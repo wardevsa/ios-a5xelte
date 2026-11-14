@@ -2,11 +2,13 @@
 
 # Tarea activa
 
-**No hay ninguna tarea en curso.**
+**T-0012 — Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP**
 
-Tareas pendientes de revisión: —
-
-Siguiente tarea que se puede empezar sin pedir autorización: **T-0035 — Renovar la línea base de regresión: registrar las suites nuevas en regression.toml, ejecutar `governance.py regress` entero y repetir la batería de mutantes de governance.py (el comportamiento de `next` cambió)**
+- Estado: `in_progress`  - Nivel: C
+- Acciones: device-read, device-write-boot
+- Depende de: T-0013
+- Aceptación: Imagen con SHA-256 y verificador PASS nombrada en la autorización; copias de BOOT y EFS fuera del teléfono; resultado registrado como evidencia del dispositivo, separado de las comprobaciones del PC.
+- Notas de reanudación: Fase 1 del primer arranque N2 autorizada (D-0033, hasta 2026-11-16). Escribir con tools/herolte-flash-boot.sh (ensayo y luego --execute); NO reiniciar sin que el Director esté listo para grabar; después S7GE_MIN_BOOT_VALIDATION.md. Ver docs/S7GE_FLASH_PROCEDURE.md.
 
 ## Cómo reanudar
 1. Lee `README.md` y `HANDOFF.md`; ejecuta `python3 tools/governance.py check` y `status`.

@@ -430,3 +430,19 @@ rationale = "La jefatura la recomienda: Mesa moderno sigue manteniendo Panfrost 
 consequences = "Cumple la condición (a) de S7GE_OSMESA_FORK_POLICY.md §4: queda autorizado trabajar en gpu/mesa/ (NO en xnu/, kernel ni parches): documentar y construir la integración del frontend. Siguen siendo condiciones propias del trabajo: (c) un entorno de compilación de Mesa (en el PC solo se puede probar una compilación de comprobación en Linux; la de iOS es del CI de macOS), (d) quién vigila los avisos de seguridad, (e) licencia declarada del código propio. NO autoriza publicar (push/CI) más allá de lo que ya cubre D-0030, ni tocar el teléfono."
 reversal = "Nueva decisión de arquitectura; si se crea gpu/mesa/osmesa-frontend/, git revert."
 
+[[decision]]
+id = "D-0033"
+title = "Autorización roja de un solo intento: fase 1 del primer arranque N2 — escribir xnu-boot-v2-s7-min-20261114.img en la partición BOOT del S7 desde TWRP"
+date = "2026-11-14"
+scope = "operation"
+status = "APPROVED"
+proposer = "ingeniero"
+approved_by = "director"
+approval_date = "2026-11-14"
+approval_ref = "Mensaje del Director (PioXI), 2026-11-14: 'Autorizo la fase 1, firmado PioXI'. Se refiere a la fase 1 de docs/herolte-solicitud-n2.md (§0, §1, §7), leída por el ingeniero tal como la propone el documento"
+authorizes = ["device-write-boot", "device-read"]
+valid_until = "2026-11-16"
+rationale = "Primer peldaño real en el hardware (N2 de menor huella): comprobar que cargador, kernel y ADT arrancan en esta unidad. Almacenamiento de solo lectura y sin Wi-Fi, energía ni GPU."
+consequences = "ALCANCE EXACTO (lectura del ingeniero del texto de la solicitud §7): escribir SOLO la imagen xnu-boot-v2-s7-min-20261114.img (SHA-256 07ddfa069c7f53936964e05f174ddced6a75b6ff690180e648a082c941115db3, 18 618 384 bytes) en la partición BOOT (by-name/BOOT = /dev/block/sda5), desde TWRP, con tools/herolte-flash-boot.sh, y leer del teléfono BOOT y EFS (solo lectura) para comprobarlos antes y después; vuelta atrás con el BOOT original (E-0009, sha256 adc519d0f16fd314ea05b072820a81c3a623db2ba446397c87c7ed70776c3348), que también queda autorizada como escritura de BOOT si hace falta restaurar. Se acepta que SYSTEM y USERDATA no están verificados porque la fase 1 no los toca. NO autoriza: ninguna otra imagen (la candidata normal, fase 3, exige otra autorización con su hash), escribir EFS, RECOVERY ni bootloaders (AGENTS.md; regla X), escribir en USERDATA ni en /sdcard, ni usar Download/Odin. El reinicio para el arranque y la observación los hace el Director con la pantalla grabada."
+reversal = "Restaurar BOOT con el original verificado (docs/S7GE_FLASH_PROCEDURE.md §4)."
+
