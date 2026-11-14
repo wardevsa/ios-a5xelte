@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0057 — min14h50 (kernel 0349: nombres de fase en pantalla) ESCRITA (D-0043/D-0045, 11/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+## Relevo vigente: H-0058 — h50 llegó a vm_object_bootstrap; h52 ESCRITA (D-0043/D-0045, 12/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+- **Tarea en curso: T-0012.** E-0156: nombres de fase vistos (vm_mem_bootstrap … vm_object_bootstrap). BOOT = `xnu-boot-v2-s7-min14h52-20261114.img` (sha256 `22c7d73f…6f10`); EFS intacto (E-0160).
+- **Qué mirar (Director, tras `adb reboot`):** los 10 nombres de antes y, debajo, **`vm_map_init`** y **`kmem_init`** (slots 51 y 52). **Congela** con `kmem_init` visible ⇒ el kernel anuncia `kmem_init` (donde min1 hizo panic con 2 GiB); el fallo es dentro de `kmem_init` o después ⇒ h53 (`vm_fault_init`) distingue. **No congela** (reinicio) ⇒ el reinicio está dentro de `vm_object_bootstrap()` o `vm_map_init()`: h51 distingue.
+- Restaurar BOOT original (E-0009) cubierto por D-0045.
+
+## Relevo anterior: H-0057 — min14h50 (kernel 0349: nombres de fase en pantalla) ESCRITA (D-0043/D-0045, 11/20); teléfono en TWRP, sin reiniciar (2026-11-14)
 - **Tarea en curso: T-0012.** E-0148: arm_init termina; el reinicio está en machine_startup/kernel_bootstrap. D-0045 (ampliación de D-0043): enganches de dibujo en 5 ficheros del arranque, verificados por herramienta. Kernel 0349 revisado (E-0149). BOOT = `xnu-boot-v2-s7-min14h50-20261114.img` (sha256 `f01f9ce3…a39e`); EFS intacto (E-0155).
 - **Qué mirar (Director, tras `adb reboot`):** bloque 40 blanco (de antes) y, unos 0,7 s después, **bloques nuevos con el NOMBRE de cada fase a su izquierda** (empiezan en el slot 41, bajo el blanco). herostop=50 congela tras la 10.ª fase (slot 50). **Congela** ⇒ los nombres dicen las 10 primeras fases y el fallo es posterior. **No congela** (pantalla de reinicio) ⇒ el reinicio es antes de la fase 10: leer los nombres que se vean y probar h44.
 - Imágenes preparadas: min14 (sin herostop), h44, h56, h62 (E-0150, E-0152..E-0154).
