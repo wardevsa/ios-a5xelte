@@ -8,7 +8,15 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0015 — Fases 10-13 hechas; hallazgo: OSMesa no existe desde Mesa 25.1 (2026-11-14)
+## Relevo vigente: H-0016 — herramienta de flasheo con salvaguardas lista; D-0031 (OSMesa) solo como política (2026-11-14)
+- **Hecho (T-0034):** `tools/herolte-flash-boot.sh` (ensayo por defecto; `--execute` exige que `governance.py gate device-write-boot --task T-0012` autorice; comprueba hash, sda5, tamaño, EFS antes/después, hash en el teléfono y lectura de vuelta) con **13 pruebas con un adb FALSO**; `tools/herolte-boot-transcript-check.py` (clasifica la transcripción A-E; **no hay log que extraer**: `herolog=0`); `S7GE_PREFLIGHT_CHECKLIST.md` (19 puntos con su estado real; el rollback está **documentado, no ensayado**), `S7GE_FLASH_SCRIPTS.md`, `S7GE_POST_FLASH_ANALYSIS.md`, `S7GE_OSMESA_FORK_POLICY.md`.
+- **D-0031 (jefatura):** OSMesa lo mantenemos nosotros; **no se implementa nada** hasta que el Director confirme y se elija B1 (congelar Mesa 25.0.7) o B2 (solo el frontend sobre un Mesa más nuevo). Señal a favor de B2: las 18 funciones de Mesa que usa `osmesa.c` existen en 26.2.4 con la misma declaración (no compilado).
+- **Cuando el Director autorice el flasheo:** registrar su decisión `APPROVED` (`authorizes` con `device-write-boot` y `device-read`, hash de la imagen en el texto), poner `authorization_ref` en T-0012, ensayo del script, después `--execute`. **El ingeniero no ejecuta el script sin esa decisión; la herramienta tampoco.**
+- **Backup del Director en otra terminal:** no tocar adb ni esa carpeta. **Sin tareas verdes abiertas.**
+
+---
+
+## Relevo anterior: H-0015 — Fases 10-13 hechas; hallazgo: OSMesa no existe desde Mesa 25.1 (2026-11-14)
 - **Hecho (T-0033, solo documentos y descargas públicas):** `S7GE_BOOT_LOG_EXPECTATIONS.md`, `S7GE_ROLLBACK_PLAN.md` (**no restaurar con el BOOT del snapshot sin recortar**: lleva 98 bytes de más, KI-0008), `S7GE_MESA_VERSION_ANALYSIS.md` (parcheador: 12/12 sobre Mesa 25.0.7; **falla en 26.2.4 porque OSMesa fue eliminado en 25.1.0**; licencias de Mesa y libdrm verificadas: MIT), `S7GE_EXECUTIVE_SUMMARY.md`.
 - **Para el Director:** la fase 1 (variante mínima) sigue esperando tu autorización roja, el backup completo/recortado y, recomendado, una segunda copia de EFS. Plan, criterios y vuelta atrás están en `herolte-solicitud-n2.md`, `S7GE_MIN_BOOT_VALIDATION.md`, `S7GE_BOOT_LOG_EXPECTATIONS.md`, `S7GE_ROLLBACK_PLAN.md`. **Riesgo residual:** si TWRP no responde no hay camino de restauración documentado por Download/Odin.
 - **Decisión de jefatura nueva necesaria:** qué hacer con OSMesa (quedarse en 25.0.7 / mantenerlo / otra superficie de Mesa).

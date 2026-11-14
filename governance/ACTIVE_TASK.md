@@ -6,7 +6,7 @@
 
 Tareas pendientes de revisión: —
 
-Siguiente tarea que se puede empezar sin pedir autorización: — (todo bloqueado: ver `TASKS.md`)
+Siguiente tarea que se puede empezar sin pedir autorización: **T-0035 — Renovar la línea base de regresión: registrar las suites nuevas en regression.toml, ejecutar `governance.py regress` entero y repetir la batería de mutantes de governance.py (el comportamiento de `next` cambió)**
 
 ## Cómo reanudar
 1. Lee `README.md` y `HANDOFF.md`; ejecuta `python3 tools/governance.py check` y `status`.

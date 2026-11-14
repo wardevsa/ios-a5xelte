@@ -24,3 +24,9 @@ Revisado en las carpetas que se enlazan (`src/mesa`, `src/gallium/auxiliary`, `s
 
 ## 4. Qué NO se hizo
 No se compiló nada; no se probó que el Mesa parcheado funcione; la comprobación de 26.2.4 se limita a la aplicabilidad del script (el resto de ediciones, posteriores al fallo del fichero ausente, no se evaluaron); no se midió ningún tag intermedio (25.1.x, 25.2.x).
+
+## 5. Decisión de la jefatura técnica (2026-11-14, nivel B) y matices medidos
+**Opción B: mantener OSMesa nosotros** (D-0031); la **implementación espera la confirmación del Director**; la política está en `S7GE_OSMESA_FORK_POLICY.md`. Añado dos datos que afinan la decisión (sin cambiarla):
+- Si "mantener OSMesa" significa **quedarse con Mesa 25.0.7 entera**, el coste de Panfrost T880 (sin correcciones) sigue ahí; si significa **solo el frontend sobre un Mesa más nuevo**, hay una **señal a favor**: las 18 funciones de Mesa que usa `osmesa.c` existen en 26.2.4 con la misma declaración (no compilado). La política distingue las dos formas (B1/B2).
+- La decisión de migrar de superficie **queda para S7GL**, como decide la jefatura.
+

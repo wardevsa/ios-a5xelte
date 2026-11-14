@@ -402,3 +402,17 @@ rationale = "Es el único camino para compilar el kernel combinado (macOS runner
 consequences = "ALCANCE (lectura del ingeniero): solo la rama herolte-drop-v2 y solo el remoto mio (https://github.com/darkcloud9998/ios-a5xelte.git), tras un escaneo del contenido a publicar en busca de datos privados (AGENTS.md); lanzar el workflow xnu y descargar sus artefactos; sin push a origin (wardevsa/ios-a5xelte), sin PR, sin force-push. NO autoriza tocar el teléfono."
 reversal = "Borrar la rama remota del fork; lo publicado puede haberse copiado: no es reversible del todo."
 
+[[decision]]
+id = "D-0031"
+title = "OSMesa: mantenerlo nosotros (Opción B) en lugar de quedarse en Mesa 25.0.7 o migrar ya a otra superficie; política en docs/S7GE_OSMESA_FORK_POLICY.md"
+date = "2026-11-14"
+scope = "architecture"
+status = "APPROVED"
+proposer = "jefe-tecnico"
+approved_by = "jefe-tecnico"
+approval_date = "2026-11-14"
+approval_ref = "Decisión de jefatura técnica del 2026-11-14 (Qwen), ratificada como AMARILLO; la propia decisión dice 'no implementar el fork hasta que el Director confirme'. Delegación D-0019 (el Director lee todo e interviene si hace falta)"
+rationale = "OSMesa fue eliminado en Mesa 25.1.0 (S7GE_MESA_VERSION_ANALYSIS.md). Mesa 25.0.7 funciona y está probada; mantener el frontend da control sin reescribir toda la integración; la migración de superficie se decide en la fase S7GL."
+consequences = "Es DIRECCIÓN, no implementación: NO autoriza crear gpu/mesa/osmesa-fork/ ni tocar parches ni gpu/mesa. La implementación espera la confirmación del Director y la elección entre B1 (congelar Mesa 25.0.7 entera) y B2 (solo el frontend sobre un Mesa más nuevo); condiciones previas en la política §4."
+reversal = "Nueva decisión de arquitectura; no hay código que revertir."
+

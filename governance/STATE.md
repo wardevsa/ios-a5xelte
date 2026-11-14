@@ -1,62 +1,62 @@
 # Estado actual de IOS S7
 
-<!-- state-commit: 8b596ba -->
-**Verificado el 2026-11-13 sobre el commit `8b596ba`** (después solo este relevo H-0005 y el cierre de T-0005; `check` avisará de la distancia).
+<!-- state-commit: ANCHOR -->
+**Verificado el 2026-11-14 sobre el commit `ANCHOR`** (el estado se refresca en cada relevo; `check` avisa de la distancia).
 
 ## 1. En una frase
-Todo el trabajo hecho hasta hoy es **en el PC**: hay una candidata BOOT N2 de solo lectura verificada, un pipeline de root portable a Linux con una verificación fallida por 32 nombres Unicode, herramientas probadas y un estudio de la arquitectura gráfica S7GE. **Nada se ha escrito ni probado en el Galaxy S7** (BOOT original de Samsung, Android intacto).
+Todo es **trabajo en el PC**: hay una candidata BOOT de primer arranque (variante mínima) **construida y verificada**, una imagen de raíz de laboratorio con nombres en forma XNU **verificada**, copias del teléfono **comprobadas**, y un estudio completo de la arquitectura gráfica S7GE. **Nada se ha escrito ni probado en el Galaxy S7** (BOOT original de Samsung; no hay evidencia L3/L4 de esta unidad). Lo único que falta para el primer arranque es la **autorización roja del Director** (y que su backup termine).
 
 ## 2. Hechos medidos (con evidencia)
 | Hecho | Evidencia | Nivel |
 |---|---|---|
-| Candidata N2 de solo lectura: 47 PASS (constructor) y 50 PASS (verificador independiente), 0 FAIL; `ufsrw=0 herolog=0 herodrop=0`; imagen SHA-256 `26a39560…1d29` (18 618 384 B, 44 % de la partición); payload reproducible byte a byte desde kernel + ADT + línea; construcción determinista | E-0001..E-0006 | L2 |
-| Kernel DROP v2 (SHA-256 `e678b454…`): preflight 14 correctas, 1 aviso (sin GCC aarch64), 0 fallos | E-0006, E-0007 | L1/L2 |
-| Las 5 candidatas anteriores fallan el perfil N2 (3-4 FAIL): no llevaban `ufsrw=0` o llevaban `ufsrw=1 rootrw=1` | E-0019 | L2 |
-| `lab-full.img.partial` (SHA-256 `e724f981…c79496`, 20 GiB aparentes) está poblada pero su verificación es `ROOT_HFSPLUS_LAB_FAILED`: **32 de 329 nombres no ASCII** difieren entre la tabla de descomposición del `hfsplus` de Linux y la de XNU (144 caracteres del BMP difieren en total); `fsck_hfs -n` solo señala esos 32 | E-0010, E-0017, `docs/herolte-unicode-hfsplus.md` | L2 |
-| Las 7 tablas CoreFoundation de XNU (compiladas desde su fuente) están byte a byte en el kernel desplegado | E-0017 | L2 |
-| El árbol ya contiene un driver de GPU T880 y un cliente de usuario (parches 0225-0267, 0307), Mesa Panfrost en OSMesa y un puente EAGL; **no hay proveedor de Metal** | `docs/S7GE_STATUS.md` | L1 |
-| DROP v2: 36/36 comprobaciones del núcleo (81 510 casos de doble fallo), `test_host_pack` y sintaxis del núcleo correctos | `regression.toml` | L2 |
-| **`tools/governance.py` auditada línea a línea**: 17 hallazgos corregidos, 97 pruebas propias en OK, 6 de incorporación en OK y una batería de 22 mutantes con control sin mutar: 22 detectados y 0 supervivientes (E-0025, sobre las 97 pruebas definitivas); los comandos de validación dejan el árbol y `.git` byte-idénticos | `AUDIT_GOVERNANCE_TOOL.md`, E-0021..E-0025 | L2 |
-| **T-0009 (integración con `origin/herolte`):** 1 conflicto de texto (`HEROLTE_PROGRESS.md`); los 5 parches de ambas series aplican en los dos órdenes; solo colisionan 0332 y 0334; `ci_check.py` puede dar un falso "aplicado" por el prefijo `0334-` | `docs/herolte-integracion-origin-herolte.md`, E-0024 | L2 (aplicabilidad, no compilación) |
-| **T-0008 (ABI de HeroGPU, código leído):** una sola AS0 compartida; `Submit` acepta la VA de la cadena sin validar; `SurfaceBO` global; sin entitlement ni presupuesto; handles sin generación | `docs/S7GE_ABI.md` | L1 (lectura de código; sin prueba en hardware) |
-| Los 10 elementos sin confirmar del árbol principal (28 ficheros) tienen el mismo SHA-256 antes y después de la auditoría; su HEAD (`8d1cf43`) no cambió | comprobado al cerrar la misión | L2 |
+| **Candidata de primer arranque** `xnu-boot-v2-s7-min-20261114.img` (SHA-256 `07ddfa06…5db3`): kernel compilado por el CI (run `43579309448`) con los parches 0332-0337; línea de solo lectura **y sin Wi-Fi, energía ni GPU** (`herowifi=0 heropower=0 herogpu=0`); 47 PASS (constructor) y 54 PASS (independiente), 0 FAIL | E-0037, E-0040 | L1/L2 |
+| Candidata normal `xnu-boot-v2-s7-20261114.img` (SHA-256 `2c155829…8f40`): la misma sin los tres `=0` de hardware; 47/51 PASS. Reserva para una fase 3 con autorización propia | E-0038 | L2 |
+| La candidata anterior de solo lectura (`26a39560…1d29`, kernel sin los parches de upstream) se conserva: 47/50 PASS | E-0001..E-0006 | L2 |
+| La serie renumerada 0332..0337 (0332 marcador→0336, 0334 DROP v2→0337) aplica limpia en orden final; fusión con `origin/herolte` con 1 conflicto de texto; CI success y los 6 parches constan aplicados | E-0035, E-0037 | L1 |
+| **Imagen de raíz `lab-full-xnu`** (HFS+ con nombres XNU; 327/327 nombres no ASCII exactos en el catálogo en bruto; 2 ficheros `U+0E33` excluidos): `ROOT_HFSPLUS_LAB_VALID_CANDIDATE`, SHA-256 `747d0245…ec27f` idéntico antes, después y en la copia de NTFS | E-0031, E-0032 | L2 |
+| Copias del teléfono (BOOT = E-0009, EFS, CPEFS, PERSISTENT, PARAM, PERSDATA, RECOVERY, BOTA0/1) verificadas con su `SHA256SUMS`; en el PC, permisos 600, fuera de git, **todas en el mismo disco** | E-0036 | L2 |
+| El hilo de Wi-Fi arranca **por defecto** y escribe GPIO, reloj, PMU y PCIe; N2 es de solo lectura para el **almacenamiento**, no para el hardware | `docs/S7GE_SPLIT_PLAN.md` §3 | L1 |
+| `herolte_gpu.c` (3 466 líneas) es 57 % GPU; el resto audio, Wi-Fi, relojes de CPU, energía, display | `docs/S7GE_INVENTORY.md`, `S7GE_SPLIT_PLAN.md` | L1 |
+| **Seguridad GPU:** AS0 única; `Submit` acepta la cadena del cliente sin validar; el bloque de 2 MiB con la L2 de usuario y las L3 es escribible desde un job (lectura de código) | `docs/S7GE_ABI.md`, `S7GE_HARDWARE.md` | L1 |
+| **Mesa:** el parcheador aplica a 25.0.7 (12/12); **OSMesa se eliminó en Mesa 25.1**; Mesa y libdrm son MIT en lo enlazado | `docs/S7GE_MESA_VERSION_ANALYSIS.md` | L1 |
+| Rondas de mutación de rev2/rev3: 47 de 49 detectados, M16 y N02 equivalentes conocidos | E-0039 | L2 |
+| `tools/governance.py`: auditada, 98 pruebas propias y 6 de incorporación en OK; batería de 22 mutantes con control (E-0025, **sobre una versión anterior**: `next` cambió, ver T-0035) | E-0025 | L2 |
+| Herramienta de escritura de BOOT con salvaguardas, 13 pruebas con adb **falso**; clasificador de transcripciones, 9 pruebas | `tools/herolte-flash-boot.sh`, `herolte-boot-transcript-check.py` | L2 |
 
 ## 3. Hipótesis (no demostradas)
-- Que la candidata N2 **arranque** en el S7: solo hay comprobaciones de consistencia del PC.
-- Que corregir los 32 nombres deje `fsck_hfs` en rc=0 (R2 lo mediría); que XNU no abra esos ficheros por nombre (ruta de código leída, no ejecutada).
-- Que la evidencia de GPU y pantalla de `HEROLTE_PROGRESS.md` (otro teléfono) se reproduzca en esta unidad.
-- Que las decisiones D1-D12 de DROP v2 sean las correctas (sin ratificar, D-0009).
+- Que la candidata **arranque** en esta unidad (solo comprobaciones de consistencia del PC).
+- Que los valores de tensión/frecuencia y los hilos probados en el teléfono del upstream sirvan para este silicio.
+- Que el procedimiento de restauración funcione en el TWRP real (documentado, no ensayado).
+- Que el `hfsplus` real no altere más nombres de los medidos (el catálogo en bruto dice que no).
+- Que la GPU de esta unidad tenga el mismo `GPU_ID` y número de address spaces que la del upstream (no leído nunca).
 
 ## 4. Git
 | Árbol | Rama | HEAD | Sin confirmar |
 |---|---|---|---|
-| `~/HackiOS/repos/wardevsa-ios-a5xelte-v2` (**worktree del ingeniero**) | `herolte-drop-v2` | `bdf7c53` al verificar | 0 |
+| `~/HackiOS/repos/wardevsa-ios-a5xelte-v2` (**worktree del ingeniero**) | `herolte-drop-v2` | `ANCHOR` al verificar | los cambios del relevo en curso |
 | `~/HackiOS/repos/wardevsa-ios-a5xelte` (árbol principal **del responsable**) | `herolte-drop-fixes` | `8d1cf43` | 10 (2 modificados, 8 sin versionar): **no tocar** |
-Remotos: `origin` = `wardevsa/ios-a5xelte` (upstream), `mio` = fork del responsable. `origin/herolte` (2026-11-13, `f19b73d`) lleva 13 commits que esta rama no tiene (incluye `0332`-`0334` de gráficos que **colisionan** con nuestros `0332`, `0334`, `0335`: D-0008, T-0009). Esta rama lleva 34 commits propios no publicados (**sin push**).
+Remotos: `origin` = `wardevsa/ios-a5xelte` (upstream, **sin push**), `mio` = `darkcloud9998/ios-a5xelte` (fork del responsable; D-0030 autoriza publicar solo `herolte-drop-v2` ahí). La rama **ya está publicada en `mio`** hasta el commit `d4c9d88`; los commits posteriores son locales.
 
 ## 5. Bloqueos abiertos (qué los desbloquea)
 | Bloqueo | Quién | Tarea |
 |---|---|---|
-| Elegir la corrección del bloqueo Unicode (1-5 / B / C) | Director | T-0003 |
-| Autorizar R2 (sudo, montar imágenes) con comandos acotados; antes, ronda 2 de mutación y revisión independiente de rev2 | Director + ingeniero | T-0004, T-0005, T-0006 |
-| Cargador de clang o GCC; qué argumento quitar de la línea diaria (604/607) | Director | T-0013, T-0014 |
-| Autorizar escribir BOOT en el S7 (N1/N2) | Director | T-0012 |
-| Autorizar retirar 24 GiB de sandboxes originales (copia verificada) | Director | T-0007 |
-| Confirmar el archivo en NTFS de `lab-full.img.partial` y `os.apfs` | Director | T-0019 |
-| Ratificar D-0001 (este gobierno), D-0011, D-0012, D-0013, **D-0015 (aislamiento de clientes de HeroGPU, S7GE_ABI.md)**, D-0007 (rango 0400+), D-0014 (renumerar solo 0332/0334; sustituye a D-0008), D-0009 (DROP v2) | Jefe técnico / Director | T-0001, T-0016, T-0021 |
-| Alinear los permisos de Claude Code con `policy.toml` (convierte la disciplina asistida en control técnico) | Director | T-0021 |
-| Ejecutar la parte 2 de la prueba de incorporación con un modelo en frío | Jefe técnico / Director | T-0020 |
+| **Autorización roja de escribir BOOT** (variante mínima, fase 1) con imagen y hash nombrados; antes: backup completo y recortado (KI-0008), segunda copia de EFS recomendada | Director | T-0012 |
+| R2 sigue sin autorizar (D-0005): el Director debe decir expresamente que puede ejecutarse | Director | T-0004, T-0006 |
+| Ratificar D-0007 (rango 0400+), D-0009 (DROP v2), D-0011, D-0012, D-0013 (permisos de Claude Code), D-0015 (aislamiento de clientes de HeroGPU) | Jefatura técnica / Director | T-0014, T-0018, T-0021, T-0023 |
+| Qué hacer con OSMesa (D-0031 fija la dirección; falta elegir B1/B2 y confirmar al Director) | Jefatura / Director | — |
+| Consolidar la serie de parches y separar `herolte_gpu.c` (recomendado: después del primer arranque) | Jefatura | T-0015, T-0017 |
+| Ejecutar la parte 2 de la prueba de incorporación con un modelo en frío | Jefatura / Director | T-0020 |
 
 ## 6. Riesgos
-1. **Evidencia volátil:** `lab-full.img.partial` y el scratchpad viven en `/tmp` (se pierden al reiniciar). Copias de seguridad: E-0011..E-0017; la imagen de laboratorio **no está archivada** (T-0019).
-2. **Divergencia con upstream** que crece cada día (colisión de números de parche).
-3. **Brecha de seguridad de la GPU:** `Submit [jc_va, js]` acepta del cliente la dirección de la cadena de jobs (no se encontró validación en los parches 0239/0248; T-0008).
-4. **Disco:** `/` en 88 % (15 GB libres); ya llegó a 0 una vez.
-5. **Solo hay un teléfono y un camino de vuelta:** BOOT original copiado (E-0009); el EFS (IMEI) está respaldado fuera del teléfono (`~/HackiOS/backups/device-herolte/2026-11-12/`).
+1. **Primer arranque en hardware nuevo:** pantalla negra o reinicios posibles; vuelta atrás con `BOOT.img` verificado; **si TWRP no responde no hay camino documentado por Download/Odin** (riesgo residual).
+2. **Punto único de fallo de las copias** (un solo disco; `EFS` contiene el IMEI).
+3. **Brecha de seguridad de la GPU:** hasta aplicar D-0015/T-0023, no usar la GPU con software no confiable. **Con `cs_enforcement_disable=1` los entitlements no son una barrera.**
+4. **Dependencia de Mesa 25.0.x** (sin OSMesa en versiones nuevas).
+5. **Volatilidad:** el scratchpad vive en `/tmp`; lo importante está archivado en NTFS (E-0011…E-0040 con copia); ahora sin `r3/work` ni la imagen original (restaurables).
+6. **Disco:** `/` con ~21 GB libres.
 
-## 7. Verificación de esta línea base (2026-11-13)
-`python3 tools/governance.py regress` (suites y líneas base en `data/regression.toml`): governance-tests **97 OK** · governance-onboarding **6 OK** · governance-mutation **22/22 detectados** (E-0021) · verify-boot 22 OK · plutil-lite 7 OK · tune-root 30 PASS · stage-portable 20 PASS · hfsplus-names 16 OK · drop-v2-core 36/36 (1 min 56 s) · drop-v2-host-pack OK · drop-v2-kernel-syntax OK · preflight-kit 14/1/0 · validate-repo **XFAIL cuantificado: 5 errores `Gap in patch sequence`** (KI-0001, T-0018; se vigila que no aumente).
-**Evidencias** (`python3 tools/governance.py evidence --all --strict`): **22 OK, 0 sin verificar** (hash y tamaño reales, incluida la imagen de laboratorio de 20 GiB). **Nivel:** todo lo anterior es **host L2** o compilación **L1**; no hay ninguna evidencia L3/L4 de esta unidad.
+## 7. Verificación de esta línea base (2026-11-14)
+Pruebas ejecutadas hoy: `tools/test_governance.py` 98 OK · `test_onboarding.py` 6 OK · `ios-root-lab/test_adapter.py` 18 OK · `test_flash_boot.py` 13 OK · `test_boot_transcript.py` 9 OK · `test_trim_dd_tail.py` 6 OK · `xnu/drop-v2/test/test_ci_check.py` 9 OK · `hfsplus-names` 16 OK + 9 OK. `python3 tools/governance.py regress` **no** se ha vuelto a ejecutar entero desde 2026-11-13 y `regression.toml` **no incluye** las suites nuevas (T-0035). **Nivel:** todo es **host L2** o compilación **L1**; no hay ninguna evidencia L3/L4 de esta unidad.
 
 ## 8. Dónde mirar
-`KNOWN_ISSUES.md` (deuda sin ocultar) · `AUDIT_GOVERNANCE_TOOL.md` · `ONBOARDING_DRILL.md` · `TASKS.md` · `ACTIVE_TASK.md` · `DECISIONS.md` · `EVIDENCE.md` · `ROADMAP.md` · `ARCHITECTURE.md` · `docs/herolte-preparacion-pruebas.md` · `docs/herolte-unicode-hfsplus.md` · `docs/S7GE_STATUS.md` · `HANDOFF.md`.
+`HANDOFF.md` (empezar aquí) · `KNOWN_ISSUES.md` · `TASKS.md` · `DECISIONS.md` · `EVIDENCE.md` · `docs/herolte-solicitud-n2.md` (la solicitud al Director) · `docs/S7GE_EXECUTIVE_SUMMARY.md` · `docs/S7GE_PREFLIGHT_CHECKLIST.md` · `docs/S7GE_ROLLBACK_PLAN.md` · `docs/S7GE_MIN_BOOT_VALIDATION.md`.

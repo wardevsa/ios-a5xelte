@@ -378,3 +378,24 @@ depends_on = ["T-0032"]
 actions = ["read-analysis", "docs-write", "local-commit"]
 acceptance = "Hecho: docs/S7GE_BOOT_LOG_EXPECTATIONS.md, S7GE_ROLLBACK_PLAN.md, S7GE_MESA_VERSION_ANALYSIS.md (aplicabilidad medida sobre Mesa 25.0.7 y 26.2.4 descargados; licencias de Mesa y libdrm verificadas; OSMesa eliminado en 25.1) y S7GE_EXECUTIVE_SUMMARY.md; S7GE_LICENCIAS.md actualizado. Sin tocar código ni parches, sin push, sin adb."
 
+[[task]]
+id = "T-0034"
+title = "S7GE Fases 15-17: herramienta de escritura de BOOT con salvaguardas (probada con adb falso), lista previa, análisis posterior; política del OSMesa propio (D-0031, solo política)"
+status = "done"
+priority = 7
+owner = "ingeniero"
+depends_on = ["T-0033"]
+actions = ["read-analysis", "docs-write", "pc-implementation", "host-tests", "local-commit"]
+acceptance = "Hecho: tools/herolte-flash-boot.sh + tools/test_flash_boot.py (13 pruebas, adb falso, nunca el real), tools/herolte-boot-transcript-check.py + 9 pruebas, docs S7GE_FLASH_SCRIPTS, S7GE_PREFLIGHT_CHECKLIST, S7GE_POST_FLASH_ANALYSIS, S7GE_OSMESA_FORK_POLICY; S7GE_MESA_VERSION_ANALYSIS actualizado. No se creó gpu/mesa/osmesa-fork/ ni se tocó código del kernel, parches, adb ni el backup."
+
+[[task]]
+id = "T-0035"
+title = "Renovar la línea base de regresión: registrar las suites nuevas en regression.toml, ejecutar `governance.py regress` entero y repetir la batería de mutantes de governance.py (el comportamiento de `next` cambió)"
+status = "ready"
+priority = 5
+owner = "ingeniero"
+depends_on = []
+actions = ["host-tests", "pc-implementation", "local-commit"]
+acceptance = "regression.toml incluye test_flash_boot, test_boot_transcript, test_trim_dd_tail, test_adapter (ios-root-lab) y test_ci_check con su línea base; `regress` sin regresiones; batería de mutantes con control sin mutar sobre la versión actual de governance.py y evidencia nueva; STATE.md actualizado."
+resume = "No lanzar mientras el Director hace el backup en la otra terminal si compite por disco o CPU; la batería de mutantes clona el repositorio en /tmp (≈ 1-2 GB)."
+
