@@ -13,6 +13,8 @@ attach "$IMG" ro "$MNT"
 VM="$PY -I $TOOLS/verify_meta.py"; SC=(); is_mini "$P" && SC=(--scope $W/os/scope.lst)
 IGN=(); is_full "$P" && IGN=(--ignore-file $O/stage_ignore.txt)
 is_mini "$P" && IGN=(--ignore-file $O/stage_ignore_mini.txt)
+# D-0017 punto 5: .journal y .journal_info_block son los ficheros del diario HFS+ (mkfs -J): EXTRA esperados, no un fallo (el 1er verify real de full-xnu falló SOLO por ellos)
+if [ ${#IGN[@]} -gt 0 ]; then IGNX=$O/ignore_xnu.$P.txt; { cat "${IGN[1]}"; printf '.journal\n.journal_info_block\n'; } > "$IGNX"; IGN=(--ignore-file "$IGNX"); fi
 res meta_os $VM os "$MNT" --hash --time-res-s --allow-extra-nlink --name-policy nfd-equiv "${SC[@]}" "${IGN[@]}" --report $O/ver.$P.os.jsonl --quiet
 is_full "$P" && res meta_sys $VM systemos "$MNT/private/preboot/Cryptexes/OS" --time-res-s --allow-extra-nlink --report $O/ver.$P.systemos.jsonl --quiet
 res meta_app $VM appos "$MNT/private/preboot/Cryptexes/App" --time-res-s --allow-extra-nlink --report $O/ver.$P.appos.jsonl --quiet

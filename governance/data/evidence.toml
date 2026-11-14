@@ -414,3 +414,18 @@ size = 1117
 immutable = true
 note = "Sin montar nada. No es la verificación de la imagen poblada (eso lo hace verify_image.sh tras el sudo)."
 
+[[evidence]]
+id = "E-0029"
+title = "T-0025: primer populate y verify REALES de lab-full-xnu.img.partial (populate ok; verify con 2 EXTRA por los ficheros del diario; hfsx_post: 327/327 nombres en forma XNU exacta en el catálogo en bruto)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/t0025-first-verify-20261114.tar"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "47933ff402b694596cae76a1874021c8a080a400bdff524e1b7b242fb2f243db"
+size = 1382400
+immutable = true
+note = "Primer montaje real de Linux (hfsplus por defecto, sin nodecompose). La imagen (sha256 747d0245...ec27f) sigue en el scratchpad (volátil) como .partial. No es evidencia de iOS ni del teléfono."
+

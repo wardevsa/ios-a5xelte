@@ -31,3 +31,17 @@ Ficheros (carpeta bajo `th.lproj/DefaultShortcuts/`; nombre en puntos de código
 - `1401D3FE-B4C5-4DDA-96EE-B149258AD492/` — `0E04 0E33 0E2A 0E31 0E48 0E07 0E25 0E31 0E14`
 **Cómo se excluyen sin borrar nada:** `xnu_names_stage.py plan TREE --ko hfsplus.ko[.zst] --exclude-list NUEVO.txt` escribe las rutas relativas que necesitarían `nodecompose`; el copiado usa esa lista como `--exclude-from`. Verificación hecha (modelo validado contra el `utfconv` real de XNU, no un montaje): **30 de 32 nombres coinciden con XNU tras renombrar; los otros 2 son estos**.
 **Sigue pendiente (T-0025):** generar la imagen exige montar HFS+ con `sudo` (`privileged-or-mount`, roja). "T-0025 autorizada" en la directiva no nombra esa acción ni los comandos; D-0020 la deja expresamente sin autorizar. Además la directiva pide no tocar los scripts del laboratorio, que son los que montan (`populate_image.sh`).
+
+## 6. Resultado REAL del primer populate y verify (2026-11-14, E-0029)
+`populate_image.sh full-xnu` terminó bien (rsync, stage, apply: 318 068 entradas del volumen `os`; ~4 min). `verify_image.sh full-xnu` dejó la imagen como `.partial` (`ROOT_HFSPLUS_LAB_FAILED`). **Lectura de los datos (no de la hipótesis):**
+| Comprobación | Resultado |
+|---|---|
+| `hfsx_post` (lee el catálogo **en bruto** de la imagen, sin el driver de Linux) | **0 errores: 327 de 327 nombres no ASCII esperados en forma XNU exacta, 0 ausentes, 0 inesperados**; 5 nombres con `/` = los 5 `:` POSIX esperados |
+| `fsck.hfsplus -n` antes y después | volumen OK |
+| `meta_sys`, `meta_app`, `strict_sys` (1 459), `strict_app` (884), `stage` (75), `census` | todos OK |
+| imagen antes/después de verificar | mismo sha256 (el montaje de solo lectura no la cambió) |
+| `meta_os` | 318 068 OK; **2 EXTRA**; 195 `NAME-NORMALIZED` |
+**Los 195 `NAME-NORMALIZED` no son un fallo ni el motivo del rc=1:** `verify_meta` los cuenta como **aviso** (no suman a `errores`; así está escrito desde el laboratorio, por eso existe la política `nfd-equiv`). Son nombres que el **driver de Linux recompone al LEER** (el disco guarda la forma XNU; `readdir` de Linux devuelve otra): en 174 de los 195 el nombre leído es exactamente `NFC(nombre del manifiesto)`; los otros 21 (hangul, etc.) son otra recomposición de Linux. Solo cambia el último componente en los 195. Por escritura: latino 136, griego 15, hangul 15, CJK 6, resto 23. **Esto confirma, con un montaje real, lo que el modelo predecía: Linux no descompone de más al escribir** (el catálogo en bruto tiene la forma XNU) **y solo difiere al leer.**
+**Los 2 `EXTRA` que sí hicieron fallar son `.journal` y `.journal_info_block`**, los ficheros del diario HFS+ (`mkfs -J`). Eran el punto 5 de la corrección (docs/herolte-unicode-hfsplus.md §3) y **no lo había implementado: omisión mía**. Corregido en la copia (`tools/ios-root-lab/verify_image.sh` los añade a la lista de ignorados; prueba en `test_adapter.py`).
+**Hipótesis del informe de jefatura:** A (el driver normaliza al leer) es cierta pero afecta a la *lectura*, no al disco; B (herramienta de renombrado) **descartada** (327/327 exactos en el catálogo y 0 sin procesar); C (más nombres problemáticos) **descartada** (solo los 2 de `U+0E33`, ya excluidos; `nonascii_on_disk_not_expected = 0`). **No hace falta** `nodecompose`, parchear XNU ni excluir más nombres.
+**Pendiente:** repetir `verify_image.sh full-xnu` (montaje de solo lectura, no escribe) con el script corregido; si todo pasa se renombra a `.valid`. Hasta entonces T-0025 no está cerrada.

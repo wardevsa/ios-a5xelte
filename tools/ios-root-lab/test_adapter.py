@@ -97,6 +97,11 @@ class Q3libIsTheSinglePoint(unittest.TestCase):
             if f.endswith('.py'): compile(open(p, encoding='utf-8').read(), p, 'exec')
             if f.endswith('.sh'): self.assertEqual(subprocess.run(['bash', '-n', p]).returncode, 0, f)
 
+    def test_verify_tolerates_exactly_the_two_journal_files_as_extras(self):
+        s = open(os.path.join(HERE, 'verify_image.sh'), encoding='utf-8').read()
+        self.assertIn(".journal\\n.journal_info_block\\n", s); self.assertIn('IGN=(--ignore-file "$IGNX")', s)
+        self.assertEqual(subprocess.run(['bash', '-n', os.path.join(HERE, 'verify_image.sh')]).returncode, 0)
+
     def test_the_populate_script_excludes_through_the_adapter(self):
         s = open(os.path.join(HERE, 'populate_image.sh'), encoding='utf-8').read()
         self.assertIn('--exclude-from=$XNU_EXCL', s); self.assertIn('xnu_name_adapter.py rsync-exclude-file', s)

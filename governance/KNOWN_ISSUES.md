@@ -35,5 +35,8 @@ La política es **disciplina asistida por herramienta**: `gate` y `check` inform
 ## KI-0006 — 2 ficheros con U+0E33 excluidos del root (D-0020)
 Dos ficheros de `System/Library/PrivateFrameworks/WorkflowKit.framework/th.lproj/DefaultShortcuts/` (nombres tailandeses con `U+0E33`, SARA AM; carpetas `0C6A13DC-…` y `1401D3FE-…`) no se copian al root: la tabla de Linux descompone `U+0E33` y XNU lo conserva (`docs/herolte-unicode-aplicacion.md` §2). **Impacto esperado:** ninguno, según la jefatura (iOS usaría la localización inglesa); **no verificado** por el ingeniero. **Se vigila:** `xnu_names_stage.py plan --ko … --exclude-list` debe listar exactamente esos 2. **Resuelve:** nueva decisión (nodecompose o parche de la tabla). T-0025.
 
+## KI-0007 — `NAME-NORMALIZED` en el volumen `os` es un aviso esperado, no un error
+En un montaje real de Linux, `verify_meta --name-policy nfd-equiv` informa ~195 `NAME-NORMALIZED` en `os`: el driver recompone al **leer** nombres que el disco guarda en forma XNU (comprobado con `hfsx_check` sobre el catálogo en bruto: 327/327 exactos). No suman a `errores`. **No lo confundas con un fallo** (T-0025, E-0029). Si el catálogo en bruto dejara de coincidir, sí sería un error: `hfsx_check` lo detectaría (`nonascii_nfd_missing_on_disk`).
+
 ## Cómo añadir una entrada
 Número correlativo `KI-NNNN`, estado, desde cuándo, **salida o evidencia exacta**, qué no es, cómo se vigila y la tarea que lo resuelve. Las entradas resueltas no se borran: se marcan `resuelto` con el commit.
