@@ -8,7 +8,14 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0018 — el snapshot de backup del Director NO está completo; qué sirve y qué no (2026-11-14)
+## Relevo vigente: H-0019 — guía de flasheo corregida (2026-11-14)
+- **Hecho (T-0039, solo documentos):** `docs/S7GE_FLASH_PROCEDURE.md` para el Director: recomienda `tools/herolte-flash-boot.sh` (ensayo + `--execute` solo con la autorización registrada) y da el equivalente manual **corregido**. Corrige 8 errores del borrador de jefatura, los de mayor impacto: `/sdcard` es USERDATA en TWRP (usar `/tmp`); `sha256sum` de la partición entera nunca coincide con el de la imagen (usar `head -c`); **no vuelve a TWRP solo** (teclas); **el BOOT original no está en el móvil** (se empuja desde el PC); `herolog=1` escribiría en USERDATA (otra imagen y otra autorización).
+- **No ejecuté la Fase 23 (comprobar el móvil con `adb ls`):** es leer el dispositivo (rojo) y la guía no lo necesita.
+- **Pendiente (Director):** firmar la autorización de la fase 1 con el texto de la solicitud §7; decidir si repite SYSTEM/USERDATA. **Siguiente (verde): T-0035.**
+
+---
+
+## Relevo anterior: H-0018 — el snapshot de backup del Director NO está completo; qué sirve y qué no (2026-11-14)
 - **Medido (T-0038, solo lectura, sin adb, nada modificado; E-0042; `docs/S7GE_BACKUP_STATUS.md`):** `BOOT.img` bueno (el prefijo = E-0009; 98 bytes de cola de `dd`); `EFS.img` bueno (8 bytes de superbloque ext4 distintos de 11-12: un montaje más); **`RECOVERY.img` TRUNCADA (7,8 de 48,2 MB)**; `SYSTEM.img` 5,7 GB sin verificar; **`USERDATA.img` 0 B**. La jefatura lo dio por "completo": no lo es. USERDATA en tarjeta SD: declarada, **sin ruta ni hash**, por eso **no** se registra como evidencia (el `E-0041` que proponía ya es del OSMesa).
 - **Lo que necesita la fase 1 SÍ está cubierto** por las copias verificadas de 2026-11-12 (BOOT, EFS, **RECOVERY completa**). La fase 1 no toca SYSTEM ni USERDATA.
 - **No hecho (rojo, no autorizado):** comparar contra el teléfono con `adb` (`device-read`). Comandos de solo lectura listos en `S7GE_BACKUP_STATUS.md` §6. **No se recortó nada en sitio** (innecesario: solo BOOT tiene cola y es redundante con E-0009).

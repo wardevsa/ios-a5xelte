@@ -433,3 +433,13 @@ actions = ["read-analysis", "docs-write", "local-commit"]
 evidence = ["E-0042"]
 acceptance = "Hecho: solo lectura de los ficheros del snapshot (sin adb, sin modificar nada); estado real por fichero; solicitud, checklist y plan de restauración actualizados. NO hecho (rojo, no autorizado): la comparación contra el teléfono (device-read)."
 
+[[task]]
+id = "T-0039"
+title = "Guía paso a paso del flasheo para el Director (S7GE_FLASH_PROCEDURE.md) corrigiendo los comandos del borrador de jefatura; sin ejecutar nada contra el teléfono"
+status = "done"
+priority = 4
+owner = "ingeniero"
+depends_on = ["T-0038"]
+actions = ["read-analysis", "docs-write", "local-commit"]
+acceptance = "Hecho: docs/S7GE_FLASH_PROCEDURE.md (camino con tools/herolte-flash-boot.sh y equivalente manual corregido, vuelta atrás, qué se anota, tabla de 8 errores del borrador) e INCONSISTENCIES con 19 filas. NO hecho (rojo): ningún comando contra el teléfono, ni siquiera de lectura (la comprobación de si el BOOT original está en el móvil exigiría adb)."
+

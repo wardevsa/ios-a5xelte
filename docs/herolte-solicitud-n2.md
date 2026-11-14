@@ -41,7 +41,7 @@
 - **Solo la partición BOOT** (`/dev/block/platform/155a0000.ufs/by-name/BOOT`), desde TWRP, con la imagen de arriba. **Nunca** EFS, RECOVERY ni bootloaders (AGENTS.md; regla X).
 - Ningún otro dispositivo, ninguna otra partición, sin tocar USERDATA.
 
-## 5. Procedimiento propuesto (para que lo revise y apruebe el Director)
+## 5. Procedimiento propuesto (para que lo revise y apruebe el Director) — **la guía paso a paso y corregida es `docs/S7GE_FLASH_PROCEDURE.md`**
 1. Con el teléfono en TWRP y la imagen copiada al teléfono (o por `adb`), comprobar su SHA-256 **en el teléfono** antes de escribir.
 2. Escribir en BOOT: `dd if=<imagen> of=/dev/block/platform/155a0000.ufs/by-name/BOOT` (o Instalar → imagen → Boot) y verificar leyendo de vuelta los primeros 18 618 384 bytes con el mismo hash.
 3. Reiniciar; observar la pantalla. **Resultado esperado de N2:** texto del kernel en pantalla, 8 núcleos, GPT del UFS; falla al montar la raíz (USERDATA es ext4): es lo esperado.
