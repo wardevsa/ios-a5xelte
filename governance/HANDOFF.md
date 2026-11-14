@@ -12,7 +12,7 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 - **Hecho (T-0034):** `tools/herolte-flash-boot.sh` (ensayo por defecto; `--execute` exige que `governance.py gate device-write-boot --task T-0012` autorice; comprueba hash, sda5, tamaño, EFS antes/después, hash en el teléfono y lectura de vuelta) con **13 pruebas con un adb FALSO**; `tools/herolte-boot-transcript-check.py` (clasifica la transcripción A-E; **no hay log que extraer**: `herolog=0`); `S7GE_PREFLIGHT_CHECKLIST.md` (19 puntos con su estado real; el rollback está **documentado, no ensayado**), `S7GE_FLASH_SCRIPTS.md`, `S7GE_POST_FLASH_ANALYSIS.md`, `S7GE_OSMESA_FORK_POLICY.md`.
 - **D-0031 (jefatura):** OSMesa lo mantenemos nosotros; **no se implementa nada** hasta que el Director confirme y se elija B1 (congelar Mesa 25.0.7) o B2 (solo el frontend sobre un Mesa más nuevo). Señal a favor de B2: las 18 funciones de Mesa que usa `osmesa.c` existen en 26.2.4 con la misma declaración (no compilado).
 - **Cuando el Director autorice el flasheo:** registrar su decisión `APPROVED` (`authorizes` con `device-write-boot` y `device-read`, hash de la imagen en el texto), poner `authorization_ref` en T-0012, ensayo del script, después `--execute`. **El ingeniero no ejecuta el script sin esa decisión; la herramienta tampoco.**
-- **Backup del Director en otra terminal:** no tocar adb ni esa carpeta. **Sin tareas verdes abiertas.**
+- **Backup del Director en otra terminal:** no tocar adb ni esa carpeta. **Siguiente (verde): T-0035** (renovar la línea base de regresión y repetir la batería de mutantes de governance.py; no lanzarla si compite con el backup).
 
 ---
 

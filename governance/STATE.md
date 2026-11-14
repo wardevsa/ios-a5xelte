@@ -1,7 +1,7 @@
 # Estado actual de IOS S7
 
-<!-- state-commit: ANCHOR -->
-**Verificado el 2026-11-14 sobre el commit `ANCHOR`** (el estado se refresca en cada relevo; `check` avisa de la distancia).
+<!-- state-commit: 120f183 -->
+**Verificado el 2026-11-14 sobre el commit `120f183`** (el estado se refresca en cada relevo; `check` avisa de la distancia).
 
 ## 1. En una frase
 Todo es **trabajo en el PC**: hay una candidata BOOT de primer arranque (variante mínima) **construida y verificada**, una imagen de raíz de laboratorio con nombres en forma XNU **verificada**, copias del teléfono **comprobadas**, y un estudio completo de la arquitectura gráfica S7GE. **Nada se ha escrito ni probado en el Galaxy S7** (BOOT original de Samsung; no hay evidencia L3/L4 de esta unidad). Lo único que falta para el primer arranque es la **autorización roja del Director** (y que su backup termine).
@@ -33,7 +33,7 @@ Todo es **trabajo en el PC**: hay una candidata BOOT de primer arranque (variant
 ## 4. Git
 | Árbol | Rama | HEAD | Sin confirmar |
 |---|---|---|---|
-| `~/HackiOS/repos/wardevsa-ios-a5xelte-v2` (**worktree del ingeniero**) | `herolte-drop-v2` | `ANCHOR` al verificar | los cambios del relevo en curso |
+| `~/HackiOS/repos/wardevsa-ios-a5xelte-v2` (**worktree del ingeniero**) | `herolte-drop-v2` | `120f183` al verificar | los cambios del relevo en curso |
 | `~/HackiOS/repos/wardevsa-ios-a5xelte` (árbol principal **del responsable**) | `herolte-drop-fixes` | `8d1cf43` | 10 (2 modificados, 8 sin versionar): **no tocar** |
 Remotos: `origin` = `wardevsa/ios-a5xelte` (upstream, **sin push**), `mio` = `darkcloud9998/ios-a5xelte` (fork del responsable; D-0030 autoriza publicar solo `herolte-drop-v2` ahí). La rama **ya está publicada en `mio`** hasta el commit `d4c9d88`; los commits posteriores son locales.
 
