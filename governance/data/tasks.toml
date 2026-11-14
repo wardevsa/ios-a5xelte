@@ -358,3 +358,13 @@ actions = ["read-analysis", "docs-write", "build-candidates", "local-commit"]
 evidence = ["E-0040"]
 acceptance = "Hecho: docs/S7GE_SPLIT_PLAN.md, S7GE_PATCH_DEPENDENCIES.md, S7GE_MESA_INTEGRATION.md, S7GE_INCONSISTENCIES.md; decisión de jefatura sobre entitlements incorporada al ABI v2 con su límite (cs_enforcement_disable); variante N2 de menor huella construida y verificada en el PC (E-0040), sin escribir en el teléfono."
 
+[[task]]
+id = "T-0032"
+title = "S7GE Fases 7-9, puentes EAGL y lecciones de A5XELTE; solicitud de flasheo reescrita con la decisión de jefatura (variante mínima primero)"
+status = "done"
+priority = 7
+owner = "ingeniero"
+depends_on = ["T-0031"]
+actions = ["read-analysis", "docs-write", "local-commit"]
+acceptance = "Hecho: docs/S7GE_EXTRACTION_INTERFACES.md, S7GE_CONSOLIDATION_RISKS.md, S7GE_MIN_BOOT_VALIDATION.md, S7GE_EAGL_BRIDGES.md y S7GE_A5XELTE_LESSONS.md; docs/herolte-solicitud-n2.md actualizada (fases 1-4, autorización solo de la variante mínima); S7GE_INCONSISTENCIES.md con 17 filas. Sin tocar parches ni código, sin push, sin adb."
+

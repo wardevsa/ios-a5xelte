@@ -8,7 +8,15 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0013 — modelado S7GE Fases 4-6 hecho; hallazgo sobre lo que hace N2 en el hardware (2026-11-14)
+## Relevo vigente: H-0014 — decisión de jefatura: primer flasheo con la variante mínima; Fases 7-9 hechas (2026-11-14)
+- **Decisión (jefatura, nivel B):** primer flasheo = `xnu-boot-v2-s7-min-20261114.img` (SHA-256 `07ddfa06…5db3`, E-0040); la candidata normal (`2c155829…8f40`, E-0038) queda para una **fase 3 con autorización propia**. `docs/herolte-solicitud-n2.md` está reescrita (fases 1-4, texto de autorización de la fase 1). **Siguen pendientes del Director:** backup completo y recortado (KI-0008) y la firma de la autorización roja.
+- **Hecho (T-0032, solo documentos):** `S7GE_MIN_BOOT_VALIDATION.md` (qué observar, criterios A-E fijados antes de arrancar, protocolo, qué no concluir), `S7GE_EXTRACTION_INTERFACES.md`, `S7GE_CONSOLIDATION_RISKS.md` (R1-R10), `S7GE_EAGL_BRIDGES.md` (propuesta: conservar hakios-gl, sin medir), `S7GE_A5XELTE_LESSONS.md` (la 8.ª: A5 se negó a exponer descriptores crudos; herolte los expone), `S7GE_INCONSISTENCIES.md` (17 filas; corrige dos afirmaciones de la directiva: el upstream de herolte es T880, no un A5/Exynos 7580; STATUS cita Mesa 26.2.4).
+- **Backup del Director en otra terminal:** no tocar adb ni esa carpeta.
+- **Sin tareas verdes abiertas.** Esperas: autorización roja de la fase 1; decisiones de jefatura sobre consolidar/separar y sobre el puente EAGL.
+
+---
+
+## Relevo anterior: H-0013 — modelado S7GE Fases 4-6 hecho; hallazgo sobre lo que hace N2 en el hardware (2026-11-14)
 - **Hecho (T-0031, solo documentos y una candidata en el PC):** `S7GE_SPLIT_PLAN.md` (mapa medido de `herolte_gpu.c`: GPU 1 960 líneas, el resto ~1 350; audio y Wi-Fi son autocontenidos; los no-GPU solo dependen de `hg_rd/hg_wr/msleep`; la presentación sí está acoplada al display), `S7GE_PATCH_DEPENDENCIES.md` (63 parches tocan `herolte_gpu.c`; candidatos a consolidar; la vía segura es una serie paralela con árbol idéntico, no quitar parches), `S7GE_MESA_INTEGRATION.md`, `S7GE_INCONSISTENCIES.md` (14 puntos), entitlements de la jefatura incorporados al ABI v2 **con su límite**: con `cs_enforcement_disable=1` el entitlement no es una barrera, la barrera es la AS por contexto.
 - **Hallazgo importante para el flasheo:** la candidata N2 es de solo lectura para el **almacenamiento**, no para el hardware: por defecto arranca el hilo de **Wi-Fi** (escribe GPIO, reloj, PMU y PCIe), el de bus/display y los de energía y medición. No toca tensión ni frecuencia de CPU (sin `herocpu_mhz`). Variante de menor huella construida y verificada: `xnu-boot-v2-s7-min-20261114.img` (SHA-256 `07ddfa06…5db3`, E-0040, +`herowifi=0 heropower=0 herogpu=0`). **El Director/jefatura elige cuál** (la solicitud en `docs/herolte-solicitud-n2.md` lo explica).
 - **Backup del Director (NVMe) sigue en otra terminal:** no tocar adb ni esa carpeta. Recortar la cola de dd al terminar (KI-0008).
