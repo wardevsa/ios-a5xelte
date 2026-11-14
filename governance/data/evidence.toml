@@ -2484,3 +2484,18 @@ sha256 = "11a84df42461dcafad8133314ce2fc64d39a8cdd7ae48f3928289abafcee536c"
 size = 724
 immutable = true
 note = "Solo escritura y lectura de vuelta (hash registrado antes en E-0167; revisión del kernel E-0166). Línea idéntica a min2."
+
+[[evidence]]
+id = "E-0169"
+title = "Observación de min15 (sin herostop): 64 fases del arranque visibles; la última es PE_lockdown_iokit (leída 'PE_lockdown_lockit'); pasa por kernel_bootstrap_thread, PE_init_iokit, trust_cache_init, OSKextRemoveKextBootstrap, machine_lockdown y kernel_do_post; luego start.s se ejecuta otra vez (reinicio)"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min15-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "5d1604736d799e6b05375b10bad1411376e7aa1c3259958bb502480cc09eb8c0"
+size = 1158
+immutable = true
+note = "Por el código (osfmk/kern/startup.c): tras el anuncio 'PE_lockdown_iokit' se ejecutan PE_lockdown_iokit(), vm_set_restrictions(), kperf_init_early() y bsd_init() (sin anuncios propios) y luego el resto de kernel_bootstrap_thread. El fallo/reinicio está en esa zona o más tarde. El kernel tiene CONFIG_XNUPOST (kernel_do_post terminó). Transcripción por IA de una foto no archivada."
