@@ -1,0 +1,72 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 4464750..440448f 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -508,6 +508,19 @@ hg_read_fault_report(void)
+ 	herolte_apm_pmic_read(0x1b, &mif);
+ 	herolte_apm_pmic_read(0x1d, &mngs);
+ 	printf("HEROLTE GPU: supplies at the read fault: g3d %#x mif %#x mngs %#x\n", g3d, mif, mngs);
++	/* The way out of the GPU: its link clock in CMU_TOP, then the links in CMU_CCORE (read only here: a wrong CMU read aborts). */
++	if (top) {
++		printf("HEROLTE GPU: top ACLK_CCORE_G3D_800 mux %#x div %#x enable %#x\n", hg_rd(top, 0x248), hg_rd(top, 0x3a8), hg_rd(top, 0x808));
++	}
++	static vm_offset_t ccore;
++	if (!ccore) {
++		ccore = ml_io_map(0x105b0000u, 0x3000);
++	}
++	if (ccore) {
++		printf("HEROLTE GPU: ccore g3d mux %#x stat %#x\n", hg_rd(ccore, 0x208), hg_rd(ccore, 0x508));
++		printf("HEROLTE GPU: ccore LH qch iram %#x g3d0 %#x g3d1 %#x g3dp %#x\n", hg_rd(ccore, 0x2008), hg_rd(ccore, 0x2014),
++		    hg_rd(ccore, 0x2018), hg_rd(ccore, 0x202c));
++	}
+ 	uint64_t pte = hgu_pte(hg_job_va);
+ 	printf("HEROLTE GPU: read fault %u in a row: job %#llx pte %#llx | status %#x faultstatus %#x@%#x%08x "
+ 	    "| ready shader %#x tiler %#x l2 %#x | as status %#x | PMU G3D %#x/%#x | G3D_PLL %#x\n", hg_read_faults,
+diff --git a/osfmk/kern/sched_prim.c b/osfmk/kern/sched_prim.c
+index 65af9c1..c81c6b6 100644
+--- a/osfmk/kern/sched_prim.c
++++ b/osfmk/kern/sched_prim.c
+@@ -152,10 +152,33 @@ bool sched_stats_active;
+  */
+ static cpumap_t sweet_fast_map = 0xf0;
+ 
++/*
++ * Herolte: Mongoose is three or four times an A53 here. launchd and mediaserverd alone use up to three CPUs, with
++ * nothing on the screen to show for it, and at BASEPRI_DEFAULT they had the fast cores before the UI.
++ */
++extern char *proc_name_address(void *p);
++
++static inline bool
++sweet_is_hog(thread_t thread)
++{
++	static const char *const hogs[] = { "launchd", "mediaserverd", "logd", "kernel_task", "xpcproxy", "cfprefsd" };
++	void *proc = get_bsdtask_info(get_threadtask(thread));
++	if (proc == NULL) {
++		return false;
++	}
++	const char *name = proc_name_address(proc);
++	for (unsigned i = 0; i < sizeof(hogs) / sizeof(hogs[0]); i++) {
++		if (strncmp(name, hogs[i], 17) == 0) {
++			return true;
++		}
++	}
++	return false;
++}
++
+ static inline bool
+ sweet_wants_fast(thread_t thread)
+ {
+-	return thread->sched_pri >= BASEPRI_DEFAULT;
++	return thread->sched_pri >= BASEPRI_USER_INITIATED && !sweet_is_hog(thread);
+ }
+ 
+ /* Idle CPU from idle_map in the thread's preferred class, else any; -1 if none. */
+@@ -5125,7 +5148,7 @@ choose_processor(
+ 					cpumap_t idle = pset->cpu_state_map[PROCESSOR_IDLE] & pset->primary_map &
+ 					    pset->recommended_bitmask;
+ 					bool fast = bit_test(sweet_fast_map, processor->cpu_id);
+-					bool want = thread->sched_pri >= BASEPRI_RTQUEUES || sweet_wants_fast(thread);
++					bool want = sweet_wants_fast(thread);
+ 					if (fast != want && (idle & (want ? sweet_fast_map : ~sweet_fast_map)) != 0) {
+ 						processor = PROCESSOR_NULL;
+ 						break;

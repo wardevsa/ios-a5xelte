@@ -1,0 +1,472 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index a3e9022..0c902cd 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -23,6 +23,10 @@
+ 
+ extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
+ void herolte_gpu_probe(void);
++/* GPU present, for iokit/Kernel/arm/SweetFramebuffer.cpp. */
++int herolte_gpu_present_slot(uint32_t id, uint64_t first_pa);
++int herolte_gpu_present_map(uint32_t id, const uint64_t *pages, unsigned n);
++bool herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h);
+ 
+ #define HG_PMU_PA       0x105c0000u
+ #define HG_PMU_G3D_CONF 0x4060u
+@@ -319,6 +323,8 @@ static uint32_t hg_affinity = 1;
+ /* GPU VA of the job chain hg_run() starts, and of its header (for the log). */
+ static uint64_t hg_job_va = HG_TEST_VA;
+ static vm_offset_t hg_job_cpu;
++/* Log only failed jobs (the per-frame GPU present). */
++static bool hg_run_quiet;
+ 
+ /* Program AS0, start the job at HG_TEST_VA on slot js, wait (bounded). */
+ static bool
+@@ -362,11 +368,13 @@ hg_run(unsigned js, const char *what)
+ 	}
+ 	volatile uint32_t *hdr = (volatile uint32_t *)(hg_job_cpu ? hg_job_cpu : hg_mem + HG_DATA_OFF);
+ 	bool ok = (jirq & (1u << js)) && !(jirq & (1u << (js + 16))) && !mirq && !(girq & 0x81);
+-	printf("HEROLTE GPU: %s: irq=%#x mmu=%#x gpu=%#x js_status=%#x as_fault=%#x@%#x "
+-	    "exception=%#x fault=%#x:%#x gpu_fault=%#x@%#x\n", what, jirq, mirq, girq,
+-	    hg_rd(hg_gpu, slot + 0x24), hg_rd(hg_gpu, AS0 + 0x1c), hg_rd(hg_gpu, AS0 + 0x20),
+-	    hdr[0], hdr[3], hdr[2],
+-	    hg_rd(hg_gpu, GPU_FAULTSTATUS), hg_rd(hg_gpu, GPU_FAULTADDR_LO));
++	if (!ok || !hg_run_quiet) {
++		printf("HEROLTE GPU: %s: irq=%#x mmu=%#x gpu=%#x js_status=%#x as_fault=%#x@%#x "
++		    "exception=%#x fault=%#x:%#x gpu_fault=%#x@%#x\n", what, jirq, mirq, girq,
++		    hg_rd(hg_gpu, slot + 0x24), hg_rd(hg_gpu, AS0 + 0x1c), hg_rd(hg_gpu, AS0 + 0x20),
++		    hdr[0], hdr[3], hdr[2],
++		    hg_rd(hg_gpu, GPU_FAULTSTATUS), hg_rd(hg_gpu, GPU_FAULTADDR_LO));
++	}
+ 	hg_wr(hg_gpu, JOB_IRQ_CLEAR, 0xffffffffu);
+ 	hg_wr(hg_gpu, MMU_IRQ_CLEAR, 0xffffffffu);
+ 	return ok;
+@@ -912,6 +920,313 @@ hg_draw(uint64_t hold, bool tex)
+ 	    ok ? "ok" : "failed");
+ }
+ 
++/*
++ * GPU present (SweetFramebuffer.cpp, boot-args sweetfb_scale=1 sweetfb_gpu=1):
++ * iOS draws a smaller frame (the ADT canvas, 960x1706) and every frame shown
++ * is the herogpu=9 draw with that iOS surface as the texture: a full-panel
++ * quad, bilinear, on all 12 shader cores, instead of a CPU copy.
++ *
++ * Set up once, on the first frame: page tables (the panel as in herogpu=6,
++ * the scratch block with the shader and descriptors as in herogpu=8/9), all
++ * cores powered and left on. iOS surfaces get GPU VAs in 8 MiB slots
++ * (4 L3 tables each, in the scratch block); a surface is mapped the first
++ * time it is shown and keeps its slot while its id and first page match.
++ * A remapped slot takes a fresh VA and the MMU is flushed, so no stale TLB
++ * entry can point at the old surface. Per frame the CPU writes the texture
++ * size/address and texel coordinates, zeroes the polygon list header (Mesa
++ * zeroes it with a WRITE_VALUE job per frame), resets the two job headers
++ * and runs tiler then fragment. Run only with herogpu<=2 (no test jobs).
++ */
++#define HGP_SLOTS       4u
++#define HGP_SLOT_TABLES 4u
++#define HGP_SLOT_PAGES  (HGP_SLOT_TABLES * 512u)
++#define HGP_L3_OFF      0x100000u       /* slot L3 tables, in the scratch block */
++#define HGP_VA_BASE     0x10000000ull
++#define HGP_VA_END      0x40000000ull   /* the one L2 table covers 1 GiB */
++
++struct hgp_slot {
++	uint32_t        id;
++	uint64_t        first_pa;
++	uint64_t        va;
++};
++static struct hgp_slot hgp_slots[HGP_SLOTS];
++static unsigned hgp_victim;
++static uint64_t hgp_next_va = HGP_VA_BASE;
++static vm_offset_t hgp_scr;
++static int hgp_state;                   /* 0 not set up, 1 ready, -1 failed */
++static uint64_t hgp_frames;
++
++/* Wait (bounded) for AS0 to finish its command. */
++static bool
++hgp_as_idle(void)
++{
++	for (unsigned i = 0; i < 10000 && (hg_rd(hg_gpu, AS0 + 0x28) & 1); i++) {
++		delay(1);
++	}
++	return !(hg_rd(hg_gpu, AS0 + 0x28) & 1);
++}
++
++/* Lock a VA range and flush the MMU's page table caches for it, as kbase's
++ * mmu_hw_do_operation(): LOCKADDR, LOCK, FLUSH_PT (which also unlocks). */
++static bool
++hgp_mmu_flush(uint64_t va, unsigned log2_size)
++{
++	uint64_t lock = (va & ~((1ull << log2_size) - 1)) | (log2_size - 1);
++	if (!hgp_as_idle()) {
++		return false;
++	}
++	hg_wr(hg_gpu, AS0 + 0x10, (uint32_t)lock);              /* AS_LOCKADDR */
++	hg_wr(hg_gpu, AS0 + 0x14, (uint32_t)(lock >> 32));
++	hg_wr(hg_gpu, AS0 + 0x18, 2);                           /* LOCK */
++	if (!hgp_as_idle()) {
++		return false;
++	}
++	hg_wr(hg_gpu, AS0 + 0x18, 4);                           /* FLUSH_PT */
++	return hgp_as_idle();
++}
++
++static bool
++hgp_setup(void)
++{
++	vm_offset_t pmu = ml_io_map(HG_PMU_PA, 0x8000);
++	if (!pmu || !hg_powered(pmu)) {
++		printf("HEROLTE GPU PRESENT: G3D domain off\n");
++		return false;
++	}
++	if (!hg_gpu) {
++		hg_gpu = ml_io_map(HG_GPU_PA, 0x5000);
++	}
++	if (!hg_mem) {
++		hg_mem = ml_io_map(HG_TEST_PA, HG_TEST_BYTES);
++	}
++	hgp_scr = ml_io_map(HG_SCR_PA, HG_SCR_BYTES);
++	if (!hg_gpu || !hg_mem || !hgp_scr) {
++		printf("HEROLTE GPU PRESENT: mapping failed\n");
++		return false;
++	}
++	uint32_t all = hg_rd(hg_gpu, SHADER_PRESENT_LO);
++	if (!hg_power(L2_PWRON_LO, L2_READY_LO, hg_rd(hg_gpu, L2_PRESENT_LO), "L2") ||
++	    !hg_power(SHADER_PWRON_LO, SHADER_READY_LO, all, "all shader cores") ||
++	    !hg_power(TILER_PWRON_LO, TILER_READY_LO, hg_rd(hg_gpu, TILER_PRESENT_LO), "tiler")) {
++		hg_cores_off();
++		return false;
++	}
++
++	/* Page tables: test pages and the panel, then the scratch block. */
++	hg_tables(true, NULL, 0);
++	vm_offset_t scr = hgp_scr;
++	volatile uint64_t *l2t = (volatile uint64_t *)(hg_mem + 0x2000);
++	volatile uint64_t *sl3 = (volatile uint64_t *)(hg_mem + HG_SCR_L3_OFF);
++	l2t[(HG_SCR_VA >> 21) & 0x1ff] = (HG_TEST_PA + HG_SCR_L3_OFF) | 3;
++	for (unsigned i = 0; i < 512; i++) {
++		sl3[i] = (HG_SCR_PA + i * 0x1000ull) | 0x2c1;
++	}
++	hg_zero(scr, S_HEAP + S_HEAP_BYTES);
++	hg_zero(scr + HGP_L3_OFF, HGP_SLOTS * HGP_SLOT_TABLES * 0x1000);
++	bzero(hgp_slots, sizeof(hgp_slots));
++
++	/* Shader, Renderer State + Blend, Viewport: as herogpu=9. */
++	for (unsigned i = 0; i < 20; i++) {
++		hg_wr32(scr, S_SHADER + i * 4, hg_midgard_tex_shader[i]);
++	}
++	hg_wr64(scr, S_RSD + 0, (HG_SCR_VA + S_SHADER) | HG_TEX_SHADER_TAG);
++	hg_wr32(scr, S_RSD + 8, 1u | (1u << 16));
++	hg_wr32(scr, S_RSD + 12, 1u << 16);
++	hg_wr32(scr, S_RSD + 16, (4u << 16) | (1u << 10));
++	hg_wr32(scr, S_RSD + 32, 0xffffu | (7u << 24));
++	hg_wr32(scr, S_RSD + 36, 0xffffu | (7u << 21));
++	hg_wr32(scr, S_RSD + 40, (7u << 16) | (0xffu << 8));
++	hg_wr32(scr, S_RSD + 44, (7u << 16) | (0xffu << 8));
++	hg_wr32(scr, S_RSD + 64, 1u << 9);
++	hg_wr32(scr, S_RSD + 72, 0xf0921921u);
++	hg_wr32(scr, S_VIEWPORT + 8, F32_1440);
++	hg_wr32(scr, S_VIEWPORT + 12, F32_2560);
++	hg_wr32(scr, S_VIEWPORT + 20, F32_1);
++	hg_wr32(scr, S_VIEWPORT + 28, ((HG_PANEL_H - 1) << 16) | (HG_PANEL_W - 1));
++
++	/* Positions: the full-panel triangle strip. */
++	static const uint32_t corner[4][2] = {
++		{ F32_0, F32_0 }, { F32_1440, F32_0 }, { F32_0, F32_2560 }, { F32_1440, F32_2560 },
++	};
++	for (unsigned v = 0; v < 4; v++) {
++		hg_wr32(scr, S_POS + v * 16 + 0, corner[v][0]);
++		hg_wr32(scr, S_POS + v * 16 + 4, corner[v][1]);
++		hg_wr32(scr, S_POS + v * 16 + 8, F32_HALF);
++		hg_wr32(scr, S_POS + v * 16 + 12, F32_1);
++		hg_wr32(scr, S_VARY_DATA + v * 16 + 12, F32_1);
++	}
++	hg_wr64(scr, S_VARY_BUF + 0, (HG_SCR_VA + S_VARY_DATA) | 1);
++	hg_wr32(scr, S_VARY_BUF + 8, 16);
++	hg_wr32(scr, S_VARY_BUF + 12, 16 * 4);
++	hg_wr32(scr, S_VARY + 0, (1u << 9) | (((183u << 12) | 0xa88u) << 10));
++	hg_wr32(scr, S_SAMPLER + 8, 9u | (9u << 4) | (9u << 8));
++	hg_wr32(scr, S_TEXDESC + 8, ((187u << 12) | 0x688u) | (2u << 22) | (2u << 24) | (3u << 28));
++	hg_wr32(scr, S_TEXDESC + 16, 0x688u);
++	hg_wr64(scr, S_TEX_PTRS, HG_SCR_VA + S_TEXDESC);
++
++	/* Tiler job + Draw. */
++	uint32_t tj = S_TILER_JOB, d = S_TILER_JOB + 64;
++	uint64_t fbd_ptr = (HG_SCR_VA + S_FBD) | 1;
++	hg_wr32(scr, tj + 16, 1u | (7u << 1) | (1u << 16));
++	hg_wr32(scr, tj + 32, 3);
++	hg_wr32(scr, tj + 36, (32u << 22) | (2u << 28));
++	hg_wr32(scr, tj + 40, 10u | (1u << 15) | (1u << 16) | (1u << 17) | (6u << 26));
++	hg_wr32(scr, tj + 52, 3);
++	hg_wr32(scr, d + 0, 0x7);
++	hg_wr64(scr, d + 16, HG_SCR_VA + S_POS);
++	hg_wr64(scr, d + 32, HG_SCR_VA + S_TEX_PTRS);
++	hg_wr64(scr, d + 40, HG_SCR_VA + S_SAMPLER);
++	hg_wr64(scr, d + 56, HG_SCR_VA + S_RSD);
++	hg_wr64(scr, d + 80, HG_SCR_VA + S_VARY_BUF);
++	hg_wr64(scr, d + 88, HG_SCR_VA + S_VARY);
++	hg_wr64(scr, d + 96, HG_SCR_VA + S_VIEWPORT);
++	hg_wr64(scr, d + 112, fbd_ptr);
++
++	/* Framebuffer + render target (the panel) + fragment job. */
++	uint32_t f = S_FBD, rt = S_FBD + 128;
++	uint32_t header = hg_tiler_size(8), full = hg_tiler_size(0x200);
++	hg_wr32(scr, f + 4, 31);
++	hg_wr32(scr, f + 32, ((HG_PANEL_H - 1) << 16) | (HG_PANEL_W - 1));
++	hg_wr32(scr, f + 40, ((HG_PANEL_H - 1) << 16) | (HG_PANEL_W - 1));
++	hg_wr32(scr, f + 44, (2u << 6) | (8u << 9) | (1u << 24));
++	hg_wr32(scr, f + 48, 1u << 16);
++	hg_wr32(scr, f + 56, full);
++	hg_wr32(scr, f + 60, 1u << HG_BIN_LEVEL);
++	hg_wr64(scr, f + 64, HG_SCR_VA + S_POLY);
++	hg_wr64(scr, f + 72, HG_SCR_VA + S_POLY + header);
++	hg_wr64(scr, f + 80, HG_SCR_VA + S_HEAP);
++	hg_wr64(scr, f + 88, HG_SCR_VA + S_HEAP + S_HEAP_BYTES);
++	hg_wr32(scr, rt + 0, 1u << 26);
++	hg_wr32(scr, rt + 4, 1u | (19u << 3) | (2u << 10) | (1u << 15) | (0x688u << 16) | (1u << 31));
++	hg_wr64(scr, rt + 32, HG_PANEL_VA);
++	hg_wr32(scr, rt + 40, HG_FB_STRIDE);
++	uint32_t tiles_x = (HG_PANEL_W + 15) / 16, tiles_y = (HG_PANEL_H + 15) / 16;
++	hg_wr32(scr, S_FRAG_JOB + 16, 0x00010013);
++	hg_wr32(scr, S_FRAG_JOB + 36, ((tiles_y - 1) << 16) | (tiles_x - 1));
++	hg_wr64(scr, S_FRAG_JOB + 40, fbd_ptr);
++	__asm__ volatile ("dsb sy" ::: "memory");
++	printf("HEROLTE GPU PRESENT: ready, cores %#x\n", all);
++	return true;
++}
++
++/* Is the surface (id, first page) mapped? Returns its slot or -1. */
++int
++herolte_gpu_present_slot(uint32_t id, uint64_t first_pa)
++{
++	for (unsigned i = 0; i < HGP_SLOTS; i++) {
++		if (hgp_slots[i].id == id && hgp_slots[i].first_pa == first_pa && id != 0) {
++			return (int)i;
++		}
++	}
++	return -1;
++}
++
++/* Map n 4 KiB pages of a surface into a slot (round robin); slot or -1. */
++int
++herolte_gpu_present_map(uint32_t id, const uint64_t *pages, unsigned n)
++{
++	if (hgp_state == 0) {
++		hgp_state = hgp_setup() ? 1 : -1;
++	}
++	if (hgp_state != 1 || n == 0 || n > HGP_SLOT_PAGES) {
++		return -1;
++	}
++	unsigned s = hgp_victim;
++	hgp_victim = (hgp_victim + 1) % HGP_SLOTS;
++	if (hgp_next_va + HGP_SLOT_PAGES * 0x1000ull > HGP_VA_END) {
++		hgp_next_va = HGP_VA_BASE;
++	}
++	uint64_t old_va = hgp_slots[s].va;
++	uint64_t va = hgp_next_va;
++	hgp_next_va += HGP_SLOT_PAGES * 0x1000ull;
++	volatile uint64_t *l2t = (volatile uint64_t *)(hg_mem + 0x2000);
++	if (old_va) {
++		for (unsigned t = 0; t < HGP_SLOT_TABLES; t++) {
++			l2t[((old_va >> 21) & 0x1ff) + t] = 0;
++		}
++	}
++	for (unsigned t = 0; t < HGP_SLOT_TABLES; t++) {
++		uint32_t table = HGP_L3_OFF + (s * HGP_SLOT_TABLES + t) * 0x1000;
++		volatile uint64_t *l3 = (volatile uint64_t *)(hgp_scr + table);
++		for (unsigned i = 0; i < 512; i++) {
++			unsigned p = t * 512 + i;
++			l3[i] = p < n ? (pages[p] | 0x2c1) : 0;
++		}
++		l2t[((va >> 21) & 0x1ff) + t] = (HG_SCR_PA + table) | 3;
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++	if (!hgp_mmu_flush(HGP_VA_BASE, 30)) {
++		printf("HEROLTE GPU PRESENT: MMU flush timeout\n");
++	}
++	hgp_slots[s].id = id;
++	hgp_slots[s].first_pa = pages[0];
++	hgp_slots[s].va = va;
++	printf("HEROLTE GPU PRESENT: surface %u (%u pages, pa %#llx) in slot %u at VA %#llx\n",
++	    id, n, pages[0], s, va);
++	return (int)s;
++}
++
++/*
++ * Draw the w x h rect at byte offset off (row stride bytes) of the surface
++ * in slot s to the whole panel, scaled, bilinear. The caller has cleaned
++ * the rect to the point of coherency. False if the GPU failed (the caller
++ * falls back to the CPU copy).
++ */
++bool
++herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h)
++{
++	if (hgp_state != 1 || s < 0 || s >= (int)HGP_SLOTS || w == 0 || h == 0 ||
++	    w > 0x10000 || h > 0x10000) {
++		return false;
++	}
++	vm_offset_t scr = hgp_scr;
++	/* IEEE bits of w and h (integers below 2^24, so exact). */
++	uint32_t fw = 0, fh = 0;
++	for (unsigned k = 0; k < 2; k++) {
++		uint32_t v = k ? h : w, e = 31 - __builtin_clz(v);
++		uint32_t bits = ((127 + e) << 23) | ((v << (23 - e)) & 0x7fffff);
++		if (k) {
++			fh = bits;
++		} else {
++			fw = bits;
++		}
++	}
++	hg_wr32(scr, S_VARY_DATA + 1 * 16 + 0, fw);
++	hg_wr32(scr, S_VARY_DATA + 2 * 16 + 4, fh);
++	hg_wr32(scr, S_VARY_DATA + 3 * 16 + 0, fw);
++	hg_wr32(scr, S_VARY_DATA + 3 * 16 + 4, fh);
++	hg_wr32(scr, S_TEXDESC + 0, (w - 1) | ((h - 1) << 16));
++	hg_wr64(scr, S_TEXDESC + 32, hgp_slots[s].va + off);
++	hg_wr32(scr, S_TEXDESC + 40, stride);
++	hg_wr32(scr, S_TEXDESC + 44, stride * h);
++	hg_zero(scr + S_POLY, hg_tiler_size(8));
++	for (unsigned i = 0; i < 4; i++) {
++		hg_wr32(scr, S_TILER_JOB + i * 4, 0);
++		hg_wr32(scr, S_FRAG_JOB + i * 4, 0);
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++
++	hg_run_quiet = true;
++	hg_affinity = hg_rd(hg_gpu, SHADER_PRESENT_LO);
++	hg_job_va = HG_SCR_VA + S_TILER_JOB;
++	hg_job_cpu = scr + S_TILER_JOB;
++	bool ok = hg_run(1, "PRESENT tiler job");
++	if (ok) {
++		hg_job_va = HG_SCR_VA + S_FRAG_JOB;
++		hg_job_cpu = scr + S_FRAG_JOB;
++		ok = hg_run(0, "PRESENT fragment job");
++	}
++	hg_job_va = HG_TEST_VA;
++	hg_job_cpu = 0;
++	hg_affinity = 1;
++	hg_run_quiet = false;
++	if (++hgp_frames <= 3 || !ok) {
++		printf("HEROLTE GPU PRESENT: frame %llu %ux%u stride %u slot %d -> %s\n",
++		    hgp_frames, w, h, stride, s, ok ? "ok" : "failed");
++	}
++	return ok;
++}
++
+ /* herogpu=7, step 2: all shader cores clear the whole panel, timed. */
+ static void
+ hg_all_cores_test(uint64_t hold)
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index 12b7033..997dd66 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -65,6 +65,11 @@ uint64_t sweet_fb_hold_until;
+ static uint32_t sweet_fb_last_surface_id;
+ extern "C" bool sweet_fb_last_surface(uint64_t *pages, unsigned max_pages, unsigned *npages,
+     uint32_t *offset, uint32_t *stride, uint32_t *width, uint32_t *height, uintptr_t *kva);
++/* bsd/dev/herolte_gpu.c: the Mali scales a surface to the whole panel. */
++extern "C" int herolte_gpu_present_slot(uint32_t id, uint64_t first_pa);
++extern "C" int herolte_gpu_present_map(uint32_t id, const uint64_t *pages, unsigned n);
++extern "C" bool herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h);
++#define SWEET_FB_GPU_MAX_PAGES 2048     /* one 8 MiB GPU slot */
+ #endif
+ 
+ enum {
+@@ -125,6 +130,7 @@ public:
+ 	uint32_t      fLogicalW, fLogicalH;     /* size reported to userland */
+ 	int32_t       fOffX, fOffY;             /* logical origin of the panel */
+ 	bool          fScaled;                  /* sweetfb_scale: logical = 2/3 panel, x1.5 */
++	bool          fGpu;                     /* sweetfb_gpu: scaled by the Mali, bilinear */
+ 	uintptr_t     fPixels;          /* kernel mapping of the panel memory */
+ 	IOMemoryMap  *fMap;
+ 	SweetSurface *fSurface;         /* the panel memory as an IOSurface */
+@@ -153,6 +159,9 @@ public:
+ 	uint64_t present(const uint8_t *rec);
+ 	uint64_t scaledCopy(uintptr_t src, uint32_t srcRowBytes, int32_t dx, int32_t dy,
+ 	    int32_t w, int32_t h);
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	bool gpuPresent(SweetSurface *s, int32_t sx, int32_t sy, int32_t w, int32_t h);
++#endif
+ };
+ 
+ OSDefineMetaClassAndStructors(AppleCLCD, IOMobileFramebuffer);
+@@ -226,6 +235,11 @@ AppleCLCD::start(IOService *provider)
+ 		fScaled = true;
+ 		fLogicalW = fWidth * 2 / 3;
+ 		fLogicalH = fHeight * 2 / 3;
++		/* sweetfb_gpu=1: full-screen frames go through the Mali instead
++		 * (herolte_gpu.c), bilinear; scaledCopy() stays the fallback. */
++		int gpu = 0;
++		PE_parse_boot_argn("sweetfb_gpu", &gpu, sizeof(gpu));
++		fGpu = gpu != 0;
+ 	}
+ #elif !defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 	if (!native && fWidth <= SWEET_FB_LOGICAL_W && fHeight <= SWEET_FB_LOGICAL_H) {
+@@ -706,6 +720,14 @@ AppleCLCD::present(const uint8_t *rec)
+ 		    s->memory == NULL || last > s->memory->getLength()) {
+ 			src = 0;
+ 		}
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		if (src != 0 && bpe == 4 && fGpu && dx == 0 && dy == 0 &&
++		    w == (int32_t)fLogicalW && h == (int32_t)fLogicalH && gpuPresent(s, sx, sy, w, h)) {
++			copied += (uint64_t)fWidth * fHeight * 4;
++			s->release();
++			continue;
++		}
++#endif
+ 		if (src != 0 && bpe == 4 && fScaled) {
+ 			copied += scaledCopy(src + s->offset + (uint64_t)sy * s->bytesPerRow + (uint64_t)sx * 4,
+ 			    s->bytesPerRow, dx, dy, w, h);
+@@ -732,6 +754,53 @@ AppleCLCD::present(const uint8_t *rec)
+ }
+ 
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
++/*
++ * sweetfb_gpu: the Mali draws the whole (logical) frame scaled to the panel.
++ * The surface is mapped into a GPU slot the first time it is shown (its
++ * pages; a slot is keyed by id and first page). The Mali is not IO-coherent,
++ * so the frame is cleaned to the point of coherency first. Called only from
++ * present(), which the vsync timer serializes. False: use the CPU copy.
++ */
++bool
++AppleCLCD::gpuPresent(SweetSurface *s, int32_t sx, int32_t sy, int32_t w, int32_t h)
++{
++	static uint64_t pages[SWEET_FB_GPU_MAX_PAGES];
++	static uint32_t failures;
++	if (failures >= 8 || s->memory == NULL) {
++		return false;
++	}
++	IOByteCount len = 0;
++	addr64_t pa0 = s->memory->getPhysicalSegment(0, &len, kIOMemoryMapperNone);
++	int slot = pa0 ? herolte_gpu_present_slot(s->id, pa0 & ~0xfffULL) : -1;
++	if (slot < 0 && pa0 != 0) {
++		unsigned n = (unsigned)((s->memory->getLength() + 0xfff) / 0x1000);
++		bool ok = n <= SWEET_FB_GPU_MAX_PAGES;
++		for (unsigned i = 0; ok && i < n; i++) {
++			addr64_t pa = s->memory->getPhysicalSegment((IOByteCount)i * 0x1000, &len,
++			    kIOMemoryMapperNone);
++			ok = pa != 0;
++			pages[i] = pa & ~0xfffULL;
++		}
++		slot = ok ? herolte_gpu_present_map(s->id, pages, n) : -1;
++	}
++	if (slot < 0) {
++		failures++;
++		return false;
++	}
++	uint64_t off = (uint64_t)s->offset + (uint64_t)sy * s->bytesPerRow + (uint64_t)sx * 4;
++	uintptr_t start = s->kernelAddress() + (uintptr_t)off;
++	uintptr_t end = start + (uintptr_t)(h - 1) * s->bytesPerRow + (uintptr_t)w * 4;
++	for (uintptr_t p = start & ~(uintptr_t)63; p < end; p += 64) {
++		__asm__ volatile ("dc cvac, %0" : : "r" (p) : "memory");
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++	if (!herolte_gpu_present_draw(slot, (uint32_t)off, s->bytesPerRow, (uint32_t)w, (uint32_t)h)) {
++		failures++;
++		return false;
++	}
++	return true;
++}
++
+ /*
+  * For the GPU copy test (bsd/dev/herolte_gpu.c): the 4 KiB physical pages
+  * of the last full-screen iOS surface, its layout and kernel address. The

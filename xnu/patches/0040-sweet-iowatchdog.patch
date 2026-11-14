@@ -1,24 +1,6 @@
---- a/iokit/conf/files.arm64
-+++ b/iokit/conf/files.arm64
-@@ -12,3 +12,4 @@
- iokit/Kernel/arm/SweetCPU.cpp                                    optional iokitcpp
- iokit/Kernel/arm/SweetEntitlements.cpp                           optional iokitcpp
- iokit/Kernel/arm/SweetKeyStore.cpp                               optional iokitcpp
-+iokit/Kernel/arm/SweetWatchdog.cpp                               optional iokitcpp
---- a/iokit/KernelConfigTables.cpp
-+++ b/iokit/KernelConfigTables.cpp
-@@ -52,6 +52,11 @@
-     "     'IOProviderClass' = IOResources;"
-     "     'IOMatchCategory' = AppleKeyStore;"
-     "   },"
-+    "   {"
-+    "     'IOClass'         = IOWatchdog;"
-+    "     'IOProviderClass' = IOResources;"
-+    "     'IOMatchCategory' = IOWatchdog;"
-+    "   },"
- #endif
-     "   {"
-     "     'IOClass'         = IOPanicPlatform;"
+diff --git a/iokit/Kernel/arm/SweetWatchdog.cpp b/iokit/Kernel/arm/SweetWatchdog.cpp
+new file mode 100644
+index 0000000..d51705a
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetWatchdog.cpp
 @@ -0,0 +1,94 @@
@@ -116,3 +98,28 @@
 +	return kIOReturnSuccess;
 +}
 +#endif /* SWEET */
+diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+index c5c7ef7..22f1605 100644
+--- a/iokit/KernelConfigTables.cpp
++++ b/iokit/KernelConfigTables.cpp
+@@ -52,6 +52,11 @@ const char * gIOKernelConfigTables =
+     "     'IOProviderClass' = IOResources;"
+     "     'IOMatchCategory' = AppleKeyStore;"
+     "   },"
++    "   {"
++    "     'IOClass'         = IOWatchdog;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = IOWatchdog;"
++    "   },"
+ #endif
+     "   {"
+     "     'IOClass'         = IOPanicPlatform;"
+diff --git a/iokit/conf/files.arm64 b/iokit/conf/files.arm64
+index 336f568..c4a1b65 100644
+--- a/iokit/conf/files.arm64
++++ b/iokit/conf/files.arm64
+@@ -12,3 +12,4 @@ iokit/Kernel/arm/SweetPlatformExpert.cpp                         optional iokitc
+ iokit/Kernel/arm/SweetCPU.cpp                                    optional iokitcpp
+ iokit/Kernel/arm/SweetEntitlements.cpp                           optional iokitcpp
+ iokit/Kernel/arm/SweetKeyStore.cpp                               optional iokitcpp
++iokit/Kernel/arm/SweetWatchdog.cpp                               optional iokitcpp

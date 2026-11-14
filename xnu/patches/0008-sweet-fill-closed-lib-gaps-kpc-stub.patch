@@ -323,7 +323,7 @@ index 0000000..1ac5f54
 +{
 +}
 diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
-index c803e4e..c90ec1a 100644
+index 76582da..c9e1ac1 100644
 --- a/osfmk/arm64/machine_routines.c
 +++ b/osfmk/arm64/machine_routines.c
 @@ -2164,6 +2164,18 @@ ml_get_decrementer(void)

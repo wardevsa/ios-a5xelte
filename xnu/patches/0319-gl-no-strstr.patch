@@ -1,0 +1,16 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -156,5 +156,10 @@ herolte_gl_env(const char *path, int pid, const char **extra, int max)
+ 	 */
+-	if (!in_applications && path != NULL && strstr(path, ".appex/") != NULL && strstr(path, "Poster") != NULL) {
+-		in_applications = true;
++	if (!in_applications && path != NULL) {
++		bool appex = false, poster = false;
++		for (const char *p = path; *p != '\0'; p++) {
++			appex = appex || strncmp(p, ".appex/", 7) == 0;
++			poster = poster || strncmp(p, "Poster", 6) == 0;
++		}
++		in_applications = appex && poster;
+ 	}
+ 	if (in_applications && max >= 1) {

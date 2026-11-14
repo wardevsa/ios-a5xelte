@@ -1,3 +1,5 @@
+diff --git a/bsd/dev/sweet_ufs.c b/bsd/dev/sweet_ufs.c
+index 8f200c6..a9441d4 100644
 --- a/bsd/dev/sweet_ufs.c
 +++ b/bsd/dev/sweet_ufs.c
 @@ -1,5 +1,5 @@
@@ -20,7 +22,7 @@
   */
  #if defined(ARM64_BOARD_CONFIG_SWEET)
  #include <sys/param.h>
-@@ -86,6 +90,7 @@
+@@ -86,6 +90,7 @@ static struct {
  	uint8_t tag;
  	uint64_t first_block, nblocks;          /* partition, in 4 KiB device blocks */
  	uint32_t secsize;                       /* logical sector size for the BSD layer */
@@ -28,7 +30,7 @@
  	int bmajor, cmajor;
  	dev_t bdev;
  	bool ready;
-@@ -113,11 +118,11 @@
+@@ -113,11 +118,11 @@ dma_sync(uint32_t off, uint32_t len)
  }
  
  /*
@@ -43,7 +45,7 @@
  {
  	struct utrd *utrd = (struct utrd *)(su.dma + DMA_UTRL);
  	struct ucd *ucd = (struct ucd *)(su.dma + DMA_UCD);
-@@ -128,7 +133,7 @@
+@@ -128,7 +133,7 @@ ufs_scsi(const uint8_t *cdb, unsigned cdb_len, uint32_t len)
  	bzero(ucd, sizeof(*ucd));
  
  	ucd->cmd[0] = 0x01;                     /* COMMAND UPIU */
@@ -52,7 +54,7 @@
  	ucd->cmd[2] = su.lun;
  	ucd->cmd[3] = ++su.tag;
  	ucd->cmd[12] = (uint8_t)(len >> 24);
-@@ -137,7 +142,8 @@
+@@ -137,7 +142,8 @@ ufs_scsi(const uint8_t *cdb, unsigned cdb_len, uint32_t len)
  	ucd->cmd[15] = (uint8_t)len;
  	memcpy(&ucd->cmd[16], cdb, cdb_len);
  
@@ -62,7 +64,7 @@
  	utrd->dw2 = 0x0f;                       /* OCS invalid until updated */
  	utrd->ucdba = (uint32_t)ucd_pa;
  	utrd->ucdbau = (uint32_t)(ucd_pa >> 32);
-@@ -202,7 +208,35 @@
+@@ -202,7 +208,35 @@ ufs_read_blocks(uint64_t lba, uint32_t count)
  		(uint8_t)(lba >> 24), (uint8_t)(lba >> 16), (uint8_t)(lba >> 8), (uint8_t)lba,
  		0, (uint8_t)(count >> 8), (uint8_t)count, 0
  	};
@@ -99,7 +101,7 @@
  }
  
  static int
-@@ -293,7 +327,7 @@
+@@ -293,7 +327,7 @@ sweet_ufs_open(__unused dev_t dev, int flags, __unused int devtype, __unused str
  	if (!su.ready) {
  		return ENXIO;
  	}
@@ -108,7 +110,7 @@
  }
  
  static int
-@@ -311,8 +345,10 @@
+@@ -311,8 +345,10 @@ sweet_ufs_strategy(buf_t bp)
  	uint32_t count = buf_count(bp);
  	uint64_t part_bytes = su.nblocks * UFS_BLOCK;
  
@@ -120,7 +122,7 @@
  		error = EROFS;
  		goto done;
  	}
-@@ -335,11 +371,25 @@
+@@ -335,11 +371,25 @@ sweet_ufs_strategy(buf_t bp)
  		uint32_t skip = (uint32_t)(pos % UFS_BLOCK);
  		uint32_t want = MIN(count - done, BOUNCE_SIZE - skip);
  		uint32_t blocks = (skip + want + UFS_BLOCK - 1) / UFS_BLOCK;
@@ -148,7 +150,7 @@
  		done += want;
  		buf_setresid(bp, count - done);
  	}
-@@ -380,13 +430,23 @@
+@@ -380,13 +430,23 @@ sweet_ufs_ioctl(__unused dev_t dev, u_long cmd, caddr_t data, __unused int flag,
  		*o = su.nblocks * UFS_BLOCK / su.secsize;
  		return 0;
  	case DKIOCISWRITABLE:
@@ -174,7 +176,7 @@
  		return 0;
  	case DKIOCGETMAXSEGMENTCOUNTREAD:
  	case DKIOCGETMAXSEGMENTCOUNTWRITE:
-@@ -422,9 +482,12 @@
+@@ -422,9 +482,12 @@ sweet_ufs_read(dev_t dev, struct uio *uio, __unused int ioflag)
  }
  
  static int
@@ -189,7 +191,7 @@
  }
  
  static const struct bdevsw sweet_ufs_bdevsw = {
-@@ -470,6 +533,8 @@
+@@ -470,6 +533,8 @@ sweet_ufs_init(void)
  		return ENXIO;
  	}
  	PE_parse_boot_argn("ufsroot", want, sizeof(want));
@@ -198,7 +200,7 @@
  
  	su.regs = ml_io_map(reg[0], reg[1]);
  	if (kmem_alloc_contig(kernel_map, &su.dma, DMA_SIZE, PAGE_MASK, 0, 0,
-@@ -490,7 +555,7 @@
+@@ -490,7 +555,7 @@ sweet_ufs_init(void)
  	if (!error) {
  		static const uint8_t tur[6] = { 0x00 };
  		/* The first command after the bootloader may report a unit attention. */
@@ -207,7 +209,7 @@
  		}
  	}
  	if (!error) {
-@@ -512,9 +577,12 @@
+@@ -512,9 +577,12 @@ sweet_ufs_init(void)
  	su.bdev = makedev(su.bmajor, 0);
  	devfs_make_node(su.bdev, DEVFS_BLOCK, UID_ROOT, GID_OPERATOR, 0640, "ufsroot0");
  	devfs_make_node(makedev(su.cmajor, 0), DEVFS_CHAR, UID_ROOT, GID_OPERATOR, 0640, "rufsroot0");

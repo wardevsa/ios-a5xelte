@@ -1,0 +1,113 @@
+--- a/osmesa.c
++++ b/osmesa.c
+@@ -76,8 +76,7 @@
+ #include "util/u_inlines.h"
+ #include "util/u_memory.h"
+ 
+-#include "postprocess/filters.h"
+-#include "postprocess/postprocess.h"
++/* Galaxy S7 port: Mesa 25.1 eliminó el módulo gallium "postprocess" (filtros de postproceso): se quita su uso (patches/0001). */
+ 
+ #include "frontend/api.h"
+ 
+@@ -125,9 +124,6 @@
+    GLboolean y_up;        /*< TRUE  -> Y increases upward */
+                           /*< FALSE -> Y increases downward */
+ 
+-   /** Which postprocessing filters are enabled. */
+-   unsigned pp_enabled[PP_FILTERS];
+-   struct pp_queue_t *pp;
+ };
+ 
+ /**
+@@ -360,28 +356,6 @@
+ 
+    if (statt != ST_ATTACHMENT_FRONT_LEFT)
+       return false;
+-
+-   if (osmesa->pp) {
+-      struct pipe_resource *zsbuf = NULL;
+-      unsigned i;
+-
+-      /* Find the z/stencil buffer if there is one */
+-      for (i = 0; i < ARRAY_SIZE(osbuffer->textures); i++) {
+-         struct pipe_resource *res = osbuffer->textures[i];
+-         if (res) {
+-            const struct util_format_description *desc =
+-               util_format_description(res->format);
+-
+-            if (util_format_has_depth(desc)) {
+-               zsbuf = res;
+-               break;
+-            }
+-         }
+-      }
+-
+-      /* run the postprocess stage(s) */
+-      pp_run(osmesa->pp, res, res, zsbuf);
+-   }
+ 
+    /* Snapshot the color buffer to the user's buffer. */
+    bpp = util_format_get_blocksize(osbuffer->visual.color_format);
+@@ -704,7 +678,6 @@
+ OSMesaDestroyContext(OSMesaContext osmesa)
+ {
+    if (osmesa) {
+-      pp_free(osmesa->pp);
+       st_destroy_context(osmesa->st);
+       free(osmesa->zs);
+       FREE(osmesa);
+@@ -788,27 +761,6 @@
+     */
+ 
+    if (!osmesa->ever_used) {
+-      /* one-time init, just postprocessing for now */
+-      bool any_pp_enabled = false;
+-      unsigned i;
+-
+-      for (i = 0; i < ARRAY_SIZE(osmesa->pp_enabled); i++) {
+-         if (osmesa->pp_enabled[i]) {
+-            any_pp_enabled = true;
+-            break;
+-         }
+-      }
+-
+-      if (any_pp_enabled) {
+-         osmesa->pp = pp_init(osmesa->st->pipe,
+-                              osmesa->pp_enabled,
+-                              osmesa->st->cso_context,
+-                              osmesa->st,
+-                              st_context_invalidate_state);
+-
+-         pp_init_fbos(osmesa->pp, width, height);
+-      }
+-
+       osmesa->ever_used = true;
+    }
+ 
+@@ -1009,21 +961,7 @@
+ OSMesaPostprocess(OSMesaContext osmesa, const char *filter,
+                   unsigned enable_value)
+ {
+-   if (!osmesa->ever_used) {
+-      /* We can only enable/disable postprocess filters before a context
+-       * is made current for the first time.
+-       */
+-      unsigned i;
+-
+-      for (i = 0; i < PP_FILTERS; i++) {
+-         if (strcmp(pp_filters[i].name, filter) == 0) {
+-            osmesa->pp_enabled[i] = enable_value;
+-            return;
+-         }
+-      }
+-      debug_warning("OSMesaPostprocess(unknown filter)\n");
+-   }
+-   else {
+-      debug_warning("Calling OSMesaPostprocess() after OSMesaMakeCurrent()\n");
+-   }
+-}
++   /* El postproceso ya no existe en Mesa >= 25.1: se conserva el símbolo (osmesa.sym) y se avisa. */
++   (void)osmesa; (void)filter; (void)enable_value;
++   debug_warning("OSMesaPostprocess() is not supported in this build (the gallium postprocess module was removed from Mesa)\n");
++}

@@ -1,0 +1,350 @@
+diff --git a/bsd/conf/files b/bsd/conf/files
+index 6a40f85..d0c145d 100644
+--- a/bsd/conf/files
++++ b/bsd/conf/files
+@@ -110,6 +110,7 @@ bsd/dev/herolte_ufs.c			standard
+ bsd/dev/herolte_touch.c			standard
+ bsd/dev/herolte_battery.c		standard
+ bsd/dev/herolte_gpu.c			standard
++bsd/dev/herolte_drop.c			standard
+ bsd/dev/a5xelte_keys.c			standard
+ bsd/dev/a5xelte_touch.c			standard
+ bsd/dev/sweet_sample.c			standard
+diff --git a/bsd/dev/herolte_drop.c b/bsd/dev/herolte_drop.c
+new file mode 100644
+index 0000000..ee81faf
+--- /dev/null
++++ b/bsd/dev/herolte_drop.c
+@@ -0,0 +1,226 @@
++/*
++ * HEROLTE drop zone: files for the iOS root written from TWRP, without
++ * rebuilding the root image (the S7 has no network to copy them over).
++ *
++ * The 128 MiB of USERDATA right below the persistent log (herolte_ufs.c)
++ * are beyond the 20 GiB HFSX volume. tools/herolte-drop.py packs files
++ * there with dd:
++ *   block 0: "HERODRP1" | u32 version 1 | u32 entry count | u64 bytes | u64 id
++ *   then, from block 1, back to back, 8-byte aligned:
++ *     u32 path length | u32 mode (0 = directory) | u64 size | path | data
++ * Paths are absolute and must start with /private/var/herolte/. Just
++ * before launchd starts (bsd_init.c), every entry is written into the
++ * root volume as root:wheel with its mode, on every boot (idempotent).
++ * Boot-arg herodrop=0 skips it.
++ */
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++#include <sys/param.h>
++#include <sys/systm.h>
++#include <sys/errno.h>
++#include <sys/fcntl.h>
++#include <sys/stat.h>
++#include <sys/proc.h>
++#include <string.h>
++#include <sys/vnode_internal.h>
++#include <sys/namei.h>
++#include <sys/kauth.h>
++#include <kern/kalloc.h>
++#include <pexpert/pexpert.h>
++
++int herolte_ufs_read_before_log(uint64_t back, uint32_t count, void *dst);
++void herolte_drop_apply(void);
++
++#define HDROP_BLOCK     4096u
++#define HDROP_BLOCKS    (32768u)                /* 128 MiB */
++#define HDROP_CHUNK     (256u * HDROP_BLOCK)    /* 1 MiB read at a time */
++#define HDROP_PREFIX    "/private/var/herolte/"
++#define HDROP_MAX_PATH  255u
++
++struct hdrop_header {
++	char     magic[8];
++	uint32_t version, count;
++	uint64_t bytes, id;
++};
++
++struct hdrop_entry {
++	uint32_t path_len, mode;
++	uint64_t size;
++};
++
++/* Sequential reader over the zone's payload (block 1 on). */
++struct hdrop_reader {
++	uint8_t  *buf;
++	uint64_t  pos;          /* payload offset of buf[0] */
++	uint32_t  have;         /* valid bytes in buf */
++	uint64_t  limit;        /* payload bytes */
++};
++
++static int
++hdrop_fill(struct hdrop_reader *r, uint64_t off)
++{
++	uint64_t block = off / HDROP_BLOCK;     /* payload block */
++	if (1 + block >= HDROP_BLOCKS) {
++		return EINVAL;
++	}
++	uint32_t n = (uint32_t)MIN((uint64_t)(HDROP_CHUNK / HDROP_BLOCK), HDROP_BLOCKS - 1 - block);
++	int error = herolte_ufs_read_before_log(HDROP_BLOCKS - 1 - block, n, r->buf);
++	r->pos = block * HDROP_BLOCK;
++	r->have = error ? 0 : n * HDROP_BLOCK;
++	return error;
++}
++
++/* Pointer to len bytes at payload offset off (len <= HDROP_CHUNK / 2). */
++static const uint8_t *
++hdrop_at(struct hdrop_reader *r, uint64_t off, uint32_t len)
++{
++	if (off + len > r->limit) {
++		return NULL;
++	}
++	if (off < r->pos || off + len > r->pos + r->have) {
++		if (hdrop_fill(r, off) || off + len > r->pos + r->have) {
++			return NULL;
++		}
++	}
++	return r->buf + (off - r->pos);
++}
++
++/* A ".." path component (the kernel has no strstr). */
++static bool
++hdrop_has_dotdot(const char *path)
++{
++	for (const char *p = path; *p; p++) {
++		if (p[0] == '.' && p[1] == '.' && (p == path || p[-1] == '/') &&
++		    (p[2] == '/' || p[2] == '\0')) {
++			return true;
++		}
++	}
++	return false;
++}
++
++static int
++hdrop_mkdir(const char *path, int mode, vfs_context_t ctx)
++{
++	struct nameidata nd;
++	NDINIT(&nd, CREATE, OP_MKDIR, LOCKPARENT | AUDITVNPATH1, UIO_SYSSPACE,
++	    CAST_USER_ADDR_T(path), ctx);
++	int error = namei(&nd);
++	if (error) {
++		return error;
++	}
++	vnode_t dvp = nd.ni_dvp, vp = nd.ni_vp;
++	if (vp == NULLVP) {
++		struct vnode_attr va;
++		VATTR_INIT(&va);
++		VATTR_SET(&va, va_type, VDIR);
++		VATTR_SET(&va, va_mode, mode & ALLPERMS);
++		error = vn_mkdir(dvp, &vp, &nd, &va, ctx);
++	}
++	nameidone(&nd);
++	if (vp != NULLVP) {
++		vnode_put(vp);
++	}
++	vnode_put(dvp);
++	return error;
++}
++
++/* Write size bytes at payload offset data into path. */
++static int
++hdrop_file(struct hdrop_reader *r, const char *path, int mode, uint64_t data, uint64_t size,
++    vfs_context_t ctx)
++{
++	vnode_t vp = NULLVP;
++	int error = vnode_open(path, FWRITE | O_CREAT | O_TRUNC, mode & ALLPERMS, 0, &vp, ctx);
++	if (error) {
++		return error;
++	}
++	for (uint64_t done = 0; done < size && !error;) {
++		uint32_t n = (uint32_t)MIN(size - done, (uint64_t)(HDROP_CHUNK / 2));
++		const uint8_t *p = hdrop_at(r, data + done, n);
++		int resid = 0;
++		if (p == NULL) {
++			error = EIO;
++			break;
++		}
++		error = vn_rdwr(UIO_WRITE, vp, (caddr_t)(uintptr_t)p, (int)n, (off_t)done, UIO_SYSSPACE,
++		    IO_UNIT, vfs_context_ucred(ctx), &resid, vfs_context_proc(ctx));
++		if (!error && resid) {
++			error = EIO;
++		}
++		done += n;
++	}
++	if (!error) {
++		struct vnode_attr va;
++		VATTR_INIT(&va);
++		VATTR_SET(&va, va_mode, mode & ALLPERMS);
++		error = vnode_setattr(vp, &va, ctx);
++	}
++	vnode_close(vp, FWRITE, ctx);
++	return error;
++}
++
++void
++herolte_drop_apply(void)
++{
++	int on = 1;
++	PE_parse_boot_argn("herodrop", &on, sizeof(on));
++	if (!on) {
++		return;
++	}
++	struct hdrop_reader r = { .buf = kalloc_data(HDROP_CHUNK, Z_WAITOK) };
++	if (r.buf == NULL) {
++		return;
++	}
++	struct hdrop_header h;
++	if (herolte_ufs_read_before_log(HDROP_BLOCKS, 1, r.buf) != 0) {
++		goto out;
++	}
++	memcpy(&h, r.buf, sizeof(h));
++	if (memcmp(h.magic, "HERODRP1", 8) != 0 || h.version != 1 ||
++	    h.bytes > (uint64_t)(HDROP_BLOCKS - 1) * HDROP_BLOCK) {
++		printf("HEROLTE DROP: no drop package\n");
++		goto out;
++	}
++	r.limit = h.bytes;
++	vfs_context_t ctx = vfs_context_kernel();
++	uint64_t off = 0;
++	unsigned files = 0, failed = 0;
++	char path[HDROP_MAX_PATH + 1];
++	(void)hdrop_mkdir("/private/var/herolte", 0755, ctx);
++	for (uint32_t i = 0; i < h.count; i++) {
++		const uint8_t *p = hdrop_at(&r, off, sizeof(struct hdrop_entry));
++		struct hdrop_entry e;
++		if (p == NULL) {
++			failed++;
++			break;
++		}
++		memcpy(&e, p, sizeof(e));
++		if (e.path_len == 0 || e.path_len > HDROP_MAX_PATH ||
++		    (p = hdrop_at(&r, off + sizeof(e), e.path_len)) == NULL) {
++			failed++;
++			break;
++		}
++		memcpy(path, p, e.path_len);
++		path[e.path_len] = '\0';
++		uint64_t data = off + ((sizeof(e) + e.path_len + 7) & ~7ull);
++		off = data + ((e.size + 7) & ~7ull);
++		int error;
++		if (strncmp(path, HDROP_PREFIX, strlen(HDROP_PREFIX)) != 0 || hdrop_has_dotdot(path)) {
++			error = EPERM;
++		} else if (e.mode == 0) {
++			error = hdrop_mkdir(path, 0755, ctx);
++			error = error == EEXIST ? 0 : error;
++		} else {
++			error = hdrop_file(&r, path, (int)e.mode, data, e.size, ctx);
++		}
++		if (error) {
++			failed++;
++			printf("HEROLTE DROP: %s: error %d\n", path, error);
++		} else {
++			files++;
++		}
++	}
++	printf("HEROLTE DROP: package %llu: %u entries written, %u failed\n", h.id, files, failed);
++out:
++	kfree_data(r.buf, HDROP_CHUNK);
++}
++#endif /* ARM64_BOARD_CONFIG_HEROLTE */
+diff --git a/bsd/dev/herolte_ufs.c b/bsd/dev/herolte_ufs.c
+index 9b46983..f40e842 100644
+--- a/bsd/dev/herolte_ufs.c
++++ b/bsd/dev/herolte_ufs.c
+@@ -693,6 +693,37 @@ herolte_log_thread(__unused void *arg, __unused wait_result_t wr)
+ 	}
+ }
+ 
++/*
++ * For bsd/dev/herolte_drop.c: read count blocks of the root partition,
++ * starting `back` blocks before the start of the log area (so back = 1 is
++ * the last block below it), into dst. 0 or an errno.
++ */
++#define HEROLTE_LOG_BLOCKS      (1 + (4u << 20) / UFS_BLOCK)
++int herolte_ufs_read_before_log(uint64_t back, uint32_t count, void *dst);
++
++int
++herolte_ufs_read_before_log(uint64_t back, uint32_t count, void *dst)
++{
++	if (!su.ready || back == 0 || count == 0 || count > back ||
++	    su.nblocks < HEROLTE_LOG_BLOCKS + back) {
++		return EINVAL;
++	}
++	uint64_t lba = su.first_block + su.nblocks - HEROLTE_LOG_BLOCKS - back;
++	int error = 0;
++	lck_mtx_lock(&herolte_ufs_lock);
++	for (uint32_t done = 0; done < count && !error;) {
++		uint32_t n = MIN(count - done, BOUNCE_SIZE / UFS_BLOCK);
++		error = ufs_read_blocks(lba + done, n);
++		if (!error) {
++			memcpy((uint8_t *)dst + (size_t)done * UFS_BLOCK,
++			    (const void *)(su.dma + DMA_BOUNCE), (size_t)n * UFS_BLOCK);
++		}
++		done += n;
++	}
++	lck_mtx_unlock(&herolte_ufs_lock);
++	return error;
++}
++
+ static void
+ herolte_log_start(void)
+ {
+diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+index c11ea3b..37b738a 100644
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -1077,6 +1077,10 @@ bsd_init(void)
+ 	bsd_init_kprintf("done\n");
+ }
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++extern void herolte_drop_apply(void);
++#endif
++
+ void
+ bsdinit_task(void)
+ {
+@@ -1103,6 +1107,10 @@ bsdinit_task(void)
+ 
+ 	bsd_init_kprintf("bsd_do_post - done");
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/* Files from the USERDATA drop zone, before launchd (bsd/dev/herolte_drop.c). */
++	herolte_drop_apply();
++#endif
+ 	load_init_program(p);
+ 	lock_trace = 1;
+ }
+diff --git a/iokit/Kernel/arm/HeroGPU.cpp b/iokit/Kernel/arm/HeroGPU.cpp
+index 8ce5806..7c15d2c 100644
+--- a/iokit/Kernel/arm/HeroGPU.cpp
++++ b/iokit/Kernel/arm/HeroGPU.cpp
+@@ -12,6 +12,7 @@
+  *   2 FreeBO      [handle]
+  *   3 MapBO       [handle]          -> [user address]  (write-combined)
+  *   4 Submit      [jc_va, js]       -> [status, us]    js 0 fragment, 1 the rest
++ *   5 Log         struct: text      (to the kernel log; test programs)
+  *
+  * Buffers are wired kernel buffers mapped noncached on the GPU side; the
+  * Mali is not IO-coherent, so the CPU sees them write-combined only (their
+@@ -49,6 +50,7 @@ enum {
+ 	kHeroGPUFreeBO   = 2,
+ 	kHeroGPUMapBO    = 3,
+ 	kHeroGPUSubmit   = 4,
++	kHeroGPULog      = 5,
+ };
+ 
+ #define HEROGPU_MAX_BOS         4096
+@@ -312,6 +314,17 @@ HeroGPUUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *
+ 		out[0] = herolte_gpu_submit(in1 ? 1 : 0, in0, &out[1]);
+ 		outCount = 2;
+ 		break;
++	case kHeroGPULog:
++		/* Test programs have no console here: their lines go to the
++		 * kernel log (and the USERDATA log ring). */
++		if (args->structureInput != NULL && args->structureInputSize > 0) {
++			char name[32];
++			proc_selfname(name, sizeof(name));
++			IOLog("HEROGPU [%s]: %.*s\n", name,
++			    (int)(args->structureInputSize < 1024u ? args->structureInputSize : 1024u),
++			    (const char *)args->structureInput);
++		}
++		break;
+ 	default:
+ 		ret = kIOReturnUnsupported;
+ 		break;

@@ -1,6 +1,54 @@
+diff --git a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
+index 1161432..754a23c 100644
+--- a/bsd/kern/kern_exit.c
++++ b/bsd/kern/kern_exit.c
+@@ -1884,6 +1884,13 @@ proc_prepareexit(proc_t p, int rv, boolean_t perf_notify)
+ 		subcode = ut->uu_subcode;
+ 		etype = ut->uu_exception;
+ 
++#if defined(ARM64_BOARD_CONFIG_SWEET)
++		if (p == current_proc()) {
++			extern void sweet_crash_log(const char *, int, int, uint64_t, uint64_t);
++			sweet_crash_log(p->p_comm, proc_getpid(p), WTERMSIG(rv),
++			    ((uint64_t)ut->uu_exception << 32) | (uint32_t)ut->uu_code, ut->uu_subcode);
++		}
++#endif
+ 		/* Defualt to EXC_CRASH if the exception is not an EXC_RESOURCE or EXC_GUARD */
+ 		if (etype != EXC_RESOURCE || etype != EXC_GUARD) {
+ 			etype = EXC_CRASH;
+diff --git a/iokit/Kernel/arm/SweetKeyStore.cpp b/iokit/Kernel/arm/SweetKeyStore.cpp
+index 58f43d6..b92e609 100644
+--- a/iokit/Kernel/arm/SweetKeyStore.cpp
++++ b/iokit/Kernel/arm/SweetKeyStore.cpp
+@@ -45,6 +45,7 @@ enum {
+ 	kAKSAssertDrop       = 27,
+ 	kAKSUnloadSessionBags = 55,
+ 	kAKSNotifyStateSet   = 102,
++	kAKSNotifyStateIsSet = 103,
+ };
+ 
+ /* The system (device) bag handle. */
+@@ -209,6 +210,15 @@ AppleKeyStoreUserClient::externalMethod(uint32_t selector, IOExternalMethodArgum
+ 		args->scalarOutput[0] = SWEET_AKS_LOCK_STATE;
+ 		args->scalarOutputCount = 1;
+ 		break;
++	case kAKSNotifyStateIsSet:
++		/* Nothing was ever set: answer "not set". */
++		if (out_scalars < 1) {
++			ret = kIOReturnBadArgument;
++			break;
++		}
++		args->scalarOutput[0] = 0;
++		args->scalarOutputCount = 1;
++		break;
+ 	case kAKSGetDeviceState:
+ 		args->scalarOutputCount = 0;
+ 		ret = sweet_aks_device_state(args);
+diff --git a/osfmk/kern/exception.c b/osfmk/kern/exception.c
+index 809dafa..4ce918b 100644
 --- a/osfmk/kern/exception.c
 +++ b/osfmk/kern/exception.c
-@@ -820,6 +820,60 @@
+@@ -820,6 +820,60 @@ exception_triage(
  	return exception_triage_thread(exception, code, codeCnt, thread);
  }
  
@@ -61,45 +109,3 @@
  kern_return_t
  bsd_exception(
  	exception_type_t        exception,
---- a/bsd/kern/kern_exit.c
-+++ b/bsd/kern/kern_exit.c
-@@ -1884,6 +1884,13 @@
- 		subcode = ut->uu_subcode;
- 		etype = ut->uu_exception;
- 
-+#if defined(ARM64_BOARD_CONFIG_SWEET)
-+		if (p == current_proc()) {
-+			extern void sweet_crash_log(const char *, int, int, uint64_t, uint64_t);
-+			sweet_crash_log(p->p_comm, proc_getpid(p), WTERMSIG(rv),
-+			    ((uint64_t)ut->uu_exception << 32) | (uint32_t)ut->uu_code, ut->uu_subcode);
-+		}
-+#endif
- 		/* Defualt to EXC_CRASH if the exception is not an EXC_RESOURCE or EXC_GUARD */
- 		if (etype != EXC_RESOURCE || etype != EXC_GUARD) {
- 			etype = EXC_CRASH;
---- a/iokit/Kernel/arm/SweetKeyStore.cpp
-+++ b/iokit/Kernel/arm/SweetKeyStore.cpp
-@@ -45,6 +45,7 @@
- 	kAKSAssertDrop       = 27,
- 	kAKSUnloadSessionBags = 55,
- 	kAKSNotifyStateSet   = 102,
-+	kAKSNotifyStateIsSet = 103,
- };
- 
- /* The system (device) bag handle. */
-@@ -209,6 +210,15 @@
- 		args->scalarOutput[0] = SWEET_AKS_LOCK_STATE;
- 		args->scalarOutputCount = 1;
- 		break;
-+	case kAKSNotifyStateIsSet:
-+		/* Nothing was ever set: answer "not set". */
-+		if (out_scalars < 1) {
-+			ret = kIOReturnBadArgument;
-+			break;
-+		}
-+		args->scalarOutput[0] = 0;
-+		args->scalarOutputCount = 1;
-+		break;
- 	case kAKSGetDeviceState:
- 		args->scalarOutputCount = 0;
- 		ret = sweet_aks_device_state(args);

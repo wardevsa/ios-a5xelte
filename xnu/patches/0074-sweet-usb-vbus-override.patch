@@ -1,6 +1,8 @@
+diff --git a/bsd/dev/sweet_usb.c b/bsd/dev/sweet_usb.c
+index 6920f56..f300121 100644
 --- a/bsd/dev/sweet_usb.c
 +++ b/bsd/dev/sweet_usb.c
-@@ -146,6 +146,19 @@
+@@ -146,6 +146,19 @@ sweet_usb_probe(void)
  #define DEPCMDPAR0(n)   (0xc808 + 0x10 * (n))
  #define DEPCMD(n)       (0xc80c + 0x10 * (n))
  
@@ -20,7 +22,7 @@
  #define DCTL_RUN_STOP   (1u << 31)
  #define DCTL_CSFTRST    (1u << 30)
  #define DSTS_DEVCTRLHLT (1u << 22)
-@@ -491,6 +504,18 @@
+@@ -491,6 +504,18 @@ sweet_usb_gadget_start(vm_offset_t dwc)
  	dwc_wr(DALEPENA, 0x3);
  	ud_start_setup();
  

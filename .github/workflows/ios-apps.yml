@@ -1,0 +1,46 @@
+name: ios-apps
+
+# Apps for the S7's iOS 16 built from source (apps/NAME/*.swift + Info.plist):
+# plain arm64 (the S7's cores have no pointer authentication), ad-hoc signed,
+# as NAME.app folders for tools/herolte-drop.py's app= entries. Nothing of
+# Apple's is in the artifact.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [herolte]
+    paths:
+      - "apps/**"
+      - ".github/workflows/ios-apps.yml"
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          set -euo pipefail
+          sdk=$(xcrun --sdk iphoneos --show-sdk-path)
+          mkdir -p out
+          for dir in apps/*/; do
+            [ -f "$dir/Info.plist" ] || continue
+            dir=${dir%/}
+            exe=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$dir/Info.plist")
+            app="out/$exe.app"
+            mkdir -p "$app"
+            xcrun --sdk iphoneos swiftc -target arm64-apple-ios16.0 -sdk "$sdk" -O \
+              -parse-as-library -o "$app/$exe" "$dir"/*.swift
+            plutil -convert binary1 -o "$app/Info.plist" "$dir/Info.plist"
+            printf 'APPL????' > "$app/PkgInfo"
+            codesign -s - -f --entitlements apps/entitlements.plist "$app"
+            codesign -d --entitlements - "$app"
+            file "$app/$exe"
+            otool -L "$app/$exe"
+          done
+          (cd out && find . -type f | sort | xargs shasum -a 256) | tee SHA256SUMS
+          mv SHA256SUMS out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-apps
+          path: out/

@@ -1,0 +1,204 @@
+# Política de autoridad y autonomía de IOS S7 (fuente de verdad; la prosa está en AUTHORITY.md y AUTONOMY_POLICY.md).
+# Consulta rápida: python3 tools/governance.py can <acción>      (código de salida: 0=A, 10=B, 20=C, 30=X, 2=desconocida)
+# Cambiar este fichero es una acción de nivel B con revisor "director" (acción `policy-change`).
+version = 1
+
+[roles.director]
+title = "Director del proyecto (el usuario)"
+can_approve = ["architecture", "policy", "process", "operation", "priority"]
+notes = "Autoridad máxima. Único que autoriza acciones de nivel C y que puede modificar reglas de nivel X."
+
+[roles.jefe-tecnico]
+title = "Jefe de dirección técnica (ChatGPT, vía el Director)"
+can_approve = ["architecture", "process", "priority"]
+notes = "Define objetivos, arquitectura, prioridades y criterios de aceptación; revisa de forma independiente. No autoriza acciones C ni cambia reglas X. Sus órdenes llegan relayadas por el Director."
+
+[roles.ingeniero]
+title = "Ingeniero principal autónomo (Claude)"
+can_approve = []
+notes = "Investiga, planifica, implementa, prueba, depura y documenta. Decide por sí mismo dentro del nivel A. Propone; no aprueba decisiones."
+
+[tiers.A]
+color = "verde"
+name = "autónomo"
+description = "Se hace sin pedir permiso, se registra y se puede revertir."
+
+[tiers.B]
+color = "amarillo"
+name = "revisión antes de consolidar"
+description = "Se puede investigar e implementar en una rama o worktree de trabajo y confirmar en local, pero no se consolida (fusión, publicación, congelar interfaz) sin la revisión del revisor indicado."
+
+[tiers.C]
+color = "rojo"
+name = "autorización explícita del Director"
+description = "Exige una autorización expresa, acotada (qué, dónde, cuánto tiempo) y registrada como decisión APPROVED del director antes de ejecutarla."
+
+[tiers.X]
+color = "rojo"
+name = "prohibida"
+description = "Prohibida por las reglas del proyecto (AGENTS.md y esta política). No se ejecuta ni con autorización verbal; solo el Director puede cambiar la regla, por escrito."
+
+# ------------------------------------------------------------------------------------------------------------------------------- nivel A
+[[actions]]
+id = "read-analysis"
+tier = "A"
+summary = "Leer ficheros, logs, imágenes y artefactos en solo lectura; medir en el PC; consultar fuentes públicas sin enviar datos del proyecto."
+requires = ["no escribir en ficheros leídos", "no enviar datos privados ni del proyecto a servicios externos"]
+
+[[actions]]
+id = "docs-write"
+tier = "A"
+summary = "Crear o modificar documentación del repositorio (incluida la de gobierno) sin cambiar reglas de autoridad."
+requires = ["no editar NOTES.md (historia del donante)", "no presentar diseño como implementado"]
+
+[[actions]]
+id = "pc-implementation"
+tier = "A"
+summary = "Escribir o modificar código, herramientas y pruebas del repositorio en el worktree de trabajo y ejecutarlos en el PC sin privilegios."
+requires = ["sin sudo, sin montar, sin tocar particiones", "pruebas proporcionadas al cambio", "no afectar al generador del root (ver root-generator-change)"]
+
+[[actions]]
+id = "local-commit"
+tier = "A"
+summary = "Confirmar en una rama de trabajo local con mensajes claros."
+requires = ["sin push", "sin reescribir historia", "sin --no-verify salvo que la tarea lo documente", "línea Co-Authored-By"]
+
+[[actions]]
+id = "host-tests"
+tier = "A"
+summary = "Ejecutar suites de prueba y compilaciones del PC que escriben solo en el repositorio, el scratchpad o directorios nuevos."
+requires = ["comprobar espacio libre antes de trabajos de varios GB", "no usar NTFS como scratchpad activo"]
+
+[[actions]]
+id = "build-candidates"
+tier = "A"
+summary = "Construir candidatas (imágenes BOOT, payloads, paquetes) en el PC con nombre nuevo, verificarlas y registrar procedencia y hashes. Construir no es flashear."
+requires = ["nombre nuevo, nunca sobrescribir", "ejecutar el verificador independiente", "registrar en evidence.toml"]
+
+[[actions]]
+id = "archive-copy"
+tier = "A"
+summary = "Copiar evidencias al almacenamiento auxiliar con tar sin comprimir, compare y SHA-256, creando ficheros nuevos."
+requires = ["origen intacto", "hash guardado junto al archivo", "registrar en evidence.toml"]
+
+[[actions]]
+id = "governance-maintain"
+tier = "A"
+summary = "Actualizar tareas, decisiones PROPOSED, evidencias, estado, checkpoints y relevos; regenerar vistas."
+requires = ["no marcar una decisión APPROVED sin la aprobación de quien puede darla"]
+
+# ------------------------------------------------------------------------------------------------------------------------------- nivel B
+[[actions]]
+id = "architecture-change"
+tier = "B"
+reviewer = "jefe-tecnico"
+summary = "Decidir o cambiar arquitectura, interfaces críticas, ABI entre subsistemas, semántica de argumentos de arranque o la estructura de un subsistema."
+requires = ["propuesta escrita como decisión PROPOSED", "no consolidar hasta la revisión"]
+
+[[actions]]
+id = "patch-series-change"
+tier = "B"
+reviewer = "jefe-tecnico"
+summary = "Añadir, renumerar o modificar parches de xnu/patches o código del kernel y del cargador."
+requires = ["comprobar aplicabilidad con la herramienta del CI (ci_check)", "no reutilizar números ya existentes en ninguna rama upstream"]
+
+[[actions]]
+id = "root-generator-change"
+tier = "B"
+reviewer = "director"
+summary = "Cambiar los scripts que generan el root de iOS (staging, tuning, población, nombres, verificación) o regenerar una imagen de laboratorio nueva."
+requires = ["decisión APPROVED previa del director sobre el cambio", "la imagen y evidencias previas se conservan"]
+
+[[actions]]
+id = "policy-change"
+tier = "B"
+reviewer = "director"
+summary = "Cambiar AGENTS.md, esta política, la jerarquía o las reglas de autonomía."
+requires = ["la propuesta no entra en vigor hasta que el director la apruebe"]
+
+# ------------------------------------------------------------------------------------------------------------------------------- nivel C
+[[actions]]
+id = "publish"
+tier = "C"
+authorizer = "director"
+summary = "Publicar fuera de la máquina: git push, pull requests, lanzar workflows del CI, subir artefactos o enviar datos a un servicio."
+requires = ["rama y contenido nombrados en la autorización", "sin datos privados ni binarios de Apple"]
+
+[[actions]]
+id = "privileged-or-mount"
+tier = "A"
+summary = "Usar sudo en el PC, asociar bucles y montar IMÁGENES DE LABORATORIO (ficheros regulares): populate/verify, R2 si hay autorización específica. Verde por decisión del Director (D-0025, 2026-11-14)."
+requires = ["solo ficheros de imagen regulares bajo la carpeta de laboratorio con las guardias de img_common.sh/guard.py: nunca un dispositivo de bloque físico, una partición ni el teléfono", "nunca tocar /mnt/hfs-test, /dev/loop10 ni lo que no sea del experimento", "imágenes originales y pristine intactas; nombre nuevo", "sudo NO reclasifica borrar/mover datos, publicar ni escribir en el dispositivo: siguen en su nivel", "R2 sigue sin autorizar mientras D-0005 esté vigente (restricción específica del Director)"]
+
+[[actions]]
+id = "heavy-compile"
+tier = "A"
+summary = "Compilación pesada (kernel, toolchains) y generación de imágenes de prueba en el PC, con uso intensivo de disco, CPU y memoria. Verde por decisión del Director (D-0025)."
+requires = ["presupuesto de disco comprobado antes (>= el doble de lo estimado libre) y guardia que aborte sin borrar nada", "nombre nuevo, nunca sobrescribir", "no es publicar: el CI, push y PR siguen siendo rojos"]
+
+[[actions]]
+id = "delete-archived"
+tier = "A"
+summary = "Borrar un artefacto TEMPORAL ya archivado: tiene copia verificada por hash en el archivo (NTFS) registrada como evidencia, y el borrado es por ruta exacta. Verde por decisión del Director (D-0028, 2026-11-14)."
+requires = ["la copia archivada existe y su sha256 coincide con el registrado (releído justo antes de borrar)", "rutas exactas, sin comodines ni sudo rm -rf sobre patrones; el borrado se limita a artefactos del scratchpad del laboratorio", "nunca evidencia sin copia, ni ficheros del repositorio, ni nada que no esté en la lista", "registro del borrado (lista + hashes + espacio antes/después) archivado como evidencia"]
+
+[[actions]]
+id = "delete-or-overwrite"
+tier = "C"
+authorizer = "director"
+summary = "(Borrado GENERAL; el de artefactos temporales ya archivados es delete-archived, nivel A.) Borrar, mover o sobrescribir datos: originales ya archivados, evidencias, sandboxes, imágenes, resultados."
+requires = ["copia verificada en el destino", "lista exacta de rutas aprobada"]
+
+[[actions]]
+id = "host-config-change"
+tier = "C"
+authorizer = "director"
+summary = "Instalar herramientas, cambiar la configuración del PC, particiones, sesión de Claude, swap o variables de sesión."
+requires = ["no detener Claude ni ADB sin orden"]
+
+[[actions]]
+id = "device-read"
+tier = "C"
+authorizer = "director"
+summary = "Conectar con el teléfono (adb/TWRP) incluso en solo lectura."
+requires = ["el Director presente", "copias previas de BOOT y EFS fuera del teléfono"]
+
+[[actions]]
+id = "device-write-boot"
+tier = "C"
+authorizer = "director"
+summary = "Escribir la partición BOOT del S7 (peldaños N1/N2) desde TWRP."
+requires = ["imagen verificada con herolte-verify-boot.py (perfil correspondiente)", "BOOT original y EFS guardados fuera del teléfono", "solo BOOT; nunca otra partición"]
+
+[[actions]]
+id = "device-write-userdata"
+tier = "C"
+authorizer = "director"
+summary = "Instalar el root de iOS en USERDATA, escribir la zona DROP o cualquier partición distinta de BOOT. Borra Android."
+requires = ["root verificado y aprobado", "confirmación expresa del Director para cada partición"]
+
+# ------------------------------------------------------------------------------------------------------------------------------- nivel X
+[[actions]]
+id = "write-protected-partitions"
+tier = "X"
+summary = "Escribir EFS, RECOVERY o las particiones de bootloader (regla de AGENTS.md)."
+
+[[actions]]
+id = "bypass-safety"
+tier = "X"
+summary = "Usar --dangerously-skip-permissions, desactivar protecciones o ejecutar sudo automático."
+
+[[actions]]
+id = "destructive-git"
+tier = "X"
+summary = "Operaciones destructivas de Git: force-push, reset --hard sobre trabajo ajeno o sin confirmar, reescritura de historia compartida, borrar ramas remotas."
+
+[[actions]]
+id = "repair-evidence"
+tier = "X"
+summary = "Reparar con escritura (fsck con reparación, fsck -y, regenerar sobre el mismo fichero) imágenes o artefactos que son evidencia."
+
+[[actions]]
+id = "leak-private-data"
+tier = "X"
+summary = "Subir a git o enviar fuera binarios de Apple, números de serie, IMEI, copias de EFS, direcciones o contraseñas privadas."

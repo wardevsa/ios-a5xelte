@@ -1,3 +1,5 @@
+diff --git a/iokit/Kernel/arm/SweetWatchdog.cpp b/iokit/Kernel/arm/SweetWatchdog.cpp
+index d51705a..8f53742 100644
 --- a/iokit/Kernel/arm/SweetWatchdog.cpp
 +++ b/iokit/Kernel/arm/SweetWatchdog.cpp
 @@ -8,6 +8,11 @@
@@ -12,7 +14,7 @@
   */
  #include <pexpert/arm64/board_config.h>
  
-@@ -24,10 +29,17 @@
+@@ -24,10 +29,17 @@ class IOWatchdog : public IOService {
  
  public:
  	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
@@ -30,7 +32,7 @@
  bool
  IOWatchdog::start(IOService *provider)
  {
-@@ -35,6 +47,7 @@
+@@ -35,6 +47,7 @@ IOWatchdog::start(IOService *provider)
  		return false;
  	}
  	setProperty(kIOUserClientClassKey, "IOWatchdogUserClient");

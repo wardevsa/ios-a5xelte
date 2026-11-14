@@ -1,7 +1,48 @@
+diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
+index e3579f1..42362c5 100644
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -523,6 +523,7 @@ arm_init(
+ 
+ 	sweet_early_mark(7, "entering arm_vm_init");
+ 	arm_vm_init(xmaxmem, args);
++	sweet_early_mark(15, "arm_vm_init returned");
+ 
+ 	if (debug_boot_arg) {
+ 		patch_low_glo();
+@@ -535,9 +536,15 @@ arm_init(
+ 	PE_consistent_debug_inherit();
+ 
+ 	/* Setup debugging output. */
++	sweet_early_mark(16, "calling serial_init");
+ 	const unsigned int serial_exists = serial_init();
++	sweet_early_mark(19, "serial_init returned");
+ 	kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF);
+ 	kprintf("kprintf initialized\n");
++	sweet_early_mark(20, "kprintf startup complete");
++	if (serial_exists) {
++		sweet_early_disable();
++	}
+ 
+ 	serialmode = 0;
+ 	if (PE_parse_boot_argn("serial", &serialmode, sizeof(serialmode))) {
+diff --git a/osfmk/arm64/Makefile b/osfmk/arm64/Makefile
+index f819fea..d75b285 100644
+--- a/osfmk/arm64/Makefile
++++ b/osfmk/arm64/Makefile
+@@ -40,6 +40,7 @@ EXPORT_MD_LIST = \
+ 	monotonic.h \
+ 	perfmon_arm64_regs.h \
+ 	proc_reg.h \
++	sweet_early.h \
+ 	asm.h \
+ 	tlb.h \
+ 	pal_hibernate.h
 diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
+index 95d9ea8..06bb568 100644
 --- a/osfmk/arm64/arm_vm_init.c
 +++ b/osfmk/arm64/arm_vm_init.c
-@@ -1825,6 +1825,32 @@
+@@ -1825,6 +1825,32 @@ init_ptpages(tt_entry_t *tt, vm_map_address_t start, vm_map_address_t end, bool
  #define ARM64_PHYSMAP_ALIGNMENT_PADDING (PTOV_TABLE_SIZE * ARM_TT_TWIG_SIZE)
  #endif
  
@@ -34,7 +75,7 @@ diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
  void
  arm_vm_init(uint64_t memory_size, boot_args * args)
  {
-@@ -2153,20 +2179,28 @@
+@@ -2153,20 +2179,28 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  
  	arm_set_user_tbi();
  
@@ -65,7 +106,7 @@ diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
  
  	// From here on out, we're off the bootstrap translation tables.
  
-@@ -2259,7 +2293,9 @@
+@@ -2259,7 +2293,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
      }
  #endif
  #endif
@@ -75,7 +116,7 @@ diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
  
  	disable_preemption();
  
-@@ -2310,6 +2346,7 @@
+@@ -2310,6 +2346,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  		va_l1 = va_l2_end;
  		cpu_l1_tte++;
  	}
@@ -84,6 +125,7 @@ diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
  #if defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR)
  	/*
 diff --git a/osfmk/arm64/sweet_early.c b/osfmk/arm64/sweet_early.c
+index 8f4c808..6928957 100644
 --- a/osfmk/arm64/sweet_early.c
 +++ b/osfmk/arm64/sweet_early.c
 @@ -2,7 +2,8 @@
@@ -106,7 +148,7 @@ diff --git a/osfmk/arm64/sweet_early.c b/osfmk/arm64/sweet_early.c
  #define EARLY_WIDTH 1080u
  #define EARLY_HEIGHT 2400u
  #define EARLY_STRIDE (4320u / 4)
-@@ -87,18 +89,21 @@
+@@ -87,18 +89,21 @@ sweet_early_string(const char *s)
  void
  sweet_early_mark(unsigned int stage, const char *label)
  {
@@ -132,26 +174,27 @@ diff --git a/osfmk/arm64/sweet_early.c b/osfmk/arm64/sweet_early.c
  	sweet_early_string(": ");
  	sweet_early_string(label);
  	sweet_early_putc('\n');
-@@ -121,9 +126,17 @@
+@@ -121,9 +126,17 @@ sweet_early_panic(const char *fmt, va_list *args)
  }
  
  void
+-sweet_early_disable(void)
 +sweet_early_relocate(uint64_t base)
-+{
-+	sweet_early_mark(8, "leaving bootstrap TTBR0");
+ {
+ 	sweet_early_mark(8, "leaving bootstrap TTBR0");
 +	early_fb = (volatile uint32_t *)(uintptr_t)base;
 +	__asm__ volatile("dsb sy" ::: "memory");
 +	sweet_early_mark(9, "kernel framebuffer VA live");
 +}
 +
 +void
- sweet_early_disable(void)
- {
--	sweet_early_mark(8, "leaving bootstrap TTBR0");
++sweet_early_disable(void)
++{
  	early_disabled = 1;
  	__asm__ volatile("dsb sy" ::: "memory");
  }
 diff --git a/osfmk/arm64/sweet_early.h b/osfmk/arm64/sweet_early.h
+index fbbc827..d7a25f2 100644
 --- a/osfmk/arm64/sweet_early.h
 +++ b/osfmk/arm64/sweet_early.h
 @@ -1,14 +1,16 @@
@@ -172,45 +215,8 @@ diff --git a/osfmk/arm64/sweet_early.h b/osfmk/arm64/sweet_early.h
  void sweet_early_disable(void);
  #else
  static inline void sweet_early_mark(unsigned int stage, const char *label)
-diff --git a/osfmk/arm64/Makefile b/osfmk/arm64/Makefile
---- a/osfmk/arm64/Makefile
-+++ b/osfmk/arm64/Makefile
-@@ -40,6 +40,7 @@
- 	monotonic.h \
- 	perfmon_arm64_regs.h \
- 	proc_reg.h \
-+	sweet_early.h \
- 	asm.h \
- 	tlb.h \
- 	pal_hibernate.h
-diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
---- a/osfmk/arm/arm_init.c
-+++ b/osfmk/arm/arm_init.c
-@@ -523,6 +523,7 @@
- 
- 	sweet_early_mark(7, "entering arm_vm_init");
- 	arm_vm_init(xmaxmem, args);
-+	sweet_early_mark(15, "arm_vm_init returned");
- 
- 	if (debug_boot_arg) {
- 		patch_low_glo();
-@@ -535,9 +536,15 @@
- 	PE_consistent_debug_inherit();
- 
- 	/* Setup debugging output. */
-+	sweet_early_mark(16, "calling serial_init");
- 	const unsigned int serial_exists = serial_init();
-+	sweet_early_mark(19, "serial_init returned");
- 	kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF);
- 	kprintf("kprintf initialized\n");
-+	sweet_early_mark(20, "kprintf startup complete");
-+	if (serial_exists) {
-+		sweet_early_disable();
-+	}
- 
- 	serialmode = 0;
- 	if (PE_parse_boot_argn("serial", &serialmode, sizeof(serialmode))) {
 diff --git a/pexpert/arm/pe_serial.c b/pexpert/arm/pe_serial.c
+index db26bbe..19f27cd 100644
 --- a/pexpert/arm/pe_serial.c
 +++ b/pexpert/arm/pe_serial.c
 @@ -26,6 +26,7 @@
@@ -221,7 +227,7 @@ diff --git a/pexpert/arm/pe_serial.c b/pexpert/arm/pe_serial.c
  #include <pexpert/arm/protos.h>
  #include <kern/sched_prim.h>
  #if HIBERNATION
-@@ -833,7 +834,9 @@
+@@ -833,7 +834,9 @@ fbcon_probe(void)
  	if (!fbcon_width || !fbcon_height || fbcon_stride < fbcon_width * 4) {
  		return;
  	}

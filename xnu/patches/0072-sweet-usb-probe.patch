@@ -1,6 +1,8 @@
+diff --git a/bsd/conf/files b/bsd/conf/files
+index 00a431d..6630131 100644
 --- a/bsd/conf/files
 +++ b/bsd/conf/files
-@@ -110,6 +110,7 @@
+@@ -110,6 +110,7 @@ bsd/dev/sweet_keys.c			standard
  bsd/dev/sweet_touch.c			standard
  bsd/dev/sweet_rpmh.c			standard
  bsd/dev/sweet_spmi.c			standard
@@ -8,9 +10,11 @@
  bsd/dev/mem.c				standard
  bsd/dev/munge.c 			optional config_requires_u32_munging
  bsd/dev/unix_startup.c			standard
+diff --git a/bsd/dev/sweet_ufs.c b/bsd/dev/sweet_ufs.c
+index 30af5f1..ec54e68 100644
 --- a/bsd/dev/sweet_ufs.c
 +++ b/bsd/dev/sweet_ufs.c
-@@ -52,6 +52,7 @@
+@@ -52,6 +52,7 @@ static void sweet_log_start(void);
  extern void sweet_sample_start(void);
  extern void sweet_keys_init(void);
  extern void sweet_touch_init(void);
@@ -18,7 +22,7 @@
  
  #define REG_CAP         0x00
  #define REG_IS          0x20
-@@ -658,6 +659,7 @@
+@@ -658,6 +659,7 @@ sweet_ufs_init(void)
  	/* Input drivers (HID services in iokit/Kernel/arm/hid/SweetHID.cpp). */
  	sweet_keys_init();
  	sweet_touch_init();
@@ -26,6 +30,9 @@
  	return 0;
  }
  
+diff --git a/bsd/dev/sweet_usb.c b/bsd/dev/sweet_usb.c
+new file mode 100644
+index 0000000..c312ca6
 --- /dev/null
 +++ b/bsd/dev/sweet_usb.c
 @@ -0,0 +1,108 @@

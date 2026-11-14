@@ -1,0 +1,57 @@
+diff --git a/osfmk/kern/sched_prim.c b/osfmk/kern/sched_prim.c
+index 993c625..6c391eb 100644
+--- a/osfmk/kern/sched_prim.c
++++ b/osfmk/kern/sched_prim.c
+@@ -2164,6 +2164,36 @@ sched_SMT_balance(processor_t cprocessor, processor_set_t cpset)
+ #endif
+ 
+ 	assert(cprocessor == current_processor());
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/*
++	 * A fast core goes idle (after Scion's sched_slow_secondaries, Galaxy S9, ported to sweet_fast_map): of the slow
++	 * cores that run something at a UI priority, the one with the highest is told to reschedule. thread_select there
++	 * sends the thread back with AST_REBALANCE (below) and choose_processor puts it on this core. Before, a UI thread
++	 * that had landed on an A53 stayed there for its whole quantum, a Mongoose idling beside it.
++	 */
++	if (sweet_fast_map != 0 && bit_test(sweet_fast_map, cprocessor->cpu_id)) {
++		processor_t slow = PROCESSOR_NULL;
++		integer_t highest = BASEPRI_USER_INITIATED - 1;
++		sched_ipi_type_t slow_ipi = SCHED_IPI_NONE;
++		uint64_t running_slow = cpset->cpu_state_map[PROCESSOR_RUNNING] & ~sweet_fast_map &
++		    ~cpset->pending_AST_URGENT_cpu_mask & cpset->recommended_bitmask;
++		for (int cpuid = lsb_first(running_slow); cpuid >= 0; cpuid = lsb_next(running_slow, cpuid)) {
++			processor_t sp = processor_array[cpuid];
++			if (sp != cprocessor && sp->current_pri < BASEPRI_RTQUEUES && sp->current_pri > highest) {
++				highest = sp->current_pri;
++				slow = sp;
++			}
++		}
++		if (slow != PROCESSOR_NULL) {
++			slow_ipi = sched_ipi_action(slow, NULL, SCHED_IPI_EVENT_SMT_REBAL);
++		}
++		pset_unlock(cpset);
++		if (slow != PROCESSOR_NULL && slow_ipi != SCHED_IPI_NONE) {
++			sched_ipi_perform(slow, slow_ipi);
++		}
++		return;
++	}
++#endif
+ 	if (cprocessor->is_SMT == FALSE) {
+ 		goto smt_balance_exit;
+ 	}
+@@ -2640,6 +2670,15 @@ restart:
+ 		bool is_yielding         = (*reason & AST_YIELD) == AST_YIELD;
+ 
+ 		bool needs_smt_rebalance = !is_yielding && thread->sched_pri < BASEPRI_RTQUEUES && processor->processor_primary != processor;
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		/* A thread that wants a fast core, on a slow one, while a fast one is idle: it moves (sched_SMT_balance above). */
++		if (!needs_smt_rebalance && !is_yielding && sweet_fast_map != 0 && thread->sched_pri < BASEPRI_RTQUEUES &&
++		    thread->bound_processor == PROCESSOR_NULL && !bit_test(sweet_fast_map, processor->cpu_id) &&
++		    (pset->recommended_bitmask & pset->primary_map & sweet_fast_map & pset->cpu_state_map[PROCESSOR_IDLE]) != 0 &&
++		    sweet_wants_fast(thread)) {
++			needs_smt_rebalance = true;
++		}
++#endif
+ 
+ 		bool affinity_mismatch   = thread->affinity_set != AFFINITY_SET_NULL && thread->affinity_set->aset_pset != pset;
+ 

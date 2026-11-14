@@ -1,0 +1,69 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 8a3fb45..477f1ba 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -332,6 +332,12 @@ hg_tables(bool panel, const uint64_t *src, unsigned src_n)
+ 
+ /* Shader cores a job may use (JS_AFFINITY). */
+ static uint32_t hg_affinity = 1;
++/*
++ * Boot-arg herogpu_flush: the GPU cache's cleaning around clients' jobs, which are some 1600 a second in an animation.
++ * 0: before and after every job, as Linux's panfrost. 1 (default): only after, as a job begun finds it clean already.
++ * 2: and not after vertex jobs either, whose results the fragment job reads through the same cache.
++ */
++static uint32_t hg_flush_mode = 1;
+ /* GPU VA of the job chain hg_run() starts, and of its header (for the log). */
+ static uint64_t hg_job_va = HG_TEST_VA;
+ static vm_offset_t hg_job_cpu;
+@@ -748,7 +754,9 @@ hg_run(unsigned js, const char *what)
+ 	hg_wr(hg_gpu, slot + 0x44, (uint32_t)(hg_job_va >> 32));
+ 	hg_wr(hg_gpu, slot + 0x50, hg_affinity);                /* AFFINITY */
+ 	hg_wr(hg_gpu, slot + 0x54, 0);
+-	hg_wr(hg_gpu, slot + 0x58, (8 << 16) | (3 << 8) | (3 << 12));
++	uint32_t flush_start = (hg_run_quiet && hg_flush_mode >= 1) ? 0 : (3u << 8);
++	uint32_t flush_end = (hg_run_quiet && hg_flush_mode >= 2 && js == 1) ? 0 : (3u << 12);
++	hg_wr(hg_gpu, slot + 0x58, (8u << 16) | flush_start | flush_end);
+ 	hg_wr(hg_gpu, slot + 0x60, 1);                          /* START */
+ 
+ 	uint32_t jirq = 0, mirq = 0, girq = 0;
+@@ -2532,6 +2540,7 @@ herolte_gpu_probe(void)
+ 	thread_t thread;
+ 	uint32_t twrp = 0;
+ 
++	PE_parse_boot_argn("herogpu_flush", &hg_flush_mode, sizeof(hg_flush_mode));
+ 	if (PE_parse_boot_argn("herotwrp", &twrp, sizeof(twrp)) && twrp > 0 &&
+ 	    kernel_thread_start(hg_twrp_thread, (void *)(uintptr_t)twrp, &thread) == KERN_SUCCESS) {
+ 		thread_deallocate(thread);
+diff --git a/osfmk/kern/sched_clutch.c b/osfmk/kern/sched_clutch.c
+index 3657d83..1c9224f 100644
+--- a/osfmk/kern/sched_clutch.c
++++ b/osfmk/kern/sched_clutch.c
+@@ -41,6 +41,7 @@
+ #include <kern/sched_prim.h>
+ #include <kern/task.h>
+ #include <kern/thread.h>
++#include <pexpert/pexpert.h>
+ #include <kern/sched_clutch.h>
+ #include <machine/atomic.h>
+ #include <kern/sched_clutch.h>
+@@ -2878,6 +2879,20 @@ sched_clutch_pset_init(processor_set_t pset)
+ static void
+ sched_clutch_tunables_init(void)
+ {
++	/* Boot-arg heroquantum=US (500 to 10000), as FiiO JM21's jm21_quantum_us: a shorter timeslice, the same policies. */
++	uint32_t hero_quantum_us = 0;
++	if (PE_parse_boot_argn("heroquantum", &hero_quantum_us, sizeof(hero_quantum_us)) &&
++	    hero_quantum_us >= 500 && hero_quantum_us <= 10000) {
++		for (unsigned int bucket = 0; bucket < TH_BUCKET_SCHED_MAX; bucket++) {
++			if (sched_clutch_thread_quantum_us[bucket] > hero_quantum_us) {
++				sched_clutch_thread_quantum_us[bucket] = hero_quantum_us;
++			}
++		}
++		if (std_quantum_us > hero_quantum_us) {
++			std_quantum_us = hero_quantum_us;
++		}
++		printf("HEROLTE: thread quantum at most %u us\n", hero_quantum_us);
++	}
+ 	sched_clutch_us_to_abstime(sched_clutch_root_bucket_wcel_us, sched_clutch_root_bucket_wcel);
+ 	sched_clutch_us_to_abstime(sched_clutch_root_bucket_warp_us, sched_clutch_root_bucket_warp);
+ 	sched_clutch_us_to_abstime(sched_clutch_thread_quantum_us, sched_clutch_thread_quantum);

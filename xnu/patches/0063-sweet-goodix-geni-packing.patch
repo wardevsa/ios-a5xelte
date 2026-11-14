@@ -1,3 +1,5 @@
+diff --git a/bsd/dev/sweet_touch.c b/bsd/dev/sweet_touch.c
+index c9d0605..03defe6 100644
 --- a/bsd/dev/sweet_touch.c
 +++ b/bsd/dev/sweet_touch.c
 @@ -3,7 +3,7 @@
@@ -9,7 +11,7 @@
   */
  #if defined(ARM64_BOARD_CONFIG_SWEET)
  #include <sys/param.h>
-@@ -32,6 +32,11 @@
+@@ -32,6 +32,11 @@ void sweet_touch_init(void);
  #define TOUCH_MAX        10u
  #define TOUCH_GOODIX     1
  #define TOUCH_FTS        2
@@ -21,7 +23,7 @@
  
  #define SE_STATUS       0x040u
  #define SE_MCLK         0x048u
-@@ -52,18 +57,26 @@
+@@ -52,18 +57,26 @@ void sweet_touch_init(void);
  #define SE_RX_COUNT     0x804u
  #define SE_HW_TX        0xe24u
  #define SE_HW_RX        0xe28u
@@ -53,7 +55,7 @@
  	int x[TOUCH_MAX], y[TOUCH_MAX];
  } st;
  static int touch_sleep_chan;
-@@ -187,9 +200,18 @@
+@@ -187,9 +200,18 @@ touch_abort(void)
  	}
  }
  
@@ -73,7 +75,7 @@
      unsigned nr, bool stretch)
  {
  	if (st.dead || nt > 3 || nr > 90 || (nt && nr) || (!nt && !nr)) {
-@@ -200,14 +222,13 @@
+@@ -200,14 +222,13 @@ touch_msg(uint8_t addr, const uint8_t *tx, unsigned nt, uint8_t *rx,
  		return EBUSY;
  	}
  	touch_wr(st.se, SE_IRQ_CLR, 0xffffffffu);
@@ -90,7 +92,7 @@
  		if (irq & SE_ERRORS) {
  			err = (irq & SE_NACK) ? ENXIO : EIO;
  			/* A completed NACK is normal during address probing. Aborting an
-@@ -215,7 +236,7 @@
+@@ -215,7 +236,7 @@ touch_msg(uint8_t addr, const uint8_t *tx, unsigned nt, uint8_t *rx,
  			 * and leave a clean idle engine available for the other IC. */
  			for (unsigned j = 0; j < 5000 && !(irq & SE_DONE); ++j) {
  				delay(1);
@@ -99,7 +101,7 @@
  			}
  			if ((irq & SE_DONE) && !(touch_rd(st.se, SE_STATUS) & 1u) &&
  			    !(touch_rd(st.se, SE_TX_COUNT) & 0xfffffffu) &&
-@@ -225,36 +246,42 @@
+@@ -225,42 +246,64 @@ touch_msg(uint8_t addr, const uint8_t *tx, unsigned nt, uint8_t *rx,
  			}
  			break;
  		}
@@ -149,10 +151,10 @@
  		delay(1);
  	}
  	touch_abort();
-@@ -262,6 +289,22 @@
+ 	return err;
  }
  
- static int
++static int
 +touch_msg(uint8_t addr, const uint8_t *tx, unsigned nt, uint8_t *rx,
 +    unsigned nr, bool stretch)
 +{
@@ -168,11 +170,10 @@
 +	return err;
 +}
 +
-+static int
+ static int
  touch_read(uint8_t addr, uint16_t reg, bool wide, uint8_t *buf, unsigned len)
  {
- 	uint8_t ptr[2] = {(uint8_t)(reg >> 8), (uint8_t)reg};
-@@ -277,10 +320,32 @@
+@@ -277,10 +320,32 @@ touch_read(uint8_t addr, uint16_t reg, bool wide, uint8_t *buf, unsigned len)
  static int
  touch_goodix_ack(void)
  {
@@ -206,7 +207,7 @@
  static unsigned
  touch_be16(const uint8_t *p)
  {
-@@ -290,6 +355,9 @@
+@@ -290,6 +355,9 @@ touch_be16(const uint8_t *p)
  static bool
  touch_checksum(const uint8_t *buf, unsigned len)
  {
@@ -216,7 +217,7 @@
  	unsigned sum = 0;
  	for (unsigned i = 0; i + 2 < len; ++i) {
  		sum += buf[i];
-@@ -321,7 +389,7 @@
+@@ -321,7 +389,7 @@ touch_goodix(void)
  	uint8_t buf[90];
  	int x[TOUCH_MAX] = {0}, y[TOUCH_MAX] = {0};
  	uint32_t mask = 0;
@@ -225,7 +226,7 @@
  	if (err) {
  		return err;
  	}
-@@ -332,7 +400,7 @@
+@@ -332,7 +400,7 @@ touch_goodix(void)
  		}
  		return 0; /* no new touch frame: retain current contacts */
  	}
@@ -234,7 +235,7 @@
  		return EIO; /* header untrusted: no write to the IC */
  	}
  	unsigned n = buf[2] & 15u;
-@@ -341,17 +409,18 @@
+@@ -341,17 +409,18 @@ touch_goodix(void)
  		return EIO;
  	}
  	if (n) {
@@ -256,7 +257,7 @@
  		unsigned id = p[0] >> 4;
  		unsigned px = touch_be16(p + 2), py = touch_be16(p + 4);
  		/* Low nibble 1/3 denotes pen data in the vendor parser. */
-@@ -449,16 +518,25 @@
+@@ -449,16 +518,25 @@ touch_se_init(void)
  	touch_wr(st.se, SE_CLK_SEL, 0);
  	touch_wr(st.se, SE_MCLK, (7u << 4) | 1u);
  	touch_wr(st.se, SE_SCL, (10u << 20) | (11u << 10) | 26u); /* 100 kHz */
@@ -288,7 +289,7 @@
  	if ((touch_rd(st.se, SE_TX_COUNT) & 0xfffffffu) ||
  	    (touch_rd(st.se, SE_RX_COUNT) & 0x1ffffffu)) {
  		printf("SWEET TOUCH: inherited FIFO data; probes skipped\n");
-@@ -511,14 +589,17 @@
+@@ -511,14 +589,17 @@ touch_thread(void *arg, wait_result_t result)
  	touch_wait(2);
  	touch_gpio(8, 0, 3, 3, true, true);
  	touch_wait(300); /* exceeds vendor 5 ms test + 95 ms post-test wait */

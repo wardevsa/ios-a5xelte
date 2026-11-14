@@ -1,0 +1,106 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 0c902cd..4923616 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -1100,6 +1100,9 @@ hgp_setup(void)
+ 	hg_wr32(scr, rt + 4, 1u | (19u << 3) | (2u << 10) | (1u << 15) | (0x688u << 16) | (1u << 31));
+ 	hg_wr64(scr, rt + 32, HG_PANEL_VA);
+ 	hg_wr32(scr, rt + 40, HG_FB_STRIDE);
++	for (unsigned i = 0; i < 4; i++) {
++		hg_wr32(scr, rt + 48 + i * 4, 0xff000000u);     /* black bars */
++	}
+ 	uint32_t tiles_x = (HG_PANEL_W + 15) / 16, tiles_y = (HG_PANEL_H + 15) / 16;
+ 	hg_wr32(scr, S_FRAG_JOB + 16, 0x00010013);
+ 	hg_wr32(scr, S_FRAG_JOB + 36, ((tiles_y - 1) << 16) | (tiles_x - 1));
+@@ -1109,6 +1112,17 @@ hgp_setup(void)
+ 	return true;
+ }
+ 
++/* IEEE-754 bits of an integer below 2^24 (exact; no FP in the kernel). */
++static uint32_t
++hgp_f32(uint32_t v)
++{
++	if (v == 0) {
++		return 0;
++	}
++	uint32_t e = 31 - __builtin_clz(v);
++	return ((127 + e) << 23) | ((v << (23 - e)) & 0x7fffff);
++}
++
+ /* Is the surface (id, first page) mapped? Returns its slot or -1. */
+ int
+ herolte_gpu_present_slot(uint32_t id, uint64_t first_pa)
+@@ -1180,16 +1194,23 @@ herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, uint32_t w, uint3
+ 		return false;
+ 	}
+ 	vm_offset_t scr = hgp_scr;
+-	/* IEEE bits of w and h (integers below 2^24, so exact). */
+-	uint32_t fw = 0, fh = 0;
+-	for (unsigned k = 0; k < 2; k++) {
+-		uint32_t v = k ? h : w, e = 31 - __builtin_clz(v);
+-		uint32_t bits = ((127 + e) << 23) | ((v << (23 - e)) & 0x7fffff);
+-		if (k) {
+-			fh = bits;
+-		} else {
+-			fw = bits;
+-		}
++	uint32_t fw = hgp_f32(w), fh = hgp_f32(h);
++	/* Keep the aspect: a frame taller than the panel's 16:9 (the iPhone
++	 * XR's 828x1792) is drawn full height, centered between black bars;
++	 * a wider one full width. The bars are the render target's clear. */
++	uint32_t x0 = 0, x1 = HG_PANEL_W, y0 = 0, y1 = HG_PANEL_H;
++	if ((uint64_t)w * HG_PANEL_H < (uint64_t)h * HG_PANEL_W) {
++		uint32_t dw = (uint32_t)((uint64_t)w * HG_PANEL_H / h);
++		x0 = (HG_PANEL_W - dw) / 2;
++		x1 = x0 + dw;
++	} else if ((uint64_t)w * HG_PANEL_H > (uint64_t)h * HG_PANEL_W) {
++		uint32_t dh = (uint32_t)((uint64_t)h * HG_PANEL_W / w);
++		y0 = (HG_PANEL_H - dh) / 2;
++		y1 = y0 + dh;
++	}
++	for (unsigned v = 0; v < 4; v++) {
++		hg_wr32(scr, S_POS + v * 16 + 0, hgp_f32(v & 1 ? x1 : x0));
++		hg_wr32(scr, S_POS + v * 16 + 4, hgp_f32(v & 2 ? y1 : y0));
+ 	}
+ 	hg_wr32(scr, S_VARY_DATA + 1 * 16 + 0, fw);
+ 	hg_wr32(scr, S_VARY_DATA + 2 * 16 + 4, fh);
+diff --git a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/SweetHID.cpp
+index 60c2ffa..61aaef9 100644
+--- a/iokit/Kernel/arm/hid/SweetHID.cpp
++++ b/iokit/Kernel/arm/hid/SweetHID.cpp
+@@ -446,6 +446,15 @@ SweetHIDTouch::start(IOService *provider)
+ 	if (PE_parse_boot_argn("sweetfb_scale", &scale, sizeof(scale)) && scale) {
+ 		fLogicalW = 1440;
+ 		fLogicalH = 2560;
++		/* A canvas taller than 16:9 (sweetfb_lw/lh, the iPhone XR's
++		 * 828x1792) is drawn full height and centered between black bars
++		 * (herolte_gpu.c): normalize over that strip. */
++		uint32_t lw = 0, lh = 0;
++		PE_parse_boot_argn("sweetfb_lw", &lw, sizeof(lw));
++		PE_parse_boot_argn("sweetfb_lh", &lh, sizeof(lh));
++		if (lw && lh && (uint64_t)lw * 2560 < (uint64_t)lh * 1440) {
++			fLogicalW = (int)((uint64_t)lw * 2560 / lh);
++		}
+ 	}
+ #elif defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 	fPanelW = fLogicalW = 1080;
+@@ -496,13 +505,18 @@ SweetHIDTouch::touch(int finger, bool down, int x, int y)
+ 	/* Panel pixels -> the presented 1125x2436 display (SweetFramebuffer.cpp). */
+ 	IOFixed nx = (IOFixed)(((int64_t)(x + fOffX) << 16) / fLogicalW);
+ 	IOFixed ny = (IOFixed)(((int64_t)(y + fOffY) << 16) / fLogicalH);
++	/* Touches on the black bars beside a narrower display land on its edge. */
++	nx = nx < 0 ? 0 : (nx > 0xffff ? 0xffff : nx);
++	ny = ny < 0 ? 0 : (ny > 0xffff ? 0xffff : ny);
+ 	bool moved = down && (nx != fX[finger] || ny != fY[finger]);
+ 	if (was == down && !moved) {
+ 		IOLockUnlock(fLock);
+ 		return;
+ 	}
+ 	if (!was && down) {
+-		fEdge[finger] = x < SWEET_TOUCH_EDGE_PX || x > fPanelW - 1 - SWEET_TOUCH_EDGE_PX ||
++		/* Edges of what is shown: the panel's, or the bars' inner sides. */
++		int left = fOffX < 0 ? -fOffX : 0, right = fOffX < 0 ? fPanelW + fOffX : fPanelW;
++		fEdge[finger] = x < left + SWEET_TOUCH_EDGE_PX || x > right - 1 - SWEET_TOUCH_EDGE_PX ||
+ 		    y < SWEET_TOUCH_EDGE_PX || y > fPanelH - 1 - SWEET_TOUCH_EDGE_PX;
+ 	}
+ 

@@ -1,4 +1,16 @@
-# Working on ios-sweet
+# Working on the HEROLTE port (Galaxy S7 SM-G930F, Exynos 8890)
+
+- **Governance (proposal D-0001, pending ratification):** read `governance/README.md` first. It defines roles, autonomy levels, evidence and handoff rules and the current state/task queue; `python3 tools/governance.py check` validates it. Nothing there overrides the rules below.
+- Read `HEROLTE_PROGRESS.md` and `docs/herolte-bringup.md` first; record new device evidence in the former. The A5XELTE files below are the reference implementation this port adapts.
+- XNU trials may write only BOOT (`/dev/block/platform/155a0000.ufs/by-name/BOOT`). Keep the stock BOOT and a TWRP backup of EFS (IMEI) off the phone; never write EFS, RECOVERY or the bootloader partitions. Confirm every other partition write with the user first.
+
+# Working on the A5XELTE fork
+
+- For Samsung SM-A510F work, read `A5XELTE_PROGRESS.md` and `docs/a5xelte-migration-map.md` first. Record new device evidence in the former and commit completed changes. Keep private VM addresses, passwords, device dumps and downloaded Apple binaries out of git.
+- Preserve recovery p11, EFS p3 and the existing Linux BOOT checkpoint. Current XNU trials may write only the explicitly authorized BOOT p10; the donor's Xiaomi `fastboot` and USERDATA instructions are not A5XELTE instructions.
+- Keep build success, recovered kernel markers, physical screen reports and iOS runtime behavior as separate claims. `NOTES.md` below is SWEET donor history; do not edit it to imply Samsung behavior.
+
+## Original SWEET contributor instructions (donor reference)
 
 - Read `NOTES.md` before starting; it contains the project goal, hardware facts,
   current blocker, local artifact locations and the next concrete action.

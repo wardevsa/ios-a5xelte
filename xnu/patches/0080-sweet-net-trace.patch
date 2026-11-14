@@ -1,6 +1,8 @@
+diff --git a/bsd/net/rtsock.c b/bsd/net/rtsock.c
+index 8d5b335..992b9cb 100644
 --- a/bsd/net/rtsock.c
 +++ b/bsd/net/rtsock.c
-@@ -510,6 +510,25 @@
+@@ -510,6 +510,25 @@ route_output(struct mbuf *m, struct socket *so)
  		SIN6(info.rti_info[RTAX_DST])->sin6_addr.s6_addr16[1] = 0;
  	}
  
@@ -26,9 +28,11 @@
  	switch (rtm->rtm_type) {
  	case RTM_ADD:
  		if (info.rti_info[RTAX_GATEWAY] == NULL) {
+diff --git a/bsd/netinet/in.c b/bsd/netinet/in.c
+index 7ea2987..6f7238c 100644
 --- a/bsd/netinet/in.c
 +++ b/bsd/netinet/in.c
-@@ -1210,6 +1210,20 @@
+@@ -1210,6 +1210,20 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
  	/* In case it's NULL, make sure it came from the kernel */
  	VERIFY(so != NULL || p == kernproc);
  

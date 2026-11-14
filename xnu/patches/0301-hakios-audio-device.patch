@@ -1,0 +1,190 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index a854c6c..0da4385 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2237,6 +2237,10 @@ ha_read(uint32_t reg, uint16_t *value)
+ 	return ok;
+ }
+ 
++#include <miscfs/devfs/devfs.h>
++#include <sys/conf.h>
++#include <sys/errno.h>
++#include <sys/uio.h>
+ #include "herolte_audio_table.h"
+ 
+ static void
+@@ -2343,10 +2347,15 @@ ha_amp_write(uint8_t reg, uint8_t value)
+  * into recovery as INFORM3 says, and each step waits for the log's flush (10 s) so the last one is on disk.
+  */
+ static vm_offset_t ha_wdt;
++static bool ha_serve;   /* heroaudio=3: for iOS, no test: no waits, no watchdog, and /dev/hakios-audio at the end */
+ 
+ static void
+ ha_step(const char *what)
+ {
++	if (ha_serve) {
++		hg_msleep(20);
++		return;
++	}
+ 	printf("HEROLTE AUDIO: step: %s\n", what);
+ 	hg_wr(ha_wdt, 8, 0xffff);
+ 	hg_msleep(11000);
+@@ -2367,6 +2376,117 @@ ha_guard(vm_offset_t pmu)
+ 	printf("HEROLTE AUDIO: watchdog armed, con %#x\n", hg_rd(ha_wdt, 0));
+ }
+ 
++/*
++ * /dev/hakios-audio, as FiiO JM21's kernel has it, for the same plug-in in mediaserverd (gpu/hakios-audio): whole frames of
++ * 16-bit stereo at 48 kHz. The FIFO is filled by hand, by the clock: its flags have told nothing so far, and the codec makes
++ * the bit clock from the same 26 MHz. What does not fit in the ring is dropped: the writer is a real-time thread.
++ */
++#define HA_RING_FRAMES  32768u
++#define HA_RATE         48000u
++#define HA_FIFO_BURST   32u
++static uint32_t ha_ring[HA_RING_FRAMES];
++static volatile uint32_t ha_ring_in, ha_ring_out;
++static uint64_t ha_ring_lost, ha_ring_short;
++static vm_offset_t ha_i2s;
++
++static int
++ha_dev_open(__unused dev_t dev, __unused int flags, __unused int devtype, __unused struct proc *p)
++{
++	return 0;
++}
++
++static int
++ha_dev_close(__unused dev_t dev, __unused int flags, __unused int devtype, __unused struct proc *p)
++{
++	return 0;
++}
++
++static int
++ha_dev_write(__unused dev_t dev, struct uio *uio, __unused int ioflag)
++{
++	uint32_t frames[256];
++	int error = 0;
++	while (uio_resid(uio) >= 4) {
++		user_ssize_t bytes = uio_resid(uio);
++		bytes = bytes > (user_ssize_t)sizeof(frames) ? (user_ssize_t)sizeof(frames) : bytes & ~(user_ssize_t)3;
++		error = uiomove((caddr_t)frames, (int)bytes, uio);
++		if (error) {
++			break;
++		}
++		for (unsigned i = 0; i < bytes / 4; i++) {
++			if (ha_ring_in - ha_ring_out >= HA_RING_FRAMES) {
++				ha_ring_lost++;
++				continue;
++			}
++			ha_ring[ha_ring_in % HA_RING_FRAMES] = frames[i];
++			__asm__ volatile ("dmb ish" ::: "memory");
++			ha_ring_in++;
++		}
++	}
++	return error;
++}
++
++/* The plug-in's volume: iOS scales the samples itself in this route, there is nothing to set. */
++static int
++ha_dev_ioctl(__unused dev_t dev, __unused u_long command, __unused caddr_t data, __unused int flags, __unused struct proc *p)
++{
++	return 0;
++}
++
++static const struct cdevsw ha_cdevsw = {
++	.d_open = ha_dev_open, .d_close = ha_dev_close, .d_read = eno_rdwrt, .d_write = ha_dev_write,
++	.d_ioctl = ha_dev_ioctl, .d_stop = eno_stop, .d_reset = eno_reset, .d_select = eno_select,
++	.d_mmap = eno_mmap, .d_strategy = eno_strat, .d_type = 0
++};
++
++static void
++ha_feed_thread(__unused void *arg, __unused wait_result_t wr)
++{
++	static int sleep_on;
++	uint64_t last = mach_absolute_time(), told = last, played = 0;
++	for (;;) {
++		uint64_t now = mach_absolute_time();
++		uint32_t due = (uint32_t)((now - last) * HA_RATE / 26000000u);
++		last += (uint64_t)due * 26000000u / HA_RATE;
++		due = due > HA_FIFO_BURST ? HA_FIFO_BURST : due;        /* a late wake-up is a gap, not a FIFO overrun */
++		uint32_t in = ha_ring_in, out = ha_ring_out;
++		ha_ring_short += (in != out && in - out < due) ? 1 : 0;
++		while (due-- && in != out) {
++			hg_wr(ha_i2s, 0x10, ha_ring[out % HA_RING_FRAMES]);
++			out++;
++			played++;
++		}
++		ha_ring_out = out;
++		if (now - told > 26000000u * 10u && played != 0) {
++			printf("HEROLTE AUDIO: %llu frames played, %llu lost, %llu short; i2s con %#x fic %#x\n", played, ha_ring_lost, ha_ring_short,
++			    hg_rd(ha_i2s, 0), hg_rd(ha_i2s, 8));
++			told = now;
++			played = 0;
++		}
++		uint64_t deadline;
++		clock_interval_to_deadline(in == out ? 2000 : 300, NSEC_PER_USEC, &deadline);
++		(void)assert_wait_deadline(&sleep_on, THREAD_UNINT, deadline);
++		(void)thread_block(THREAD_CONTINUE_NULL);
++	}
++}
++
++static void
++ha_serve_start(vm_offset_t i2s)
++{
++	extern kern_return_t kernel_thread_start_priority(thread_continue_t, void *, integer_t, thread_t *);
++	thread_t thread;
++	ha_i2s = i2s;
++	int major = cdevsw_add(-1, &ha_cdevsw);
++	if (major < 0 || devfs_make_node(makedev(major, 0), DEVFS_CHAR, UID_ROOT, GID_WHEEL, 0666, "hakios-audio") == NULL) {
++		printf("HEROLTE AUDIO: no /dev/hakios-audio\n");
++		return;
++	}
++	if (kernel_thread_start_priority(ha_feed_thread, NULL, 90, &thread) == KERN_SUCCESS) {
++		thread_deallocate(thread);
++	}
++	printf("HEROLTE AUDIO: /dev/hakios-audio ready\n");
++}
++
+ /* The I2S block is the codec's slave (CBM_CFM); its FIFO filled by hand for now. A sine at 440 Hz. */
+ static void
+ ha_tone(void)
+@@ -2377,7 +2497,9 @@ ha_tone(void)
+ 	vm_offset_t i2s = ml_io_map(0x11440000u, 0x1000);
+ 	vm_offset_t pins = ml_io_map(0x114b0000u, 0x1000);
+ 	ha_i2c = ml_io_map(HA_AMP_PINS_PA & ~0xfffu, 0x1000) + (HA_AMP_PINS_PA & 0xfffu);
+-	ha_guard(pmu);
++	if (!ha_serve) {
++		ha_guard(pmu);
++	}
+ 	ha_step("PMU");
+ 	printf("HEROLTE AUDIO: PMU debug %#x, AUD domain %#x/%#x\n", hg_rd(pmu, 0xa00), hg_rd(pmu, 0x40c0), hg_rd(pmu, 0x40c4));
+ 	ha_step("MCLK");
+@@ -2436,7 +2558,12 @@ ha_tone(void)
+ 	ha_step("I2S active");
+ 	hg_wr(i2s, 0x00, (1u << 31) | 1u);      /* CON_ACTIVE */
+ 	printf("HEROLTE AUDIO: i2s con %#x mod %#x fic %#x\n", hg_rd(i2s, 0), hg_rd(i2s, 4), hg_rd(i2s, 8));
++	if (ha_serve) {
++		ha_serve_start(i2s);
++		return;
++	}
+ 	ha_step("I2S samples");
++	uint64_t tone_start = mach_absolute_time();
+ 	/* A table of one 440 Hz period at 48 kHz (109 samples, close enough), low level. */
+ 	static int16_t wave[109];
+ 	int32_t a = 0, b = 2621;                /* a recurrence for a sine: c = 2 sin(pi f/fs) in 1/32768 */
+@@ -2460,7 +2587,7 @@ ha_tone(void)
+ 		phase = (phase + 1) % 109;
+ 		sent++;
+ 	}
+-	printf("HEROLTE AUDIO: tone: %u frames sent, %u waits, i2s con %#x, level %#x\n", sent, stuck, hg_rd(i2s, 0), hg_rd(i2s, 8));
++	printf("HEROLTE AUDIO: tone: %u frames sent in %llu ms, %u waits, i2s con %#x, level %#x\n", sent, (mach_absolute_time() - tone_start) / 26000, stuck, hg_rd(i2s, 0), hg_rd(i2s, 8));
+ 	hg_wr(i2s, 0x00, 1u << 31);
+ 	hg_wr(ha_wdt, 0, 0);
+ }
+@@ -2517,6 +2644,7 @@ hg_audio_thread(void *arg, __unused wait_result_t wr)
+ 		printf("HEROLTE AUDIO: codec register %#x = %#x (%s), SPI status %#x\n", regs[i], value, ok ? "read" : "TIMEOUT", hg_rd(ha_spi, 0x14));
+ 	}
+ 	if ((int)(uintptr_t)arg >= 2) {
++		ha_serve = (int)(uintptr_t)arg == 3;
+ 		ha_tone();
+ 	}
+ }

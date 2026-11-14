@@ -1,6 +1,8 @@
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index f41b75b..68612db 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
-@@ -7411,9 +7411,14 @@
+@@ -7411,9 +7411,14 @@ process_signature(proc_t p, struct image_params *imgp)
  				error = EACCES;
  				goto done;
  			}

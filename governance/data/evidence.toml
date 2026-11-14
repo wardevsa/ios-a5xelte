@@ -1,0 +1,731 @@
+# Índice de evidencias (fuente de verdad; vista EVIDENCE.md generada). Hashes calculados de los ficheros el 2026-11-13.
+# Verificar: python3 tools/governance.py evidence [--all]. Los ficheros ausentes en otra máquina se SALTAN (SKIP), no fallan.
+# Evidencia inmutable: no se edita, mueve ni borra; se añade otra con nombre nuevo.
+
+[[evidence]]
+id = "E-0001"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Candidata N2 de solo lectura (imagen BOOT, run2): 47-50 PASS, 0 FAIL"
+kind = "image"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.img"
+location = "device-day-kit"
+created = "2026-11-13"
+sha256 = "26a39560ed963c89f1593b2b3db59faba55235c4140dce28686649f8799d1e29"
+size = 18618384
+immutable = true
+note = "La construcción es determinista: idéntica byte a byte a la candidata anterior. NO escrita en el teléfono."
+
+[[evidence]]
+id = "E-0002"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Payload SWEETXNU de la candidata N2"
+kind = "artifact"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.payload.bin"
+location = "device-day-kit"
+created = "2026-11-13"
+sha256 = "0bdbc2021437c722dd5b3397f9473b06e0f50db2345e9d6d96de5dfd35084c6f"
+size = 16795200
+immutable = true
+
+[[evidence]]
+id = "E-0003"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Procedencia de la candidata N2 (entradas con SHA-256, comando, commit de herramientas)"
+kind = "log"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.PROVENANCE.txt"
+location = "device-day-kit"
+created = "2026-11-13"
+sha256 = "a337dfb2b143766309774d0c166dec91615ddad59aec89678198ebae27d94e66"
+size = 1867
+immutable = true
+
+[[evidence]]
+id = "E-0004"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Verificación independiente de la candidata N2 (50 PASS, 0 FAIL, salida 0)"
+kind = "result"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/xnu-boot-v2-n2ro-clang-20261113-run2.verify-independent.txt"
+location = "device-day-kit"
+created = "2026-11-13"
+sha256 = "8c9420a62e76f5c9b2db3bb05d353761ac99af6b50c35685e193d1e033e29e2c"
+size = 3618
+immutable = true
+
+[[evidence]]
+id = "E-0005"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Resultados consolidados de la ejecución N2 run2 (hashes, argumentos efectivos, originales, preflight)"
+kind = "result"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/RESULTS-run2.txt"
+location = "device-day-kit"
+created = "2026-11-13"
+sha256 = "d9f2a488c611bd28c5114311351171f4cf2a552feb48f87d86253426ba5a8a84"
+size = 1748
+immutable = true
+
+[[evidence]]
+id = "E-0006"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Preflight del kit y del kernel DROP v2 (14 correctas, 1 aviso, 0 fallos)"
+kind = "result"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2-run2/preflight-run2.txt"
+location = "device-day-kit"
+created = "2026-11-13"
+sha256 = "af950321306fb0d41bac05c66c20770e21e97c86b59609fd1657b788c0e9b8aa"
+size = 1247
+immutable = true
+note = "El aviso es la falta de GCC aarch64 (limitación del entorno)."
+
+[[evidence]]
+id = "E-0007"
+domain = "build"
+level = "L1"
+device = "none"
+title = "Kernel con DROP v2 (CI run 43223873690, 0334 aplicado)"
+kind = "artifact"
+path = "~/HackiOS/builds/device-day/artifacts/kernel-0334-v2-herolte-drop-v2/kernel.development.herolte"
+location = "device-day-kit"
+created = "2026-11-12"
+sha256 = "e678b4545f72bdec23d5be342290acf746dc1f9731adde89b9ae3555d30b6b7f"
+size = 17338496
+immutable = true
+note = "Producto de Apple/XNU: no va a git."
+
+[[evidence]]
+id = "E-0008"
+domain = "build"
+level = "L1"
+device = "none"
+title = "Cargador xnu_boot.Image compilado con clang (de conveniencia, no el validado con GCC)"
+kind = "artifact"
+path = "~/HackiOS/builds/device-day/loader-clang/xnu_boot.Image"
+location = "device-day-kit"
+created = "2026-11-12"
+sha256 = "0a68abbd2d2bd186345f5c7a4a75eb8b2d589a47bbde4e4483add530c8cf7cfc"
+size = 16192
+immutable = true
+
+[[evidence]]
+id = "E-0009"
+domain = "device"
+level = "n/a"
+device = "this-unit"
+title = "BOOT original de Samsung copiado del teléfono (base de las candidatas)"
+kind = "image"
+path = "~/HackiOS/backups/device-herolte/2026-11-12/BOOT.img"
+location = "host"
+created = "2026-11-12"
+sha256 = "adc519d0f16fd314ea05b072820a81c3a623db2ba446397c87c7ed70776c3348"
+size = 41943040
+immutable = true
+private = true
+note = "PRIVADO: puede contener datos del dispositivo; fuera de git; copia de seguridad del teléfono."
+
+[[evidence]]
+id = "E-0010"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Imagen de laboratorio HFSX poblada lab-full.img.partial (verificación FAILED por 32 nombres Unicode)"
+kind = "image"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/lab-full-old-20261113.img"
+location = "ntfs-archive"
+created = "2026-11-13"
+sha256 = "e724f9818a28d2c9ce8e84798bd8e46f256f112ddb0ec48e7125a2f0c4c79496"
+size = 21474836480
+immutable = true
+note = "[2026-11-14: la ruta apunta ya a la copia de NTFS (E-0034), mismo sha256; el original sigue en el scratchpad, volátil] 20 GiB aparentes, ~11,5 GiB asignados. Vive en /tmp (se pierde al reiniciar) y NO está archivada: ver T-0019. No reparar ni regenerar sobre ella."
+
+[[evidence]]
+id = "E-0011"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Archivo TAR de 224 sandboxes de las baterías R2 y las carpetas tests/ (24,1 GiB)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/01-test-sandboxes/r2-v2-tests-sandboxes-20261113.tar"
+location = "ntfs-archive"
+created = "2026-11-13"
+sha256 = "ff4f4f51bd3dce4c078e3dcbe587455f0209568acc1b3c7a003d5fad4fdfae3d"
+size = 25907189760
+immutable = true
+note = "tar --compare rc=0, 265 873 ficheros."
+
+[[evidence]]
+id = "E-0012"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Archivo TAR de t02/ex (extracción de os.dmg), 6 861 de 6 862 ficheros"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/t02-ex.tar"
+location = "ntfs-archive"
+created = "2026-11-13"
+sha256 = "16c874786207347c3efd58216e3f72795742b85d8bc63fc96be1c0f4b43caa92"
+size = 3206236160
+immutable = true
+note = "Falta ex/os/.file (0 bytes, modo 000); documentado."
+
+[[evidence]]
+id = "E-0013"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Archivo TAR de t04r/r3/work (extracción completa os/systemos/appos, 184 026 ficheros)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/t04r-r3-work.tar"
+location = "ntfs-archive"
+created = "2026-11-13"
+sha256 = "46b0305cad193037b1d37b6c566bc6e0f900925cb3e187c06ee3e2c512e1e175"
+size = 11843102720
+immutable = true
+note = "El original se retiró tras verificar."
+
+[[evidence]]
+id = "E-0014"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Copia de herramientas y evidencias del laboratorio T04-R (pipeline, auditoría, rev2 sin sandboxes)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/06-session-backups/t04r-tools-evidence-20261113.tar"
+location = "ntfs-archive"
+created = "2026-11-13"
+sha256 = "44134c72387889a63030bf0c41d96fe3d44cefa8c403fe21fc23494f59eb3277"
+size = 689418240
+immutable = true
+note = "Contiene rev2 (ejecutor R2) y el pipeline de población y verificación."
+
+[[evidence]]
+id = "E-0015"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Material de análisis Unicode (tabla de Linux extraída, arnés, JSON)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/unicode-analysis-20261113.tar"
+location = "ntfs-archive"
+created = "2026-11-13"
+sha256 = "5eabf6e2e5ec14bde95f8fee9b4579f0c7a6b615308294e370b495788376fd63"
+size = 645120
+immutable = true
+
+[[evidence]]
+id = "E-0016"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Comparación Unicode en tres niveles, primera pasada (con el filtro por bytes defectuoso, marcada)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/unicode-3niveles-20261113.tar"
+location = "ntfs-archive"
+created = "2026-11-13"
+sha256 = "80d035f163ff32d76d1216659762dcab4c598a2e443faf9a493593ad017bec71"
+size = 378880
+immutable = true
+note = "Contiene results-3niveles-20261113 (defectuoso) y -v2."
+
+[[evidence]]
+id = "E-0017"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Comparación Unicode en tres niveles v3 (unidades UTF-16, 7 tablas XNU vs kernel, 24/24 comprobaciones)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/unicode-3niveles-v3-20261113.tar"
+location = "ntfs-archive"
+created = "2026-11-13"
+sha256 = "839b4e2714cd8f6f709f116cdf09d57d4542ae2ce9dbfaee8fa05064c35d37cf"
+size = 399360
+immutable = true
+note = "Resultado válido de la auditoría Unicode."
+
+[[evidence]]
+id = "E-0018"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Manifiesto SHA-256 del kit del día del dispositivo (199 ficheros)"
+kind = "log"
+path = "~/HackiOS/builds/device-day/MANIFEST.sha256"
+location = "device-day-kit"
+created = "2026-11-12"
+sha256 = "65eef0fbb7436fb9163d51442ab235d87d28a116029f8d1c44b184a1d769a401"
+size = 38241
+immutable = true
+
+[[evidence]]
+id = "E-0019"
+domain = "host"
+level = "L2"
+device = "none"
+title = "Resultados del verificador sobre todas las candidatas (la vigente 47 PASS; las anteriores, 3 o 4 FAIL por no llevar ufsrw=0 etc.)"
+kind = "result"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2/verify-all-20261113.txt"
+location = "device-day-kit"
+created = "2026-11-13"
+sha256 = "ca05394da28d2659e13cff7f4ab998d7fbe6ebac4c6e93db212263927da36559"
+size = 1552
+immutable = true
+
+[[evidence]]
+id = "E-0020"
+domain = "doc"
+level = "n/a"
+device = "none"
+title = "Política de almacenamiento (ext4 activo, NTFS archivo)"
+kind = "doc"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/05-manifests-and-hashes/POLITICA_ALMACENAMIENTO.md"
+location = "ntfs-archive"
+created = "2026-11-13"
+sha256 = "e38ac5d2a868738221bb2e6f1d0bed220dd6e0725ea137e406a958bc0ae7dce9"
+size = 916
+immutable = false
+note = "Aprobada en D-0002."
+
+[[evidence]]
+id = "E-0021"
+title = "Resultado de la batería de 22 mutantes de tools/governance.py: 22 detectados, 0 sobreviven"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/governance-mutation-20261113.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "123c0dc014dc84f0ab3ed73c355f126ed53c7da88ad5ccf7d6b2daf331dc950f"
+size = 2789
+immutable = true
+note = "Reproducible: python3 tools/governance_mutation.py"
+
+[[evidence]]
+id = "E-0022"
+title = "Procedencia de la batería de mutantes (hashes de la herramienta y de las pruebas evaluadas)"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/governance-mutation-20261113.PROVENANCE.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "eb5c01bcc26a2bc4d4a8561ff4e811597dee48e2152cce80c4529b7e03ee7951"
+size = 870
+immutable = true
+
+[[evidence]]
+id = "E-0023"
+title = "Batería de mutantes de tools/governance.py CON control sin mutar (el control pasa; 22 mutantes, 22 detectados)"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/governance-mutation-20261113-control.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "c50853efe1f746edd962e79430ec5776e80c0323db1109f0ab1c6ea55f9442df"
+size = 2863
+immutable = true
+note = "Sustituye en valor probatorio a E-0021: la herramienta exige ahora que un clon SIN mutar pase antes de contar mutantes. Reproducible: python3 tools/governance_mutation.py"
+
+[[evidence]]
+id = "E-0024"
+title = "T-0009: resultados de la integración con origin/herolte (fusión de prueba, aplicación de los 5 parches en los dos órdenes, parches y registros)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/integracion-origin-herolte-20261113.tar"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "619b1b42f947649bfd228accae74f6f5b24bd328ddf2971ef4012bf95d915e9b"
+size = 81920
+immutable = true
+note = "Prueba de APLICABILIDAD de parches, no de compilación ni de funcionamiento. Informe: docs/herolte-integracion-origin-herolte.md"
+
+[[evidence]]
+id = "E-0025"
+title = "Batería FINAL de mutantes de tools/governance.py sobre las pruebas definitivas (97): control sin mutar pasa; 22/22 detectados"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/governance-mutation-20261113-final.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "c50853efe1f746edd962e79430ec5776e80c0323db1109f0ab1c6ea55f9442df"
+size = 2863
+immutable = true
+note = "Sustituye en valor probatorio a E-0021 y E-0023 (se reescribieron las pruebas de selección). Reproducible: python3 tools/governance_mutation.py"
+
+[[evidence]]
+id = "E-0026"
+title = "Registro del borrado de 224 sandboxes archivados (T-0007, D-0023): TAR verificado antes y después, comparación byte a byte, lista exacta"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/t0007-sandboxes-deletion-20261113.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "772c02a2500fcd8fab370c755f89f8707743fd6ef52e5ff66d11a76ba4f8ed7e"
+size = 10000
+immutable = true
+note = "Espacio libre en ext4: 5244 -> 30360 MiB. Los 224 sandboxes siguen en el TAR E-0011."
+
+[[evidence]]
+id = "E-0027"
+title = "rev2: ronda 2 de mutación completa (49 mutantes, con control de disco): 46 detectados, 3 sobreviven (M16 y N02 equivalentes conocidos; R07 sin clasificar: hueco de cobertura)"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/rev2-mutation-ronda2-summary-20261113.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "ee1823dce9bb5cac715b689642e62e16827a15fb50094200bd0904856ac18f3a"
+size = 8410
+immutable = true
+note = "Mutación sobre r2_lib.sh de rev2 con la batería de stubs (sin montar nada, sin sudo). Salida íntegra en rev2-mutation-ronda2-stdout-20261113.txt. Sustituye a la ronda cortada por disco lleno (sus 'SOBREVIVE' eran artefactos). No valida R2 ni autoriza nada."
+
+[[evidence]]
+id = "E-0028"
+title = "T-0025: staging os restaurado y renombrado a forma XNU; manifiesto traducido coincide con el árbol (0 errores de nombre); imagen anterior intacta"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/t0025-staging-names-os-20261113.txt"
+location = "ntfs-archive"
+created = "2026-11-13"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "105d8068b7edc3aee0ed1cd769505e6db25c62399840f1605974c214f876c3a3"
+size = 1117
+immutable = true
+note = "Sin montar nada. No es la verificación de la imagen poblada (eso lo hace verify_image.sh tras el sudo)."
+
+[[evidence]]
+id = "E-0029"
+title = "T-0025: primer populate y verify REALES de lab-full-xnu.img.partial (populate ok; verify con 2 EXTRA por los ficheros del diario; hfsx_post: 327/327 nombres en forma XNU exacta en el catálogo en bruto)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/t0025-first-verify-20261114.tar"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "47933ff402b694596cae76a1874021c8a080a400bdff524e1b7b242fb2f243db"
+size = 1382400
+immutable = true
+note = "Primer montaje real de Linux (hfsplus por defecto, sin nodecompose). La imagen (sha256 747d0245...ec27f) sigue en el scratchpad (volátil) como .partial. No es evidencia de iOS ni del teléfono."
+
+[[evidence]]
+id = "E-0030"
+title = "rev3 (T-0027): corrección del retraso simulado de udev en el stub de losetup; R07 detectado (T26/T26b), r2_lib.sh intacto 131 PASS"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/rev3-battery-20261114.tar"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "430d20a213d92051cb62d52a08663b88e4821fba1ea76222c0ee128527cff9dd"
+size = 112640
+immutable = true
+note = "Solo R07 y R09 se reejecutaron sobre rev3; no es una ronda completa. rev2 intacto. No valida R2 ni autoriza nada."
+
+[[evidence]]
+id = "E-0031"
+title = "Imagen de laboratorio lab-full-xnu (ROOT_HFSPLUS_LAB_VALID_CANDIDATE): HFS+ con nombres en forma XNU, copia archivada en NTFS"
+kind = "image"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/lab-full-xnu-20261114.img"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "747d02450f94426b81493189732e6719bfc0dc09b0632661b822961a319ec27f"
+size = 21474836480
+immutable = true
+note = "Imagen de 20 GiB (12 GiB reales) verificada con verify_image.sh en un montaje de solo lectura real; sha256 idéntico antes y después y al de la copia. Contiene binarios de Apple: NO va a git. Es un candidato de laboratorio: no se ha arrancado en el S7 ni en ningún otro sitio. 195 NAME-NORMALIZED son avisos (KI-0007). Faltan los 2 ficheros U+0E33 excluidos (KI-0006)."
+
+[[evidence]]
+id = "E-0032"
+title = "T-0025: salidas completas del populate y del verify válido (meta_os 318 068 OK, sys 2 093, app 1 047, strict 1 459 + 884, stage 75, fsck y hfsx_post sin errores)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/t0025-verify-valid-20261114.tar"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "362f55a07041c3c3f519993d6f857f0fe560a9a4f68d7d7e94ef01ca5ade4a02"
+size = 1392640
+immutable = true
+note = "Sustituye a E-0029 (primer verify, con los 2 EXTRA del diario) como resultado final; E-0029 se conserva."
+
+[[evidence]]
+id = "E-0033"
+title = "Registro del borrado de lab-full-xnu.img.valid y r3/work (D-0027/D-0028): hashes del archivo releídos antes, espacio 6232 -> 29468 MiB"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/d0027-delete-archived-20261114.txt"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "9ced50466e0561c8f92c62d7e72840aa5855cd16b9f9c5f0c1814e7a235ac152"
+size = 658
+immutable = true
+note = "Las copias siguen en NTFS: E-0031 (imagen) y E-0013 (r3/work, estado previo al renombrado XNU; reproducible con xnu_names_stage.py apply)."
+
+[[evidence]]
+id = "E-0034"
+title = "Copia en NTFS de la imagen de laboratorio ANTERIOR lab-full.img.partial (nombres sin corregir; nunca validada), sha256 igual a E-0010"
+kind = "image"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/lab-full-old-20261113.img"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "e724f9818a28d2c9ce8e84798bd8e46f256f112ddb0ec48e7125a2f0c4c79496"
+size = 21474836480
+immutable = true
+note = "T-0019. Origen intacto en el scratchpad. Contiene binarios de Apple: NO va a git. Sustituida en uso por E-0031."
+
+[[evidence]]
+id = "E-0035"
+title = "T-0016: la serie renumerada 0332..0337 aplica limpia, en orden final, sobre el árbol XNU revertido a 0331; fusión con origin/herolte con un solo conflicto de texto"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/t0016-patch-sequence-20261114.txt"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "build"
+level = "L1"
+device = "none"
+sha256 = "5310e7dd44790703390ac828db2662ad790d0ee9ac80431b88f3860f74f8cdb7"
+size = 735
+immutable = true
+note = "Aplicabilidad de los parches (git apply --check + apply), no compilación ni ejecución: eso lo hace el CI. Árbol base: buildtree-0332-fork-8d1cf43 (marcador antiguo quitado con -R); caduca el 2026-11-18."
+
+[[evidence]]
+id = "E-0036"
+title = "Copias de seguridad del teléfono verificadas por SHA256SUMS: BOOT original (= E-0009), EFS, CPEFS, PERSISTENT, PARAM, PERSDATA, RECOVERY, BOTA0/1; fuera del teléfono, permisos 600, no en git"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/backups-verification-20261114.txt"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "8d57ebc43383e92285cdb614913d4584bce5f8a0b8f2e22addf93b9ed2d7be79"
+size = 810
+immutable = true
+note = "Solo el registro de la verificación (hashes), sin contenido. Las copias están en un único disco (/dev/sda2): riesgo de punto único de fallo señalado al Director. No es una prueba en el teléfono."
+
+[[evidence]]
+id = "E-0037"
+title = "CI xnu run 43579309448 (success): los 6 parches 0332-0337 constan como APLICADOS, ninguno propio saltado; kernel.development.herolte descargado"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/ci-xnu-43579309448-20261114.txt"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "build"
+level = "L1"
+device = "none"
+sha256 = "97d00a3495ee64ef9b70948f6d23edad2cbfc5901183a96186e732f98930fdad"
+size = 721
+immutable = true
+note = "Kernel sha256 62ea7501ee4483dc83bb6402ac2210153ecb55e535208ddabf52942a3ec02d5b. Compilación en el CI, no arranque. Artefacto del CI caduca; copia local en builds/device-day/artifacts/kernel-0337-ci-43579309448 y en E-0038."
+
+[[evidence]]
+id = "E-0038"
+title = "Candidata N2 de solo lectura RECONSTRUIDA con el kernel del CI: xnu-boot-v2-s7-20261114.img, verificador del constructor 47 PASS/0 FAIL, independiente 51 PASS/0 FAIL"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/boot-candidates-n2-run3-20261114.tar"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "50a1b0af7ea514455a932041cc666ade4fe56afecfed510b6f6f7a71eb1aad4d"
+size = 52776960
+immutable = true
+note = "Imagen BOOT xnu-boot-v2-s7-20261114.img (sha256 2c155829b1c6c7c5161b0bf245ae4015e5b041a01ad907507c84f3b70a648f40). Mismas entradas que E-0001 salvo el kernel (E-0037); línea de arranque con ufsrw=0 herolog=0 herodrop=0. Solo comprobaciones de consistencia del PC: NO se ha escrito en el teléfono ni arrancado (el nivel real lo da el S7, L3)."
+
+[[evidence]]
+id = "E-0039"
+title = "rev3: ronda completa de 49 mutantes con el stub de udev corregido: 47 detectados (R07 incluido), 2 sobreviven (M16 y N02, equivalentes conocidos)"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/rev3-mutation-summary-20261114.txt"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "8e602c65fbc9c8adc25495a2e373a56a27e6cb3dc311a4963cb8addc45867aa8"
+size = 8488
+immutable = true
+note = "Sustituye a E-0027 como referencia de rev3. Sin montar nada ni sudo; r2_lib.sh idéntico al de rev2. Salida íntegra en rev3-mutation-stdout-20261114.txt. No valida R2 ni autoriza nada."
+
+[[evidence]]
+id = "E-0040"
+title = "Variante N2 de MENOR HUELLA DE HARDWARE: xnu-boot-v2-s7-min-20261114.img (candidata de E-0038 + herowifi=0 heropower=0 herogpu=0), 47 PASS builder / 54 PASS independiente, 0 FAIL"
+kind = "image"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2-run3-min/xnu-boot-v2-s7-min-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "07ddfa069c7f53936964e05f174ddced6a75b6ff690180e648a082c941115db3"
+size = 18618384
+immutable = true
+note = "Mismo kernel (62ea7501...) y mismas entradas que E-0038; solo cambia la línea de arranque, para que en un primer arranque no se encienda el Wi-Fi/PCIe ni corran los hilos de energía y medición de GPU (S7GE_SPLIT_PLAN.md §3). Sin copia en NTFS aún (el NVMe está ocupado por el backup). NO escrita en el teléfono; decisión sobre cuál de las dos candidatas usar: del Director/jefatura."
+
+[[evidence]]
+id = "E-0041"
+title = "OSMesa de Mesa 25.0.7 reinyectado en Mesa 26.2.4 (gpu/mesa/osmesa-frontend): compila en Linux (913/913, rc=0) y la prueba mínima da el píxel correcto"
+kind = "result"
+path = "~/HackiOS/builds/device-day/osmesa-b2-20261114/PROVENANCE.txt"
+location = "host"
+created = "2026-11-14"
+domain = "build"
+level = "L1"
+device = "none"
+sha256 = "9fd2867e495a17eb29fdd7123ddb62c3384977379cde3b607c86dabc7cb248ea"
+size = 955
+immutable = true
+note = "Carpeta con build-linux-host.log, meson-options.txt, smoke-test.txt, exported-osmesa-symbols.txt y libOSMesa.sha256. Compilación de COMPROBACIÓN en Linux con softpipe: NO es Darwin, NO es Panfrost, NO está probada en el teléfono. Sin copia en NTFS aún (NVMe ocupado por el backup)."
+
+[[evidence]]
+id = "E-0042"
+title = "Comprobación del snapshot de backup del 2026-11-14: BOOT bueno (prefijo = E-0009), EFS bueno (8 bytes de superbloque ext4 distintos), RECOVERY truncada, SYSTEM sin verificar, USERDATA vacío"
+kind = "result"
+path = "~/HackiOS/builds/device-day/backup-check-20261114/RESULTS.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ab2d5a3637698f61fe70a23035be270ed92e5ee1a6bef3e58097a41fc4a5449c"
+size = 782
+immutable = true
+note = "Solo lectura de ficheros de copia en el PC; no se leyó el teléfono. No es una comparación contra el teléfono (device-read, no hecha). Sin copia en NTFS aún."
+
+[[evidence]]
+id = "E-0043"
+title = "Fase 1: BOOT del S7 escrito con xnu-boot-v2-s7-min-20261114.img y leído de vuelta (sha256 07ddfa06…5db3); EFS idéntico antes y después y igual al EFS.img del snapshot del Director"
+kind = "result"
+path = "~/HackiOS/builds/device-day/phase1-20261114/flash-out.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "f26a0fafb61196269cfb7d65ae037a5c1ece1f6213811468e4e430bdc9172234"
+size = 946
+immutable = true
+note = "Es la ESCRITURA y su lectura de vuelta (D-0033). NO prueba que el kernel arranque: el teléfono no se había reiniciado al registrarla. El EFS leído del teléfono (eb8912ad…7817) coincide con el EFS.img del snapshot del 2026-11-14 (compara copia con teléfono)."
+
+[[evidence]]
+id = "E-0044"
+title = "Primer arranque en el S7 (fase 1, variante mínima 1): el cargador y el kernel ejecutan y XNU hace panic en kmem_range_init (transcripción de terceros del vídeo del Director)"
+kind = "result"
+path = "~/HackiOS/builds/device-day/phase1-20261114/first-boot-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "54b52a54206f70a3a2064e8342cd854937d91255cce74686497e4fbe10379f4c"
+size = 686
+immutable = true
+note = "Transcripción de Gemini resumida por la jefatura; el ingeniero no ha visto el vídeo, que debe archivarse (con hash) para elevar esta evidencia. La línea del panic parece mal leída (kext_range_init en lugar de kmem_range_init). No prueba nada más allá de que el kernel ejecuta hasta kmem_range_init."
+
+[[evidence]]
+id = "E-0045"
+title = "Candidata min2: la variante mínima + vm_compression_limit=98304 vm_compressor=2 (documentado por el upstream para 2 GiB); 47 PASS constructor y 56 PASS independiente, 0 FAIL"
+kind = "image"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2-run4-min2/xnu-boot-v2-s7-min2-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "595316aae927b3e7c960301790fa34557e5a296073a29df62522b67050edae21"
+size = 18618384
+immutable = true
+note = "Mismo kernel (62ea7501...), cargador y ADT que E-0040; solo cambia la línea de arranque. NO escrita en el teléfono: exige una autorización nueva del Director con este hash."
+
+[[evidence]]
+id = "E-0046"
+title = "Intento 2: BOOT del S7 escrito con xnu-boot-v2-s7-min2-20261114.img y leído de vuelta (sha256 595316aa…edae21); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "~/HackiOS/builds/device-day/phase1-20261114/flash-min2-out.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "0c6eff6e07d603b0445b96055fd10686955c0e2c94984ac022c1bb0d3bc83e6c"
+size = 1111
+immutable = true
+note = "Es la ESCRITURA y su lectura de vuelta (D-0034). NO prueba que arranque: el teléfono no se había reiniciado al registrarla. El SHA-256 del EFS en vivo (b006b26d…) es DISTINTO del de la sesión anterior (eb8912ad…): cada sesión de TWRP cambia el superbloque ext4 (mismo fenómeno medido el 11-12 vs 11-14); lo que importa es que no cambia DENTRO de la sesión."
+
+[[evidence]]
+id = "E-0047"
+title = "Segundo arranque (min2): cargador y bloques de color de XNU visibles, pantalla fija, sin panic ni líneas HEROLTE KMEM (transcripción de terceros)"
+kind = "result"
+path = "~/HackiOS/builds/device-day/phase1-20261114/second-boot-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "9d4364af2db5987c31d9dabea97a06a08422ce4f90bfdd9942236541ceb8a412"
+size = 672
+immutable = true
+note = "Transcripción de Gemini; el ingeniero no ha visto el vídeo. 'NO XNU ON' no existe en el cargador ni en el kernel: probable mala lectura. Los bloques azul/cian/magenta corresponden a las etapas MMU, fp y tunables que dibuja start.s (S7GE_MIN2_ANALYSIS.md §2). No prueba que pasara kmem_range_init ni elevar nada."
+
+
+[[evidence]]
+id = "E-0048"
+title = "Candidata min3: min2 con la RAM del banco de arranque reducida a 1536 MiB (ADT: dram-size y primer banco 0x60000000); 47 PASS constructor y 57 PASS independiente, 0 FAIL"
+kind = "image"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2-run5-min3/xnu-boot-v2-s7-min3-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "c70d3dd8151b891a93a42e0c703ff525b288a6c9c105966e757263a29313e36f"
+size = 18618384
+immutable = true
+note = "Mismo kernel (62ea7501...), cargador y línea de arranque que min2 (cmdline.txt idéntico, d18f4167...); el ADT difiere de E-0040 solo en 2 bytes (0x80 a 0x60 en dram-size y en el primer banco de hakios-ram-banks). NO escrita en el teléfono: exige autorización roja nueva con este hash."
+
+[[evidence]]
+id = "E-0049"
+title = "Intento 3: BOOT del S7 escrito con xnu-boot-v2-s7-min3-20261114.img y leído de vuelta (sha256 c70d3dd8…e36f); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min3-out.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "0a8cedf6d02d29ce6d6ae1bd519d873c3bf14b35a174cf5996bf2dc4285c4c58"
+size = 721
+immutable = true
+note = "Solo la escritura y la lectura de vuelta (D-0035). El teléfono sigue en TWRP, sin reiniciar. Que arranque, y qué muestre, es evidencia aparte que aportará el Director."

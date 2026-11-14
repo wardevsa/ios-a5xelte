@@ -1,0 +1,64 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 6a7e6ba..91d7d90 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -395,6 +395,51 @@ hg_clock_report(void)
+ 	    c1 - c0, us, us ? (c1 - c0) / us : 0);
+ }
+ 
++/*
++ * Boot-arg herogpu_mhz=338 or 390: G3D_PLL is relocked at that rate, before
++ * the GPU has any work, at the voltage the bootloader left (the PMIC is not
++ * touched, so only these small steps above its 260 MHz are accepted). Without
++ * the boot-arg nothing is written. A PLL that does not lock goes back.
++ */
++static void
++hg_clock_set(void)
++{
++	uint32_t mhz = 0, m;
++
++	if (!PE_parse_boot_argn("herogpu_mhz", &mhz, sizeof(mhz))) {
++		return;
++	}
++	if (mhz == 338) {
++		m = 208;
++	} else if (mhz == 390) {
++		m = 240;
++	} else {
++		printf("HEROLTE GPU: clock: herogpu_mhz=%u not accepted\n", mhz);
++		return;
++	}
++	vm_offset_t top = ml_io_map(0x10570000u, 0x1000);
++	if (!top) {
++		return;
++	}
++	uint32_t old = hg_rd(top, 0x1e0);
++	/* 26 MHz * M / (P << S): keep P 4 and S 2, as the bootloader has them. */
++	if (((old >> 8) & 0x3f) != 4 || (old & 0x7) != 2) {
++		printf("HEROLTE GPU: clock: G3D_PLL con0=%#x not as expected, left alone\n", old);
++		return;
++	}
++	hg_wr(top, 0x1e0, (old & ~(0x3ffu << 16)) | (m << 16));
++	bool locked = false;
++	for (unsigned i = 0; i < 1000 && !locked; i++) {
++		delay(10);
++		locked = (hg_rd(top, 0x1e0) >> 29) & 1;
++	}
++	if (!locked) {
++		hg_wr(top, 0x1e0, old);
++		delay(1000);
++	}
++	printf("HEROLTE GPU: clock: G3D_PLL %#x -> %#x: %s\n", old, hg_rd(top, 0x1e0), locked ? "locked" : "NOT locked, put back");
++}
++
+ /*
+  * After a job that faulted or never finished: hard-stop whatever is still
+  * on a slot (as kbase does), and if a slot stays ACTIVE, soft-reset the GPU
+@@ -1167,6 +1212,7 @@ hg_bringup(void)
+ 		printf("HEROLTE GPU: bring-up: mapping failed\n");
+ 		return false;
+ 	}
++	hg_clock_set();
+ 	uint32_t all = hg_rd(hg_gpu, SHADER_PRESENT_LO);
+ 	if (!hg_power(L2_PWRON_LO, L2_READY_LO, hg_rd(hg_gpu, L2_PRESENT_LO), "L2") ||
+ 	    !hg_power(SHADER_PWRON_LO, SHADER_READY_LO, all, "all shader cores") ||

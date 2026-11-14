@@ -1,3 +1,5 @@
+diff --git a/bsd/dev/sweet_ufs.c b/bsd/dev/sweet_ufs.c
+index 8591fb2..0fae827 100644
 --- a/bsd/dev/sweet_ufs.c
 +++ b/bsd/dev/sweet_ufs.c
 @@ -37,10 +37,15 @@
@@ -16,7 +18,7 @@
  
  #define REG_CAP         0x00
  #define REG_IS          0x20
-@@ -591,9 +596,116 @@
+@@ -591,9 +596,116 @@ sweet_ufs_init(void)
  	printf("SWEET UFS: \"%s\" on LUN %u: first block 0x%llx, %llu MiB, %s, DMA at 0x%llx\n",
  	    want, su.lun, su.first_block, su.nblocks * UFS_BLOCK >> 20,
  	    su.writable ? "read-write" : "read-only", su.dma_pa);
@@ -133,9 +135,11 @@
  /* Root device for rd=ufsroot0 (IOFindBSDRoot). */
  int sweet_ufs_rootdev(dev_t *dev);
  
+diff --git a/osfmk/console/serial_console.c b/osfmk/console/serial_console.c
+index e5b23f2..43b7677 100644
 --- a/osfmk/console/serial_console.c
 +++ b/osfmk/console/serial_console.c
-@@ -266,11 +266,19 @@
+@@ -266,11 +266,19 @@ _cnputc(char c, bool poll)
   *             waiting for an interrupt when the hardware device isn't ready
   * @param size The number of characters to print to the console.
   */

@@ -4,7 +4,25 @@ dtb/
 recovery/
 # third-party/Apple sources fetched for reading
 research/
+*.ipsw
 shim/out/
 xnu/out/
 xnu/out-*/
 __pycache__/
+shim/a5xelte/out/
+shim/a5xelte/out4k/
+shim/a5xelte/outxnu/
+shim/herolte/out/
+*.img
+# the drop zone (docs/herolte-howto.md): Wi-Fi firmware from the phone's VENDOR, the network's passphrase,
+# Apple-derived device trees and payloads
+drop/
+network.txt
+bcmdhd_*
+nvram.txt*
+*.blob
+*.adt
+payload*.bin
+
+# boot image for the loader (tools/herolte-make-splash.py): the user's own picture
+shim/herolte/splash.bin

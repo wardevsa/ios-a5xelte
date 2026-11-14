@@ -1,6 +1,8 @@
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index 35fed08..df966ca 100644
 --- a/iokit/Kernel/arm/SweetFramebuffer.cpp
 +++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
-@@ -61,7 +61,17 @@
+@@ -61,7 +61,17 @@ enum {
  #define SWEET_FB_NOTIFY_TYPES           8
  #define SWEET_FB_NOTIFY_VSYNC           5
  #define SWEET_FB_VSYNC_US               16667
@@ -19,7 +21,7 @@
  #define SWEET_FB_FORMAT_BGRA            0x42475241
  
  class IOMobileFramebuffer : public IOService {
-@@ -84,6 +94,8 @@
+@@ -84,6 +94,8 @@ class AppleCLCD : public IOMobileFramebuffer {
  public:
  	uint64_t      fPhys;
  	uint32_t      fWidth, fHeight, fRowBytes;
@@ -28,7 +30,7 @@
  	uintptr_t     fPixels;          /* kernel mapping of the panel memory */
  	IOMemoryMap  *fMap;
  	SweetSurface *fSurface;         /* the panel memory as an IOSurface */
-@@ -144,6 +156,16 @@
+@@ -144,6 +156,16 @@ AppleCLCD::start(IOService *provider)
  		IOLog("SWEET FB: no boot framebuffer\n");
  		return false;
  	}
@@ -45,7 +47,7 @@
  	fLock = IOLockAlloc();
  	fClients = OSArray::withCapacity(4);
  	fSurface = sweet_surface_create_physical(fPhys, fWidth, fHeight, fRowBytes, SWEET_FB_FORMAT_BGRA);
-@@ -169,8 +191,8 @@
+@@ -169,8 +191,8 @@ AppleCLCD::start(IOService *provider)
  	setProperty("external", false);
  	setProperty("DisplayPipePlaneBaseAlignment", 64ULL, 32);
  	registerService();
@@ -56,7 +58,7 @@
  	return true;
  }
  
-@@ -309,6 +331,19 @@
+@@ -309,6 +331,19 @@ AppleCLCD::present(const uint8_t *rec)
  		if (dx < 0 || dy < 0) {
  			dx = dy = 0;
  		}
@@ -76,7 +78,7 @@
  		if (w > (int32_t)s->width - sx) {
  			w = (int32_t)s->width - sx;
  		}
-@@ -444,8 +479,8 @@
+@@ -444,8 +479,8 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
  		outCount = 1;
  		break;
  	case kSweetFBGetDisplaySize:
@@ -87,9 +89,11 @@
  		outCount = 2;
  		break;
  	case kSweetFBIsMainDisplay:
+diff --git a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/SweetHID.cpp
+index e52876f..c4d0a5f 100644
 --- a/iokit/Kernel/arm/hid/SweetHID.cpp
 +++ b/iokit/Kernel/arm/hid/SweetHID.cpp
-@@ -359,6 +359,7 @@
+@@ -359,6 +359,7 @@ protected:
  	virtual UInt32 getProductID() APPLE_KEXT_OVERRIDE { return 2; }
  private:
  	IOLock *fLock;
@@ -97,7 +101,7 @@
  	bool fDown[SWEET_TOUCH_FINGERS];
  	IOFixed fX[SWEET_TOUCH_FINGERS];
  	IOFixed fY[SWEET_TOUCH_FINGERS];
-@@ -422,6 +423,12 @@
+@@ -422,6 +423,12 @@ SweetHIDTouch::start(IOService *provider)
  	if (!fLock || !IOHIDEventService::start(provider)) {
  		return false;
  	}
@@ -110,7 +114,7 @@
  	/* The digitizer covers the main display (backboardd maps it 1:1). */
  	setProperty("DisplayIntegrated", kOSBooleanTrue);
  	setProperty("SurfaceWidth", (unsigned long long)(68 << 16), 32);	/* mm, 16.16 */
-@@ -447,8 +454,9 @@
+@@ -447,8 +454,9 @@ SweetHIDTouch::touch(int finger, bool down, int x, int y)
  
  	IOLockLock(fLock);
  	bool was = fDown[finger];

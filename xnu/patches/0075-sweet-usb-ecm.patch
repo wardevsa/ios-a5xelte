@@ -1,3 +1,5 @@
+diff --git a/bsd/dev/sweet_usb.c b/bsd/dev/sweet_usb.c
+index f300121..c21486a 100644
 --- a/bsd/dev/sweet_usb.c
 +++ b/bsd/dev/sweet_usb.c
 @@ -21,6 +21,18 @@
@@ -19,7 +21,7 @@
  
  extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
  void sweet_usb_probe(void);
-@@ -184,10 +196,25 @@
+@@ -184,10 +196,25 @@ sweet_usb_probe(void)
  #define UD_EVT_SIZE     0x1000
  #define UD_TRB_OUT      0x1000          /* ep0 OUT TRB */
  #define UD_TRB_IN       0x1010          /* ep0 IN TRB */
@@ -45,7 +47,7 @@
  static struct {
  	vm_offset_t dwc;
  	vm_offset_t dma;
-@@ -197,6 +224,15 @@
+@@ -197,6 +224,15 @@ static struct {
  	enum { EP0_SETUP, EP0_DATA, EP0_WAIT_STATUS2, EP0_WAIT_STATUS3, EP0_STATUS } state;
  	bool        data_in;        /* data stage direction */
  	uint32_t    events;
@@ -61,7 +63,7 @@
  } ud;
  
  static inline void
-@@ -250,11 +286,10 @@
+@@ -250,11 +286,10 @@ ud_epcmd(unsigned ep, uint32_t cmd, uint32_t p0, uint32_t p1, uint32_t p2)
  	return -1;
  }
  
@@ -75,20 +77,20 @@
  	volatile uint32_t *t = (volatile uint32_t *)(ud.dma + trb);
  	uint64_t bpa = ud.dma_pa + buf;
  
-@@ -271,6 +306,12 @@
+@@ -270,6 +305,12 @@ ud_start(unsigned ep, uint32_t buf, uint32_t len, uint32_t ctl)
+ 	ud_epcmd(ep, DEPCMD_STARTTRANSFER, (uint32_t)(tpa >> 32), (uint32_t)tpa, 0);
  }
  
- static void
++static void
 +ud_start(unsigned ep, uint32_t buf, uint32_t len, uint32_t ctl)
 +{
 +	ud_start_trb(ep, ep ? UD_TRB_IN : UD_TRB_OUT, buf, len, ctl);
 +}
 +
-+static void
+ static void
  ud_start_setup(void)
  {
- 	ud.state = EP0_SETUP;
-@@ -284,16 +325,32 @@
+@@ -284,16 +325,32 @@ ud_stall(void)
  	ud_start_setup();
  }
  
@@ -117,17 +119,17 @@
 +	9, 4, 1, 1, 2, 0x0a, 0x00, 0x00, 0,             /* data interface 1 alt 1: two bulk endpoints */
 +	7, 5, 0x81, 0x02, 0x00, 0x02, 0,                /* ep 0x81 bulk IN, 512 */
 +	7, 5, 0x01, 0x02, 0x00, 0x02, 0,                /* ep 0x01 bulk OUT, 512 */
-+};
+ };
+-static const char *const ud_strings[] = { NULL, "ios-sweet", "Sweet iOS (USB bring-up)", "0001" };
 +/* The host side's MAC (ECM iMACAddress); the phone's own is ..:02 */
 +static const char *const ud_strings[] = {
 +	NULL, "ios-sweet", "Sweet iOS (USB Ethernet)", "0001", "02005E77EE01",
- };
--static const char *const ud_strings[] = { NULL, "ios-sweet", "Sweet iOS (USB bring-up)", "0001" };
++};
 +static const uint8_t ud_phone_mac[ETHER_ADDR_LEN] = { 0x02, 0x00, 0x5e, 0x77, 0xee, 0x02 };
  
  static uint32_t
  ud_string(unsigned idx, uint8_t *out)
-@@ -316,6 +373,45 @@
+@@ -316,6 +373,45 @@ ud_string(unsigned idx, uint8_t *out)
  	return n;
  }
  
@@ -173,7 +175,7 @@
  static void
  ud_setup(void)
  {
-@@ -323,13 +419,16 @@
+@@ -323,13 +419,16 @@ ud_setup(void)
  	uint8_t *data = (uint8_t *)(ud.dma + UD_DATA);
  	uint8_t type = st[0], req = st[1];
  	uint16_t value = (uint16_t)(st[2] | st[3] << 8);
@@ -192,7 +194,7 @@
  		ok = false;
  	} else if (req == 6) {          /* GET_DESCRIPTOR */
  		switch (value >> 8) {
-@@ -343,12 +442,24 @@
+@@ -343,12 +442,24 @@ ud_setup(void)
  		dwc_wr(DCFG, dcfg | ((uint32_t)(value & 0x7f) << 3));
  		printf("SWEET USB: address %u\n", value & 0x7f);
  	} else if (req == 9) {          /* SET_CONFIGURATION */
@@ -218,7 +220,7 @@
  	} else {
  		ok = false;
  	}
-@@ -371,6 +482,183 @@
+@@ -371,6 +482,183 @@ ud_setup(void)
  	}
  }
  
@@ -402,7 +404,7 @@
  static void
  ud_event(uint32_t ev)
  {
-@@ -395,6 +683,18 @@
+@@ -395,6 +683,18 @@ ud_event(uint32_t ev)
  	unsigned ep = (ev >> 1) & 0x1f;
  	unsigned type = (ev >> 6) & 0xf;
  	unsigned status = (ev >> 12) & 0xf;
@@ -421,7 +423,7 @@
  	if (ep > 1) {
  		return;
  	}
-@@ -433,6 +733,7 @@
+@@ -433,6 +733,7 @@ ud_event(uint32_t ev)
  static void
  ud_thread(void *arg __unused, wait_result_t wr __unused)
  {
@@ -429,7 +431,7 @@
  	for (;;) {
  		uint32_t count = dwc_rd(GEVNTCOUNT) & 0xffff;
  		if (count) {
-@@ -440,13 +741,16 @@
+@@ -440,13 +741,16 @@ ud_thread(void *arg __unused, wait_result_t wr __unused)
  			for (uint32_t done = 0; done < count; done += 4) {
  				uint32_t ev = *(volatile uint32_t *)(ud.dma + UD_EVT + ud.evt_pos);
  				ud.evt_pos = (ud.evt_pos + 4) % UD_EVT_SIZE;
@@ -447,7 +449,7 @@
  		ud_sleep_ms(1);
  	}
  }
-@@ -467,6 +771,7 @@
+@@ -467,6 +771,7 @@ sweet_usb_gadget_start(vm_offset_t dwc)
  		return;
  	}
  	ud.dma_pa = ptoa_64(pn);

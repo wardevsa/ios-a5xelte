@@ -1,0 +1,56 @@
+diff --git a/iokit/Kernel/arm/SweetSurface.cpp b/iokit/Kernel/arm/SweetSurface.cpp
+index 2b6ce2d..39e8272 100644
+--- a/iokit/Kernel/arm/SweetSurface.cpp
++++ b/iokit/Kernel/arm/SweetSurface.cpp
+@@ -742,20 +742,39 @@ IOSurfaceRootUserClient::create(IOExternalMethodArguments *args)
+ 		OSNumber *client = OSDynamicCast(OSNumber, props->getObject("IOSurfaceAddress"));
+ 		uint64_t at = client != NULL ? client->unsigned64BitValue() : 0;
+ 		if (at != 0 && (at & PAGE_MASK) == 0 && (s->allocSize & PAGE_MASK) == 0 && s->allocSize != 0) {
+-			IOMemoryDescriptor *over = IOMemoryDescriptor::withAddressRange((mach_vm_address_t)at,
+-			    (mach_vm_size_t)s->allocSize, kIODirectionInOut, fTask);
+-			if (over != NULL && over->prepare() == kIOReturnSuccess) {
+-				s->memory = over;
+-				s->mapCache = kIOMapDefaultCache;
+-				wrapped = true;
+-				if (!sweet_surface_publish(s)) {
+-					ret = kIOReturnNoResources;
++			/*
++			 * (0332) Only as far as the pixels go: the size the layout rounds up to
++			 * can reach past the end of what the client allocated, and then nothing
++			 * is wired and the copy below is taken before the client has drawn --
++			 * the original wallpaper, 1105x1160 at 4448 bytes a row, all zero in
++			 * backboardd. Memory the client may only read is wired for reading.
++			 */
++			uint64_t need = (uint64_t)s->bytesPerRow * s->height;
++			if (s->planeCount != 0 || need == 0 || need > s->allocSize) {
++				need = s->allocSize;
++			}
++			mach_vm_size_t len = (mach_vm_size_t)((need + PAGE_MASK) & ~(uint64_t)PAGE_MASK);
++			IOReturn why[2] = { kIOReturnError, kIOReturnError };
++			const IOOptionBits ways[2] = { kIODirectionInOut, kIODirectionOut };
++			for (int w = 0; w < 2 && !wrapped; w++) {
++				IOMemoryDescriptor *over = IOMemoryDescriptor::withAddressRange((mach_vm_address_t)at, len,
++				    ways[w], fTask);
++				why[w] = over != NULL ? over->prepare() : kIOReturnNoMemory;
++				if (why[w] == kIOReturnSuccess) {
++					s->memory = over;
++					s->allocSize = (uint32_t)len;
++					s->mapCache = kIOMapDefaultCache;
++					wrapped = true;
++					if (!sweet_surface_publish(s)) {
++						ret = kIOReturnNoResources;
++					}
++				} else {
++					OSSafeReleaseNULL(over);
+ 				}
+-			} else {
+-				OSSafeReleaseNULL(over);
+ 			}
+-			IOLog("SWEET SURF: %ux%u at client address 0x%llx: %s\n", s->width, s->height, at,
+-			    wrapped ? "the surface is that memory" : "not wired, copied");
++			IOLog("SWEET SURF: %ux%u at client address 0x%llx, %llu of %u bytes: %s (read-write 0x%x, read 0x%x)\n",
++			    s->width, s->height, at, (unsigned long long)len, s->allocSize,
++			    wrapped ? "the surface is that memory" : "not wired, copied", why[0], why[1]);
+ 		}
+ 	}
+ 	if (ret == kIOReturnSuccess && !wrapped) {

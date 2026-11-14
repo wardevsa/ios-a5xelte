@@ -1,7 +1,8 @@
 diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+index 659e56a..95c2429 100644
 --- a/bsd/kern/bsd_init.c
 +++ b/bsd/kern/bsd_init.c
-@@ -927,9 +927,20 @@
+@@ -927,9 +927,20 @@ bsd_init(void)
  		if (require_rootauth) {
  			/* enforce sealedness */
  			int autherr = VNOP_IOCTL(rootvnode, FSIOC_KERNEL_ROOTAUTH, NULL, 0, vfs_context_kernel());

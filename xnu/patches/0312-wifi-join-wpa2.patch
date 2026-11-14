@@ -1,0 +1,164 @@
+diff --git a/bsd/dev/herolte_wifi.c b/bsd/dev/herolte_wifi.c
+index df7e957..8c3329a 100644
+--- a/bsd/dev/herolte_wifi.c
++++ b/bsd/dev/herolte_wifi.c
+@@ -290,8 +290,16 @@ hw_console(uint32_t console, uint32_t *done)
+ #define MSG_WL_EVENT            0xe
+ 
+ #define WLC_UP          2
++#define WLC_SET_INFRA   20
++#define WLC_GET_BSSID   23
++#define WLC_SET_SSID    26
++#define WLC_GET_RSSI    127
+ #define WLC_GET_VAR     262
+ #define WLC_SET_VAR     263
++#define WLC_SET_WSEC_PMK 268
++#define E_SET_SSID      0
++#define E_LINK          16
++#define E_PSK_SUP       46
+ #define E_ESCAN_RESULT  69
+ 
+ static vm_offset_t hw_dma;
+@@ -303,6 +311,8 @@ static uint16_t hw_resp_len;
+ static uint32_t hw_resp_id;
+ static bool hw_resp_seen;
+ static unsigned hw_ssids;
++static bool hw_link, hw_keyed;
++static int hw_joined;
+ static char hw_ssid_seen[48][33];
+ 
+ static uint16_t
+@@ -416,7 +426,15 @@ hw_event(const volatile uint8_t *pkt, uint16_t len)
+ 	}
+ 	uint32_t type = hw_get32be(pkt + 28), status = hw_get32be(pkt + 32), datalen = hw_get32be(pkt + 44);
+ 	if (type != E_ESCAN_RESULT) {
+-		printf("HEROLTE WIFI: event %u status %u\n", type, status);
++		unsigned flags = ((unsigned)pkt[26] << 8) | pkt[27];
++		printf("HEROLTE WIFI: event %u status %u reason %u flags %#x\n", type, status, hw_get32be(pkt + 36), flags);
++		if (type == E_LINK) {
++			hw_link = (flags & 1) != 0;
++		} else if (type == E_PSK_SUP) {
++			hw_keyed = status == 6;                 /* FWSUP_COMPLETED */
++		} else if (type == E_SET_SSID) {
++			hw_joined = status == 0 ? 1 : -1;
++		}
+ 		return;
+ 	}
+ 	if (status != 8) {
+@@ -536,6 +554,108 @@ hw_ioctl(uint32_t cmd, const char *name, const void *in, uint32_t in_len, void *
+ 	return hw_resp_status;
+ }
+ 
++static int
++hw_setint(const char *name, uint32_t v)
++{
++	return hw_ioctl(WLC_SET_VAR, name, &v, 4, NULL, 0);
++}
++
++/*
++ * brcmf_cfg80211_connect() with the firmware's own supplicant: WPA2-PSK, AES. The network is in the drop zone's
++ * wifi/network.txt, its name on the first line and its passphrase on the second; the passphrase is not logged.
++ */
++static void
++hw_join(void)
++{
++	static char text[256];
++	uint32_t n = hw_read_file("/private/var/herolte/wifi/network.txt", text, sizeof(text) - 1);
++	if (n == 0) {
++		printf("HEROLTE WIFI: no wifi/network.txt, no joining\n");
++		return;
++	}
++	text[n] = 0;
++	char *c = text, *line[2] = { NULL, NULL };
++	if (n >= 3 && (uint8_t)c[0] == 0xef && (uint8_t)c[1] == 0xbb && (uint8_t)c[2] == 0xbf) {
++		c += 3;                                         /* the byte order mark Notepad may write */
++	}
++	for (unsigned k = 0; *c && k < 2; k++) {
++		line[k] = c;
++		while (*c && *c != '\r' && *c != '\n') {
++			c++;
++		}
++		while (*c == '\r' || *c == '\n') {
++			*c++ = 0;
++		}
++	}
++	size_t slen = line[0] ? strlen(line[0]) : 0, plen = line[1] ? strlen(line[1]) : 0;
++	if (slen == 0 || slen > 32 || plen < 8 || plen > 63) {
++		printf("HEROLTE WIFI: wifi/network.txt: a name of %zu bytes and a passphrase of %zu; wanted 1-32 and 8-63\n", slen, plen);
++		memset(text, 0, sizeof(text));
++		return;
++	}
++	printf("HEROLTE WIFI: joining \"%s\", a passphrase of %zu characters\n", line[0], plen);
++
++	uint32_t one = 1, sup = 0;
++	int infra = hw_ioctl(WLC_SET_INFRA, NULL, &one, 4, NULL, 0);
++	int wpa = hw_setint("wpa_auth", 0x80);                 /* WPA2_AUTH_PSK */
++	int auth = hw_setint("auth", 0);                        /* open */
++	int wsec = hw_setint("wsec", 4);                        /* AES */
++	int mfp = hw_setint("mfp", 0);
++	int sup_get = hw_ioctl(WLC_GET_VAR, "sup_wpa", NULL, 0, &sup, 4);
++	int sup_set = hw_setint("sup_wpa", 1);
++	printf("HEROLTE WIFI: infra %d, wpa_auth %d, auth %d, wsec %d, mfp %d, sup_wpa %d (was %u) set %d\n", infra, wpa, auth, wsec, mfp,
++	    sup_get, sup, sup_set);
++
++	/* brcmf_wsec_pmk_le with BRCMF_WSEC_PASSPHRASE: the firmware derives the PMK */
++	uint8_t pmk[2 + 2 + 65] = { 0 };
++	uint16_t klen = (uint16_t)plen, kflags = 1;
++	memcpy(pmk, &klen, 2);
++	memcpy(pmk + 2, &kflags, 2);
++	memcpy(pmk + 4, line[1], plen);
++	int pmk_err = hw_ioctl(WLC_SET_WSEC_PMK, NULL, pmk, sizeof(pmk), NULL, 0);
++	memset(pmk, 0, sizeof(pmk));
++	volatile uint8_t *req = (volatile uint8_t *)(hw_dma + HW_IOCTL_REQ);
++	for (unsigned i = 0; i < sizeof(pmk); i++) {
++		req[i] = 0;
++	}
++
++	uint8_t mask[16] = { 0 };
++	int err = hw_ioctl(WLC_GET_VAR, "event_msgs", NULL, 0, mask, sizeof(mask));
++	static const uint8_t wanted[] = { 0, 1, 3, 5, 6, 7, 12, 16, 46, E_ESCAN_RESULT };
++	for (unsigned i = 0; i < sizeof(wanted); i++) {
++		mask[wanted[i] / 8] = (uint8_t)(mask[wanted[i] / 8] | (1u << (wanted[i] % 8)));
++	}
++	int mask_err = hw_ioctl(WLC_SET_VAR, "event_msgs", mask, sizeof(mask), NULL, 0);
++
++	/* brcmf_join_params, the SSID alone: any BSSID, any channel */
++	uint8_t join_params[4 + 32] = { 0 };
++	uint32_t sl = (uint32_t)slen;
++	memcpy(join_params, &sl, 4);
++	memcpy(join_params + 4, line[0], slen);
++	hw_link = hw_keyed = false;
++	hw_joined = 0;
++	int ssid_err = hw_ioctl(WLC_SET_SSID, NULL, join_params, sizeof(join_params), NULL, 0);
++	printf("HEROLTE WIFI: pmk %d, event_msgs %d/%d, set_ssid %d\n", pmk_err, err, mask_err, ssid_err);
++	memset(text, 0, sizeof(text));
++
++	uint64_t t0 = mach_absolute_time();
++	for (unsigned t = 0; t < 3000 && !(hw_link && hw_keyed) && hw_joined >= 0; t++) {
++		IOSleep(10);
++		hw_drain();
++	}
++	uint64_t ns = 0;
++	absolutetime_to_nanoseconds(mach_absolute_time() - t0, &ns);
++	if (hw_link && hw_keyed) {
++		uint8_t rssi[12] = { 0 }, bssid[6] = { 0 };
++		hw_ioctl(WLC_GET_RSSI, NULL, NULL, 0, rssi, sizeof(rssi));
++		hw_ioctl(WLC_GET_BSSID, NULL, NULL, 0, bssid, sizeof(bssid));
++		printf("HEROLTE WIFI: CONNECTED with WPA2 in %llu ms: %02x:%02x:%02x:%02x:%02x:%02x, %d dBm\n", ns / 1000000,
++		    bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], (int32_t)hw_get32(rssi));
++	} else {
++		printf("HEROLTE WIFI: not connected after %llu ms: link %d, keys %d, join %d\n", ns / 1000000, hw_link, hw_keyed, hw_joined);
++	}
++}
++
+ static void
+ hw_msgbuf(uint32_t shared, uint32_t ramsize, const uint8_t *clm, uint32_t clm_len)
+ {
+@@ -643,6 +763,7 @@ hw_msgbuf(uint32_t shared, uint32_t ramsize, const uint8_t *clm, uint32_t clm_le
+ 		hw_drain();
+ 	}
+ 	printf("HEROLTE WIFI: %u networks seen\n", hw_ssids);
++	hw_join();
+ }
+ 
+ void

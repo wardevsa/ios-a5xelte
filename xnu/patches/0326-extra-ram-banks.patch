@@ -1,0 +1,597 @@
+diff --git a/osfmk/arm/pmap/pmap.c b/osfmk/arm/pmap/pmap.c
+index 9f9e4aa..c029b96 100644
+--- a/osfmk/arm/pmap/pmap.c
++++ b/osfmk/arm/pmap/pmap.c
+@@ -1468,7 +1468,7 @@ pmap_set_xprr_perm(
+ {
+ 	pvh_assert_locked(pai);
+ 
+-	const vm_offset_t kva = phystokv(vm_first_phys + (pmap_paddr_t)ptoa(pai));
++	const vm_offset_t kva = phystokv(pmap_pai_to_phys(pai));
+ 	pt_entry_t * const ptep = pmap_pte(kernel_pmap, kva);
+ 
+ 	pmap_set_pte_xprr_perm(ptep, expected_perm, new_perm);
+@@ -2568,6 +2568,10 @@ pmap_virtual_region(
+ 
+ static unsigned int avail_page_count = 0;
+ static bool need_ram_ranges_init = true;
++#if defined(__arm64__)
++static uint32_t hakios_next_ram_bank = 1;
++static uint64_t hakios_next_bank_page;
++#endif
+ 
+ 
+ /**
+@@ -2600,6 +2604,10 @@ initialize_ram_ranges(void)
+ 	assert(first == (first & ~PAGE_MASK));
+ 	assert(end == (end & ~PAGE_MASK));
+ 	avail_page_count = atop(end - first);
++#if defined(__arm64__)
++	if (hakios_managed_ram.count > 1)
++		avail_page_count += (unsigned int)(hakios_managed_ram.total_pages - hakios_managed_ram.bank[0].pages);
++#endif
+ 
+ 	need_ram_ranges_init = false;
+ }
+@@ -2621,6 +2629,9 @@ pmap_free_pages_span(
+ 	if (need_ram_ranges_init) {
+ 		initialize_ram_ranges();
+ 	}
++#if defined(__arm64__)
++	if (hakios_managed_ram.count > 1) return avail_page_count;
++#endif
+ 	return (unsigned int)atop(avail_end - first_avail);
+ }
+ 
+@@ -2650,6 +2661,19 @@ pmap_next_page(
+ 		--avail_page_count;
+ 		return TRUE;
+ 	}
++#if defined(__arm64__)
++	while (hakios_next_ram_bank < hakios_managed_ram.count) {
++		const struct hakios_ram_bank *bank = &hakios_managed_ram.bank[hakios_next_ram_bank];
++		if (hakios_next_bank_page < bank->pages) {
++			*pnum = (ppnum_t)atop(bank->base) + (ppnum_t)hakios_next_bank_page++;
++			assert(avail_page_count > 0);
++			--avail_page_count;
++			return TRUE;
++		}
++		++hakios_next_ram_bank;
++		hakios_next_bank_page = 0;
++	}
++#endif
+ 	assert(avail_page_count == 0);
+ 	return FALSE;
+ }
+@@ -3928,7 +3952,7 @@ pmap_set_ptov_ap(unsigned int pai __unused, unsigned int ap __unused, boolean_t
+ {
+ #if __ARM_PTE_PHYSMAP__
+ 	pvh_assert_locked(pai);
+-	vm_offset_t kva = phystokv(vm_first_phys + (pmap_paddr_t)ptoa(pai));
++	vm_offset_t kva = phystokv(pmap_pai_to_phys(pai));
+ 	pt_entry_t *pte_p = pmap_pte(kernel_pmap, kva);
+ 
+ 	pt_entry_t tmplate = *pte_p;
+@@ -7455,6 +7479,17 @@ pmap_disconnect(
+ boolean_t
+ pmap_has_managed_page(ppnum_t first, ppnum_t last)
+ {
++#if defined(__arm64__)
++	if (hakios_managed_ram.count > 1) {
++		if (first > last) return FALSE;
++		for (uint32_t i = 0; i < hakios_managed_ram.count; ++i) {
++			const struct hakios_ram_bank *bank = &hakios_managed_ram.bank[i];
++			if (ptoa(first) < bank->base + (bank->pages << PAGE_SHIFT) && bank->base <= ptoa(last))
++				return TRUE;
++		}
++		return FALSE;
++	}
++#endif
+ 	if (ptoa(first) >= vm_last_phys) {
+ 		return FALSE;
+ 	}
+@@ -8654,7 +8689,7 @@ pmap_set_ppl_hashed_flag(const pmap_paddr_t addr)
+ MARK_AS_PMAP_TEXT void
+ pmap_clear_ppl_hashed_flag_all(void)
+ {
+-	const unsigned int last_index = pa_index(vm_last_phys);
++	const unsigned int last_index = pmap_managed_page_count();
+ 	pv_entry_t **pv_h = NULL;
+ 
+ 	for (int pai = 0; pai < last_index; ++pai) {
+@@ -8678,7 +8713,7 @@ pmap_clear_ppl_hashed_flag_all(void)
+ MARK_AS_PMAP_TEXT void
+ pmap_check_ppl_hashed_flag_all(void)
+ {
+-	const unsigned int last_index = pa_index(vm_last_phys);
++	const unsigned int last_index = pmap_managed_page_count();
+ 	pv_entry_t **pv_h = NULL;
+ 
+ 	for (int pai = 0; pai < last_index; ++pai) {
+diff --git a/osfmk/arm/pmap/pmap_data.h b/osfmk/arm/pmap/pmap_data.h
+index 2883f63..3dc23db 100644
+--- a/osfmk/arm/pmap/pmap_data.h
++++ b/osfmk/arm/pmap/pmap_data.h
+@@ -35,6 +35,7 @@
+ #define _ARM_PMAP_PMAP_DATA_H_
+ 
+ #include <stdint.h>
++#include <arm64/hakios_ram_banks.h>
+ 
+ #include <kern/ledger.h>
+ #include <mach/vm_types.h>
+@@ -74,6 +75,12 @@ extern pmap_paddr_t vm_first_phys, vm_last_phys;
+ static inline bool
+ pa_valid(pmap_paddr_t pa)
+ {
++#if defined(__arm64__)
++	if (hakios_managed_ram.count > 1) {
++		uint64_t index;
++		return hakios_ram_pa_index(&hakios_managed_ram, pa, &index);
++	}
++#endif
+ 	return (pa >= vm_first_phys) && (pa < vm_last_phys);
+ }
+ 
+@@ -97,9 +104,30 @@ pa_valid(pmap_paddr_t pa)
+ static inline unsigned int
+ pa_index(pmap_paddr_t pa)
+ {
++#if defined(__arm64__)
++	if (hakios_managed_ram.count > 1) return (unsigned int)hakios_ram_pmap_index(pa);
++#endif
+ 	return (unsigned int)atop(pa - vm_first_phys);
+ }
+ 
++static inline pmap_paddr_t
++pmap_pai_to_phys(unsigned int index)
++{
++#if defined(__arm64__)
++	if (hakios_managed_ram.count > 1) return hakios_ram_pmap_pa(index);
++#endif
++	return vm_first_phys + (pmap_paddr_t)ptoa(index);
++}
++
++static inline unsigned int
++pmap_managed_page_count(void)
++{
++#if defined(__arm64__)
++	if (hakios_managed_ram.count > 1) return (unsigned int)hakios_managed_ram.total_pages;
++#endif
++	return (unsigned int)atop(vm_last_phys - vm_first_phys);
++}
++
+ /* See the definition of pv_head_table for more information. */
+ extern pv_entry_t **pv_head_table;
+ 
+diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
+index fbc383d..f5987c2 100644
+--- a/osfmk/arm64/arm_vm_init.c
++++ b/osfmk/arm64/arm_vm_init.c
+@@ -345,6 +345,8 @@ SECURITY_READ_ONLY_LATE(unsigned long)   real_phys_size;
+ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_base = (vm_map_address_t)0;
+ SECURITY_READ_ONLY_LATE(vm_map_address_t) physmap_end = (vm_map_address_t)0;
+ 
++#include <arm64/hakios_ram_banks.inc>
++
+ /*
+  * Bounds of the kernelcache; used for accounting.
+  */
+@@ -362,7 +364,7 @@ typedef struct {
+ 	vm_size_t len;
+ } ptov_table_entry;
+ 
+-#define PTOV_TABLE_SIZE 8
++#define PTOV_TABLE_SIZE (8 + HAKIOS_RAM_BANK_MAX)
+ SECURITY_READ_ONLY_LATE(static ptov_table_entry)        ptov_table[PTOV_TABLE_SIZE];
+ SECURITY_READ_ONLY_LATE(static boolean_t)               kva_active = FALSE;
+ 
+@@ -996,9 +998,10 @@ arm_vm_page_granular_helper(vm_offset_t start, vm_offset_t _end, vm_offset_t va,
+ 		va &= ~ARM_TT_L2_OFFMASK;
+ 		pa = va - gVirtBase + gPhysBase - pa_offset;
+ 
+-		if (pa >= real_avail_end) {
+-			return;
+-		}
++		pmap_paddr_t requested_pa = start - gVirtBase + gPhysBase - pa_offset;
++		pmap_paddr_t mapping_end = hakios_ram_mapping_end(requested_pa);
++		if (!mapping_end) panic("ram_banks: physical mapping outside claimed banks");
++		if (pa >= mapping_end) return;
+ 
+ 		tte2 = arm_kva_to_tte(va);
+ 
+@@ -1023,10 +1026,10 @@ arm_vm_page_granular_helper(vm_offset_t start, vm_offset_t _end, vm_offset_t va,
+ 		}
+ 
+ 		vm_offset_t len = _end - va;
+-		if ((pa + len) > real_avail_end) {
+-			_end -= (pa + len - real_avail_end);
++		if ((pa + len) > mapping_end) {
++			_end -= (pa + len - mapping_end);
+ 		}
+-		assert((start - gVirtBase + gPhysBase - pa_offset) >= gPhysBase);
++		assert(requested_pa < mapping_end);
+ 
+ 		/* Round up to the nearest PAGE_SIZE boundary when creating mappings:
+ 		 * PAGE_SIZE may be a multiple of ARM_PGBYTES, and we don't want to leave
+@@ -1117,7 +1120,7 @@ arm_vm_page_granular_prot(vm_offset_t start, unsigned long size, pmap_paddr_t pa
+ 
+ 			tte2 = arm_kva_to_tte(align_start);
+ 
+-			if ((pa >= gPhysBase) && (pa < real_avail_end)) {
++			if (hakios_ram_mapping_end(pa) >= pa + ARM_TT_L2_SIZE) {
+ 				tmplate = (pa & ARM_TTE_BLOCK_L2_MASK) | ARM_TTE_TYPE_BLOCK
+ 				    | ARM_TTE_VALID | ARM_TTE_BLOCK_AF | ARM_TTE_BLOCK_NX
+ 				    | ARM_TTE_BLOCK_AP(pte_prot_APX) | ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY)
+@@ -1576,6 +1579,14 @@ arm_vm_physmap_init(boot_args *args)
+ 	arm_vm_physmap_slide(temp_ptov_table, (args->topOfKernelData - gPhysBase + gVirtBase),
+ 	    real_avail_end - args->topOfKernelData, AP_RWNA, 0);
+ 
++
++	/* Compact virtual aperture; never map the physical holes between banks. */
++	for (uint32_t i = 1; i < hakios_managed_ram.count; ++i) {
++		const struct hakios_ram_bank *bank = &hakios_managed_ram.bank[i];
++		vm_map_address_t synthetic_va = gVirtBase + (bank->base - gPhysBase);
++		arm_vm_physmap_slide(temp_ptov_table, synthetic_va, bank->pages << PAGE_SHIFT, AP_RWNA, 0);
++	}
++
+ 	assert((temp_ptov_table[ptov_index - 1].va + temp_ptov_table[ptov_index - 1].len) <= physmap_end);
+ 
+ 	// Sort in descending order of segment length.  LUT traversal is linear, so largest (most likely used)
+@@ -1603,6 +1614,14 @@ arm_vm_physmap_init(boot_args *args)
+ 	arm_vm_physmap_slide(temp_ptov_table, (args->topOfKernelData - gPhysBase + gVirtBase),
+ 	    real_avail_end - args->topOfKernelData, AP_RWNA, ARM64_GRANULE_ALLOW_BLOCK | ARM64_GRANULE_ALLOW_HINT); // rest of physmem
+ 
++
++	/* Compact virtual aperture; never map the physical holes between banks. */
++	for (uint32_t i = 1; i < hakios_managed_ram.count; ++i) {
++		const struct hakios_ram_bank *bank = &hakios_managed_ram.bank[i];
++		vm_map_address_t synthetic_va = gVirtBase + (bank->base - gPhysBase);
++		arm_vm_physmap_slide(temp_ptov_table, synthetic_va, bank->pages << PAGE_SHIFT, AP_RWNA, 0);
++	}
++
+ 	assert((temp_ptov_table[ptov_index - 1].va + temp_ptov_table[ptov_index - 1].len) <= physmap_end);
+ 
+ 	// Sort in descending order of segment length.  LUT traversal is linear, so largest (most likely used)
+@@ -1822,7 +1841,11 @@ init_ptpages(tt_entry_t *tt, vm_map_address_t start, vm_map_address_t end, bool
+  * space in both the aperture bound and its L1 allocation, including the
+  * ARM_LARGE_MEMORY configuration used by SWEET's non-PPL kernel.
+  */
+-#define ARM64_PHYSMAP_ALIGNMENT_PADDING (PTOV_TABLE_SIZE * ARM_TT_TWIG_SIZE)
++/*
++ * HEROLTE: the PTOV entries actually used (the boot ones plus the extra RAM banks), not PTOV_TABLE_SIZE, which grew by
++ * HAKIOS_RAM_BANK_MAX for them: 72 twigs of 32 MiB would be 2.3 GiB more of kernel VA.
++ */
++#define ARM64_PHYSMAP_ALIGNMENT_PADDING ((8 + (vm_size_t)hakios_managed_ram.count) * ARM_TT_TWIG_SIZE)
+ #endif
+ 
+ #if defined(SWEET) && !defined(A5XELTE)
+@@ -1884,8 +1907,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	 * in units of the hardware page size and should not need similar treatment.
+ 	 */
+ 	gPhysSize = mem_size = ((gPhysBase + args->memSize) & ~PAGE_MASK) - gPhysBase;
++	mem_size = hakios_ram_boot_memory_size(args, memory_size);
+ 
+-	mem_actual = args->memSizeActual ? args->memSizeActual : mem_size;
++	mem_actual = hakios_managed_ram.count > 1 ? mem_size : (args->memSizeActual ? args->memSizeActual : mem_size);
+ 
+ 	if ((memory_size != 0) && (mem_size > memory_size)) {
+ 		mem_size = memory_size;
+@@ -1898,7 +1922,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	}
+ 
+ #if defined(ARM_LARGE_MEMORY)
+-	unsigned long physmap_l1_entries = ((real_phys_size + ARM64_PHYSMAP_SLIDE_RANGE + ARM64_PHYSMAP_ALIGNMENT_PADDING) >> ARM_TT_L1_SHIFT) + 1;
++	unsigned long physmap_l1_entries = ((real_phys_size + hakios_ram_extra_bytes() + ARM64_PHYSMAP_SLIDE_RANGE + ARM64_PHYSMAP_ALIGNMENT_PADDING) >> ARM_TT_L1_SHIFT) + 1;
+ 	physmap_base = VM_MIN_KERNEL_ADDRESS - (physmap_l1_entries << ARM_TT_L1_SHIFT);
+ #else
+ 	physmap_base = phystokv(args->topOfKernelData);
+@@ -1922,10 +1946,10 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ #if defined(ARM_LARGE_MEMORY)
+ 	/* For large memory systems with no PPL such as virtual machines */
+ 	static_memory_end = phystokv(args->topOfKernelData);
+-	physmap_end = physmap_base + real_phys_size + ARM64_PHYSMAP_ALIGNMENT_PADDING;
++	physmap_end = physmap_base + real_phys_size + hakios_ram_extra_bytes() + ARM64_PHYSMAP_ALIGNMENT_PADDING;
+ #else
+ 	static_memory_end = physmap_base + mem_size + ARM64_PHYSMAP_ALIGNMENT_PADDING; // worst possible case for block alignment
+-	physmap_end = physmap_base + real_phys_size + ARM64_PHYSMAP_ALIGNMENT_PADDING;
++	physmap_end = physmap_base + real_phys_size + hakios_ram_extra_bytes() + ARM64_PHYSMAP_ALIGNMENT_PADDING;
+ #endif // ARM_LARGE_MEMORY
+ #endif
+ 
+@@ -1993,7 +2017,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	cpu_tte = (tt_entry_t *)alloc_ptpage(TRUE);
+ 	cpu_ttep = kvtophys((vm_offset_t)cpu_tte);
+ 	bzero(cpu_tte, ARM_PGBYTES);
+-	avail_end = gPhysBase + mem_size;
++	avail_end = gPhysBase + MIN(gPhysSize, mem_size);
+ 	assert(!(avail_end & PAGE_MASK));
+ 
+ #if KASAN
+diff --git a/osfmk/arm64/hakios_ram_banks.h b/osfmk/arm64/hakios_ram_banks.h
+new file mode 100644
+index 0000000..81f4f8c
+--- /dev/null
++++ b/osfmk/arm64/hakios_ram_banks.h
+@@ -0,0 +1,134 @@
++/* Shared loader/VM model for discontinuous physical RAM.
++ * Only firmware-claimed, reservation-filtered ranges may be added here.
++ * Bank order defines compact metadata indices; physical addresses need not be ordered.
++ * This model never makes a physical gap into managed memory.
++ */
++#ifndef HAKIOS_RAM_BANKS_H
++#define HAKIOS_RAM_BANKS_H
++
++#include <stdint.h>
++
++#define HAKIOS_RAM_BANK_MAX 16u     /* HEROLTE: 7 used (bank 2 and six pieces of bank 1); phystokv walks the PTOV table */
++
++struct hakios_ram_bank {
++    uint64_t base;
++    uint64_t pages;
++    uint64_t first_index;
++};
++
++struct hakios_ram_banks {
++    uint32_t count;
++    uint32_t page_shift;
++    uint64_t total_pages;
++    struct hakios_ram_bank bank[HAKIOS_RAM_BANK_MAX];
++};
++
++#if defined(KERNEL)
++extern struct hakios_ram_banks hakios_managed_ram;
++uint64_t hakios_ram_pmap_index(uint64_t address);
++uint64_t hakios_ram_pmap_pa(uint64_t index);
++void hakios_ram_set_vm_first_page(uint64_t ppnum);
++uint64_t hakios_ram_vm_page_pa(uint64_t index);
++#endif
++
++enum hakios_ram_result {
++    HAKIOS_RAM_OK = 0,
++    HAKIOS_RAM_INVALID,
++    HAKIOS_RAM_OVERLAP,
++    HAKIOS_RAM_FULL,
++    HAKIOS_RAM_OVERFLOW
++};
++
++static inline int
++hakios_ram_banks_init(struct hakios_ram_banks *table, uint32_t page_shift)
++{
++    if (page_shift < 12 || page_shift > 16) return HAKIOS_RAM_INVALID;
++    *table = (struct hakios_ram_banks){ .page_shift = page_shift };
++    return HAKIOS_RAM_OK;
++}
++
++/* Append preserves every previously assigned index. Only forward adjacency to
++ * the final bank is merged, so coalescing cannot reorder existing pages. */
++static inline int
++hakios_ram_bank_add_mode(struct hakios_ram_banks *table, uint64_t base, uint64_t bytes, int merge_adjacent)
++{
++    if (table->page_shift < 12 || table->page_shift > 16 || table->count > HAKIOS_RAM_BANK_MAX)
++        return HAKIOS_RAM_INVALID;
++    uint64_t mask = (UINT64_C(1) << table->page_shift) - 1;
++    if (!bytes || ((base | bytes) & mask)) return HAKIOS_RAM_INVALID;
++    if (bytes > UINT64_MAX - base) return HAKIOS_RAM_OVERFLOW;
++    uint64_t end = base + bytes;
++    uint64_t pages = bytes >> table->page_shift;
++    if (pages > (UINT64_MAX >> table->page_shift) - table->total_pages)
++        return HAKIOS_RAM_OVERFLOW;
++    for (uint32_t i = 0; i < table->count; ++i) {
++        const struct hakios_ram_bank *bank = &table->bank[i];
++        uint64_t bank_end = bank->base + (bank->pages << table->page_shift);
++        if (base < bank_end && bank->base < end) return HAKIOS_RAM_OVERLAP;
++    }
++    if (table->count && merge_adjacent) {
++        struct hakios_ram_bank *last = &table->bank[table->count - 1];
++        if (last->base + (last->pages << table->page_shift) == base) {
++            last->pages += pages;
++            table->total_pages += pages;
++            return HAKIOS_RAM_OK;
++        }
++    }
++    if (table->count == HAKIOS_RAM_BANK_MAX) return HAKIOS_RAM_FULL;
++    table->bank[table->count++] = (struct hakios_ram_bank){
++        .base = base, .pages = pages, .first_index = table->total_pages };
++    table->total_pages += pages;
++    return HAKIOS_RAM_OK;
++}
++
++static inline int
++hakios_ram_bank_add(struct hakios_ram_banks *table, uint64_t base, uint64_t bytes)
++{
++    return hakios_ram_bank_add_mode(table, base, bytes, 1);
++}
++
++/* Accept page-interior addresses, as pmap's pa_valid/pa_index do. */
++static inline int
++hakios_ram_pa_index(const struct hakios_ram_banks *table, uint64_t address, uint64_t *index)
++{
++    for (uint32_t i = 0; i < table->count; ++i) {
++        const struct hakios_ram_bank *bank = &table->bank[i];
++        if (address >= bank->base) {
++            uint64_t page = (address - bank->base) >> table->page_shift;
++            if (page < bank->pages) {
++                *index = bank->first_index + page;
++                return 1;
++            }
++        }
++    }
++    return 0;
++}
++
++static inline int
++hakios_ram_index_pa(const struct hakios_ram_banks *table, uint64_t index, uint64_t *address)
++{
++    if (index >= table->total_pages) return 0;
++    for (uint32_t i = 0; i < table->count; ++i) {
++        const struct hakios_ram_bank *bank = &table->bank[i];
++        if (index >= bank->first_index && index - bank->first_index < bank->pages) {
++            *address = bank->base + ((index - bank->first_index) << table->page_shift);
++            return 1;
++        }
++    }
++    return 0;
++}
++
++/* Bound a physical/DMA operation to one real contiguous bank. */
++static inline uint64_t
++hakios_ram_contiguous_bytes(const struct hakios_ram_banks *table, uint64_t address)
++{
++    for (uint32_t i = 0; i < table->count; ++i) {
++        const struct hakios_ram_bank *bank = &table->bank[i];
++        uint64_t bytes = bank->pages << table->page_shift;
++        if (address >= bank->base && address - bank->base < bytes)
++            return bytes - (address - bank->base);
++    }
++    return 0;
++}
++
++#endif
+diff --git a/osfmk/arm64/hakios_ram_banks.inc b/osfmk/arm64/hakios_ram_banks.inc
+new file mode 100644
+index 0000000..22971f0
+--- /dev/null
++++ b/osfmk/arm64/hakios_ram_banks.inc
+@@ -0,0 +1,107 @@
++/* Included by arm_vm_init.c after its physical-window globals.
++ * boot_args retains the primary contiguous bootstrap window. Only the explicit,
++ * opt-in DT bank list contributes extra pages; gaps never enlarge that window.
++ */
++#include <arm64/hakios_ram_banks.h>
++
++SECURITY_READ_ONLY_LATE(struct hakios_ram_banks) hakios_managed_ram;
++SECURITY_READ_ONLY_LATE(static uint64_t) hakios_vm_first_ram_index;
++
++uint64_t
++hakios_ram_pmap_index(uint64_t address)
++{
++    uint64_t index;
++    if (!hakios_ram_pa_index(&hakios_managed_ram, address, &index))
++        panic("ram_banks: unmanaged physical address 0x%llx", address);
++    return index;
++}
++
++uint64_t
++hakios_ram_pmap_pa(uint64_t index)
++{
++    uint64_t address;
++    if (!hakios_ram_index_pa(&hakios_managed_ram, index, &address))
++        panic("ram_banks: invalid metadata index 0x%llx", index);
++    return address;
++}
++
++void
++hakios_ram_set_vm_first_page(uint64_t ppnum)
++{
++    if (hakios_managed_ram.count > 1)
++        hakios_vm_first_ram_index = hakios_ram_pmap_index(ppnum << PAGE_SHIFT);
++}
++
++uint64_t
++hakios_ram_vm_page_pa(uint64_t index)
++{
++    if (index > UINT64_MAX - hakios_vm_first_ram_index)
++        panic("ram_banks: VM page index overflow");
++    return hakios_ram_pmap_pa(hakios_vm_first_ram_index + index);
++}
++
++static uint64_t
++hakios_ram_extra_bytes(void)
++{
++    if (hakios_managed_ram.count <= 1) return 0;
++    return (hakios_managed_ram.total_pages - hakios_managed_ram.bank[0].pages) << PAGE_SHIFT;
++}
++
++/* The primary mapping may include the KASAN shadow or an unused capped tail,
++ * whereas additional mappings must end at their own bank's exact boundary. */
++static pmap_paddr_t
++hakios_ram_mapping_end(pmap_paddr_t address)
++{
++    if (address >= gPhysBase && address < real_avail_end) return real_avail_end;
++    for (uint32_t i = 1; i < hakios_managed_ram.count; ++i) {
++        const struct hakios_ram_bank *bank = &hakios_managed_ram.bank[i];
++        uint64_t size = bank->pages << PAGE_SHIFT;
++        if (address >= bank->base && address - bank->base < size) return bank->base + size;
++    }
++    return 0;
++}
++
++static uint64_t
++hakios_ram_boot_memory_size(boot_args *args, uint64_t limit)
++{
++    /*
++     * HEROLTE: on whenever the ADT has the list (mkadt_herolte.py --bank1), boot-arg ram_banks=0 turns it off: the
++     * boot line has no room left for an opt-in. Without the list, the one boot bank, as before.
++     */
++    int enabled = 1;
++    PE_parse_boot_argn("ram_banks", &enabled, sizeof(enabled));
++    if (enabled != 1)
++        return gPhysSize;
++    DTEntry chosen;
++    void *property = NULL;
++    unsigned int length = 0;
++    if (SecureDTLookupEntry(NULL, "/chosen", &chosen) != kSuccess ||
++        SecureDTGetProperty(chosen, "hakios-ram-banks", &property, &length) != kSuccess || !property || !length)
++        return gPhysSize;
++    if (length % 16 || length / 16 > HAKIOS_RAM_BANK_MAX)
++        panic("ram_banks: malformed claimed-bank list");
++    struct { uint64_t base, bytes; } range;
++    if (hakios_ram_banks_init(&hakios_managed_ram, PAGE_SHIFT) != HAKIOS_RAM_OK)
++        panic("ram_banks: unsupported page size");
++    uint64_t remaining = limit ? (limit & ~((uint64_t)PAGE_MASK)) : UINT64_MAX;
++    for (unsigned int i = 0; i < length / 16; ++i) {
++        memcpy(&range, (const char *)property + i * 16, sizeof(range));
++        if (i == 0 && (range.base != args->physBase || range.bytes != args->memSize))
++            panic("ram_banks: primary bank differs from boot_args");
++        if (!remaining) break;
++        if (range.bytes > remaining) range.bytes = remaining;
++        /* Keep the bootstrap bank boundary even if another claim is adjacent. */
++        if (hakios_ram_bank_add_mode(&hakios_managed_ram, range.base, range.bytes, 0) != HAKIOS_RAM_OK)
++            panic("ram_banks: invalid, overlapping or overflowing bank %u", i);
++        remaining -= range.bytes;
++    }
++    if (!hakios_managed_ram.count) panic("ram_banks: no usable memory");
++#if KASAN || XNU_MONITOR
++    if (hakios_managed_ram.count > 1)
++        panic("ram_banks: extra banks require the generic non-KASAN pmap configuration");
++#endif
++    uint64_t bytes = hakios_managed_ram.total_pages << PAGE_SHIFT;
++    kprintf("ram_banks: %u claimed banks, %llu MiB managed, primary %llu MiB\n",
++            hakios_managed_ram.count, bytes >> 20, hakios_managed_ram.bank[0].pages >> (20 - PAGE_SHIFT));
++    return bytes;
++}
+diff --git a/osfmk/vm/vm_page.h b/osfmk/vm/vm_page.h
+index 90a4b3b..ccdfb4b 100644
+--- a/osfmk/vm/vm_page.h
++++ b/osfmk/vm/vm_page.h
+@@ -408,6 +408,8 @@ VMP_CS_SET_NX(
+ 
+ #if defined(__arm64__)
+ 
++#include <arm64/hakios_ram_banks.h>
++
+ extern  unsigned int vm_first_phys_ppnum;
+ 
+ struct vm_page_with_ppnum {
+@@ -422,6 +424,8 @@ static inline ppnum_t
+ VM_PAGE_GET_PHYS_PAGE(vm_page_t m)
+ {
+ 	if (m >= vm_page_array_beginning_addr && m < vm_page_array_ending_addr) {
++		if (hakios_managed_ram.count > 1)
++			return (ppnum_t)(hakios_ram_vm_page_pa((uint64_t)(m - vm_page_array_beginning_addr)) >> PAGE_SHIFT);
+ 		return (ppnum_t)((uintptr_t)(m - vm_page_array_beginning_addr) + vm_first_phys_ppnum);
+ 	} else {
+ 		return ((vm_page_with_ppnum_t)m)->vmp_phys_page;
+diff --git a/osfmk/vm/vm_resident.c b/osfmk/vm/vm_resident.c
+index 6394730..6ef6b05 100644
+--- a/osfmk/vm/vm_resident.c
++++ b/osfmk/vm/vm_resident.c
+@@ -1554,6 +1554,7 @@ pmap_startup(
+ #if defined(__arm64__)
+ 		if (i == 0) {
+ 			vm_first_phys_ppnum = phys_page;
++			hakios_ram_set_vm_first_page(phys_page);
+ 			patch_low_glo_vm_page_info((void *)vm_page_array_beginning_addr,
+ 			    (void *)vm_page_array_ending_addr, vm_first_phys_ppnum);
+ 		}

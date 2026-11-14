@@ -1,0 +1,22 @@
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index 997dd66..3dc6d44 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -235,6 +235,17 @@ AppleCLCD::start(IOService *provider)
+ 		fScaled = true;
+ 		fLogicalW = fWidth * 2 / 3;
+ 		fLogicalH = fHeight * 2 / 3;
++		/* sweetfb_lw/sweetfb_lh: another logical size (it must match the
++		 * ADT canvas). 960 px is 320 points at @3x, narrower than any
++		 * iPhone iOS 16 lays out for; 1125x2001 is 375x667 points, the
++		 * iPhone 8 / SE screen in the panel's 16:9. */
++		uint32_t lw = 0, lh = 0;
++		PE_parse_boot_argn("sweetfb_lw", &lw, sizeof(lw));
++		PE_parse_boot_argn("sweetfb_lh", &lh, sizeof(lh));
++		if (lw >= 320 && lw <= fWidth && lh >= 480 && lh <= fHeight) {
++			fLogicalW = lw;
++			fLogicalH = lh;
++		}
+ 		/* sweetfb_gpu=1: full-screen frames go through the Mali instead
+ 		 * (herolte_gpu.c), bilinear; scaledCopy() stays the fallback. */
+ 		int gpu = 0;

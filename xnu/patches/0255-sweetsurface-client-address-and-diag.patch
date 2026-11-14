@@ -1,0 +1,77 @@
+diff --git a/iokit/Kernel/arm/SweetSurface.cpp b/iokit/Kernel/arm/SweetSurface.cpp
+index c162df9..f6c1600 100644
+--- a/iokit/Kernel/arm/SweetSurface.cpp
++++ b/iokit/Kernel/arm/SweetSurface.cpp
+@@ -35,6 +35,8 @@
+ #include <IOKit/IOLocks.h>
+ #include <IOKit/system.h>
+ #include <libkern/c++/OSArray.h>
++#include <libkern/c++/OSCollectionIterator.h>
++#include <libkern/c++/OSSymbol.h>
+ #include <libkern/c++/OSDictionary.h>
+ #include <libkern/c++/OSNumber.h>
+ #include <libkern/c++/OSUnserialize.h>
+@@ -719,6 +721,21 @@ IOSurfaceRootUserClient::create(IOExternalMethodArguments *args)
+ 			ret = kIOReturnNoMemory;
+ 		} else {
+ 			bzero(mem->getBytesNoCopy(), s->allocSize);
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++			/*
++			 * A surface over the client's own memory: not mapped here, but it
++			 * must at least start with those pixels. Ignored, the surface
++			 * stayed empty for good (CoreAnimation's 180x180 icons).
++			 */
++			OSNumber *address = OSDynamicCast(OSNumber, props->getObject("IOSurfaceAddress"));
++			if (address != NULL && address->unsigned64BitValue() != 0) {
++				uint64_t want = (uint64_t)s->bytesPerRow * s->height;
++				int err = copyin((user_addr_t)address->unsigned64BitValue(), mem->getBytesNoCopy(),
++				    (vm_size_t)MIN(want, (uint64_t)s->allocSize));
++				IOLog("SWEET SURF: pixels of %ux%u taken from client address 0x%llx -> %d\n",
++				    s->width, s->height, address->unsigned64BitValue(), err);
++			}
++#endif
+ 			s->memory = mem;
+ 			s->mapCache = kIOMapDefaultCache;
+ 			if (!sweet_surface_publish(s)) {
+@@ -733,6 +750,18 @@ IOSurfaceRootUserClient::create(IOExternalMethodArguments *args)
+ 		IOLog("SWEET SURF: %s create id %u %ux%u fmt 0x%x bpe %u bpr %u planes %u size %u keys %u -> 0x%x\n",
+ 		    name, s->id, s->width, s->height, s->pixelFormat, s->bytesPerElement,
+ 		    s->bytesPerRow, s->planeCount, s->allocSize, props->getCount(), ret);
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		/* which keys a surface is asked for with, to tell who is meant to fill it */
++		OSCollectionIterator *keys = OSCollectionIterator::withCollection(props);
++		if (keys != NULL) {
++			while (OSSymbol *key = OSDynamicCast(OSSymbol, keys->getNextObject())) {
++				OSNumber *value = OSDynamicCast(OSNumber, props->getObject(key));
++				IOLog("SWEET SURF:   id %u key %s = 0x%llx\n", s->id, key->getCStringNoCopy(),
++				    value != NULL ? value->unsigned64BitValue() : 0);
++			}
++			keys->release();
++		}
++#endif
+ 	}
+ 	props->release();
+ 	if (ret != kIOReturnSuccess) {
+@@ -806,6 +835,22 @@ IOSurfaceRootUserClient::externalMethod(uint32_t selector, IOExternalMethodArgum
+ 		 * NULL+0x30.
+ 		 */
+ 		sweet_surf_log_once("sel", selector);
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		{
++			static int told;
++			if (told < 12) {
++				const uint32_t *in = (const uint32_t *)args->structureInput;
++				told++;
++				IOLog("SWEET SURF: wrap sel %u refused: scalars %u [0x%llx 0x%llx] struct %u [%x %x %x %x %x %x %x %x]\n",
++				    selector, args->scalarInputCount, arg0,
++				    args->scalarInputCount > 1 ? args->scalarInput[1] : 0, args->structureInputSize,
++				    in != NULL && args->structureInputSize >= 32 ? in[0] : 0, in != NULL && args->structureInputSize >= 32 ? in[1] : 0,
++				    in != NULL && args->structureInputSize >= 32 ? in[2] : 0, in != NULL && args->structureInputSize >= 32 ? in[3] : 0,
++				    in != NULL && args->structureInputSize >= 32 ? in[4] : 0, in != NULL && args->structureInputSize >= 32 ? in[5] : 0,
++				    in != NULL && args->structureInputSize >= 32 ? in[6] : 0, in != NULL && args->structureInputSize >= 32 ? in[7] : 0);
++			}
++		}
++#endif
+ 		return kIOReturnUnsupported;
+ 	default:
+ 		/* Values, notifications, ownership, timestamps...: accept and ignore. */

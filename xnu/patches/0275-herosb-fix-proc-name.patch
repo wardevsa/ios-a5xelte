@@ -1,0 +1,65 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+index 666c034..c743b77 100644
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -27,6 +27,8 @@ uint64_t herolte_gl_dyld_flags(void);
+ #define HGL_TARGET      "/usr/libexec/backboardd"
+ #define HGL_SHIM        "/private/var/herolte/lib/libheroeagl.dylib"
+ #define HGL_MAX_LAUNCHES 2
++#define HGL_SB_TARGET   "/System/Library/CoreServices/SpringBoard.app/SpringBoard"
++#define HGL_SB_LIB      "/private/var/herolte/lib/libherosb.dylib"
+ 
+ /*
+  * dyld only honours DYLD_* variables when AMFI allows them
+@@ -45,11 +47,13 @@ uint64_t herolte_gl_dyld_flags(void);
+ static int hgl_mode = -1;
+ static int hgl_launches;
+ static int hgl_pid = -1;        /* the backboardd that got the shim */
++static int hgl_sb_pid = -1;     /* the SpringBoard that got libherosb */
++static int hgl_sb_launches;
+ 
+ uint64_t
+ herolte_gl_dyld_flags(void)
+ {
+-	if (hgl_pid < 0 || proc_selfpid() != hgl_pid) {
++	if ((hgl_pid < 0 || proc_selfpid() != hgl_pid) && (hgl_sb_pid < 0 || proc_selfpid() != hgl_sb_pid)) {
+ 		return 0;
+ 	}
+ 	return AMFI_DYLD_OUTPUT_ALLOW_AT_PATH | AMFI_DYLD_OUTPUT_ALLOW_PATH_VARS |
+@@ -109,6 +113,23 @@ herolte_gl_env(const char *path, int pid, const char **extra, int max)
+ 		hgl_mode = 0;
+ 		PE_parse_boot_argn("herogl", &hgl_mode, sizeof(hgl_mode));
+ 	}
++	/*
++	 * boot-arg herosb=1: libherosb.dylib in SpringBoard shows the picture of the drop zone behind the home screen,
++	 * as PosterBoard has no posters here. Its first two launches only, as with the shim.
++	 */
++	int sb = 0;
++	PE_parse_boot_argn("herosb", &sb, sizeof(sb));
++	if (sb && path != NULL && strcmp(path, HGL_SB_TARGET) == 0 && max >= 1 && hgl_sb_launches < HGL_MAX_LAUNCHES) {
++		vnode_t sbvp = NULLVP;
++		if (vnode_lookup(HGL_SB_LIB, 0, &sbvp, vfs_context_kernel()) == 0) {
++			vnode_put(sbvp);
++			hgl_sb_launches++;
++			hgl_sb_pid = pid;
++			extra[0] = "DYLD_INSERT_LIBRARIES=" HGL_SB_LIB;
++			printf("HEROLTE GL: SpringBoard launch %d (pid %d): libherosb inserted\n", hgl_sb_launches, pid);
++			return 1;
++		}
++	}
+ 	if (hgl_mode == 0 || path == NULL || strcmp(path, HGL_TARGET) != 0 || max < 3) {
+ 		return 0;
+ 	}
+diff --git a/osfmk/kern/sched_prim.c b/osfmk/kern/sched_prim.c
+index c81c6b6..993c625 100644
+--- a/osfmk/kern/sched_prim.c
++++ b/osfmk/kern/sched_prim.c
+@@ -156,7 +156,7 @@ static cpumap_t sweet_fast_map = 0xf0;
+  * Herolte: Mongoose is three or four times an A53 here. launchd and mediaserverd alone use up to three CPUs, with
+  * nothing on the screen to show for it, and at BASEPRI_DEFAULT they had the fast cores before the UI.
+  */
+-extern char *proc_name_address(void *p);
++extern char *proc_name_address(struct proc *p);
+ 
+ static inline bool
+ sweet_is_hog(thread_t thread)

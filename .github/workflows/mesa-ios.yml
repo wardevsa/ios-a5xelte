@@ -1,0 +1,60 @@
+name: mesa-ios
+
+# Mesa's Panfrost (Mali-T880, Midgard) inside OSMesa for the S7's iOS
+# userland, over the HeroGPU libdrm stand-in (gpu/mesa). The artifact holds
+# the dylibs and osmesa-test; they reach the phone through the USERDATA
+# drop zone (tools/herolte-drop.py). Nothing of Apple's is in it.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [herolte, herolte-drop-v2]   # herolte-drop-v2: temporal, quitar al fusionar
+    paths:
+      - "gpu/mesa/**"
+      - "gpu/eagl/**"
+      - "gpu/hakios-gl/**"
+      - ".github/workflows/mesa-ios.yml"
+
+jobs:
+  build:
+    # Intel runners: macos-14 (arm64) jobs went unacquired for hours (Oct 2026); any Xcode cross-builds this.
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deps
+        run: |
+          brew install meson ninja bison pkg-config || true
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install -q mako pyyaml packaging setuptools meson
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
+      - name: Build
+        run: |
+          set -o pipefail
+          bash gpu/mesa/build-mesa.sh "$RUNNER_TEMP/mesa-work" out 2>&1 | tee build.log
+          MESA_INC="$RUNNER_TEMP/mesa-work/mesa/include" bash gpu/eagl/build-eagl.sh out 2>&1 | tee -a build.log
+          shasum -a 256 out/osmesa-test out/eagl_ca_test out/hero-run out/lib/* | tee out/SHA256SUMS
+      # Logs need a GitHub sign-in to read; check-run annotations are public.
+      - name: Report build errors as annotations
+        if: failure()
+        run: |
+          test -f build.log || exit 0
+          python3 - build.log <<'PY'
+          import re, sys
+          clean = [re.sub(r'\x1b\[[0-9;]*m', '', l) for l in open(sys.argv[1], errors='replace').read().splitlines()]
+          cc = re.compile(r'(:\d+:\d+: (fatal )?error:|^ld: (?!warning)|Undefined symbols|clang: error|ERROR:|AssertionError|^FAILED:|meson.build:\d+:\d+:)')
+          hits = []
+          for i, l in enumerate(clean):
+              if cc.search(l):
+                  hits.append(' | '.join(x[:250] for x in clean[i:i + 4]))
+          esc = lambda s: s.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+          for l in hits[:9]:
+              print('::error title=build::' + esc(l[:900]))
+          print('::error title=build log tail::' + esc('\n'.join(l[:300] for l in clean[-60:])[-30000:]))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: mesa-ios
+          path: out/
