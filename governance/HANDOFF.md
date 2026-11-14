@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0054 — h26 congeló (bloques 25 y 26); h28 ESCRITA (D-0043, 8/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+## Relevo vigente: H-0055 — h28 congeló (bloques 27 y 28); h29 ESCRITA (D-0043, 9/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+- **Tarea en curso: T-0012.** E-0137: el kernel vuelve de `arm_vm_init` a `arm_init` y llega justo antes de `serial_init`; el reinicio es posterior al bloque 28. BOOT = `xnu-boot-v2-s7-min12h29-20261114.img` (sha256 `8a66aedb…86b6`); EFS intacto (E-0139).
+- **Siguiente (Director):** `adb reboot`, mirar. **Congela** con un bloque nuevo (29 gris) ⇒ `serial_init` termina; el reinicio es posterior (hace falta un kernel con más marcas tras `serial_init`: `kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF)`, `kprintf`, etc.). **No congela** ⇒ el reinicio está DENTRO de `serial_init`.
+- Restaurar BOOT original (E-0009) cubierto por D-0043.
+
+## Relevo anterior: H-0054 — h26 congeló (bloques 25 y 26); h28 ESCRITA (D-0043, 8/20); teléfono en TWRP, sin reiniciar (2026-11-14)
 - **Tarea en curso: T-0012.** E-0135: el kernel supera `pmap_bootstrap` y las tablas de E/S tempranas; el reinicio es posterior al bloque 26. BOOT = `xnu-boot-v2-s7-min12h28-20261114.img` (sha256 `453009ce…4e5f`); EFS intacto (E-0136).
 - **Siguiente (Director):** `adb reboot`, mirar. **Congela** con un bloque nuevo (27 morado, 28 blanco) ⇒ el reinicio está en `serial_init` o después (h29, por construir). **No congela** ⇒ entre el bloque 26 y el 28: `arm_vm_init` terminando o el código previo a `serial_init` (h27 por construir).
 - Restaurar BOOT original (E-0009) cubierto por D-0043.

@@ -2034,3 +2034,18 @@ sha256 = "8a66aedb318c76560ab08451b64a1c4797f20ff3007b3ece059892bf4f3a86b6"
 size = 18618384
 immutable = true
 note = "Kernel 34222b5d1438516f0daab01f88c9310df60ce5c0464dad37fdd359edde75fd15 (revisión E-0121), ADT y cargador como antes; la línea difiere de min12 solo en herostop=29 (diff). Para saber si el reinicio está dentro de serial_init (no congela) o después (congela)."
+
+[[evidence]]
+id = "E-0139"
+title = "Tanda amplia D-0043, imagen 9: BOOT del S7 escrito con xnu-boot-v2-s7-min12h29-20261114.img (kernel 0347, herostop=29) y leído de vuelta (sha256 8a66aedb…86b6); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min12h29-out.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "f7ff5e02fe422cc8dccd04c0cdb96d61cb2528621fc68446f9469865be4769e9"
+size = 727
+immutable = true
+note = "Solo escritura y lectura de vuelta (D-0043; hash registrado antes en E-0138). Difiere de min12 solo en herostop=29. El primer intento esperó a una conexión estable de adb."
