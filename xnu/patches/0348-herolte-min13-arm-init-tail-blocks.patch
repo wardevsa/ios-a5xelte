@@ -1,0 +1,85 @@
+diag(min13): progress blocks 30-40 through the rest of arm_init, and keep the early console alive after serial_init
+
+min12h29 showed a black screen with only block 29 (drawn right after serial_init): the real console cleared the framebuffer, so the earlier text and blocks are gone, but the kernel does reach and pass serial_init. Add blocks after each remaining step of arm_init (kprintf startup 30/31, PE_create_console 32, PE_init_printf 33, cpu_machine_idle_init 34, PE_init_platform(TRUE) 35, ml_map_cpu_pio 36, cpu_timebase_init 37, PE_init_cpu+fiq_context_init 38, dram DT parse 39, just before machine_startup 40) and do not turn the early console off after serial_init on A5XELTE (it would hide those blocks and any panic). Drawing only.
+
+--- a/osfmk/arm/arm_init.c	2026-11-14 22:27:58.960908388 +0100
++++ b/osfmk/arm/arm_init.c	2026-11-14 22:27:58.978601718 +0100
+@@ -586,11 +586,15 @@
+ 	sweet_early_mark(19, "serial_init returned");
+ 	sweet_early_block(29, 0xffa9a9a9);
+ 	kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF);
++	sweet_early_block(30, 0xffff4500);
+ 	kprintf("kprintf initialized\n");
++	sweet_early_block(31, 0xffffd700);
+ 	sweet_early_mark(20, "kprintf startup complete");
++#if !defined(A5XELTE)
+ 	if (serial_exists) {
+ 		sweet_early_disable();
+ 	}
++#endif
+ 
+ 	serialmode = 0;
+ 	if (PE_parse_boot_argn("serial", &serialmode, sizeof(serialmode))) {
+@@ -631,9 +635,11 @@
+ 		disableConsoleOutput = FALSE;     /* Allow printfs to happen */
+ 	}
+ 	PE_create_console();
++	sweet_early_block(32, 0xff00ff7f);
+ 
+ 	/* setup console output */
+ 	PE_init_printf(FALSE);
++	sweet_early_block(33, 0xff00bfff);
+ 
+ #if __arm64__
+ #if DEBUG
+@@ -642,8 +648,10 @@
+ #endif
+ 
+ 	cpu_machine_idle_init(TRUE);
++	sweet_early_block(34, 0xffff1493);
+ 
+ 	PE_init_platform(TRUE, &BootCpuData);
++	sweet_early_block(35, 0xff7fff00);
+ 
+ #if __arm64__
+ 	extern bool cpu_config_correct;
+@@ -652,6 +660,7 @@
+ 	}
+ 
+ 	ml_map_cpu_pio();
++	sweet_early_block(36, 0xffffa500);
+ 
+ #if APPLE_ARM64_ARCH_FAMILY
+ 	configure_late_apple_regs();
+@@ -660,6 +669,7 @@
+ #endif
+ 
+ 	cpu_timebase_init(TRUE);
++	sweet_early_block(37, 0xff9370db);
+ 
+ #if KPERF
+ 	/* kptimer_curcpu_up() must be called after cpu_timebase_init */
+@@ -668,6 +678,7 @@
+ 
+ 	PE_init_cpu();
+ 	fiq_context_init(TRUE);
++	sweet_early_block(38, 0xff20b2aa);
+ 
+ 
+ #if HIBERNATION
+@@ -696,6 +707,7 @@
+ 
+ 	gDramBase = *dram_base;
+ 	gDramSize = *dram_size;
++	sweet_early_block(39, 0xffdc143c);
+ 
+ 	/*
+ 	 * Initialize the stack protector for all future calls
+@@ -709,6 +721,7 @@
+ 	 * against string vulnerabilities
+ 	 */
+ 	__stack_chk_guard &= ~(0xFFULL << 8);
++	sweet_early_block(40, 0xffffffff);
+ 	machine_startup(args);
+ }
+ 

@@ -2049,3 +2049,18 @@ sha256 = "f7ff5e02fe422cc8dccd04c0cdb96d61cb2528621fc68446f9469865be4769e9"
 size = 727
 immutable = true
 note = "Solo escritura y lectura de vuelta (D-0043; hash registrado antes en E-0138). Difiere de min12 solo en herostop=29. El primer intento esperó a una conexión estable de adb."
+
+[[evidence]]
+id = "E-0140"
+title = "Observación de min12h29 (Director): pantalla negra con UN solo bloque claro a la altura del botón de encendido y sin texto: serial_init borró el framebuffer y el kernel llegó al bloque 29 (justo después de serial_init) y se congeló"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min12h29-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "fd87b931f2c0c98e88c2657e1aaa32789a0187558381d35f6a2d20bd52cf9675"
+size = 415
+immutable = true
+note = "El bloque 29 (gris 0xa9a9a9, x=1300, y=1016) se dibuja DESPUÉS de serial_init; lo anterior (texto y bloques 0-28) desapareció: la consola de vídeo real (serial_init/PE_create_console) limpia el framebuffer. No es un fallo: es el cambio de consola. Conclusión: serial_init termina bien y el reinicio es posterior al bloque 29. Sin vídeo."

@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0055 — h28 congeló (bloques 27 y 28); h29 ESCRITA (D-0043, 9/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+## Relevo vigente: H-0056 — h29: pantalla negra con un bloque (serial_init pasa y limpia la consola); 0348 (bloques 30-40 en el resto de arm_init) en CI (2026-11-14)
+- **Tarea en curso: T-0012** (D-0043, 9/20). E-0140: el kernel supera `serial_init` (el bloque 29 se dibuja después y la consola real borró lo anterior); el reinicio es posterior.
+- **Hecho:** 0348 (bloques 30-40 tras cada paso restante de arm_init y consola temprana viva en A5XELTE); publicado en `mio`; CI en curso. Luego: revisión D-0043 (solo `osfmk/arm/arm_init.c`), imágenes herostop 35/40 etc.
+- **Más allá de arm_init** (machine_startup → kernel_bootstrap → STARTUP_SUB_*) hay que marcar ficheros fuera de la lista blanca de D-0043 (`osfmk/arm/model_dep.c`, `osfmk/kern/startup.c`): pedir al Director ampliarla. También `-v` (verbose) en la línea de arranque para ver el log de kernel (D-0043 no lo cubre).
+- Restaurar BOOT original (E-0009) cubierto por D-0043.
+
+## Relevo anterior: H-0055 — h28 congeló (bloques 27 y 28); h29 ESCRITA (D-0043, 9/20); teléfono en TWRP, sin reiniciar (2026-11-14)
 - **Tarea en curso: T-0012.** E-0137: el kernel vuelve de `arm_vm_init` a `arm_init` y llega justo antes de `serial_init`; el reinicio es posterior al bloque 28. BOOT = `xnu-boot-v2-s7-min12h29-20261114.img` (sha256 `8a66aedb…86b6`); EFS intacto (E-0139).
 - **Siguiente (Director):** `adb reboot`, mirar. **Congela** con un bloque nuevo (29 gris) ⇒ `serial_init` termina; el reinicio es posterior (hace falta un kernel con más marcas tras `serial_init`: `kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF)`, `kprintf`, etc.). **No congela** ⇒ el reinicio está DENTRO de `serial_init`.
 - Restaurar BOOT original (E-0009) cubierto por D-0043.
