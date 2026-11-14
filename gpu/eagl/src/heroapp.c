@@ -14,6 +14,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <string.h>
+#include <unistd.h>
 
 extern void herodrm_log(const char *format, ...);
 extern void NSSetUncaughtExceptionHandler(void (*handler)(id));
@@ -120,9 +121,29 @@ preview_for_view(id self, SEL command, id view)
    UIGraphicsBeginImageContextWithOptions((hero_size){ bounds.w, bounds.h }, false, 2.0);
    void *context = UIGraphicsGetCurrentContext();
    if (context != NULL) {
-      CGContextTranslateCTM((CGContextRef)context, -bounds.x, -bounds.y);
-      id layer = ((id (*)(id, SEL))objc_msgSend)(view, sel_registerName("layer"));
-      ((void (*)(id, SEL, void *))objc_msgSend)(layer, sel_registerName("renderInContext:"), context);
+      /*
+       * (2026-11-14) -renderInContext: draws only this process's layers: the posters are drawn by their extensions
+       * (remote layers), so the gallery's previews came out black. -drawViewHierarchyInRect:afterScreenUpdates: asks
+       * the render server (backboardd, which has OpenGL ES) for the picture, remote layers included; if it says no,
+       * the old way. DROP_DIR preview.cpu keeps the old way only.
+       */
+      static int cpu_only = -1;
+      if (cpu_only < 0)
+         cpu_only = access("/private/var/herolte/preview.cpu", F_OK) == 0;
+      signed char drawn = 0;
+      if (!cpu_only) {
+         drawn = ((signed char (*)(id, SEL, hero_rect, signed char))objc_msgSend)(view,
+            sel_registerName("drawViewHierarchyInRect:afterScreenUpdates:"), (hero_rect){ 0, 0, bounds.w, bounds.h }, 1);
+      }
+      static unsigned told;
+      if (told++ < 6)
+         herodrm_log("PosterBoard: preview %.0fx%.0f %s", bounds.w, bounds.h,
+            drawn ? "from the render server" : "drawn here (renderInContext)");
+      if (!drawn) {
+         CGContextTranslateCTM((CGContextRef)context, -bounds.x, -bounds.y);
+         id layer = ((id (*)(id, SEL))objc_msgSend)(view, sel_registerName("layer"));
+         ((void (*)(id, SEL, void *))objc_msgSend)(layer, sel_registerName("renderInContext:"), context);
+      }
    }
    id image = UIGraphicsGetImageFromCurrentImageContext();
    UIGraphicsEndImageContext();
