@@ -2004,3 +2004,33 @@ sha256 = "c0ea00c047a912c31bf92549635d024bbfb4968640b20bed00821c2791019ae4"
 size = 727
 immutable = true
 note = "Solo escritura y lectura de vuelta (D-0043; hash registrado antes en E-0130). Difiere de min12 solo en herostop=28 (diff comprobado). El primer intento esperó a que adb viera el teléfono (reenumeración USB); el segundo escribió."
+
+[[evidence]]
+id = "E-0137"
+title = "Observación de min12h28 (Director): congela con dos bloques nuevos (violeta = 27 tras volver de arm_vm_init, blanco = 28 antes de serial_init), sin errores ni líneas A5V nuevas: el reinicio es posterior al bloque 28 (en serial_init o después)"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min12h28-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "6c6c7666f8e432cb6fc29ef2a98cb3c2614b6061fd87e6c14718efc23e100e41"
+size = 386
+immutable = true
+note = "Coherente con 0343/0345: 27 = 0x9932cc (violeta), 28 = 0xffffffff (blanco). arm_vm_init termina y devuelve el control a arm_init. Sin vídeo."
+
+[[evidence]]
+id = "E-0138"
+title = "Imagen preparada (kernel 0347, D-0043): xnu-boot-v2-s7-min12h29-20261114 = min12 + herostop=29; 47 PASS constructor y 58 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run13-min12/xnu-boot-v2-s7-min12h29-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "8a66aedb318c76560ab08451b64a1c4797f20ff3007b3ece059892bf4f3a86b6"
+size = 18618384
+immutable = true
+note = "Kernel 34222b5d1438516f0daab01f88c9310df60ce5c0464dad37fdd359edde75fd15 (revisión E-0121), ADT y cargador como antes; la línea difiere de min12 solo en herostop=29 (diff). Para saber si el reinicio está dentro de serial_init (no congela) o después (congela)."
