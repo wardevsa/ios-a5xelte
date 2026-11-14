@@ -446,3 +446,19 @@ rationale = "Primer peldaño real en el hardware (N2 de menor huella): comprobar
 consequences = "ALCANCE EXACTO (lectura del ingeniero del texto de la solicitud §7): escribir SOLO la imagen xnu-boot-v2-s7-min-20261114.img (SHA-256 07ddfa069c7f53936964e05f174ddced6a75b6ff690180e648a082c941115db3, 18 618 384 bytes) en la partición BOOT (by-name/BOOT = /dev/block/sda5), desde TWRP, con tools/herolte-flash-boot.sh, y leer del teléfono BOOT y EFS (solo lectura) para comprobarlos antes y después; vuelta atrás con el BOOT original (E-0009, sha256 adc519d0f16fd314ea05b072820a81c3a623db2ba446397c87c7ed70776c3348), que también queda autorizada como escritura de BOOT si hace falta restaurar. Se acepta que SYSTEM y USERDATA no están verificados porque la fase 1 no los toca. NO autoriza: ninguna otra imagen (la candidata normal, fase 3, exige otra autorización con su hash), escribir EFS, RECOVERY ni bootloaders (AGENTS.md; regla X), escribir en USERDATA ni en /sdcard, ni usar Download/Odin. El reinicio para el arranque y la observación los hace el Director con la pantalla grabada."
 reversal = "Restaurar BOOT con el original verificado (docs/S7GE_FLASH_PROCEDURE.md §4)."
 
+[[decision]]
+id = "D-0034"
+title = "Autorización roja: segundo intento del primer arranque N2 — escribir xnu-boot-v2-s7-min2-20261114.img (variante mínima + vm_compression_limit=98304 vm_compressor=2) en la partición BOOT del S7 desde TWRP"
+date = "2026-11-14"
+scope = "operation"
+status = "APPROVED"
+proposer = "ingeniero"
+approved_by = "director"
+approval_date = "2026-11-14"
+approval_ref = "Mensaje del Director (PioXI), 2026-11-14: 'Autorizo min2, firmado PioXI'. Se refiere a la candidata xnu-boot-v2-s7-min2-20261114.img propuesta en docs/S7GE_FIRST_BOOT_ANALYSIS.md §6 y E-0045 (SHA-256 595316aae927b3e7c960301790fa34557e5a296073a29df62522b67050edae21), con el mismo alcance que la fase 1 (D-0033)"
+authorizes = ["device-write-boot", "device-read"]
+valid_until = "2026-11-16"
+rationale = "El primer arranque (D-0033, imagen mínima 1) hizo panic en kmem_range_init; la causa más probable es la ausencia de vm_compression_limit con un ADT de 2 GiB (S7GE_FIRST_BOOT_ANALYSIS.md). Este intento cambia una sola variable."
+consequences = "ALCANCE EXACTO: escribir SOLO la imagen xnu-boot-v2-s7-min2-20261114.img (SHA-256 595316aae927b3e7c960301790fa34557e5a296073a29df62522b67050edae21, 18 618 384 bytes) en BOOT (by-name/BOOT = /dev/block/sda5), desde TWRP, con tools/herolte-flash-boot.sh, leyendo BOOT y EFS del teléfono (solo lectura) antes y después; vuelta atrás con el BOOT original (E-0009, adc519d0…3348), también autorizada. NO autoriza ninguna otra imagen, escribir EFS, RECOVERY ni bootloaders, escribir en USERDATA ni /sdcard, ni cambiar el ADT. El reinicio y la observación los hace el Director con la pantalla grabada; con el panic anterior en bucle, el reinicio no es necesario para escribir (el teléfono debe estar en TWRP)."
+reversal = "Restaurar BOOT con el original verificado (S7GE_FLASH_PROCEDURE.md §4)."
+
