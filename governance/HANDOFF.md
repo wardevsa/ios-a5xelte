@@ -8,7 +8,16 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0008 — T-0025 cerrada; sudo/montaje/compilación pesada/imágenes de prueba son VERDES (D-0025), 2026-11-14
+## Relevo vigente: H-0009 — el Director delega más autonomía (D-0028); T-0028 en curso (2026-11-14)
+- **D-0028 (Director, sus palabras):** el ingeniero y la jefatura técnica son más autónomos; el Director lee todo e interviene de forma extraordinaria. Aplicación: `delete-archived` (nivel A) para borrar temporales YA archivados con hash verificado, por ruta exacta. **Sigue rojo/del Director:** el teléfono, reglas X y `AGENTS.md`, borrado general, publicar/CI en el repositorio público, R2 (D-0005), host-config-change. Las directivas de la jefatura son dirección técnica; una acción C solo la cubre una decisión del Director.
+- **Hecho hoy:** T-0025 cerrada (E-0031/E-0032), T-0026 (D-0025), D-0027 ejecutado (E-0033: 6,2 → 29,5 GiB libres; la imagen y `r3/work` siguen en NTFS), T-0019 (E-0034: imagen anterior archivada, sha256 = E-0010).
+- **En curso: T-0028** (ronda completa de 49 mutantes sobre rev3, guardia de disco). Ver `resume` de la tarea.
+- **Esperas:** T-0004 (R2: D-0005), T-0016/T-0023 (arquitectura). El S7 sigue sin tocarse; sin L3/L4 de esta unidad.
+- Contraseña de sudo: el ingeniero no la tiene; los comandos con sudo los ejecuta el Director.
+
+---
+
+## Relevo anterior: H-0008 — T-0025 cerrada; sudo/montaje/compilación pesada/imágenes de prueba son VERDES (D-0025), 2026-11-14
 - **T-0025 hecha:** verify real del Director: `ROOT_HFSPLUS_LAB_VALID_CANDIDATE` (`lab-full-xnu.img.valid`), sha256 `747d0245…ec27f` idéntico antes, después y en la copia de NTFS (E-0031; salidas en E-0032). Contiene binarios de Apple: no va a git. **No se ha arrancado en ningún sitio** (nivel L2, sin L3/L4). Faltan los 2 ficheros `U+0E33` (KI-0006); los 195 `NAME-NORMALIZED` son avisos (KI-0007).
 - **D-0025 (Director, 2026-11-14):** `privileged-or-mount` y la nueva `heavy-compile` pasan a nivel A; D-0022 y D-0021 quedan sustituidas. **No** cambia: borrar/mover datos, publicar/CI, todo lo del teléfono (siguen rojos), ni **R2** (D-0005: sigue sin autorizar; hay que pedir al Director que lo diga expresamente). El ingeniero **no tiene sudo** (pide contraseña): ejecuta el Director los comandos con sudo, o la sesión debe disponer de él. Las guardas de `img_common.sh`/`guard.py` no se relajan.
 - **T-0026 hecha** (como D-0025, no como "tres niveles nuevos": la estructura A/B/C/X ya son los tres colores).

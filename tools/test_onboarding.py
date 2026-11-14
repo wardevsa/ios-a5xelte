@@ -64,6 +64,7 @@ class Onboarding(unittest.TestCase):
         c = tg.make_clone(tempfile.mkdtemp(prefix='gov-resume.', dir=self.tmp))                      # its own clone: this test changes state
         g = lambda *a: self.gov(*a, cwd=c); git = lambda *a: self.sh(['git', '-c', 'commit.gpgsign=false'] + list(a), cwd=c)
         tp = os.path.join(c, 'governance', 'data', 'tasks.toml')
+        t0 = open(tp, encoding='utf-8').read(); open(tp, 'w', encoding='utf-8').write(t0.replace('status = "in_progress"', 'status = "ready"'))   # una tarea real en curso haria que `next` la reanudase
         with open(tp, 'a', encoding='utf-8') as f:         # a spare ready task so "another one is offered" does not depend on how many real ones are left
             f.write('\n[[task]]\nid = "T-0900"\ntitle = "tarea de relleno del simulacro"\nstatus = "ready"\npriority = 99\nowner = "ingeniero"\ndepends_on = []\nactions = ["docs-write"]\nacceptance = "sin efecto"\n')
             f.write('\n[[task]]\nid = "T-0901"\ntitle = "tarea verde del simulacro (siempre la primera)"\nstatus = "ready"\npriority = 0\nowner = "ingeniero"\ndepends_on = []\nactions = ["docs-write"]\nacceptance = "sin efecto"\n')

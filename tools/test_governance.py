@@ -59,6 +59,7 @@ class Base(unittest.TestCase):
         # Las pruebas de autorización usan T-0007 como tarea ROJA SIN AUTORIZAR. T-0007 real ya se ejecutó (D-0023): en la copia temporal se
         # le devuelve el estado de fixture, para que las pruebas no dependan de cómo evolucione la cola real.
         tp = os.path.join(self.d, 'governance', 'data', 'tasks.toml')
+        t0 = open(tp, encoding='utf-8').read(); open(tp, 'w', encoding='utf-8').write(t0.replace('status = "in_progress"', 'status = "ready"'))   # una tarea real en curso no debe contaminar las pruebas
         mutate(tp, 'task', 'T-0007', 'status', '"blocked"'); mutate(tp, 'task', 'T-0007', 'blocked_on', '"fixture de pruebas"')
         mutate(tp, 'task', 'T-0007', 'authorization_ref', None); mutate(tp, 'task', 'T-0007', 'requires_decisions', None); mutate(tp, 'task', 'T-0007', 'evidence', '["E-0011"]')
         self.render()                                              # las vistas generadas siguen al dato (las pruebas de independencia comprueban 'render --check')
