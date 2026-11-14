@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0061 — min15 (kernel 0350: lista de fases en 3 columnas) ESCRITA (D-0043/D-0045, 15/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+## Relevo vigente: H-0062 — min15v (min15 + `-v`, kernel 0350) ESCRITA (D-0046, 16/20); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** E-0169: min15 llega a PE_lockdown_iokit (64 fases); el reinicio está en PE_lockdown_iokit/vm_set_restrictions/kperf_init_early/bsd_init o más allá. BOOT = `xnu-boot-v2-s7-min15v-20261114.img` (sha256 `79fdf35c…94f5`); EFS intacto (E-0172).
+- **Qué mirar (Director, tras `adb reboot`):** con `-v` XNU escribe el LOG del kernel en la pantalla en texto normal (líneas largas, muchas; pueden pasar rápido). Copiar: (1) cualquier línea con `panic`/`Panic`/`error`/`fail`; (2) las ÚLTIMAS líneas antes de que la pantalla se reinicie; (3) si hay un `A5 XNU PANIC`. Si se ve demasiado rápido, hacer vídeo corto o varias fotos; yo puedo sacar fotogramas con `tools/herolte-video-frames.sh`.
+- Restaurar BOOT original (E-0009) cubierto por D-0046.
+
+## Relevo anterior: H-0061 — min15 (kernel 0350: lista de fases en 3 columnas) ESCRITA (D-0043/D-0045, 15/20); teléfono en TWRP, sin reiniciar (2026-11-14)
 - **Tarea en curso: T-0012.** E-0165: min14 listó 36 fases hasta thread_init (tope de pantalla, slot 76) y luego start.s volvió a ejecutarse (reinicio); sin pánico visible. BOOT = `xnu-boot-v2-s7-min15-20261114.img` (sha256 `7337370f…5675`); EFS intacto (E-0168).
 - **Qué mirar (Director, tras `adb reboot`):** la lista de nombres ahora CONTINÚA en una segunda columna (a la izquierda de la primera, a partir de ~x=660) y una tercera (x≈20) cuando se llena la primera. El ÚLTIMO nombre de la última columna dice dónde se reinicia. Copiar los nombres de la 2.ª y 3.ª columna (de arriba abajo). Si hay `A5 XNU PANIC`, copiarlo literal.
 - Fases esperadas tras thread_init: restartable_init, workq_init, turnstiles_init, mach_init_activity_id, exception_init, sfi_init (si CONFIG_SCHED_SFI), kernel_thread_create, load_context - done; luego kernel_bootstrap_thread: idle_thread_create, sched_startup, thread_daemon_init, thread_bind, mapping_adjust, …

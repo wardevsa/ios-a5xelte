@@ -2514,3 +2514,18 @@ sha256 = "79fdf35c90b22d5fc5f1824af7e18dab6f88c38c426bc5c24ea493592e8794f5"
 size = 18620432
 immutable = true
 note = "Mismo kernel adfe1249ce911aaa2fcc8e4b304368fa2e31c3c334f867a9fecb87a8268d7b6b (E-0166), ADT y cargador. Difiere de min15 SOLO en el argumento '-v' (diff). '-v' hace que XNU escriba kprintf/printf en la consola de texto del framebuffer: veríamos el log de bsd_init, IOKit y cualquier mensaje previo al reinicio. Sustituye al intento E-0170, revertido (mi verificación independiente falló por la sintaxis de --expect-arg -v y no abortó)."
+
+[[evidence]]
+id = "E-0172"
+title = "Tanda D-0043/D-0045/D-0046, imagen 16: BOOT del S7 escrito con xnu-boot-v2-s7-min15v-20261114.img (kernel 0350, línea de min2 + -v) y leído de vuelta (sha256 79fdf35c…94f5); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min15v-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ed885a00d12082fe23b8355db6438ba5f0d618b06005d609764abd211cfa85b8"
+size = 725
+immutable = true
+note = "Solo escritura y lectura de vuelta (hash registrado antes en E-0171; revisión del kernel E-0166; autorización D-0046 del argumento -v)."
