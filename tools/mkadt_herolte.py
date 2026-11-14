@@ -30,6 +30,28 @@ def set_prop(node, name, value):
     node.props.append((name, 0, value))
 
 
+def add_haptics(root):
+    """/product/haptics as the iPhone X's DeviceTree.d22ap has it (16.7.16): with
+    closed-loop, MobileGestalt's DeviceSupportsClosedLoopHaptics, Darwin plays its
+    vibrations and feedbacks as waveforms on the audio plug-in's "Actuator"
+    (gpu/hakios-audio), whose samples go to the motor (/dev/hakios-haptic).
+    Without it Darwin looks for an IOKit vibrator the iPhone X has not and stays
+    still. Idempotent."""
+    product = child(root, 'product')
+    if any(c.prop('name') == mkadt.cstr('haptics') for c in product.children):
+        return
+    def phandles(n):
+        yield int.from_bytes(n.prop('AAPL,phandle') or b'\0\0\0\0', 'little')
+        for c in n.children:
+            yield from phandles(c)
+    handle = max(phandles(root)) + 1
+    product.children.append(mkadt.node('haptics', [
+        ('AAPL,phandle', mkadt.u32(handle)),
+        ('closed-loop', mkadt.u32(1)),
+        ('supports-3rd-party-haptics', mkadt.u32(1)),
+    ]))
+
+
 def child(node, name):
     for candidate in node.children:
         if candidate.prop('name') == mkadt.cstr(name):
@@ -91,6 +113,7 @@ def build(canvas=(FB_WIDTH, FB_HEIGHT), dram=(DRAM_BASE, DRAM_SIZE), scale=3):
     # into 10-bit 'w30r'/'b3a8' surfaces, which CoreAnimation over our OpenGL ES
     # never shows (Safari's pages and the stock wallpapers black, boot-0317).
     set_prop(child(root, 'product'), 'artwork-display-gamut', mkadt.cstr('sRGB'))
+    add_haptics(root)
     cpus = child(root, 'cpus')
     cpu0 = child(cpus, 'cpu0')
     # S-Boot starts on the Cortex-A53 "Apollo" cluster: MPIDR 0x100..0x103
