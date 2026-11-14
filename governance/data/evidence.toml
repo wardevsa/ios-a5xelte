@@ -2469,3 +2469,18 @@ sha256 = "7337370f5e10320ef8c4e54079f0de8d690ae37728ac3e3a2f5dcc85a2eb5675"
 size = 18620432
 immutable = true
 note = "Kernel adfe1249ce911aaa2fcc8e4b304368fa2e31c3c334f867a9fecb87a8268d7b6b (revisión E-0166), ADT dc817436… y cargador 0a68abbd… como antes; línea idéntica a min2 (diff)."
+
+[[evidence]]
+id = "E-0168"
+title = "Tanda D-0043/D-0045, imagen 15: BOOT del S7 escrito con xnu-boot-v2-s7-min15-20261114.img (kernel 0350, sin herostop) y leído de vuelta (sha256 7337370f…5675); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min15-out.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "11a84df42461dcafad8133314ce2fc64d39a8cdd7ae48f3928289abafcee536c"
+size = 724
+immutable = true
+note = "Solo escritura y lectura de vuelta (hash registrado antes en E-0167; revisión del kernel E-0166). Línea idéntica a min2."

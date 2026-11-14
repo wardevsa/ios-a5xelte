@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0060 — h53 llegó a la fase 'kmem' (entradas STARTUP de KMEM); min14 SIN herostop ESCRITA (D-0043/D-0045, 14/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+## Relevo vigente: H-0061 — min15 (kernel 0350: lista de fases en 3 columnas) ESCRITA (D-0043/D-0045, 15/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+- **Tarea en curso: T-0012.** E-0165: min14 listó 36 fases hasta thread_init (tope de pantalla, slot 76) y luego start.s volvió a ejecutarse (reinicio); sin pánico visible. BOOT = `xnu-boot-v2-s7-min15-20261114.img` (sha256 `7337370f…5675`); EFS intacto (E-0168).
+- **Qué mirar (Director, tras `adb reboot`):** la lista de nombres ahora CONTINÚA en una segunda columna (a la izquierda de la primera, a partir de ~x=660) y una tercera (x≈20) cuando se llena la primera. El ÚLTIMO nombre de la última columna dice dónde se reinicia. Copiar los nombres de la 2.ª y 3.ª columna (de arriba abajo). Si hay `A5 XNU PANIC`, copiarlo literal.
+- Fases esperadas tras thread_init: restartable_init, workq_init, turnstiles_init, mach_init_activity_id, exception_init, sfi_init (si CONFIG_SCHED_SFI), kernel_thread_create, load_context - done; luego kernel_bootstrap_thread: idle_thread_create, sched_startup, thread_daemon_init, thread_bind, mapping_adjust, …
+- Restaurar BOOT original (E-0009) cubierto por D-0045.
+
+## Relevo anterior: H-0060 — h53 llegó a la fase 'kmem' (entradas STARTUP de KMEM); min14 SIN herostop ESCRITA (D-0043/D-0045, 14/20); teléfono en TWRP, sin reiniciar (2026-11-14)
 - **Tarea en curso: T-0012.** E-0163: kmem_init() termina y se anuncian las entradas STARTUP de KMEM (entre ellas kmem_range_init). herostop=53 solo prueba que se llegó al 53. BOOT = `xnu-boot-v2-s7-min14-20261114.img` (sha256 `1a0c4d20…0073b`); EFS intacto (E-0164).
 - **Qué mirar (Director, tras `adb reboot`):** los nombres de fase irán apareciendo; **si el reinicio es un PÁNICO, `A5 XNU PANIC: …` quedará en pantalla** (la consola temprana sigue viva; en min10/min11 los pánicos se quedaron): copiarlo literal. Si NO hay pánico y acaba en la pantalla de reinicio (azul, cian, magenta, XNU MMU ON), es un cuelgue + reinicio por vigilante: anotar los últimos nombres que alcance a ver.
 - Siguiente según el resultado: pánico ⇒ leer la causa; cuelgue ⇒ h54/h55/h56 (preparadas h56) para ver la fase tras 'kmem'.
