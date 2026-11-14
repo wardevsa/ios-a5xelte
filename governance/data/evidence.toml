@@ -2064,3 +2064,18 @@ sha256 = "fd87b931f2c0c98e88c2657e1aaa32789a0187558381d35f6a2d20bd52cf9675"
 size = 415
 immutable = true
 note = "El bloque 29 (gris 0xa9a9a9, x=1300, y=1016) se dibuja DESPUÉS de serial_init; lo anterior (texto y bloques 0-28) desapareció: la consola de vídeo real (serial_init/PE_create_console) limpia el framebuffer. No es un fallo: es el cambio de consola. Conclusión: serial_init termina bien y el reinicio es posterior al bloque 29. Sin vídeo."
+
+[[evidence]]
+id = "E-0141"
+title = "Corrección del Director sobre min12h29 (E-0140): aparecen brevemente el texto de stages y los bloques hasta 28 más un blanco nuevo muy abajo (29), y en una fracción de segundo desaparece todo MENOS ese último blanco, que queda"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min12h29-correction.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "735dbf2b397a9ae6c36b8b7dd82c75057d37e816919ba389cc1c84479f9c1941"
+size = 622
+immutable = true
+note = "Sustituye la lectura 'pantalla negra' de E-0140 (que no se modifica). El bloque 29 (x=1300, y=1016) se dibuja DESPUÉS de serial_init y sobrevive; todo lo anterior se borra en una fracción de segundo aunque la CPU esté parada (herostop=29): lo borra algo que no es el hilo de arranque (un trabajo asíncrono o el hardware de pantalla iniciado por serial_init). Sin vídeo."
