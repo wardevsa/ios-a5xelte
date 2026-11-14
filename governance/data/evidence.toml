@@ -2529,3 +2529,18 @@ sha256 = "ed885a00d12082fe23b8355db6438ba5f0d618b06005d609764abd211cfa85b8"
 size = 725
 immutable = true
 note = "Solo escritura y lectura de vuelta (hash registrado antes en E-0171; revisión del kernel E-0166; autorización D-0046 del argumento -v)."
+
+[[evidence]]
+id = "E-0173"
+title = "Observación de min15v (-v): idéntica a min15 (64 fases hasta PE_lockdown_iokit); NO aparece el registro del kernel en texto: '-v' no hace visible kprintf/printf en esta pantalla"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min15v-observation.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "4ba5442f626c0a0737f4e64be55e2b7639af2966f807b8fdc818e17538d20e8c"
+size = 786
+immutable = true
+note = "Interpretación (L1/L2): la consola de vídeo de XNU no dibuja sobre el framebuffer que se ve (usa otro búfer o su salida está desactivada: disable_kprintf_output / disableConsoleOutput) o el reinicio ocurre antes de que escriba nada. Plan: reflejar kprintf/printf en la consola temprana propia (enganche de dibujo en kprintf y printf). Transcripción por IA de una foto no archivada."
