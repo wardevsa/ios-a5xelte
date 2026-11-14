@@ -2499,18 +2499,3 @@ sha256 = "5d1604736d799e6b05375b10bad1411376e7aa1c3259958bb502480cc09eb8c0"
 size = 1158
 immutable = true
 note = "Por el código (osfmk/kern/startup.c): tras el anuncio 'PE_lockdown_iokit' se ejecutan PE_lockdown_iokit(), vm_set_restrictions(), kperf_init_early() y bsd_init() (sin anuncios propios) y luego el resto de kernel_bootstrap_thread. El fallo/reinicio está en esa zona o más tarde. El kernel tiene CONFIG_XNUPOST (kernel_do_post terminó). Transcripción por IA de una foto no archivada."
-
-[[evidence]]
-id = "E-0170"
-title = "Imagen preparada (kernel 0350): xnu-boot-v2-s7-min15v-20261114 = línea de min2 + '-v' (arranque detallado: la consola de vídeo escribe el log del kernel); 47 PASS constructor y 0 PASS independiente, 0 FAIL (NO escrita; requiere decisión del Director: D-0043/D-0045 excluyen cambiar la línea de arranque)"
-kind = "image"
-path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run16-min15/xnu-boot-v2-s7-min15v-20261114.img"
-location = "host"
-created = "2026-11-14"
-domain = "host"
-level = "L2"
-device = "none"
-sha256 = "79fdf35c90b22d5fc5f1824af7e18dab6f88c38c426bc5c24ea493592e8794f5"
-size = 18620432
-immutable = true
-note = "Mismo kernel adfe1249ce911aaa2fcc8e4b304368fa2e31c3c334f867a9fecb87a8268d7b6b (E-0166), ADT y cargador. Difiere de min15 SOLO en el argumento '-v' (diff). '-v' hace que XNU escriba kprintf/printf en la consola de texto del framebuffer: veríamos el log de bsd_init, IOKit y cualquier mensaje previo al reinicio."
