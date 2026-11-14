@@ -1794,3 +1794,48 @@ sha256 = "7718a774b800ecd17e226ba381181069280341d67a8a8c38c63c9da23cf3c834"
 size = 18618384
 immutable = true
 note = "Kernel 34222b5d1438516f0daab01f88c9310df60ce5c0464dad37fdd359edde75fd15 (revisión E-0121), ADT dc817436… y cargador 0a68abbd… como antes; línea de arranque idéntica a min2 (diff). Se escribirá cuando termine la copia de seguridad (T-0043)."
+
+[[evidence]]
+id = "E-0123"
+title = "Copia de seguridad verificada de RECOVERY del S7 (48234496 B, /dev/block/sda6): sha256 156d7992…c8e4"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-backup/2026-11-14-engineer-full/RECOVERY.img"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "156d79921694ab4b63ebb7c9d08d3f34c95accc6a231c4a090700f3cbbb0c8e4"
+size = 48234496
+immutable = true
+note = "D-0044, T-0043. Herramienta tools/herolte-backup-partition.py (trozos de 128 MiB comprobados contra el hash del teléfono, transporte nc por adb forward). Tamaño = tamaño de la partición. idéntica a la copia completa del 2026-11-12 (E-0036); la del snapshot de hoy estaba truncada al 16 %. Disco: NVMe NTFS (un solo disco: segunda copia recomendada). Registro de la ejecución: backup-engineer-full.log."
+
+[[evidence]]
+id = "E-0124"
+title = "Copia de seguridad verificada de SYSTEM del S7 (7750000640 B, /dev/block/sda14): sha256 8a3e75a5…d6ea"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-backup/2026-11-14-engineer-full/SYSTEM.img"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "8a3e75a5f740c6784337c74fa5b47c6fae478aa0f8a12b8458926d605f7fd6ea"
+size = 7750000640
+immutable = true
+note = "D-0044, T-0043. Herramienta tools/herolte-backup-partition.py (trozos de 128 MiB comprobados contra el hash del teléfono, transporte nc por adb forward). Tamaño = tamaño de la partición. verificada por trozos y contra el SHA-256 de la partición ENTERA calculado en el teléfono (idéntico); la SYSTEM.img del snapshot (5,7 GB, hash ece5e85c…) NO es válida: más corta que la partición y su hash no coincide con el principio de esta copia. Disco: NVMe NTFS (un solo disco: segunda copia recomendada). Registro de la ejecución: backup-engineer-full.log."
+
+[[evidence]]
+id = "E-0125"
+title = "Copia de seguridad verificada de USERDATA del S7 (23431790592 B, /dev/block/sda18): sha256 d1255890…f4e6"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-backup/2026-11-14-engineer-full/USERDATA.img"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "d1255890047299b917f4cb5c40590522fca5d8cd02017f3a82c83d852299f4e6"
+size = 23431790592
+immutable = true
+note = "D-0044, T-0043. Herramienta tools/herolte-backup-partition.py (trozos de 128 MiB comprobados contra el hash del teléfono, transporte nc por adb forward). Tamaño = tamaño de la partición. verificada por trozos y contra el SHA-256 de la partición ENTERA calculado en el teléfono (idéntico, 7 min 50 s); contiene datos personales de Android: no mirar, fuera de git. Disco: NVMe NTFS (un solo disco: segunda copia recomendada). Registro de la ejecución: backup-engineer-full.log."

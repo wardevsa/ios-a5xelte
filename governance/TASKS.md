@@ -43,7 +43,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 | T-0013 | done | 9 | director | Decidir el cargador de las pruebas: el de clang (conveniencia) o compilar con el GCC aarch64 de Arm | — | A verde | — |
 | T-0016 | done | 9 | ingeniero | Aplicar la renumeración de parches y fusionar con origin/herolte (si el jefe técnico aprueba D-0008) | T-0009 | B amarillo | — |
 | T-0042 | ready | 9 | ingeniero | Leer desde TWRP (solo lectura) el marcador de RAM de start.s para saber si hubo reinicio/reentrada | — | C rojo | — |
-| T-0043 | ready | 9 | ingeniero | Copia de seguridad verificada de SYSTEM, USERDATA y RECOVERY del S7 (solo lectura desde TWRP, al NVMe) | — | C rojo | — |
+| T-0043 | done | 9 | ingeniero | Copia de seguridad verificada de SYSTEM, USERDATA y RECOVERY del S7 (solo lectura desde TWRP, al NVMe) | — | C rojo | — |
 | T-0014 | blocked | 10 | director | Decidir qué argumento quitar de la línea diaria (604/607 caracteres) para poder añadir herodrop=0 y herosplash=1 | — | B amarillo | decisión del director o del jefe técnico |
 | T-0015 | blocked | 11 | ingeniero | Root de iOS de 20 GiB válido y verificable (fsck_hfs sin errores, nombres coherentes con XNU) | T-0003, T-0004 | B amarillo | T-0003 (decisión) y T-0004 (R2) |
 | T-0007 | done | 12 | ingeniero | Retirar los originales de 224 sandboxes (~24 GiB) ya archivados y verificados | — | C rojo | — |

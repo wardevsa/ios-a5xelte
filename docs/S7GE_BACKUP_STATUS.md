@@ -39,3 +39,12 @@ adb shell "dd if=/dev/block/sda6 bs=1048576 2>/dev/null | sha256sum"     # RECOV
 ```
 Todo con `2>/dev/null` **dentro** de la orden del teléfono (KI-0008). Son lecturas; ninguna escribe.
 
+
+## 7. Actualización (2026-11-14 tarde): SYSTEM, USERDATA y RECOVERY copiadas y verificadas (D-0044, T-0043, E-0123…E-0125)
+Carpeta nueva (no se tocó el snapshot del Director): `/media/pioxi/F20C31440C31055F/IOS-S7-backup/2026-11-14-engineer-full/` (NVMe NTFS).
+| Imagen | Bytes (= partición) | SHA-256 | Verificación |
+|---|---|---|---|
+| `RECOVERY.img` | 48 234 496 | `156d7992…c8e4` | por trozos; **idéntica** a la copia completa del 2026-11-12 |
+| `SYSTEM.img` | 7 750 000 640 | `8a3e75a5…d6ea` | por trozos **y** SHA-256 de la partición entera leído en el teléfono: **idéntico** |
+| `USERDATA.img` | 23 431 790 592 | `d1255890…f4e6` | por trozos **y** SHA-256 de la partición entera leído en el teléfono (7 min 50 s): **idéntico** |
+Herramienta: `tools/herolte-backup-partition.py` (solo lectura; trozos de 128 MiB aceptados solo si el hash del PC coincide con el del teléfono; reanudable). **Hallazgo de rendimiento:** `adb exec-out` en este TWRP va a ~0,9 MB/s (por eso el snapshot falló); `dd | nc -l` + `adb forward` da ~18 MB/s sostenidos. **Descarte:** la `SYSTEM.img` del snapshot (5,7 GB) es **más corta que la partición y su contenido no coincide con el principio de esta copia**: no sirve. **Riesgos que quedan:** (1) estas copias están en **un solo disco** (el NVMe); la copia del 12-nov (BOOT, EFS, RECOVERY, etc.) está en `/dev/sda2`; una segunda copia de USERDATA y EFS en otro soporte sigue siendo recomendable; (2) `USERDATA` es una instantánea del momento: no sustituye lo que haya en la tarjeta SD declarada; (3) no se ha probado restaurar nada.
