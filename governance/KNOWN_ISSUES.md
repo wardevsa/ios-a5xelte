@@ -4,6 +4,7 @@ Aquí se **documenta sin corregir** lo que ya fallaba antes del gobierno o fuera
 
 ## KI-0001 — `tools/validate-repo.py` falla (preexistente)
 - **Estado:** abierto, **sin corregir a propósito** (fuera del alcance de la Misión 0; corregirlo exige decidir la numeración definitiva de la serie de parches: T-0016 → T-0018).
+- **Actualización (2026-11-14, T-0016):** tras renumerar 0332→0336 y 0334→0337 y fusionar con origin/herolte, `validate-repo.py` da **4** errores (huecos antiguos 0106→0108, 0112→0114, 0115→0117, 0129→0200); el hueco 0333→0334 desapareció. Los 4 restantes siguen sin corregir a propósito (T-0018).
 - **Desde cuándo:** ya fallaba en `8d1cf43` y en la rama anterior a la Misión 0 (auditoría 2026-11-12, hallazgo M3); el hueco `0333→0334` apareció al sustituir el borrador 0333 por DROP v2.
 - **Salida exacta** (2026-11-13, `python3 -I tools/validate-repo.py`, salida 1):
   ```

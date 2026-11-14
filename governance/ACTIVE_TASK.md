@@ -8,7 +8,7 @@
 - Acciones: host-tests, pc-implementation, local-commit
 - Depende de: T-0027
 - Aceptación: Cada mutante clasificado con evidencia (DETECTADO / EQUIVALENTE DEMOSTRADO / SOBREVIVE); M16 y N02 siguen como equivalentes conocidos; ningún SOBREVIVE nuevo sin explicar; sin llenar el disco (>= 12 GiB libres al empezar); sin montar nada ni usar sudo; r2_lib.sh de rev3 idéntico al de rev2 (sha256 52357bd5…).
-- Notas de reanudación: EN CURSO desde 2026-11-14 (tras liberar espacio, E-0033): salida en /tmp/claude-1000/-home-pioxi-HackiOS-repos-wardevsa-ios-a5xelte/2013331e-f694-44e9-97ca-fda8e240f915/scratchpad/t0028_out.txt (volátil); lanzada con t0005_guard.sh (aborta si <3 GiB libres, no borra). Si el proceso ya no existe, ver el último mutation_summary3-* de v2/rev3/tests y registrar el resultado. Desde v2/rev3/tests: bash run_mutations.sh (usa mutants_def.py y run_tests.sh de rev3). Lanzar con guardia de disco como en T-0005 (t0005_guard.sh). Ver docs/ y E-0030.
+- Notas de reanudación: EN CURSO desde 2026-11-14 (tras liberar espacio, E-0033): salida en el scratchpad de la sesión (t0028_out.txt, volátil); lanzada con t0005_guard.sh (aborta si <3 GiB libres, no borra). Si el proceso ya no existe, ver el último mutation_summary3-* de v2/rev3/tests y registrar el resultado. Desde v2/rev3/tests: bash run_mutations.sh (usa mutants_def.py y run_tests.sh de rev3). Lanzar con guardia de disco como en T-0005 (t0005_guard.sh). Ver docs/ y E-0030.
 
 ## Cómo reanudar
 1. Lee `README.md` y `HANDOFF.md`; ejecuta `python3 tools/governance.py check` y `status`.

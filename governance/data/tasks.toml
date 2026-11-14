@@ -177,14 +177,15 @@ acceptance = "Imagen nueva (la de laboratorio se conserva) con verify_full en PA
 [[task]]
 id = "T-0016"
 title = "Aplicar la renumeración de parches y fusionar con origin/herolte (si el jefe técnico aprueba D-0008)"
-status = "blocked"
+status = "done"
 priority = 9
 owner = "ingeniero"
 depends_on = ["T-0009"]
 actions = ["patch-series-change", "local-commit"]
-requires_decisions = ["D-0007", "D-0014"]
-blocked_on = "decisión: revisión del jefe técnico de D-0007 y D-0014 (PROPOSED)"
-acceptance = "Serie sin colisiones; ci_check aplicable; kernel candidato reconstruido y candidata N2 reverificada con nombre nuevo."
+requires_decisions = ["D-0014"]
+review_ref = "D-0014"
+evidence = ["E-0035"]
+acceptance = "Hecho: serie sin colisiones (0332..0337), aplica limpia en el orden final (E-0035), fusión local con origin/herolte hecha. Pendiente (otras tareas): push + CI (D-0030) y reconstruir/reverificar la candidata con el kernel del CI."
 
 [[task]]
 id = "T-0017"
@@ -320,5 +321,5 @@ owner = "ingeniero"
 depends_on = ["T-0027"]
 actions = ["host-tests", "pc-implementation", "local-commit"]
 acceptance = "Cada mutante clasificado con evidencia (DETECTADO / EQUIVALENTE DEMOSTRADO / SOBREVIVE); M16 y N02 siguen como equivalentes conocidos; ningún SOBREVIVE nuevo sin explicar; sin llenar el disco (>= 12 GiB libres al empezar); sin montar nada ni usar sudo; r2_lib.sh de rev3 idéntico al de rev2 (sha256 52357bd5…)."
-resume = "EN CURSO desde 2026-11-14 (tras liberar espacio, E-0033): salida en /tmp/claude-1000/-home-pioxi-HackiOS-repos-wardevsa-ios-a5xelte/2013331e-f694-44e9-97ca-fda8e240f915/scratchpad/t0028_out.txt (volátil); lanzada con t0005_guard.sh (aborta si <3 GiB libres, no borra). Si el proceso ya no existe, ver el último mutation_summary3-* de v2/rev3/tests y registrar el resultado. Desde v2/rev3/tests: bash run_mutations.sh (usa mutants_def.py y run_tests.sh de rev3). Lanzar con guardia de disco como en T-0005 (t0005_guard.sh). Ver docs/ y E-0030."
+resume = "EN CURSO desde 2026-11-14 (tras liberar espacio, E-0033): salida en el scratchpad de la sesión (t0028_out.txt, volátil); lanzada con t0005_guard.sh (aborta si <3 GiB libres, no borra). Si el proceso ya no existe, ver el último mutation_summary3-* de v2/rev3/tests y registrar el resultado. Desde v2/rev3/tests: bash run_mutations.sh (usa mutants_def.py y run_tests.sh de rev3). Lanzar con guardia de disco como en T-0005 (t0005_guard.sh). Ver docs/ y E-0030."
 

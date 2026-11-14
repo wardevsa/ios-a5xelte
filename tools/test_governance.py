@@ -62,6 +62,9 @@ class Base(unittest.TestCase):
         t0 = open(tp, encoding='utf-8').read(); open(tp, 'w', encoding='utf-8').write(t0.replace('status = "in_progress"', 'status = "ready"'))   # una tarea real en curso no debe contaminar las pruebas
         mutate(tp, 'task', 'T-0007', 'status', '"blocked"'); mutate(tp, 'task', 'T-0007', 'blocked_on', '"fixture de pruebas"')
         mutate(tp, 'task', 'T-0007', 'authorization_ref', None); mutate(tp, 'task', 'T-0007', 'requires_decisions', None); mutate(tp, 'task', 'T-0007', 'evidence', '["E-0011"]')
+        # T-0016 se usa como tarea AMARILLA sin revisar y con una decisión requerida aún PROPUESTA (D-0007); la real ya se cerró: fixture en la copia.
+        mutate(tp, 'task', 'T-0016', 'status', '"blocked"'); mutate(tp, 'task', 'T-0016', 'blocked_on', '"fixture de pruebas"'); mutate(tp, 'task', 'T-0016', 'review_ref', None)
+        mutate(tp, 'task', 'T-0016', 'requires_decisions', '["D-0007", "D-0014"]'); mutate(tp, 'task', 'T-0016', 'evidence', None)
         self.render()                                              # las vistas generadas siguen al dato (las pruebas de independencia comprueban 'render --check')
 
     def tearDown(self): shutil.rmtree(self.d, ignore_errors=True)       # only this test's own temporary copy
@@ -162,7 +165,7 @@ class Tasks(Base):
         self.t('T-0007', 'status', '"in_progress"'); self.assertErr('acción C en curso/hecha sin authorization_ref')
 
     def test_authorization_by_an_unrelated_director_decision_is_rejected(self):
-        self.t('T-0007', 'status', '"in_progress"'); self.t('T-0007', 'authorization_ref', '"D-0002"')      # D-0002 is APPROVED by the director but authorizes nothing
+        self.t('T-0007', 'status', '"in_progress"'); self.t('T-0007', 'authorization_ref', '"D-0005"')      # D-0005 is APPROVED by the director but authorizes nothing
         self.assertErr('no autoriza la acción delete-or-overwrite')
 
     def test_authorization_that_names_the_action_is_accepted(self):
@@ -286,7 +289,7 @@ class Gate(Base):
         self.assertEqual(self.g('delete-or-overwrite', '--task', 'T-9999').returncode, 20)
 
     def test_red_is_denied_with_an_unrelated_approved_decision(self):
-        mutate(self.data('tasks.toml'), 'task', 'T-0007', 'authorization_ref', '"D-0002"'); r = self.g('delete-or-overwrite', '--task', 'T-0007')
+        mutate(self.data('tasks.toml'), 'task', 'T-0007', 'authorization_ref', '"D-0005"'); r = self.g('delete-or-overwrite', '--task', 'T-0007')
         self.assertEqual(r.returncode, 20); self.assertIn('no autoriza la acción', r.stdout)
 
     def test_red_is_registered_only_with_a_matching_director_decision_and_never_executes(self):
@@ -316,7 +319,7 @@ class Gate(Base):
     def test_policy_change_is_reviewed_by_the_director_only(self):
         mutate(self.data('tasks.toml'), 'task', 'T-0001', 'actions', '["policy-change"]'); mutate(self.data('tasks.toml'), 'task', 'T-0001', 'review_ref', '"D-0003"')
         self.assertEqual(self.g('policy-change', '--task', 'T-0001', '--consolidate').returncode, 12)          # D-0003 is the technical lead's, the reviewer must be the director
-        mutate(self.data('tasks.toml'), 'task', 'T-0001', 'review_ref', '"D-0002"'); self.assertEqual(self.g('policy-change', '--task', 'T-0001', '--consolidate').returncode, 11)
+        mutate(self.data('tasks.toml'), 'task', 'T-0001', 'review_ref', '"D-0005"'); self.assertEqual(self.g('policy-change', '--task', 'T-0001', '--consolidate').returncode, 11)
 
     def test_can_and_check_say_they_are_not_authorizations(self):
         self.assertIn('no es una autorización', run(self.d, 'can', 'publish').stdout)

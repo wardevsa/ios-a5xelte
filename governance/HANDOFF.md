@@ -8,7 +8,16 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0009 — el Director delega más autonomía (D-0028); T-0028 en curso (2026-11-14)
+## Relevo vigente: H-0010 — T-0016 hecha; D-0029/D-0030 del Director; push y CI (2026-11-14)
+- **Decisiones del Director (firmadas):** D-0029 (el NVMe NTFS vale como zona de trabajo para imágenes grandes; ext4 sigue preferido para repositorios y bucles), D-0030 (push de `herolte-drop-v2` SOLO al remoto `mio` = `darkcloud9998/ios-a5xelte`, lanzar el workflow `xnu` y descargar artefactos; sin push a `origin`, sin PR, sin force), D-0014 (renumeración) aprobada.
+- **T-0016 hecha:** `0332-herolte-drop-marker-protocol` → `0336-…`, `0334-herolte-drop-v2` → `0337-…`; fusión local con `origin/herolte` (un conflicto de texto en `HEROLTE_PROGRESS.md`, ambas partes conservadas); la serie 0332..0337 aplica limpia en el orden final (E-0035; aplicabilidad, no compilación). `validate-repo.py`: 4 errores antiguos (KI-0001).
+- **Antes de publicar** se escaneó el contenido (sin secretos, sin binarios de Apple, sin IMEI/serie; solo direcciones USB de prueba 192.168.7.x y rutas con el usuario local).
+- **Siguiente:** push + CI + `ci_check.py` por nombre completo (`0337-herolte-drop-v2`) → kernel del CI → reconstruir la candidata BOOT con nombre nuevo, reverificar, archivar. T-0028 (mutantes rev3) sigue en curso en segundo plano.
+- **Antes de pedir el flasheo al Director** (acción roja): candidata verificada en el PC, BOOT original con hash (E-0009) y copia TWRP de EFS fuera del teléfono (el EFS NO está en este repositorio: lo respalda el Director).
+
+---
+
+## Relevo anterior: H-0009 — el Director delega más autonomía (D-0028); T-0028 en curso (2026-11-14)
 - **D-0028 (Director, sus palabras):** el ingeniero y la jefatura técnica son más autónomos; el Director lee todo e interviene de forma extraordinaria. Aplicación: `delete-archived` (nivel A) para borrar temporales YA archivados con hash verificado, por ruta exacta. **Sigue rojo/del Director:** el teléfono, reglas X y `AGENTS.md`, borrado general, publicar/CI en el repositorio público, R2 (D-0005), host-config-change. Las directivas de la jefatura son dirección técnica; una acción C solo la cubre una decisión del Director.
 - **Hecho hoy:** T-0025 cerrada (E-0031/E-0032), T-0026 (D-0025), D-0027 ejecutado (E-0033: 6,2 → 29,5 GiB libres; la imagen y `r3/work` siguen en NTFS), T-0019 (E-0034: imagen anterior archivada, sha256 = E-0010).
 - **En curso: T-0028** (ronda completa de 49 mutantes sobre rev3, guardia de disco). Ver `resume` de la tarea.

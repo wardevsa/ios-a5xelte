@@ -140,7 +140,7 @@ level = "L2"
 device = "none"
 title = "Imagen de laboratorio HFSX poblada lab-full.img.partial (verificación FAILED por 32 nombres Unicode)"
 kind = "image"
-path = "/tmp/claude-1000/-home-pioxi-HackiOS-repos-wardevsa-ios-a5xelte/2013331e-f694-44e9-97ca-fda8e240f915/scratchpad/t04r/image/lab-full.img.partial"
+path = "scratchpad-de-sesion/t04r/image/lab-full.img.partial (volátil; copia en E-0034)"
 location = "host-volatile"
 created = "2026-11-13"
 sha256 = "e724f9818a28d2c9ce8e84798bd8e46f256f112ddb0ec48e7125a2f0c4c79496"
@@ -503,4 +503,19 @@ sha256 = "e724f9818a28d2c9ce8e84798bd8e46f256f112ddb0ec48e7125a2f0c4c79496"
 size = 21474836480
 immutable = true
 note = "T-0019. Origen intacto en el scratchpad. Contiene binarios de Apple: NO va a git. Sustituida en uso por E-0031."
+
+[[evidence]]
+id = "E-0035"
+title = "T-0016: la serie renumerada 0332..0337 aplica limpia, en orden final, sobre el árbol XNU revertido a 0331; fusión con origin/herolte con un solo conflicto de texto"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/t0016-patch-sequence-20261114.txt"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "build"
+level = "L1"
+device = "none"
+sha256 = "5310e7dd44790703390ac828db2662ad790d0ee9ac80431b88f3860f74f8cdb7"
+size = 735
+immutable = true
+note = "Aplicabilidad de los parches (git apply --check + apply), no compilación ni ejecución: eso lo hace el CI. Árbol base: buildtree-0332-fork-8d1cf43 (marcador antiguo quitado con -R); caduca el 2026-11-18."
 
