@@ -8,7 +8,14 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0022 — min2 AUTORIZADA (D-0034) pero NO escrita: el teléfono está `offline` en adb (2026-11-14 12:30)
+## Relevo vigente: H-0023 — min2 ESCRITA y verificada (D-0034); el teléfono está en TWRP, SIN reiniciar (2026-11-14 12:31)
+- **Hecho:** tras poner el Director el teléfono en TWRP y un `adb reconnect offline` (no reinicia el servidor), `tools/herolte-flash-boot.sh --execute` dio `OK: BOOT escrito y leído de vuelta (18 618 384 bytes, sha256 595316aa…edae21); EFS intacto` (E-0046). Los intentos anteriores de las 12:29-12:30 abortaron sin escribir (adb `offline`).
+- **El EFS en vivo cambió entre sesiones** (`eb8912ad…` → `b006b26d…`): el superbloque ext4 cambia con cada sesión de TWRP; el script compara dentro de la sesión (idéntico). Esperado, no un fallo.
+- **Estado del teléfono:** TWRP, BOOT = min2. **Siguiente (Director):** grabar la pantalla (con fotogramas legibles de las líneas `HEROLTE KMEM:` si vuelve a haber panic), `adb reboot`, ≥ 2 min, pasar la transcripción literal; si no arranca, Vol− + Power ~7 s y Vol+ + Home + Power. Luego restaurar BOOT (`S7GE_FLASH_PROCEDURE.md` §4) si se quiere volver a Android. **Ningún otro intento está autorizado** (D-0034 = min2 + restauración).
+
+---
+
+## Relevo anterior: H-0022 — min2 AUTORIZADA (D-0034) pero NO escrita: el teléfono está `offline` en adb (2026-11-14 12:30)
 - **Director:** "Autorizo min2, firmado PioXI" → **D-0034** (`device-write-boot` + `device-read`, imagen `xnu-boot-v2-s7-min2-20261114.img`, SHA-256 `595316aa…edae21`, hasta 2026-11-16), colgada de **T-0012**. El `gate` autoriza.
 - **Intento de escritura:** `tools/herolte-flash-boot.sh … --execute` **abortó sin tocar nada** (`debe haber exactamente un dispositivo en recovery`): minutos antes `adb devices` mostraba `recovery`, ahora el dispositivo aparece `offline` (probablemente arrancó/entró en el bucle de panic). **Nada se escribió** (el script comprueba antes de cualquier escritura).
 - **Pendiente del Director:** dejar el teléfono en **TWRP** (Vol− + Power ~7 s, y enseguida Vol+ + Home + Power) y avisar; entonces el ingeniero repite el `--execute` (misma autorización) y el teléfono se queda en TWRP hasta que el Director grabe y reinicie.
