@@ -45,3 +45,35 @@ Hay una **pregunta abierta de fondo**: con la consola de texto del kernel activa
 | **S. Probar con 1 536 MiB** (la RAM con la que el upstream sí arrancaba) | ADT nuevo con `dram-size 0x60000000` y la misma línea de min2 | candidata nueva (PC, minutos) y autorización; **pero sin saber en qué punto se para, es una apuesta**, no un diagnóstico |
 | **T. Restaurar Android** | `S7GE_FLASH_PROCEDURE.md` §4 | 5 minutos; el teléfono vuelve a funcionar |
 **Sobre "autorizo seguir con min3 o lo que tú veas":** **no puedo tomarlo como autorización de escritura**: una autorización roja nombra **una imagen y su hash** (AUTHORITY.md §4) y hoy **no existe ninguna min3**; sería una apuesta sin datos. Lo que sí hago con esa frase es **preparar** (PC, sin riesgo) lo que haga falta cuando haya datos, y **pedir la autorización concreta** entonces.
+
+## 6. Adenda: qué ejecuta `start.s` entre magenta y amarillo, y por qué el cargador no muestra ENTRY/BOOTARGS/JUMP (2026-11-14, nivel L1: código leído, nada medido en el teléfono)
+Fuente: `osfmk/arm64/start.s` del árbol parcheado (líneas 974-1040 del árbol extraído en T-0016).
+
+### 6.1 Entre `tunables_done` (magenta, y=184) y `arm_init_jump` (amarillo, y=216)
+Tras el bloque magenta (`dsb sy`) el código es **lineal y corto**:
+1. `#if HAS_CLUSTER`: bloque propio de núcleos Apple; no se compila para este objetivo (no hay `CPU_OVRD` en el Exynos).
+2. `cbnz x21, Ltrampoline`: `x21` vale **0** en arranque en frío (`start.s:517`, `mov x21, #0`), así que **no se salta**. La rama `Ltrampoline`/`arm_init_tramp` (que llama a `phystokv`) es solo de arranque en caliente y **se salta el amarillo**; no es nuestro caso.
+3. `add x0, x20, x22` / `sub x0, x0, x23`: dos aritméticas de registros (argumento `boot_args`).
+4. `KASAN`: desactivado.
+5. Bloque amarillo: `MOV64`, un doble bucle de `str` al framebuffer (el mismo patrón que ya funcionó en azul, cian y magenta) y `dsb sy`.
+6. `ret` a `arm_init()`.
+**Conclusión de código:** entre magenta y amarillo no hay llamadas, ni pila, ni BSS, ni accesos a memoria distintos del propio framebuffer, ni bucles de espera. **Un cuelgue ahí no tiene mecanismo en el código**; el mismo tipo de escritura acababa de funcionar tres veces. Lo más probable es que el amarillo **sí se dibujase** y no se notase (o no se transcribiese), igual que el verde (y=88), que se dibuja **antes** que el azul y tampoco consta en la transcripción. Que falte el verde, que es el primero, apoya "observación incompleta" más que "el código se paró".
+**Hipótesis ordenadas (ninguna comprobada):**
+| # | Hipótesis | Evidencia de código | Qué la distingue |
+|---|---|---|---|
+| H1 | Amarillo dibujado; el cuelgue está **en C**, después de `ret` a `arm_init()` y antes de que haya consola (p. ej. `kmem_range_init`, ver KI-0009: con 2 GiB el upstream documenta pánico ahí) | tramo ensamblador sin mecanismo de parada; el upstream documenta el fallo en `kmem_range_init` con 2 GiB de RAM | foto con 5 bloques (verde, azul, cian, magenta, amarillo) |
+| H2 | El amarillo no se dibujó por un fallo del propio almacenamiento (p. ej. dirección del framebuffer no mapeada solo en ese punto) | improbable: misma `FB_PA` y mismo patrón que los tres bloques anteriores | foto con exactamente 3 bloques y nada más; entonces sería un hallazgo nuevo y habría que mirar el mapeo |
+| H3 | Transcripción incompleta (verde y amarillo omitidos por el análisis de vídeo) | el verde falta aunque va antes del azul | una foto fija lo resuelve |
+Min1 y min2 usan **el mismo kernel**; que min2 parezca parar antes que min1 no tiene explicación en este tramo (solo cambia la línea de arranque, que se lee ya en C). Por eso H3/H1 son preferibles a H2.
+
+### 6.2 Por qué el cargador solo muestra 3 líneas
+En `shim/herolte/xnu_boot.c` (`hero_prepare_xnu`):
+- Las filas son **reutilizadas**: `RAM BASE` va a la fila 2, `COPYING KERNEL` a la 1; después `ENTRY` (fila 1), `BOOTARGS` (fila 2) y `JUMP TO XNU` (fila 3) **sobrescriben** esas filas. Con `hero_fb_hex`/`hero_fb_text` rápidos y el salto inmediato, lo que queda a la vista depende de qué texto se vio en cada fila y de cuánto duró; el texto anterior se borra al escribir el nuevo, y todo ocurre en una fracción de segundo antes de que el kernel dibuje.
+- `ENTRY`, `BOOTARGS` y `JUMP TO XNU` solo se imprimen `if (!splash)`; si hubiese un `splash.bin` embebido, **ninguna** línea de progreso aparecería.
+- **Corrección de lo que se esperaba:** `BOOTARGS` imprime la **dirección física de `boot_args`** (`ba_pa`), **no la línea de arranque**. Por tanto la foto de `BOOTARGS` **no puede confirmar** `vm_compression_limit=98304 vm_compressor=2`; esa verificación sale del hash/contenido de la imagen (ya hecha en preparación), no de la pantalla. §4.2 de este documento queda **corregido** en ese punto.
+- El texto "rápido ilegible" solo en el primer arranque es compatible con el cargador escribiendo y el kernel sobrescribiendo el framebuffer (efecto de la resolución y del reuso de filas); no hay evidencia de fallo del cargador: su camino de error imprimiría `LOADER FAIL` y `TWRP EN 30 S`, y no se vio.
+
+### 6.3 Implicaciones para min3 (sin construir nada)
+- **No hay corrección específica con evidencia** que justifique una min3 hoy: el tramo de ensamblador no tiene un defecto visible, y la causa más plausible (H1, en C) no se distingue de H3 sin la foto fija.
+- Si H1 se confirma, las opciones razonables son **R** (marcas en `arm_init`) o **S** (1 536 MiB, la configuración con la que el upstream arrancaba); ambas son **candidatas nuevas** que requieren autorización roja con imagen y hash. **No se pide ahora.**
+- Siguen siendo imprescindibles las fotos de §4 (en particular: ¿hay **cinco** bloques, y están `XNU ENTRY`/`XNU MMU ON`?).
