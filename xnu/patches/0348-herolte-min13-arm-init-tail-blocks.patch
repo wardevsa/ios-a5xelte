@@ -1,12 +1,14 @@
-diag(min13): progress blocks 30-40 through the rest of arm_init, and keep the early console alive after serial_init
+diag(min13): progress blocks 30-40 through the rest of arm_init, keep the early console alive after serial_init, pause 700 ms before them
 
-min12h29 showed a black screen with only block 29 (drawn right after serial_init): the real console cleared the framebuffer, so the earlier text and blocks are gone, but the kernel does reach and pass serial_init. Add blocks after each remaining step of arm_init (kprintf startup 30/31, PE_create_console 32, PE_init_printf 33, cpu_machine_idle_init 34, PE_init_platform(TRUE) 35, ml_map_cpu_pio 36, cpu_timebase_init 37, PE_init_cpu+fiq_context_init 38, dram DT parse 39, just before machine_startup 40) and do not turn the early console off after serial_init on A5XELTE (it would hide those blocks and any panic). Drawing only.
+min12h29 (observation corrected by the Director): everything drawn up to block 29 vanishes in a fraction of a second, except block 29, even with the CPU stopped: something asynchronous started by serial_init clears the framebuffer. So: pause 700 ms (busy-wait on the generic timer) after block 29, then draw blocks after each remaining step of arm_init (kprintf startup 30/31, PE_create_console 32, PE_init_printf 33, cpu_machine_idle_init 34, PE_init_platform(TRUE) 35, ml_map_cpu_pio 36, cpu_timebase_init 37, PE_init_cpu+fiq_context_init 38, dram DT parse 39, just before machine_startup 40). On A5XELTE the early console is no longer turned off after serial_init (it would hide these blocks and any panic). Drawing only.
 
 --- a/osfmk/arm/arm_init.c	2026-11-14 22:27:58.960908388 +0100
-+++ b/osfmk/arm/arm_init.c	2026-11-14 22:27:58.978601718 +0100
-@@ -586,11 +586,15 @@
++++ b/osfmk/arm/arm_init.c	2026-11-14 22:32:56.663445997 +0100
+@@ -585,12 +585,17 @@
+ 	const unsigned int serial_exists = serial_init();
  	sweet_early_mark(19, "serial_init returned");
  	sweet_early_block(29, 0xffa9a9a9);
++	sweet_early_pause_ms(700); /* let whatever serial_init started finish clearing the screen, then draw on the clean framebuffer */
  	kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF);
 +	sweet_early_block(30, 0xffff4500);
  	kprintf("kprintf initialized\n");
@@ -20,7 +22,7 @@ min12h29 showed a black screen with only block 29 (drawn right after serial_init
  
  	serialmode = 0;
  	if (PE_parse_boot_argn("serial", &serialmode, sizeof(serialmode))) {
-@@ -631,9 +635,11 @@
+@@ -631,9 +636,11 @@
  		disableConsoleOutput = FALSE;     /* Allow printfs to happen */
  	}
  	PE_create_console();
@@ -32,7 +34,7 @@ min12h29 showed a black screen with only block 29 (drawn right after serial_init
  
  #if __arm64__
  #if DEBUG
-@@ -642,8 +648,10 @@
+@@ -642,8 +649,10 @@
  #endif
  
  	cpu_machine_idle_init(TRUE);
@@ -43,7 +45,7 @@ min12h29 showed a black screen with only block 29 (drawn right after serial_init
  
  #if __arm64__
  	extern bool cpu_config_correct;
-@@ -652,6 +660,7 @@
+@@ -652,6 +661,7 @@
  	}
  
  	ml_map_cpu_pio();
@@ -51,7 +53,7 @@ min12h29 showed a black screen with only block 29 (drawn right after serial_init
  
  #if APPLE_ARM64_ARCH_FAMILY
  	configure_late_apple_regs();
-@@ -660,6 +669,7 @@
+@@ -660,6 +670,7 @@
  #endif
  
  	cpu_timebase_init(TRUE);
@@ -59,7 +61,7 @@ min12h29 showed a black screen with only block 29 (drawn right after serial_init
  
  #if KPERF
  	/* kptimer_curcpu_up() must be called after cpu_timebase_init */
-@@ -668,6 +678,7 @@
+@@ -668,6 +679,7 @@
  
  	PE_init_cpu();
  	fiq_context_init(TRUE);
@@ -67,7 +69,7 @@ min12h29 showed a black screen with only block 29 (drawn right after serial_init
  
  
  #if HIBERNATION
-@@ -696,6 +707,7 @@
+@@ -696,6 +708,7 @@
  
  	gDramBase = *dram_base;
  	gDramSize = *dram_size;
@@ -75,11 +77,60 @@ min12h29 showed a black screen with only block 29 (drawn right after serial_init
  
  	/*
  	 * Initialize the stack protector for all future calls
-@@ -709,6 +721,7 @@
+@@ -709,6 +722,7 @@
  	 * against string vulnerabilities
  	 */
  	__stack_chk_guard &= ~(0xFFULL << 8);
 +	sweet_early_block(40, 0xffffffff);
  	machine_startup(args);
  }
+ 
+--- a/osfmk/arm64/sweet_early.c	2026-11-14 22:32:56.640449352 +0100
++++ b/osfmk/arm64/sweet_early.c	2026-11-14 22:32:56.663128790 +0100
+@@ -131,6 +131,22 @@
+ 	__asm__ volatile("dsb sy" ::: "memory");
+ }
+ 
++/* min13: busy-wait (generic timer, no allocation) so that something asynchronous that clears the framebuffer after serial_init
++ * has finished before the later progress blocks are drawn. */
++void
++sweet_early_pause_ms(unsigned int ms)
++{
++	uint64_t freq, t0, now;
++	__asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(freq));
++	if (freq == 0) {
++		freq = 24000000ULL;
++	}
++	__asm__ volatile ("isb; mrs %0, cntpct_el0" : "=r"(t0));
++	do {
++		__asm__ volatile ("isb; mrs %0, cntpct_el0" : "=r"(now));
++	} while ((now - t0) * 1000ULL < freq * ms);
++}
++
+ /* Boot-arg herostop=N (read in arm_init after PE_init_platform): freeze the machine right after block N is drawn, so the
+  * screen keeps showing how far it got. -1 = never stop (default). Interrupts are masked at this point of boot. */
+ static volatile int a5_stop_slot = -1;
+@@ -306,4 +322,5 @@
+ void sweet_early_block(unsigned int slot, uint32_t argb) { (void)slot; (void)argb; }
+ void sweet_early_set_stop(int slot) { (void)slot; }
+ void sweet_early_hex(const char *label, uint64_t value) { (void)label; (void)value; }
++void sweet_early_pause_ms(unsigned int ms) { (void)ms; }
+ #endif /* SWEET */
+--- a/osfmk/arm64/sweet_early.h	2026-11-14 22:32:56.641449391 +0100
++++ b/osfmk/arm64/sweet_early.h	2026-11-14 22:32:56.662862931 +0100
+@@ -10,6 +10,7 @@
+ void sweet_early_mark(unsigned int stage, const char *label);
+ void sweet_early_block(unsigned int slot, uint32_t argb);
+ void sweet_early_hex(const char *label, uint64_t value);
++void sweet_early_pause_ms(unsigned int ms);
+ void sweet_early_set_stop(int slot);
+ void sweet_early_putc(char c);
+ void sweet_early_panic(const char *fmt, va_list *args);
+@@ -24,6 +25,7 @@
+ static inline void sweet_early_block(unsigned int slot, uint32_t argb) { (void)slot; (void)argb; }
+ static inline void sweet_early_set_stop(int slot) { (void)slot; }
+ static inline void sweet_early_hex(const char *label, uint64_t value) { (void)label; (void)value; }
++static inline void sweet_early_pause_ms(unsigned int ms) { (void)ms; }
+ static inline void sweet_early_disable(void) {}
+ #endif
  
