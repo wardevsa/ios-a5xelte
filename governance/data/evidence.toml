@@ -2379,3 +2379,18 @@ sha256 = "a51251f568722bf6dd7cf15092e0c564f8c92773f7332de62fc15319b140b8f8"
 size = 418
 immutable = true
 note = "vm_object_bootstrap() y vm_map_init() han TERMINADO (se anunció la fase siguiente). kmem_init() fue anunciada; es la función que incluye kmem_range_init, donde min1 hizo panic con 2 GiB sin vm_compression_limit. Sin vídeo."
+
+[[evidence]]
+id = "E-0162"
+title = "Tanda D-0043/D-0045, imagen 13: BOOT del S7 escrito con xnu-boot-v2-s7-min14h53-20261114.img (kernel 0349, herostop=53) y leído de vuelta (sha256 5a97c6aa…b877); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min14h53-out.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ccac453cfcb293c042efb95678b9fd83481a2e36931146d50f6aad4f6bc75e6b"
+size = 727
+immutable = true
+note = "Solo escritura y lectura de vuelta (hash registrado antes en E-0159; revisión del kernel E-0149). Difiere de la línea de min2 solo en herostop=53. El primer intento esperó a una conexión estable de adb."

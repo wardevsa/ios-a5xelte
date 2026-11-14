@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0058 — h50 llegó a vm_object_bootstrap; h52 ESCRITA (D-0043/D-0045, 12/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+## Relevo vigente: H-0059 — h52 congeló con kmem_init anunciada; h53 ESCRITA (D-0043/D-0045, 13/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+- **Tarea en curso: T-0012.** E-0161: vm_object_bootstrap y vm_map_init terminan; kmem_init se anuncia (la función donde min1 hizo panic en kmem_range_init). BOOT = `xnu-boot-v2-s7-min14h53-20261114.img` (sha256 `5a97c6aa…b877`); EFS intacto (E-0162).
+- **Qué mirar (Director, tras `adb reboot`):** los nombres de antes y, debajo de `kmem_init`, **`vm_fault_init`** (slot 53). **Congela con `vm_fault_init` visible** ⇒ `kmem_init()` TERMINA y vm_mem_bootstrap casi acaba: el fallo es posterior (siguientes fases de kernel_bootstrap: hace falta h54+). **No congela** (reinicio) ⇒ el reinicio está DENTRO de `kmem_init()` (kmem_range_init y compañía).
+- Restaurar BOOT original (E-0009) cubierto por D-0045.
+
+## Relevo anterior: H-0058 — h50 llegó a vm_object_bootstrap; h52 ESCRITA (D-0043/D-0045, 12/20); teléfono en TWRP, sin reiniciar (2026-11-14)
 - **Tarea en curso: T-0012.** E-0156: nombres de fase vistos (vm_mem_bootstrap … vm_object_bootstrap). BOOT = `xnu-boot-v2-s7-min14h52-20261114.img` (sha256 `22c7d73f…6f10`); EFS intacto (E-0160).
 - **Qué mirar (Director, tras `adb reboot`):** los 10 nombres de antes y, debajo, **`vm_map_init`** y **`kmem_init`** (slots 51 y 52). **Congela** con `kmem_init` visible ⇒ el kernel anuncia `kmem_init` (donde min1 hizo panic con 2 GiB); el fallo es dentro de `kmem_init` o después ⇒ h53 (`vm_fault_init`) distingue. **No congela** (reinicio) ⇒ el reinicio está dentro de `vm_object_bootstrap()` o `vm_map_init()`: h51 distingue.
 - Restaurar BOOT original (E-0009) cubierto por D-0045.
