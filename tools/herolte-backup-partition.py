@@ -4,13 +4,13 @@
   herolte-backup-partition.py NOMBRE DISPOSITIVO SALIDA.img [--chunk-mib 128] [--retries 4]
   p. ej.  herolte-backup-partition.py USERDATA /dev/block/sda18 /media/.../USERDATA.img
 
-Para cada trozo (unidades de 4096 B, el tamaño de sector de la UFS): lee el trozo con `adb exec-out dd ... 2>/dev/null`, calcula su
+Para cada trozo (unidades de 4096 B, el tamaño de sector de la UFS): lee el trozo con `dd ... | nc -l` en el teléfono y `adb forward` (BACKUP_TRANSPORT=exec usa `adb exec-out`, 30 veces más lento), calcula su
 SHA-256 en el PC, calcula el SHA-256 del MISMO trozo en el teléfono (`dd ... | sha256sum`) y solo lo acepta si coinciden; reintenta
 (esperando a que adb vea el teléfono) si hay desconexión o discrepancia. Es REANUDABLE: SALIDA.img.state guarda los trozos
 aceptados y sus hashes. Al final comprueba que el tamaño del fichero es el de la partición y escribe SALIDA.img.sha256 con el hash
 de todo el fichero. NUNCA escribe en el teléfono: solo `dd if=`, `blockdev --getsize64` y `sha256sum`. ADB=ruta del adb (por defecto adb).
 """
-import argparse, hashlib, json, os, subprocess, sys, time
+import argparse, hashlib, json, os, socket, subprocess, sys, time
 
 ADB = os.environ.get('ADB', 'adb')
 UNIT = 4096
@@ -37,9 +37,50 @@ def phone_size(dev):
     return int(r.stdout.decode().strip())
 
 
-def read_chunk(dev, skip, count):
+PORT = int(os.environ.get('BACKUP_PORT', '5555'))
+TRANSPORT = os.environ.get('BACKUP_TRANSPORT', 'nc')   # 'nc' (rápido: ~30 MB/s) o 'exec' (adb exec-out: ~1 MB/s en este TWRP; lo usan las pruebas)
+
+
+def read_chunk_exec(dev, skip, count):
     r = adb('exec-out', 'dd if=%s bs=%d skip=%d count=%d 2>/dev/null' % (dev, UNIT, skip, count), timeout=900)
     return r.stdout
+
+
+def read_chunk_nc(dev, skip, count):
+    """El teléfono sirve el trozo con `dd | nc -l` y el PC lo lee por `adb forward` (30 veces más rápido que exec-out en este TWRP).
+    Solo lectura del disco; el único efecto en el teléfono es un proceso nc temporal que escucha en un puerto local de adb."""
+    adb('shell', 'killall nc 2>/dev/null')
+    adb('forward', 'tcp:%d' % PORT, 'tcp:%d' % PORT)
+    srv = subprocess.Popen([ADB, 'shell', 'dd if=%s bs=%d skip=%d count=%d 2>/dev/null | nc -l -p %d' % (dev, UNIT, skip, count, PORT)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    want = count * UNIT; data = b''
+    try:
+        for _ in range(8):                       # el listener tarda un instante en existir; sin él el forward cierra al momento
+            time.sleep(1.0)
+            data = b''
+            try:
+                c = socket.create_connection(('127.0.0.1', PORT), timeout=30)
+                c.settimeout(120)
+                parts = []
+                while True:
+                    b = c.recv(1 << 20)
+                    if not b: break
+                    parts.append(b)
+                c.close(); data = b''.join(parts)
+            except (OSError, socket.timeout):
+                data = b''
+            if len(data) == want: break
+            if data: break                        # datos parciales: que lo reintente el bucle superior
+    finally:
+        srv.terminate()
+        try: srv.wait(5)
+        except subprocess.TimeoutExpired: srv.kill()
+        adb('shell', 'killall nc 2>/dev/null')
+    return data
+
+
+def read_chunk(dev, skip, count):
+    return read_chunk_nc(dev, skip, count) if TRANSPORT == 'nc' else read_chunk_exec(dev, skip, count)
 
 
 def phone_hash(dev, skip, count):

@@ -25,7 +25,7 @@ class B(unittest.TestCase):
         self.d = tempfile.mkdtemp(); self.img = os.path.join(self.d, 'part.bin')
         open(self.img, 'wb').write(os.urandom(4096 * 100 + 4096 * 7))        # 107 unidades; trozo de 32 unidades (0,125 MiB)
         self.adb = os.path.join(self.d, 'adb'); open(self.adb, 'w').write(FAKE); os.chmod(self.adb, 0o755)
-        self.env = dict(os.environ, ADB=self.adb, FAKE_IMG=self.img, FAKE_FLAG=os.path.join(self.d, 'flag'))
+        self.env = dict(os.environ, BACKUP_TRANSPORT='exec', ADB=self.adb, FAKE_IMG=self.img, FAKE_FLAG=os.path.join(self.d, 'flag'))
     def run_(self, out): return subprocess.run([sys.executable, T, 'X', '/dev/block/fake', out, '--chunk-kib', '128'], env=self.env, capture_output=True, text=True)
     def test_copy_matches_and_corrupt_chunk_is_retried(self):
         # trozos de 128 KiB = 32 unidades: 4 trozos; el de skip=64 llega corrupto la primera vez y debe reintentarse
