@@ -1,6 +1,6 @@
 # S7GE_OSMESA_FORK_POLICY — política de mantenimiento del OSMesa propio (2026-11-14)
 
-**Decisión de la jefatura técnica (nivel B, 2026-11-14): Opción B, "mantener OSMesa nosotros".** Se registra como **D-0031**. **La implementación NO está autorizada** (el propio mensaje de jefatura lo dice: esperar la confirmación del Director): este documento fija la **política**; **no existe ni se crea** `gpu/mesa/osmesa-fork/`, y no se toca `gpu/mesa/` ni ningún parche. Contexto y medidas: `S7GE_MESA_VERSION_ANALYSIS.md`.
+**Decisión de la jefatura técnica (nivel B, 2026-11-14): Opción B, "mantener OSMesa nosotros" (D-0031); el Director confirma la variante B2 el mismo día (D-0032).** Estado: **implementación iniciada** en `gpu/mesa/osmesa-frontend/` (no en `xnu/`, kernel ni parches; el directorio `osmesa-fork/` que citaba la propuesta se llama `osmesa-frontend/`): fuentes de Mesa 25.0.7 sin tocar + un parche + integrador + pruebas; compila con Mesa 26.2.4 en Linux (`S7GE_OSMESA_MESA26_COMPATIBILITY.md`). **Falta** portar el gancho de Panfrost y compilar para iOS. Contexto y medidas: `S7GE_MESA_VERSION_ANALYSIS.md`.
 
 ## 1. Qué es "el OSMesa propio" (dos formas posibles; hay que elegir una al implementar)
 | Forma | Qué se mantiene | Qué viene de Mesa | Coste real |
@@ -22,7 +22,7 @@ La jefatura describe un directorio `gpu/mesa/osmesa-fork/{src/gallium/frontends/
 5. La **migración a otra superficie** (EGL, GBM o una propia) se decide en la fase S7GL, no antes (decisión de la jefatura).
 
 ## 4. Condiciones previas para implementar (no cumplidas hoy)
-(a) Confirmación del **Director** (lo exige la jefatura); (b) elegir **B1 o B2**; (c) tener un **entorno de compilación de Mesa para iOS** reproducible (hoy solo el CI de macOS; `mesa-ios.yml`) para poder probar cada cambio; (d) decidir quién vigila los avisos de seguridad; (e) licencia declarada para el código propio de `gpu/mesa/` (hoy sin licencia).
+(a) ~~Confirmación del **Director**~~ **hecha (D-0032)**; (b) ~~elegir **B1 o B2**~~ **B2 elegida**; (c) tener un **entorno de compilación de Mesa para iOS** reproducible (hoy solo el CI de macOS; `mesa-ios.yml`) para poder probar cada cambio; (d) decidir quién vigila los avisos de seguridad; (e) licencia declarada para el código propio de `gpu/mesa/` (hoy sin licencia).
 
 ## 5. Riesgos
 Mantener código ajeno sin pruebas automáticas del kernel/Mesa (S7GE_CONSOLIDATION_RISKS R10); la obsolescencia silenciosa de Panfrost para T880; que un fallo de Mesa 25.0.7 en esta unidad (p. ej. los `0x42`) **no tenga solución upstream**.

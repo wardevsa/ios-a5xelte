@@ -6,7 +6,7 @@
 | Pregunta | Resultado medido |
 |---|---|
 | ¿Aplica `gpu/mesa/patch-mesa.py` a **Mesa 25.0.7**? | **Sí: las 12 ediciones aplican** (cada una exige que el texto aparezca exactamente una vez) y se añaden `osmesa_hero.inc` y `hero_hw.c`; efecto: 7 ficheros de Mesa modificados, +295 −3 líneas |
-| ¿Aplica a **Mesa 26.2.4**? | **No.** Fallan al menos 3 ediciones (`meson.build`, dos de `pan_kmod.h`) y, sobre todo, **el fichero `src/gallium/targets/osmesa/osmesa_target.c` no existe**: `src/gallium/frontends/` de 26.2.4 no tiene `osmesa` (tampoco `src/gallium/targets/osmesa`) |
+| ¿Aplica a **Mesa 26.2.4**? | **No tal cual.** El fichero `src/gallium/targets/osmesa/osmesa_target.c` **no existe** (`src/gallium/frontends/` de 26.2.4 no tiene `osmesa`). *Corrección (2026-11-14, `S7GE_OSMESA_MESA26_COMPATIBILITY.md` §4):* con el frontend reinyectado, **10 de las 12 ediciones aplican y 2 fallan** (ambas en `pan_kmod.h`); la cifra "al menos 3" salió de una segunda pasada sobre un árbol ya modificado |
 | ¿Cuándo desapareció OSMesa? | Las notas de versión de Mesa lo dicen: **25.1.0: "Remove osmesa"** (y 25.2.0 limpia la opción de meson). **25.0.7 es, por tanto, la última versión con OSMesa** (la serie 25.0 acaba en 25.0.7) |
 | ¿Existe el tag `libdrm-2.4.124`? | Sí (se usa solo para las cabeceras `xf86drm.h`, `drm.h`; la biblioteca la sustituye `herodrm.c`) |
 

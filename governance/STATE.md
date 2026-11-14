@@ -19,6 +19,7 @@ Todo es **trabajo en el PC**: hay una candidata BOOT de primer arranque (variant
 | `herolte_gpu.c` (3 466 líneas) es 57 % GPU; el resto audio, Wi-Fi, relojes de CPU, energía, display | `docs/S7GE_INVENTORY.md`, `S7GE_SPLIT_PLAN.md` | L1 |
 | **Seguridad GPU:** AS0 única; `Submit` acepta la cadena del cliente sin validar; el bloque de 2 MiB con la L2 de usuario y las L3 es escribible desde un job (lectura de código) | `docs/S7GE_ABI.md`, `S7GE_HARDWARE.md` | L1 |
 | **Mesa:** el parcheador aplica a 25.0.7 (12/12); **OSMesa se eliminó en Mesa 25.1**; Mesa y libdrm son MIT en lo enlazado | `docs/S7GE_MESA_VERSION_ANALYSIS.md` | L1 |
+| **OSMesa propio (B2, D-0032):** `gpu/mesa/osmesa-frontend/` reinyecta el frontend de Mesa 25.0.7 en Mesa 26.2.4; **compila en Linux (913/913) y una prueba mínima da el píxel correcto**; falta el gancho `mmap` de Panfrost (2 de 12 ediciones), Panfrost y Darwin | E-0041, `docs/S7GE_OSMESA_MESA26_COMPATIBILITY.md` | L1 |
 | Rondas de mutación de rev2/rev3: 47 de 49 detectados, M16 y N02 equivalentes conocidos | E-0039 | L2 |
 | `tools/governance.py`: auditada, 98 pruebas propias y 6 de incorporación en OK; batería de 22 mutantes con control (E-0025, **sobre una versión anterior**: `next` cambió, ver T-0035) | E-0025 | L2 |
 | Herramienta de escritura de BOOT con salvaguardas, 13 pruebas con adb **falso**; clasificador de transcripciones, 9 pruebas | `tools/herolte-flash-boot.sh`, `herolte-boot-transcript-check.py` | L2 |
@@ -43,7 +44,7 @@ Remotos: `origin` = `wardevsa/ios-a5xelte` (upstream, **sin push**), `mio` = `da
 | **Autorización roja de escribir BOOT** (variante mínima, fase 1) con imagen y hash nombrados; antes: backup completo y recortado (KI-0008), segunda copia de EFS recomendada | Director | T-0012 |
 | R2 sigue sin autorizar (D-0005): el Director debe decir expresamente que puede ejecutarse | Director | T-0004, T-0006 |
 | Ratificar D-0007 (rango 0400+), D-0009 (DROP v2), D-0011, D-0012, D-0013 (permisos de Claude Code), D-0015 (aislamiento de clientes de HeroGPU) | Jefatura técnica / Director | T-0014, T-0018, T-0021, T-0023 |
-| Qué hacer con OSMesa (D-0031 fija la dirección; falta elegir B1/B2 y confirmar al Director) | Jefatura / Director | — |
+| Portar el gancho `mmap` de Panfrost y compilar con Panfrost/iOS (B2 ya elegida y autorizada): falta `libdrm-dev` o el CI (D-0032) | Ingeniero + Director (instalar herramientas / publicar) | T-0037 |
 | Consolidar la serie de parches y separar `herolte_gpu.c` (recomendado: después del primer arranque) | Jefatura | T-0015, T-0017 |
 | Ejecutar la parte 2 de la prueba de incorporación con un modelo en frío | Jefatura / Director | T-0020 |
 

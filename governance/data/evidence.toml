@@ -594,3 +594,18 @@ size = 18618384
 immutable = true
 note = "Mismo kernel (62ea7501...) y mismas entradas que E-0038; solo cambia la línea de arranque, para que en un primer arranque no se encienda el Wi-Fi/PCIe ni corran los hilos de energía y medición de GPU (S7GE_SPLIT_PLAN.md §3). Sin copia en NTFS aún (el NVMe está ocupado por el backup). NO escrita en el teléfono; decisión sobre cuál de las dos candidatas usar: del Director/jefatura."
 
+[[evidence]]
+id = "E-0041"
+title = "OSMesa de Mesa 25.0.7 reinyectado en Mesa 26.2.4 (gpu/mesa/osmesa-frontend): compila en Linux (913/913, rc=0) y la prueba mínima da el píxel correcto"
+kind = "result"
+path = "~/HackiOS/builds/device-day/osmesa-b2-20261114/PROVENANCE.txt"
+location = "host"
+created = "2026-11-14"
+domain = "build"
+level = "L1"
+device = "none"
+sha256 = "9fd2867e495a17eb29fdd7123ddb62c3384977379cde3b607c86dabc7cb248ea"
+size = 955
+immutable = true
+note = "Carpeta con build-linux-host.log, meson-options.txt, smoke-test.txt, exported-osmesa-symbols.txt y libOSMesa.sha256. Compilación de COMPROBACIÓN en Linux con softpipe: NO es Darwin, NO es Panfrost, NO está probada en el teléfono. Sin copia en NTFS aún (NVMe ocupado por el backup)."
+

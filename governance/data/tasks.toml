@@ -399,3 +399,26 @@ actions = ["host-tests", "pc-implementation", "local-commit"]
 acceptance = "regression.toml incluye test_flash_boot, test_boot_transcript, test_trim_dd_tail, test_adapter (ios-root-lab) y test_ci_check con su línea base; `regress` sin regresiones; batería de mutantes con control sin mutar sobre la versión actual de governance.py y evidencia nueva; STATE.md actualizado."
 resume = "No lanzar mientras el Director hace el backup en la otra terminal si compite por disco o CPU; la batería de mutantes clona el repositorio en /tmp (≈ 1-2 GB)."
 
+[[task]]
+id = "T-0036"
+title = "OSMesa B2 (D-0032): reinyectar el frontend OSMesa de Mesa 25.0.7 en Mesa 26.x (gpu/mesa/osmesa-frontend), compilar en Linux y documentar compatibilidad, pruebas y riesgos (Fases 18-21)"
+status = "done"
+priority = 6
+owner = "ingeniero"
+depends_on = ["T-0034"]
+actions = ["read-analysis", "docs-write", "pc-implementation", "host-tests", "heavy-compile", "local-commit"]
+requires_decisions = ["D-0032"]
+evidence = ["E-0041"]
+acceptance = "Hecho: gpu/mesa/osmesa-frontend/ (fuentes MIT sin tocar con SOURCES.sha256, 1 parche, integrate.py con anclas exactas, 2 Meson adaptados, README, 7 pruebas), compilación Linux sobre Mesa 26.2.4 (913/913) y prueba mínima OK; docs S7GE_OSMESA_MESA26_COMPATIBILITY, S7GE_OSMESA_TEST_PLAN y S7GE_OSMESA_B2_RISKS. NO hecho: portar el gancho mmap de Panfrost, compilar con Panfrost ni para iOS, y no se tocó gpu/mesa/build-mesa.sh ni patch-mesa.py, kernel, parches, adb, backup ni push."
+
+[[task]]
+id = "T-0037"
+title = "Portar a Mesa 26.x el gancho de mmap de Panfrost (2 ediciones de patch-mesa.py en pan_kmod.h) y el glue osmesa_hero.inc/hero_hw.c; compilar con Panfrost en el PC (necesita libdrm o su subproyecto) o en el CI"
+status = "blocked"
+priority = 7
+owner = "ingeniero"
+depends_on = ["T-0036"]
+actions = ["pc-implementation", "host-tests", "heavy-compile", "local-commit"]
+blocked_on = "libdrm-dev no está instalado en el PC (instalar herramientas del sistema es una acción roja): se puede resolver con el subproyecto de Meson (descarga) o compilando en el CI (publish, D-0030 solo cubre la rama herolte-drop-v2 en mio)"
+acceptance = "patch-mesa.py (o su sucesor) aplica 12/12 a Mesa 26.x y compila con Panfrost; los dylibs de iOS salen del CI con hash; comparar con 25.0.7."
+

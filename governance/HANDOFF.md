@@ -8,7 +8,15 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0016 — herramienta de flasheo con salvaguardas lista; D-0031 (OSMesa) solo como política (2026-11-14)
+## Relevo vigente: H-0017 — B2 autorizada por el Director (D-0032) y el OSMesa propio compila sobre Mesa 26.2.4 (2026-11-14)
+- **Director:** "Autorizo B2". **Hecho (T-0036):** `gpu/mesa/osmesa-frontend/` (fuentes de Mesa 25.0.7 sin tocar + `patches/0001-osmesa-no-postprocess.patch` + `integrate.py` con anclas exactas + Meson 26.x + README + 7 pruebas; la prueba encontró y corrigió un fallo de idempotencia). **Compila en Linux sobre Mesa 26.2.4 (913/913) y una prueba mínima da el píxel correcto (E-0041).** Documentos: `S7GE_OSMESA_MESA26_COMPATIBILITY.md` (lo que rompió: Meson ≥1.4, opciones, `with_shared_glapi`, `libglapi_static`, `glapi.h`, módulo `postprocess` eliminado), `S7GE_OSMESA_TEST_PLAN.md`, `S7GE_OSMESA_B2_RISKS.md`.
+- **No resuelto:** el gancho de `mmap` de Panfrost (2 de 12 ediciones de `patch-mesa.py` fallan en 26.2.4), el glue `osmesa_hero.inc`/`hero_hw.c`, Panfrost compilado y Darwin (T-0037, bloqueada: falta `libdrm-dev`, instalar herramientas del sistema es rojo). **`gpu/mesa/build-mesa.sh` sigue en Mesa 25.0.7: el drop no cambia.**
+- **Corrección de un dato mío anterior:** "fallan 3 ediciones" salió de una segunda pasada sobre un árbol ya modificado; son 2.
+- **La variante mínima del primer arranque no usa GL**: nada de esto afecta al flasheo. Backup del Director en otra terminal: no tocar adb ni esa carpeta. **Siguiente (verde): T-0035.**
+
+---
+
+## Relevo anterior: H-0016 — herramienta de flasheo con salvaguardas lista; D-0031 (OSMesa) solo como política (2026-11-14)
 - **Hecho (T-0034):** `tools/herolte-flash-boot.sh` (ensayo por defecto; `--execute` exige que `governance.py gate device-write-boot --task T-0012` autorice; comprueba hash, sda5, tamaño, EFS antes/después, hash en el teléfono y lectura de vuelta) con **13 pruebas con un adb FALSO**; `tools/herolte-boot-transcript-check.py` (clasifica la transcripción A-E; **no hay log que extraer**: `herolog=0`); `S7GE_PREFLIGHT_CHECKLIST.md` (19 puntos con su estado real; el rollback está **documentado, no ensayado**), `S7GE_FLASH_SCRIPTS.md`, `S7GE_POST_FLASH_ANALYSIS.md`, `S7GE_OSMESA_FORK_POLICY.md`.
 - **D-0031 (jefatura):** OSMesa lo mantenemos nosotros; **no se implementa nada** hasta que el Director confirme y se elija B1 (congelar Mesa 25.0.7) o B2 (solo el frontend sobre un Mesa más nuevo). Señal a favor de B2: las 18 funciones de Mesa que usa `osmesa.c` existen en 26.2.4 con la misma declaración (no compilado).
 - **Cuando el Director autorice el flasheo:** registrar su decisión `APPROVED` (`authorizes` con `device-write-boot` y `device-read`, hash de la imagen en el texto), poner `authorization_ref` en T-0012, ensayo del script, después `--execute`. **El ingeniero no ejecuta el script sin esa decisión; la herramienta tampoco.**

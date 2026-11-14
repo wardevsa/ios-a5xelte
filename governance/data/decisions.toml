@@ -416,3 +416,17 @@ rationale = "OSMesa fue eliminado en Mesa 25.1.0 (S7GE_MESA_VERSION_ANALYSIS.md)
 consequences = "Es DIRECCIÓN, no implementación: NO autoriza crear gpu/mesa/osmesa-fork/ ni tocar parches ni gpu/mesa. La implementación espera la confirmación del Director y la elección entre B1 (congelar Mesa 25.0.7 entera) y B2 (solo el frontend sobre un Mesa más nuevo); condiciones previas en la política §4."
 reversal = "Nueva decisión de arquitectura; no hay código que revertir."
 
+[[decision]]
+id = "D-0032"
+title = "El Director confirma la Opción B2 de OSMesa: mantener solo el frontend OSMesa (osmesa.c, ~1 286 líneas) sobre un Mesa más nuevo; refina y confirma D-0031"
+date = "2026-11-14"
+scope = "architecture"
+status = "APPROVED"
+proposer = "jefe-tecnico"
+approved_by = "director"
+approval_date = "2026-11-14"
+approval_ref = "Mensaje del Director (pioxi), 2026-11-14: 'Autorizo B2, firmado Pioxi.'"
+rationale = "La jefatura la recomienda: Mesa moderno sigue manteniendo Panfrost para Midgard v5 (T760/T820/T830/T860/T880 constan en docs/drivers/panfrost.rst de 26.2.4, con correcciones recientes en 26.1 y 26.2) y recibe correcciones de seguridad; B1 (congelar 25.0.7) las perdería."
+consequences = "Cumple la condición (a) de S7GE_OSMESA_FORK_POLICY.md §4: queda autorizado trabajar en gpu/mesa/ (NO en xnu/, kernel ni parches): documentar y construir la integración del frontend. Siguen siendo condiciones propias del trabajo: (c) un entorno de compilación de Mesa (en el PC solo se puede probar una compilación de comprobación en Linux; la de iOS es del CI de macOS), (d) quién vigila los avisos de seguridad, (e) licencia declarada del código propio. NO autoriza publicar (push/CI) más allá de lo que ya cubre D-0030, ni tocar el teléfono."
+reversal = "Nueva decisión de arquitectura; si se crea gpu/mesa/osmesa-frontend/, git revert."
+
