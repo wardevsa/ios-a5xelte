@@ -20,7 +20,7 @@ Un modelo distinto que se incorpore **hereda el rol de ingeniero**, no una autor
 | Cambio de arquitectura o interfaz crítica | ingeniero / jefe técnico | jefe técnico | jefe técnico (ámbito `architecture`); el director si cambia la dirección del proyecto |
 | Prioridades y criterios de aceptación | jefe técnico / director | — | jefe técnico o director |
 | Cambio de política, jerarquía, `AGENTS.md`, nivel X | cualquiera | director | **director** |
-| Acción de nivel C (sudo, montar, publicar, borrar, tocar el teléfono) | ingeniero la solicita | jefe técnico opina | **director** (decisión `APPROVED` ámbito `operation`) |
+| Acción de nivel C (publicar, borrar, tocar el teléfono; `sudo` y montaje de imágenes de laboratorio son nivel A desde D-0025) | ingeniero la solicita | jefe técnico opina | **director** (decisión `APPROVED` ámbito `operation`) |
 | Cambio del generador del root | ingeniero | jefe técnico | **director** |
 
 ## 3. Quién habla: procedencia de los mensajes

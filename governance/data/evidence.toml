@@ -444,3 +444,33 @@ size = 112640
 immutable = true
 note = "Solo R07 y R09 se reejecutaron sobre rev3; no es una ronda completa. rev2 intacto. No valida R2 ni autoriza nada."
 
+[[evidence]]
+id = "E-0031"
+title = "Imagen de laboratorio lab-full-xnu (ROOT_HFSPLUS_LAB_VALID_CANDIDATE): HFS+ con nombres en forma XNU, copia archivada en NTFS"
+kind = "image"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/lab-full-xnu-20261114.img"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "747d02450f94426b81493189732e6719bfc0dc09b0632661b822961a319ec27f"
+size = 21474836480
+immutable = true
+note = "Imagen de 20 GiB (12 GiB reales) verificada con verify_image.sh en un montaje de solo lectura real; sha256 idéntico antes y después y al de la copia. Contiene binarios de Apple: NO va a git. Es un candidato de laboratorio: no se ha arrancado en el S7 ni en ningún otro sitio. 195 NAME-NORMALIZED son avisos (KI-0007). Faltan los 2 ficheros U+0E33 excluidos (KI-0006)."
+
+[[evidence]]
+id = "E-0032"
+title = "T-0025: salidas completas del populate y del verify válido (meta_os 318 068 OK, sys 2 093, app 1 047, strict 1 459 + 884, stage 75, fsck y hfsx_post sin errores)"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/t0025-verify-valid-20261114.tar"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "362f55a07041c3c3f519993d6f857f0fe560a9a4f68d7d7e94ef01ca5ade4a02"
+size = 1392640
+immutable = true
+note = "Sustituye a E-0029 (primer verify, con los 2 EXTRA del diario) como resultado final; E-0029 se conserva."
+

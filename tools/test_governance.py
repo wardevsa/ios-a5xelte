@@ -105,7 +105,7 @@ class Positive(unittest.TestCase):
     def test_views_are_current(self): self.assertEqual(gov.cmd_render(REPO, True), 0)
 
     def test_exit_codes_of_can_by_tier(self):
-        for action, code in (('read-analysis', 0), ('patch-series-change', 10), ('publish', 20), ('privileged-or-mount', 20), ('device-write-boot', 20),
+        for action, code in (('read-analysis', 0), ('patch-series-change', 10), ('publish', 20), ('privileged-or-mount', 0), ('heavy-compile', 0), ('device-write-boot', 20),
                              ('write-protected-partitions', 30), ('destructive-git', 30), ('no-existe', 2)):
             self.assertEqual(run(REPO, 'can', action).returncode, code, action)
 

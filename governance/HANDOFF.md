@@ -8,7 +8,16 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0007 — T-0025 con verify real analizado; T-0027 cerrada; T-0026 en espera (2026-11-14)
+## Relevo vigente: H-0008 — T-0025 cerrada; sudo/montaje/compilación pesada/imágenes de prueba son VERDES (D-0025), 2026-11-14
+- **T-0025 hecha:** verify real del Director: `ROOT_HFSPLUS_LAB_VALID_CANDIDATE` (`lab-full-xnu.img.valid`), sha256 `747d0245…ec27f` idéntico antes, después y en la copia de NTFS (E-0031; salidas en E-0032). Contiene binarios de Apple: no va a git. **No se ha arrancado en ningún sitio** (nivel L2, sin L3/L4). Faltan los 2 ficheros `U+0E33` (KI-0006); los 195 `NAME-NORMALIZED` son avisos (KI-0007).
+- **D-0025 (Director, 2026-11-14):** `privileged-or-mount` y la nueva `heavy-compile` pasan a nivel A; D-0022 y D-0021 quedan sustituidas. **No** cambia: borrar/mover datos, publicar/CI, todo lo del teléfono (siguen rojos), ni **R2** (D-0005: sigue sin autorizar; hay que pedir al Director que lo diga expresamente). El ingeniero **no tiene sudo** (pide contraseña): ejecuta el Director los comandos con sudo, o la sesión debe disponer de él. Las guardas de `img_common.sh`/`guard.py` no se relajan.
+- **T-0026 hecha** (como D-0025, no como "tres niveles nuevos": la estructura A/B/C/X ya son los tres colores).
+- **Siguiente (verde): T-0028** (ronda completa de 49 mutantes sobre rev3, con guardia de disco). Otras esperas: T-0004 (R2), T-0019 (archivar `lab-full.img.partial` anterior; el nuevo ya está), T-0016/T-0023 (arquitectura).
+- Scratchpad volátil: la imagen nueva ya está en NTFS; `r3/work` (renombrado) y los logs también deberían archivarse si se vuelven a necesitar.
+
+---
+
+## Relevo anterior: H-0007 — T-0025 con verify real analizado; T-0027 cerrada; T-0026 en espera (2026-11-14)
 - **T-0025:** populate y primer verify REALES hechos por el Director (E-0029). Catálogo en bruto: 327/327 nombres en forma XNU exacta; los 195 `NAME-NORMALIZED` son avisos (Linux recompone al leer, KI-0007); el fallo real eran 2 EXTRA: `.journal` y `.journal_info_block` (omisión mía del punto 5, corregida en `tools/ios-root-lab/verify_image.sh`). **Falta que el Director repita `sudo bash <carpeta-imagenes>/xnu_sudo_run.sh verify`** (montaje de solo lectura); si pasa, la imagen se renombra a `.valid`. Ver `docs/herolte-unicode-imagen.md` §5. Después: archivar la imagen (12 GB, volátil en /tmp) y cerrar T-0025.
 - **T-0027 hecha (E-0030):** el hueco R07 era del stub de losetup (el retraso de udev nunca arrancaba), no de `r2_lib.sh`; rev3 lo corrige (rev2 intacto).
 - **T-0026 en espera:** la petición del 2026-11-14 (sudo/montaje/imágenes = VERDE, 3 niveles) contradice D-0022 (NARANJA) y quita controles al Director: necesita su confirmación con sus palabras.

@@ -6,9 +6,9 @@ Catálogo completo de acciones y su nivel: `data/policy.toml`. Consulta rápida:
 ## 1. Los cuatro niveles
 | Nivel | Qué es | Ejemplos | Regla |
 |---|---|---|---|
-| **A** verde, autónomo | No se pregunta | leer y medir; escribir código y pruebas en el worktree; commits locales; construir candidatas con nombre nuevo; archivar copias verificadas; documentación y gobierno | Se hace, se prueba, se documenta, se anota en un checkpoint |
+| **A** verde, autónomo | No se pregunta | leer y medir; escribir código y pruebas en el worktree; commits locales; construir candidatas con nombre nuevo; archivar copias verificadas; `sudo`, montaje de imágenes de laboratorio, compilación pesada y generación de imágenes de prueba (D-0025); documentación y gobierno | Se hace, se prueba, se documenta, se anota en un checkpoint |
 | **B** amarillo, revisión antes de consolidar | Se implementa y se confirma en local, **no se consolida** | arquitectura e interfaces críticas, serie de parches y kernel, generador del root, política | Registrar como decisión `PROPOSED`; el revisor (`policy.toml`) la revisa; solo entonces se fusiona/publica/congela |
-| **C** rojo, autorización del Director | Antes de ejecutar | `sudo` y montajes (R2), push/PR/CI, borrar o mover datos, tocar el teléfono (leer o escribir BOOT/USERDATA), instalar herramientas, cambiar el PC | Decisión `APPROVED` del director, acotada; la tarea la cita en `authorization_ref` |
+| **C** rojo, autorización del Director | Antes de ejecutar | push/PR/CI, borrar o mover datos, tocar el teléfono (leer o escribir BOOT/USERDATA), instalar herramientas, cambiar el PC. (`sudo` y montaje de imágenes de laboratorio son VERDES desde D-0025; R2 sigue sin autorizar: D-0005) | Decisión `APPROVED` del director, acotada; la tarea la cita en `authorization_ref` |
 | **X** rojo, prohibido | Nunca | escribir EFS/RECOVERY/bootloader; saltarse permisos; Git destructivo; reparar con escritura evidencias; filtrar datos privados | Ni con autorización verbal: solo el Director, por escrito, cambiando la regla |
 
 ## 2. El bucle de trabajo del ingeniero

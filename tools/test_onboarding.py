@@ -57,7 +57,7 @@ class Onboarding(unittest.TestCase):
         for d in pend: self.assertIn(d, rd('HANDOFF.md') + rd('STATE.md'), d)      # no pending proposal is invisible to the next agent
 
     def test_red_actions_stay_denied_and_forbidden_ones_forbidden(self):
-        for action, code in (('publish', 20), ('privileged-or-mount', 20), ('device-write-boot', 20), ('delete-or-overwrite', 20), ('write-protected-partitions', 30), ('docs-write', 0)):
+        for action, code in (('publish', 20), ('privileged-or-mount', 0), ('device-write-boot', 20), ('delete-or-overwrite', 20), ('write-protected-partitions', 30), ('docs-write', 0)):
             self.assertEqual(self.gov('gate', action).returncode, code, action)
 
     def test_resume_drill_after_an_interruption(self):

@@ -45,9 +45,9 @@ title = "R2: experimento nodecompose con imágenes de 512 MiB A/B/C (monta imág
 status = "blocked"
 priority = 6
 owner = "ingeniero"
-depends_on = ["T-0005", "T-0006", "T-0024"]
+depends_on = ["T-0006"]
 actions = ["privileged-or-mount"]
-blocked_on = "autorización explícita del director (D-0005) y cierre de T-0005/T-0006"
+blocked_on = "R2 sigue sin autorizar por D-0005 (restricción específica del Director); sudo y montaje ya son verdes (D-0025), pero eso no levanta D-0005: el Director debe decir expresamente que R2 puede ejecutarse"
 acceptance = "fsck_hfs -n rc=0 sobre B/C con nombres en forma XNU, hashes de las imágenes originales intactos, evidencias nuevas con nombre nuevo."
 
 [[task]]
@@ -280,16 +280,14 @@ resume = "Ver docs/herolte-unicode-hfsplus.md §3 puntos 2-5 (el punto 1, nodeco
 [[task]]
 id = "T-0025"
 title = "Generar la imagen de laboratorio NUEVA con los nombres en forma XNU (monta HFS+: acción roja) y verificarla"
-status = "blocked"
+status = "done"
 priority = 3
 owner = "ingeniero"
 depends_on = ["T-0024"]
-requires_decisions = ["D-0020", "D-0021"]
-authorization_ref = "D-0021"
+requires_decisions = ["D-0020"]
 actions = ["privileged-or-mount", "pc-implementation", "host-tests"]
-blocked_on = "repetir verify_image.sh con sudo (script corregido: .journal y .journal_info_block ya no cuentan como EXTRA); el primer verify real está archivado en E-0029; ver docs/herolte-unicode-imagen.md §5"
 acceptance = "Imagen con nombre nuevo con 30 nombres en forma XNU y los 2 de U+0E33 excluidos (KI-0006); hashes de la anterior intactos; hfsx_check esperando forma XNU; evidencias nuevas con SHA-256."
-evidence = ["E-0026", "E-0028", "E-0029"]
+evidence = ["E-0026", "E-0028", "E-0029", "E-0031", "E-0032"]
 
 [[task]]
 id = "T-0027"
@@ -304,15 +302,15 @@ evidence = ["E-0027", "E-0030"]
 
 [[task]]
 id = "T-0026"
-title = "Implementar D-0022 en policy.toml, AUTHORITY y governance.py: nivel NARANJA (autorizador: jefatura técnica) y ROJO CRÍTICO (solo Director), con pruebas y mutantes"
-status = "blocked"
+title = "Implementar D-0025 (sudo, montaje, compilación pesada e imágenes de prueba pasan a verde; sustituye a D-0022)"
+status = "done"
 priority = 5
 owner = "ingeniero"
 depends_on = []
-blocked_on = "el Director debe confirmar con sus palabras la nueva clasificación pedida el 2026-11-14 (sudo/montaje/generación de imágenes en el host = VERDE autónomo, tres niveles), que contradice D-0022 (NARANJA autorizada por la jefatura) y le quita al Director el control de acciones privilegiadas; ver el informe"
 actions = ["policy-change", "pc-implementation", "host-tests", "local-commit"]
-requires_decisions = ["D-0022"]
-acceptance = "Un nivel nuevo en policy.toml con sus acciones (privileged-or-mount y las de compilación pesada/imágenes; NO borrar ficheros del host ni publicar, que D-0022 no reclasifica), gate con su código de salida, validación en check, pruebas (incluida la negativa: una acción naranja sin decisión del jefe técnico/Director se deniega), batería de mutantes con control y documentación. Cambiar policy.toml es nivel B con revisor director: el Director aprobó D-0022."
+review_ref = "D-0025"
+requires_decisions = ["D-0025"]
+acceptance = "Hecho: policy.toml (privileged-or-mount A, heavy-compile A nueva), pin, AUTHORITY/AUTONOMY/SECURITY, D-0022 y D-0021 sustituidas, pruebas actualizadas. NO se creó un nivel naranja ni se reclasificó borrar/publicar/dispositivo (el Director solo nombró sudo, montaje, compilación pesada e imágenes de prueba)."
 
 [[task]]
 id = "T-0028"

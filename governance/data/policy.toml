@@ -126,10 +126,15 @@ requires = ["rama y contenido nombrados en la autorización", "sin datos privado
 
 [[actions]]
 id = "privileged-or-mount"
-tier = "C"
-authorizer = "director"
-summary = "Usar sudo, asociar bucles o montar imágenes (incluido el experimento R2 y cualquier populate/verify con montaje)."
-requires = ["ejecutor validado y revisado de forma independiente", "imágenes originales y pristine intactas", "lista exacta de comandos aprobada"]
+tier = "A"
+summary = "Usar sudo en el PC, asociar bucles y montar IMÁGENES DE LABORATORIO (ficheros regulares): populate/verify, R2 si hay autorización específica. Verde por decisión del Director (D-0025, 2026-11-14)."
+requires = ["solo ficheros de imagen regulares bajo la carpeta de laboratorio con las guardias de img_common.sh/guard.py: nunca un dispositivo de bloque físico, una partición ni el teléfono", "nunca tocar /mnt/hfs-test, /dev/loop10 ni lo que no sea del experimento", "imágenes originales y pristine intactas; nombre nuevo", "sudo NO reclasifica borrar/mover datos, publicar ni escribir en el dispositivo: siguen en su nivel", "R2 sigue sin autorizar mientras D-0005 esté vigente (restricción específica del Director)"]
+
+[[actions]]
+id = "heavy-compile"
+tier = "A"
+summary = "Compilación pesada (kernel, toolchains) y generación de imágenes de prueba en el PC, con uso intensivo de disco, CPU y memoria. Verde por decisión del Director (D-0025)."
+requires = ["presupuesto de disco comprobado antes (>= el doble de lo estimado libre) y guardia que aborte sin borrar nada", "nombre nuevo, nunca sobrescribir", "no es publicar: el CI, push y PR siguen siendo rojos"]
 
 [[actions]]
 id = "delete-or-overwrite"
