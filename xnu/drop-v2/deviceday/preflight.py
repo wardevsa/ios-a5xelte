@@ -78,12 +78,12 @@ def host_checks(kit):
     hero = open(os.path.join(REPO, 'gpu', 'eagl', 'test', 'hero-run.c')).read()
     check('hero-run.c usa .drop/ready y consumed', 'dropv2_pending' in hero and 'DROP_CONSUMED' in hero)
     patches = sorted(os.listdir(os.path.join(REPO, 'xnu', 'patches')))
-    has334 = '0334-herolte-drop-v2.patch' in patches   # nombre completo: upstream tiene otro 0334 (T-0009)
-    report('ok' if has334 else 'warn', 'parche 0334-herolte-drop-v2 en xnu/patches/',
-           '' if has334 else 'no está (queda en xnu/drop-v2/patches-proposed/): el CI NO lo compilará hasta que se adopte')
-    if has334 and any(p.startswith('0333-herolte-drop-block1') for p in patches):
-        report('fail', '0333 y 0334 a la vez en xnu/patches/',
-               '0334 sustituye herolte_drop.c desde el estado 0332: con 0333 delante NO aplica y el CI lo salta en silencio')
+    has337 = '0337-herolte-drop-v2.patch' in patches   # nombre completo: upstream tiene otro 0334 (T-0009)
+    report('ok' if has337 else 'warn', 'parche 0337-herolte-drop-v2 en xnu/patches/',
+           '' if has337 else 'no está (queda en xnu/drop-v2/patches-proposed/): el CI NO lo compilará hasta que se adopte')
+    if has337 and any(p.startswith('0333-herolte-drop-block1') for p in patches):
+        report('fail', '0333-herolte-drop-block1 y 0337 a la vez en xnu/patches/',
+               '0337 sustituye herolte_drop.c desde el estado 0336 (marcadores): con 0333-herolte-drop-block1 delante NO aplica y el CI lo salta en silencio')
     strays = [f for f in os.listdir(os.getcwd()) if f.startswith('herolte-drop') and f.endswith('.bin')]
     check('sin restos herolte-drop*.bin en el directorio actual', not strays, str(strays))
 

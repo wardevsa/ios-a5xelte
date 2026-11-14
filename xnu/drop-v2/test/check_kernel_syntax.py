@@ -3,7 +3,7 @@
 
   python3 -I xnu/drop-v2/test/check_kernel_syntax.py
 
-Extrae de xnu/patches/0334-herolte-drop-v2.patch (o de patches-proposed/) la imagen resultante de bsd/dev/herolte_drop.c y la compila
+Extrae de xnu/patches/0337-herolte-drop-v2.patch (o de patches-proposed/) la imagen resultante de bsd/dev/herolte_drop.c y la compila
 (solo -fsyntax-only) contra test/kstub/kstub.h: cabeceras SIMULADAS con las firmas copiadas de XNU 8796.141.3.
 Cubre errores de tipos, de número de argumentos y los avisos que XNU trata como error (-Wmissing-prototypes,
 -Wshorten-64-to-32, -Wcast-qual...). NO sustituye a una compilación real de XNU: no valida nombres de KPI que
@@ -18,8 +18,8 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DROP = os.path.join(HERE, '..')
-PATCH = next(p for p in (os.path.join(DROP, '..', 'patches', '0334-herolte-drop-v2.patch'),
-                         os.path.join(DROP, 'patches-proposed', '0334-herolte-drop-v2.patch'))
+PATCH = next(p for p in (os.path.join(DROP, '..', 'patches', '0337-herolte-drop-v2.patch'),
+                         os.path.join(DROP, 'patches-proposed', '0337-herolte-drop-v2.patch'))
              if os.path.exists(p))
 FORWARD = ['sys/param.h', 'sys/systm.h', 'sys/errno.h', 'sys/fcntl.h', 'sys/stat.h', 'sys/proc.h',
            'sys/vnode_internal.h', 'sys/namei.h', 'sys/kauth.h', 'sys/mount.h', 'kern/kalloc.h',

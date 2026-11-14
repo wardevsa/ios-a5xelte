@@ -56,7 +56,7 @@ barreras; 81 510 casos de doble fallo.
 autoprueba y su verificación de solo lectura vía `tools/herolte-hfs-read.py`). El kit de artefactos descargados está en
 `~/HackiOS/builds/device-day/` (fuera del repo).
 
-## Kernel: `xnu/patches/0334-herolte-drop-v2.patch` — adoptado en la rama `herolte-drop-v2`; hasta el CI, SIN compilar
+## Kernel: `xnu/patches/0337-herolte-drop-v2.patch` — adoptado en la rama `herolte-drop-v2`; hasta el CI, SIN compilar
 Aplica con `git apply` sobre el árbol con la serie hasta **0332** (comprobado contra el árbol exacto del CI, run 43020315155,
 y el resultado es idéntico a las fuentes de este directorio). **No debe ir junto a 0333** (el borrador `0333-herolte-drop-block1-hardening`,
 que 0334 deja sin efecto): con 0333 delante, 0334 no aplica y el CI lo salta en silencio. `preflight.py` lo comprueba. Sustituye por completo `bsd/dev/herolte_drop.c` (enlace fino sobre el
@@ -77,7 +77,7 @@ Sin verificar hasta una compilación real: `VNOP_IOCTL(rootvnode, F_FULLFSYNC)` 
 orden alfabético (0334 va tras 0333, bien), pero si `git apply --check` falla solo escribe "Skipping patch ..." y sigue.
 Además, el paso de anotaciones de `xnu.yml` filtra a propósito esas líneas. Un 0334 que no aplicara dejaría el kernel
 con el 0333 defectuoso y **sin ningún error**. Tras la primera compilación hay que buscar en el log
-`Applying patch: .../0334-herolte-drop-v2.patch` y comprobar que no aparece su "Skipping patch".
+`Applying patch: .../0337-herolte-drop-v2.patch` y comprobar que no aparece su "Skipping patch".
 
 ## hero-run (`gpu/eagl/test/hero-run.c`) — hecho
 `install_apps` espera `.drop/ready`; si es distinto de `.drop/consumed`, mueve las apps y escribe `consumed`
@@ -109,7 +109,7 @@ D6 `herolte_ufs_sync()` exportada y usada tras cada `F_FULLFSYNC`. D7 estado en 
 pierden espacio, no corrompen nada.
 
 ## Pendiente, en este orden
-1. ~~Enlace con el kernel~~ **escrito, sin compilar**: `patches-proposed/0334-herolte-drop-v2.patch` (ver abajo).
+1. ~~Enlace con el kernel~~ **escrito, sin compilar**: `patches-proposed/0337-herolte-drop-v2.patch` (ver abajo).
 2. ~~`gpu/eagl/test/hero-run.c`~~ **hecho** (ver abajo); falta que lo compile el CI (necesita el SDK de Apple).
 3. ~~`tools/herolte-drop.py`~~ **hecho** (ver abajo).
 4. Compilación XNU controlada y, con autorización específica, el dispositivo.

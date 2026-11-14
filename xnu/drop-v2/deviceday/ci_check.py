@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """¿Aplicó el CI el parche pedido? Lee el log de una ejecución del workflow xnu (solo lectura, usa `gh`).
 
-  python3 -I xnu/drop-v2/deviceday/ci_check.py OWNER/REPO RUN_ID [PARCHE=0334-herolte-drop-v2]
+  python3 -I xnu/drop-v2/deviceday/ci_check.py OWNER/REPO RUN_ID [PARCHE=0337-herolte-drop-v2]
 
 PARCHE es el NOMBRE COMPLETO del parche (con o sin `.patch`). Un número suelto (`0334`, `0334-`) casa con varios
 parches si dos series comparten número (T-0009: 0332 y 0334 están duplicados con origin/herolte) y daría un falso
@@ -18,7 +18,7 @@ import sys
 import zipfile
 
 
-DEFAULT_PATCH = '0334-herolte-drop-v2'
+DEFAULT_PATCH = '0337-herolte-drop-v2'
 
 
 def normalise(name):

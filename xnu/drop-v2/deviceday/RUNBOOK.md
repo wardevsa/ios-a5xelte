@@ -47,8 +47,8 @@ En cualquier caso la instalación **borra USERDATA entero** (todo el Android): c
 Nada más. DROP v2 solo escribe bajo `/private/var/herolte/` (el núcleo rechaza cualquier otra ruta y los nombres `.drop*`).
 
 ## 2. En el PC, sin teléfono
-1. 🛑 **Decisión D5**: cómo entra el parche. Propuesto: `xnu/drop-v2/patches-proposed/0334-herolte-drop-v2.patch` →
-   `xnu/patches/0334-herolte-drop-v2.patch`. Hasta entonces el CI **no** lo compila.
+1. 🛑 **Decisión D5**: cómo entra el parche. Propuesto: `xnu/drop-v2/patches-proposed/0337-herolte-drop-v2.patch` →
+   `xnu/patches/0337-herolte-drop-v2.patch`. Hasta entonces el CI **no** lo compila.
 2. 🛑 Compilar con el CI (acción hacia fuera: empujar la rama y lanzar el workflow `xnu`, y `mesa-ios` para el `hero-run` nuevo).
 3. **Comprobar que el parche se aplicó** (el CI salta en silencio los que no aplican):
    `gh run view <ID> --log | grep -E 'Applying patch: .*0334|Skipping patch .*0334'` → debe salir *Applying* y **no** *Skipping*.
