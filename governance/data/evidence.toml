@@ -2289,3 +2289,63 @@ sha256 = "49a35c75a935c363e3deeaf88c1aff524c92c3780abc07323484058bff07ac65"
 size = 727
 immutable = true
 note = "Solo escritura y lectura de vuelta (hash registrado antes en E-0151; revisión del kernel E-0149). La imagen mide 18 620 432 B (el kernel creció); cabe de sobra en BOOT (41 943 040 B). Difiere de la línea de min2 solo en herostop=50."
+
+[[evidence]]
+id = "E-0156"
+title = "Observación de min14h50: pantalla congelada con los nombres de las 10 primeras fases del arranque general (vm_mem_bootstrap … vm_object_bootstrap) junto a sus bloques; sin pánico: el kernel entra en vm_object_bootstrap"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min14h50-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "840e8bd9a10a80b2fbc6d835bb6a8db613b6f8e622459921c7527be7e14cea66"
+size = 760
+immutable = true
+note = "Los 10 nombres encajan con vm_init.c/pmap_steal/zone (vm_mem_bootstrap_log y kernel_bootstrap_log) y con el slot 50 = décima fase. La fase se ANUNCIA antes de ejecutarse: vm_object_bootstrap fue anunciada, no se sabe si terminó. Quedan en vm_mem_bootstrap: vm_map_init (51), kmem_init (52, donde min1 hizo panic en kmem_range_init), vm_fault_init (53). Texto transcrito por IA de una foto no archivada."
+
+[[evidence]]
+id = "E-0157"
+title = "Imagen preparada (kernel 0349; D-0043/D-0045): xnu-boot-v2-s7-min14h51-20261114 = línea de min2 + herostop=51; 47 PASS constructor y 58 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run15-min14/xnu-boot-v2-s7-min14h51-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "2c0847a539940af1b88a9c67d78f2df8d33a891a2eb7ff6783a83f0cf30eaa9d"
+size = 18620432
+immutable = true
+note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT y cargador como antes; la línea difiere de min2 solo en herostop=51 (diff). Acota el fallo dentro de vm_mem_bootstrap: 51 = vm_map_init anunciada, 52 = kmem_init, 53 = vm_fault_init."
+
+[[evidence]]
+id = "E-0158"
+title = "Imagen preparada (kernel 0349; D-0043/D-0045): xnu-boot-v2-s7-min14h52-20261114 = línea de min2 + herostop=52; 47 PASS constructor y 58 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run15-min14/xnu-boot-v2-s7-min14h52-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "22c7d73fc1f2603ccb232ee46c4bc31ec65623e54f14438f47920d71f86f6f10"
+size = 18620432
+immutable = true
+note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT y cargador como antes; la línea difiere de min2 solo en herostop=52 (diff). Acota el fallo dentro de vm_mem_bootstrap: 51 = vm_map_init anunciada, 52 = kmem_init, 53 = vm_fault_init."
+
+[[evidence]]
+id = "E-0159"
+title = "Imagen preparada (kernel 0349; D-0043/D-0045): xnu-boot-v2-s7-min14h53-20261114 = línea de min2 + herostop=53; 47 PASS constructor y 58 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run15-min14/xnu-boot-v2-s7-min14h53-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "5a97c6aab9cbcd75da68116c82b0486f96e0d584575d85cd377ea592431bb877"
+size = 18620432
+immutable = true
+note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT y cargador como antes; la línea difiere de min2 solo en herostop=53 (diff). Acota el fallo dentro de vm_mem_bootstrap: 51 = vm_map_init anunciada, 52 = kmem_init, 53 = vm_fault_init."
