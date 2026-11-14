@@ -2604,3 +2604,18 @@ sha256 = "fb8837fb38e37ce74dbda2be8a3a75c8a1bab4dc49c54a9134d8b39fd44d3da9"
 size = 1761
 immutable = true
 note = "Corresponde al resultado A de docs/S7GE_MIN_BOOT_VALIDATION.md (llega a la consola de C, lee el UFS y falla al montar la raíz: éxito de N2). Transcripción por IA de tres fotos no archivadas y no ordenadas en el tiempo; el anillo da cadenas de formato, no valores. Implicación sobre mis interpretaciones previas: la 'pantalla de reinicio' de min2-min13 (XNU MMU ON + 3 bloques) probablemente NO era un reinicio: eran las marcas de start.s que quedan sobre el framebuffer mientras el kernel seguía vivo y su consola no dibujaba."
+
+[[evidence]]
+id = "E-0178"
+title = "F0 de la raíz iOS: los tres .dmg del IPSW y la imagen lab-full-xnu-20261114.img (20 GiB) coinciden con sus hashes registrados; herramientas presentes; sudo no interactivo"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/f0-ios-root-checks.txt"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "7eaea72a7e10b3bfb24a65bff7fe05c51e6e3a813e6a5bb1816178440e82d2e0"
+size = 610
+immutable = true
+note = "Comprobaciones previas del plan docs/S7GE_IOS_ROOT_PLAN.md; solo lectura. La imagen no se ha montado ni tuneado todavía (F1 necesita sudo)."
