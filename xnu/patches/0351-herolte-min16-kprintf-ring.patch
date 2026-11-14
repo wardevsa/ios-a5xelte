@@ -1,0 +1,135 @@
+diag(min16): mirror kprintf()/printf() format strings into a ring of text lines on the early console
+
+min15/min15v: 64 phases are announced up to PE_lockdown_iokit and then the machine resets inside PE_lockdown_iokit/bsd_init, which announce nothing; -v does not make the kernel log visible. Hook kprintf() and printf() with sweet_early_kprintf(fmt): the first 36 characters of each format string go to a 73-row ring in the left third of the screen (x=20..620), a white marker at the left edge on the newest line. Active after sweet_early_phase_begin(). Hooks in pexpert/arm/pe_kprintf.c and osfmk/kern/printf.c are one-line draw calls only; the drawing code is in sweet_early.c.
+
+--- a/osfmk/arm64/sweet_early.c	2026-11-15 00:06:59.805184429 +0100
++++ b/osfmk/arm64/sweet_early.c	2026-11-15 00:06:59.825153260 +0100
+@@ -203,6 +203,64 @@
+ 	sweet_early_block(slot, colours[slot & 7]);
+ }
+ 
++/*
++ * min16: mirror the first 36 characters of every kprintf()/printf() format string into a ring of text lines in the left third of
++ * the screen (x=20..620, 73 rows of 32 px from y=88), with a white marker at the left edge on the newest line. The format string
++ * only (no arguments), enough to name what the kernel logged last before a reset. Active once sweet_early_phase_begin() ran.
++ */
++static unsigned int a5_k_row;
++
++void
++sweet_early_kprintf(const char *fmt)
++{
++	static const unsigned int scale = 2, rows = 73, maxc = 36;
++	if (!a5_active || !a5_phase_on || !fmt) {
++		return;
++	}
++	unsigned int r = a5_k_row++ % rows, prev = (r + rows - 1) % rows;
++	unsigned int y0 = 88 + 32 * r;
++	for (unsigned int y = 0; y < 32; y++) {                       /* clear this row and the old marker column */
++		volatile uint32_t *line = A5_FB + (y0 + y) * A5_STRIDE;
++		for (unsigned int x = 0; x < 620; x++) {
++			line[x] = 0xff000000u;
++		}
++		volatile uint32_t *pl = A5_FB + (88 + 32 * prev + y) * A5_STRIDE;
++		for (unsigned int x = 0; x < 16; x++) {
++			pl[x] = 0xff000000u;
++		}
++	}
++	for (unsigned int y = 4; y < 28; y++) {                       /* marker */
++		volatile uint32_t *line = A5_FB + (y0 + y) * A5_STRIDE;
++		for (unsigned int x = 0; x < 14; x++) {
++			line[x] = 0xffffffffu;
++		}
++	}
++	unsigned int n = 0;
++	for (unsigned int i = 0; fmt[i] && n < maxc; i++) {
++		unsigned char ch = (unsigned char)fmt[i];
++		if (ch == '\n' || ch == '\r' || ch < 32 || ch > 126) {
++			if (n == 0) {
++				continue;
++			}
++			ch = ' ';
++		}
++		const unsigned char *glyph = iso_font + ch * 16;
++		for (unsigned int gy = 0; gy < 16; gy++) {
++			for (unsigned int sy = 0; sy < scale; sy++) {
++				volatile uint32_t *line = A5_FB + (y0 + gy * scale + sy) * A5_STRIDE + 20 + n * 8 * scale;
++				for (unsigned int gx = 0; gx < 8; gx++) {
++					uint32_t pixel = (glyph[gy] & (1u << gx)) ? 0xffffffffu : 0xff000000u;
++					for (unsigned int sx = 0; sx < scale; sx++) {
++						line[gx * scale + sx] = pixel;
++					}
++				}
++			}
++		}
++		n++;
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++}
++
+ /* Boot-arg herostop=N (read in arm_init after PE_init_platform): freeze the machine right after block N is drawn, so the
+  * screen keeps showing how far it got. -1 = never stop (default). Interrupts are masked at this point of boot. */
+ static volatile int a5_stop_slot = -1;
+@@ -388,4 +446,5 @@
+ void sweet_early_pause_ms(unsigned int ms) { (void)ms; }
+ void sweet_early_phase_begin(void) {}
+ void sweet_early_phase(const char *message) { (void)message; }
++void sweet_early_kprintf(const char *fmt) { (void)fmt; }
+ #endif /* SWEET */
+--- a/osfmk/arm64/sweet_early.h	2026-11-15 00:06:59.805234114 +0100
++++ b/osfmk/arm64/sweet_early.h	2026-11-15 00:06:59.824969006 +0100
+@@ -13,6 +13,7 @@
+ void sweet_early_pause_ms(unsigned int ms);
+ void sweet_early_phase_begin(void);
+ void sweet_early_phase(const char *message);
++void sweet_early_kprintf(const char *fmt);
+ void sweet_early_set_stop(int slot);
+ void sweet_early_putc(char c);
+ void sweet_early_panic(const char *fmt, va_list *args);
+@@ -30,6 +31,7 @@
+ static inline void sweet_early_pause_ms(unsigned int ms) { (void)ms; }
+ static inline void sweet_early_phase_begin(void) {}
+ static inline void sweet_early_phase(const char *message) { (void)message; }
++static inline void sweet_early_kprintf(const char *fmt) { (void)fmt; }
+ static inline void sweet_early_disable(void) {}
+ #endif
+ 
+--- a/pexpert/arm/pe_kprintf.c	2026-11-15 00:06:59.808943074 +0100
++++ b/pexpert/arm/pe_kprintf.c	2026-11-15 00:06:59.825247074 +0100
+@@ -93,10 +93,17 @@
+ 
+ static int      cpu_last_locked = 0;
+ 
++#if defined(A5XELTE)
++extern void sweet_early_kprintf(const char *fmt);
++#endif
++
+ __attribute__((noinline, not_tail_called))
+ void
+ kprintf(const char *fmt, ...)
+ {
++#if defined(A5XELTE)
++	sweet_early_kprintf(fmt);
++#endif
+ 	va_list         listp;
+ 	va_list         listp2;
+ 	boolean_t       state;
+--- a/osfmk/kern/printf.c	2026-11-15 00:06:59.807086728 +0100
++++ b/osfmk/kern/printf.c	2026-11-15 00:06:59.825374465 +0100
+@@ -887,10 +887,17 @@
+ 	return 0;
+ }
+ 
++#if defined(A5XELTE)
++extern void sweet_early_kprintf(const char *fmt);
++#endif
++
+ __attribute__((noinline, not_tail_called))
+ int
+ printf(const char *fmt, ...)
+ {
++#if defined(A5XELTE)
++	sweet_early_kprintf(fmt);
++#endif
+ 	int ret;
+ 
+ 	va_list ap;
