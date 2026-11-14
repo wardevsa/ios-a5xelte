@@ -321,5 +321,5 @@ owner = "ingeniero"
 depends_on = ["T-0027"]
 actions = ["host-tests", "pc-implementation", "local-commit"]
 acceptance = "Cada mutante clasificado con evidencia (DETECTADO / EQUIVALENTE DEMOSTRADO / SOBREVIVE); M16 y N02 siguen como equivalentes conocidos; ningún SOBREVIVE nuevo sin explicar; sin llenar el disco (>= 12 GiB libres al empezar); sin montar nada ni usar sudo; r2_lib.sh de rev3 idéntico al de rev2 (sha256 52357bd5…)."
-resume = "Desde v2/rev3/tests: bash run_mutations.sh (usa mutants_def.py y run_tests.sh de rev3). Lanzar con guardia de disco como en T-0005 (t0005_guard.sh). Ver docs/ y E-0030."
+resume = "PRECONDICIÓN NO CUMPLIDA HOY: hay ~6 GiB libres y se necesitan >= 12 (una ronda gasta ~12 GiB); liberar espacio exige borrar (delete-or-overwrite, rojo): candidatos ya archivados y con hash en NTFS: lab-full-xnu.img.valid (E-0031, ~11,7 GiB reales) y r3/work (E-0013, ~12 GiB, restaurable). Pedir al Director esa autorización. Desde v2/rev3/tests: bash run_mutations.sh (usa mutants_def.py y run_tests.sh de rev3). Lanzar con guardia de disco como en T-0005 (t0005_guard.sh). Ver docs/ y E-0030."
 
