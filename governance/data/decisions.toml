@@ -462,3 +462,19 @@ rationale = "El primer arranque (D-0033, imagen mínima 1) hizo panic en kmem_ra
 consequences = "ALCANCE EXACTO: escribir SOLO la imagen xnu-boot-v2-s7-min2-20261114.img (SHA-256 595316aae927b3e7c960301790fa34557e5a296073a29df62522b67050edae21, 18 618 384 bytes) en BOOT (by-name/BOOT = /dev/block/sda5), desde TWRP, con tools/herolte-flash-boot.sh, leyendo BOOT y EFS del teléfono (solo lectura) antes y después; vuelta atrás con el BOOT original (E-0009, adc519d0…3348), también autorizada. NO autoriza ninguna otra imagen, escribir EFS, RECOVERY ni bootloaders, escribir en USERDATA ni /sdcard, ni cambiar el ADT. El reinicio y la observación los hace el Director con la pantalla grabada; con el panic anterior en bucle, el reinicio no es necesario para escribir (el teléfono debe estar en TWRP)."
 reversal = "Restaurar BOOT con el original verificado (S7GE_FLASH_PROCEDURE.md §4)."
 
+
+[[decision]]
+id = "D-0035"
+title = "Autorización roja: tercer intento del primer arranque N2 — escribir xnu-boot-v2-s7-min3-20261114.img (min2 con el banco de arranque de 1536 MiB) en la partición BOOT del S7 desde TWRP"
+date = "2026-11-14"
+scope = "operation"
+status = "APPROVED"
+proposer = "ingeniero"
+approved_by = "director"
+approval_date = "2026-11-14"
+approval_ref = "Mensaje del Director (PioXI), 2026-11-14: 'Firmo autorizacion y perdon por mis errores, la letra es muy pequeña', en respuesta al texto de autorización que nombra la imagen xnu-boot-v2-s7-min3-20261114.img, su SHA-256 c70d3dd8151b891a93a42e0c703ff525b288a6c9c105966e757263a29313e36f y la partición BOOT (docs/S7GE_MIN3_ANALYSIS.md, E-0048). El Director no contestó A/B/C de la pregunta de la jefatura sobre el origen de la transcripción; se firma conociendo el riesgo descrito en MIN3_ANALYSIS §3."
+authorizes = ["device-write-boot", "device-read"]
+valid_until = "2026-11-16"
+rationale = "Apuesta de una variable (RAM 2 GiB a 1536 MiB, configuración estable del upstream). Si el cuelgue de min2 está antes de la marca 7, no lo arreglará; riesgo asumido."
+consequences = "ALCANCE EXACTO: escribir SOLO xnu-boot-v2-s7-min3-20261114.img (SHA-256 c70d3dd8151b891a93a42e0c703ff525b288a6c9c105966e757263a29313e36f, 18 618 384 bytes) en /dev/block/platform/155a0000.ufs/by-name/BOOT desde TWRP con tools/herolte-flash-boot.sh --execute, leyendo BOOT y EFS (solo lectura) antes y después; vuelta atrás con el BOOT original (E-0009, adc519d0…3348), también autorizada. NO autoriza otra imagen, EFS, RECOVERY, bootloaders, USERDATA ni /sdcard. El reinicio y la observación los hace el Director."
+reversal = "Restaurar BOOT con el original verificado (S7GE_FLASH_PROCEDURE.md §4)."
