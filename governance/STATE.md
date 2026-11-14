@@ -1,7 +1,7 @@
 # Estado actual de IOS S7
 
-<!-- state-commit: ce574fc -->
-**Verificado el 2026-11-14 sobre el commit `ce574fc`** (el estado se refresca en cada relevo; `check` avisa de la distancia).
+<!-- state-commit: b6c05e8 -->
+**Verificado el 2026-11-14 sobre el commit `b6c05e8`** (el estado se refresca en cada relevo; `check` avisa de la distancia).
 
 ## 1. En una frase
 Todo es **trabajo en el PC**: hay una candidata BOOT de primer arranque (variante mínima) **construida y verificada**, una imagen de raíz de laboratorio con nombres en forma XNU **verificada**, copias del teléfono **comprobadas**, y un estudio completo de la arquitectura gráfica S7GE. **Nada se ha escrito ni probado en el Galaxy S7** (BOOT original de Samsung; no hay evidencia L3/L4 de esta unidad). Lo único que falta para el primer arranque es la **autorización roja del Director** (y que su backup termine).
