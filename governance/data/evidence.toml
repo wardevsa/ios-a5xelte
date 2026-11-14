@@ -1839,3 +1839,18 @@ sha256 = "d1255890047299b917f4cb5c40590522fca5d8cd02017f3a82c83d852299f4e6"
 size = 23431790592
 immutable = true
 note = "D-0044, T-0043. Herramienta tools/herolte-backup-partition.py (trozos de 128 MiB comprobados contra el hash del teléfono, transporte nc por adb forward). Tamaño = tamaño de la partición. verificada por trozos y contra el SHA-256 de la partición ENTERA calculado en el teléfono (idéntico, 7 min 50 s); contiene datos personales de Android: no mirar, fuera de git. Disco: NVMe NTFS (un solo disco: segunda copia recomendada). Registro de la ejecución: backup-engineer-full.log."
+
+[[evidence]]
+id = "E-0126"
+title = "Tanda amplia D-0043, imagen 5: BOOT del S7 escrito con xnu-boot-v2-s7-min12-20261114.img (kernel 0347) y leído de vuelta (sha256 7718a774…c834); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min12-out.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "64399560f3cede65413ed137292b260fa57e5a0d908b760a1078af64385186dc"
+size = 724
+immutable = true
+note = "Solo escritura y lectura de vuelta, tras terminar la copia de seguridad (T-0043). Condiciones de D-0043: revisión E-0121, hash en E-0122, cmdline = min2 (diff)."

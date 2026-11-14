@@ -8,7 +8,14 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0049 — min11: el alias mapeaba solo 2 MiB (granularidad de 4 KiB); parche 0347 (8 bloques) en CI (2026-11-14)
+## Relevo vigente: H-0050 — copias SYSTEM/USERDATA/RECOVERY hechas y verificadas; min12 (kernel 0347, 8 bloques de alias) ESCRITA (D-0043, 5/20) (2026-11-14)
+- **Tarea en curso: T-0012.** T-0043 (copias) hecha: E-0123 (RECOVERY = copia del 12-nov), E-0124 (SYSTEM 7,75 GB), E-0125 (USERDATA 23,4 GB), cada una verificada por trozos y contra el hash de la partición entera en el teléfono. Carpeta `IOS-S7-backup/2026-11-14-engineer-full/` en el NVMe. La SYSTEM del snapshot del Director NO es válida (más corta).
+- **BOOT = `xnu-boot-v2-s7-min12-20261114.img`** (sha256 `7718a774…c834`), leída de vuelta; EFS intacto (E-0126). Kernel 0347 (E-0121): el alias del framebuffer ahora cubre los 8 bloques de 2 MiB.
+- **Siguiente (Director):** `adb reboot`, mirar. Esperado tras el bloque 19: **20 (sonda: VERDE = bien)**, **21**, y bloques 22-29 después de apagar TTBR0 si el kernel sigue; texto `A5V TTBR1/TCR/…/PAR` como antes; si hay `A5 XNU PANIC`, transcribir literal.
+- **Riesgo pendiente:** las copias nuevas están en un solo disco (NVMe).
+- Restaurar BOOT original (E-0009) cubierto por D-0043.
+
+## Relevo anterior: H-0049 — min11: el alias mapeaba solo 2 MiB (granularidad de 4 KiB); parche 0347 (8 bloques) en CI (2026-11-14)
 - **Tarea en curso: T-0012.** E-0118 + docs/S7GE_MIN11_RESULT.md: TG0/TG1 = 4 KiB, L2 = bloque de 2 MiB; el alias cubría las primeras ~364 filas; la sonda en la fila 1500 cayó fuera ⇒ fallo ⇒ pánico secundario en vm_fault.
 - **Hecho:** 0347 (mapea 8 bloques de 2 MiB); publicado en `mio`; CI en curso. Luego: revisión D-0043, imagen min12 (sin herostop) y escribirla (D-0043: 4/20 usadas).
 - **Teléfono:** en TWRP con min11. Restaurar BOOT original (E-0009) cubierto por D-0043.
