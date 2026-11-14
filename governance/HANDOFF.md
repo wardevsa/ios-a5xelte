@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0056 — h29: pantalla negra con un bloque (serial_init pasa y limpia la consola); 0348 (bloques 30-40 en el resto de arm_init) en CI (2026-11-14)
+## Relevo vigente: H-0057 — min14h50 (kernel 0349: nombres de fase en pantalla) ESCRITA (D-0043/D-0045, 11/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+- **Tarea en curso: T-0012.** E-0148: arm_init termina; el reinicio está en machine_startup/kernel_bootstrap. D-0045 (ampliación de D-0043): enganches de dibujo en 5 ficheros del arranque, verificados por herramienta. Kernel 0349 revisado (E-0149). BOOT = `xnu-boot-v2-s7-min14h50-20261114.img` (sha256 `f01f9ce3…a39e`); EFS intacto (E-0155).
+- **Qué mirar (Director, tras `adb reboot`):** bloque 40 blanco (de antes) y, unos 0,7 s después, **bloques nuevos con el NOMBRE de cada fase a su izquierda** (empiezan en el slot 41, bajo el blanco). herostop=50 congela tras la 10.ª fase (slot 50). **Congela** ⇒ los nombres dicen las 10 primeras fases y el fallo es posterior. **No congela** (pantalla de reinicio) ⇒ el reinicio es antes de la fase 10: leer los nombres que se vean y probar h44.
+- Imágenes preparadas: min14 (sin herostop), h44, h56, h62 (E-0150, E-0152..E-0154).
+- Restaurar BOOT original (E-0009) cubierto por D-0045.
+
+## Relevo anterior: H-0056 — h29: pantalla negra con un bloque (serial_init pasa y limpia la consola); 0348 (bloques 30-40 en el resto de arm_init) en CI (2026-11-14)
 - **Tarea en curso: T-0012** (D-0043, 9/20). E-0140: el kernel supera `serial_init` (el bloque 29 se dibuja después y la consola real borró lo anterior); el reinicio es posterior.
 - **Hecho:** 0348 (bloques 30-40 tras cada paso restante de arm_init y consola temprana viva en A5XELTE); publicado en `mio`; CI en curso. Luego: revisión D-0043 (solo `osfmk/arm/arm_init.c`), imágenes herostop 35/40 etc.
 - **Más allá de arm_init** (machine_startup → kernel_bootstrap → STARTUP_SUB_*) hay que marcar ficheros fuera de la lista blanca de D-0043 (`osfmk/arm/model_dep.c`, `osfmk/kern/startup.c`): pedir al Director ampliarla. También `-v` (verbose) en la línea de arranque para ver el log de kernel (D-0043 no lo cubre).
