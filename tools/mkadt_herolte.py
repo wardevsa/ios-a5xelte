@@ -78,69 +78,6 @@ def add_bluetooth_isp(root):
         ]))
 
 
-def child(node, name):
-    for candidate in node.children:
-        if candidate.prop('name') == mkadt.cstr(name):
-            return candidate
-    raise ValueError(f'missing donor ADT node {name}')
-
-
-def build(canvas=(FB_WIDTH, FB_HEIGHT), dram=(DRAM_BASE, DRAM_SIZE), scale=3):
-    root = mkadt.build(seed=os.urandom(64), qemu=True)
-    if scale == 2:
-        # --scale2 (as syncmodz/ios-s9): a whole iPhone XR screen, 414x896
-        # points at @2x (828x1792), 2.5x fewer pixels than the panel for
-        # CoreAnimation's CPU renderer. UIKit picks the status bar layout by
-        # native pixel width and notch, and the notch comes from points,
-        # scale and artwork-device-subtype; any other @2x size gets the red
-        # rdar:45025538 bar. The kernel scales it to the panel
-        # (sweetfb_scale=1 sweetfb_lw=828 sweetfb_lh=1792 sweetfb_gpu=1).
-        set_prop(child(root, 'chosen'), 'display-scale', mkadt.u32(2))
-        product = child(root, 'product')
-        set_prop(product, 'artwork-device-subtype', mkadt.u32(1792))
-        set_prop(product, 'artwork-scale-factor', mkadt.u32(2))
-        canvas = (828, 1792)
-    if scale == 8:
-        # --iphone8: 375x667 points at @2x, the panel's 16:9, 72% fewer pixels. With a home button (below) UIKit has a
-        # status bar for it; type 2 gets the red rdar:45025538 one. Boot args: sweetfb_scale=1 sweetfb_lw=750
-        # sweetfb_lh=1334 sweetfb_gpu=1.
-        set_prop(child(root, 'chosen'), 'display-scale', mkadt.u32(2))
-        product = child(root, 'product')
-        set_prop(product, 'artwork-device-subtype', mkadt.u32(1334))
-        set_prop(product, 'artwork-scale-factor', mkadt.u32(2))
-        set_prop(child(root, 'buttons'), 'home-button-type', mkadt.u32(1))
-        canvas = (750, 1334)
-    if canvas == (1242, 2208):
-        # --canvas 1242x2208: an iPhone 8 Plus screen, 414x736 points at @3x,
-        # the panel's 16:9 with no bars. The kernel scales it to the panel
-        # (sweetfb_scale=1 sweetfb_lw=1242 sweetfb_lh=2208 sweetfb_gpu=1).
-        product = child(root, 'product')
-        set_prop(product, 'artwork-device-subtype', mkadt.u32(2208))
-        set_prop(product, 'artwork-scale-factor', mkadt.u32(3))
-    # The userland is the iPhone X IPSW (iPhone10,3 / D22AP), like the donor:
-    # compatible[0] is hw.model/hw.target, model is hw.machine. The donor's
-    # /buttons stays (home-button-type 2: gesture navigation, no Home key).
-    # 'samsung,a5xelte' keeps the shared SweetPlatformExpert IONameMatch.
-    set_prop(root, 'compatible', mkadt.cstr('D22AP') + mkadt.cstr('iPhone10,3') +
-             mkadt.cstr('samsung,a5xelte') + mkadt.cstr('samsung,herolte') +
-             mkadt.cstr('samsung,exynos8890') + mkadt.cstr('AppleARM'))
-    chosen = child(root, 'chosen')
-    set_prop(chosen, 'dram-base', mkadt.u64(dram[0]))
-    set_prop(chosen, 'dram-size', mkadt.u64(dram[1]))
-    set_prop(chosen, 'firmware-version', mkadt.cstr('herolte-entry'))
-    set_prop(chosen, 'system-firmware-version', mkadt.cstr('herolte-entry'))
-    # MobileGestalt derives the UDID from these; without them it waits for a
-    # Bluetooth/Wi-Fi driver forever, and LaunchServices never finishes seeding
-    # the app database (SpringBoard stays on the boot logo). Synthetic,
-    # locally administered addresses, not the phone's.
-    for name, last in (('wifi0', 1), ('bluetooth0', 2), ('ethernet0', 3)):
-        set_prop(chosen, f'mac-address-{name}', bytes((0x02, 0x48, 0x45, 0x52, 0x4f, last)))
-    # An sRGB screen, not the iPhone X's P3: with "P3" WebKit and PosterBoard draw
-    # into 10-bit 'w30r'/'b3a8' surfaces, which CoreAnimation over our OpenGL ES
-    # never shows (Safari's pages and the stock wallpapers black, boot-0317).
-    set_prop(child(root, 'product'), 'artwork-display-gamut', mkadt.cstr('sRGB'))
-    add_haptics(root)
-    add_bluetooth_isp(root)
     cpus = child(root, 'cpus')
     cpu0 = child(cpus, 'cpu0')
     # S-Boot starts on the Cortex-A53 "Apollo" cluster: MPIDR 0x100..0x103
