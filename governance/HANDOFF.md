@@ -11,7 +11,7 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 ## Relevo vigente: H-0023 — min2 ESCRITA y verificada (D-0034); el teléfono está en TWRP, SIN reiniciar (2026-11-14 12:31)
 - **Hecho:** tras poner el Director el teléfono en TWRP y un `adb reconnect offline` (no reinicia el servidor), `tools/herolte-flash-boot.sh --execute` dio `OK: BOOT escrito y leído de vuelta (18 618 384 bytes, sha256 595316aa…edae21); EFS intacto` (E-0046). Los intentos anteriores de las 12:29-12:30 abortaron sin escribir (adb `offline`).
 - **El EFS en vivo cambió entre sesiones** (`eb8912ad…` → `b006b26d…`): el superbloque ext4 cambia con cada sesión de TWRP; el script compara dentro de la sesión (idéntico). Esperado, no un fallo.
-- **Estado del teléfono:** TWRP, BOOT = min2. **Siguiente (Director):** grabar la pantalla (con fotogramas legibles de las líneas `HEROLTE KMEM:` si vuelve a haber panic), `adb reboot`, ≥ 2 min, pasar la transcripción literal; si no arranca, Vol− + Power ~7 s y Vol+ + Home + Power. Luego restaurar BOOT (`S7GE_FLASH_PROCEDURE.md` §4) si se quiere volver a Android. **Ningún otro intento está autorizado** (D-0034 = min2 + restauración).
+- **Tarea en curso: T-0012** (primer arranque N2). **Estado del teléfono:** TWRP, BOOT = min2. **Siguiente (Director):** grabar la pantalla (con fotogramas legibles de las líneas `HEROLTE KMEM:` si vuelve a haber panic), `adb reboot`, ≥ 2 min, pasar la transcripción literal; si no arranca, Vol− + Power ~7 s y Vol+ + Home + Power. Luego restaurar BOOT (`S7GE_FLASH_PROCEDURE.md` §4) si se quiere volver a Android. **Ningún otro intento está autorizado** (D-0034 = min2 + restauración).
 
 ---
 
