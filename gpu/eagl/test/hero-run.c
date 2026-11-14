@@ -903,6 +903,48 @@ remove_listed_apps(void)
       unlink(LS_DB_GONE);       /* remove_ls_db_once, just after, takes the database */
 }
 
+/*
+ * With DROP_DIR haptics.probe: 60 s after the start, what MobileGestalt answers about the haptics (the ADT's
+ * /product/haptics closed-loop, boot-0339), then the system's vibration (kSystemSoundID_Vibrate, 4095) three times:
+ * whether Darwin plays it on the audio plug-in's Actuator says itself in the log ("the actuator plays").
+ */
+static void *
+haptics_probe(__unused void *unused)
+{
+   if (access(DROP_DIR "haptics.probe", F_OK) != 0)
+      return NULL;
+   sleep(60);
+   void *mg = dlopen("/usr/lib/libMobileGestalt.dylib", RTLD_NOW);
+   CFTypeRef (*copy_answer)(CFStringRef, CFDictionaryRef) = mg ? (CFTypeRef (*)(CFStringRef, CFDictionaryRef))dlsym(mg, "MGCopyAnswer") : NULL;
+   static const char *keys[] = {
+      "DeviceSupportsClosedLoopHaptics", "DeviceSupportsHaptics", "HapticsCapability", "DeviceSupportsHapticKeyboard",
+      "ProductType", "HWModelStr",
+   };
+   for (unsigned i = 0; copy_answer && i < sizeof(keys) / sizeof(keys[0]); i++) {
+      CFStringRef key = CFStringCreateWithCString(NULL, keys[i], kCFStringEncodingUTF8);
+      CFTypeRef v = copy_answer(key, NULL);
+      char text[160] = "(none)";
+      if (v) {
+         CFStringRef d = CFCopyDescription(v);
+         CFStringGetCString(d, text, sizeof(text), kCFStringEncodingUTF8);
+         CFRelease(d);
+         CFRelease(v);
+      }
+      CFRelease(key);
+      herodrm_log("hero-run: haptics: MobileGestalt %s = %s", keys[i], text);
+   }
+   void *at = dlopen("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", RTLD_NOW);
+   void (*play)(uint32_t) = at ? (void (*)(uint32_t))dlsym(at, "AudioServicesPlaySystemSound") : NULL;
+   for (int i = 0; play && i < 3; i++) {
+      herodrm_log("hero-run: haptics: the system's vibration (4095), %d of 3", i + 1);
+      play(4095);
+      sleep(3);
+   }
+   if (!play)
+      herodrm_log("hero-run: haptics: no AudioServicesPlaySystemSound");
+   return NULL;
+}
+
 int
 main(int main_argc, char **main_argv)
 {
@@ -933,6 +975,9 @@ main(int main_argc, char **main_argv)
    pthread_t apps;
    if (pthread_create(&apps, NULL, install_apps, NULL) == 0)
       pthread_detach(apps);
+   pthread_t haptics;
+   if (pthread_create(&haptics, NULL, haptics_probe, NULL) == 0)
+      pthread_detach(haptics);
    sleep(20);
    load_env();
    posix_spawn_file_actions_t fa;
