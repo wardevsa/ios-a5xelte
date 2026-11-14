@@ -579,3 +579,18 @@ size = 8488
 immutable = true
 note = "Sustituye a E-0027 como referencia de rev3. Sin montar nada ni sudo; r2_lib.sh idéntico al de rev2. Salida íntegra en rev3-mutation-stdout-20261114.txt. No valida R2 ni autoriza nada."
 
+[[evidence]]
+id = "E-0040"
+title = "Variante N2 de MENOR HUELLA DE HARDWARE: xnu-boot-v2-s7-min-20261114.img (candidata de E-0038 + herowifi=0 heropower=0 herogpu=0), 47 PASS builder / 54 PASS independiente, 0 FAIL"
+kind = "image"
+path = "~/HackiOS/builds/device-day/boot-candidates-n2-run3-min/xnu-boot-v2-s7-min-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "07ddfa069c7f53936964e05f174ddced6a75b6ff690180e648a082c941115db3"
+size = 18618384
+immutable = true
+note = "Mismo kernel (62ea7501...) y mismas entradas que E-0038; solo cambia la línea de arranque, para que en un primer arranque no se encienda el Wi-Fi/PCIe ni corran los hilos de energía y medición de GPU (S7GE_SPLIT_PLAN.md §3). Sin copia en NTFS aún (el NVMe está ocupado por el backup). NO escrita en el teléfono; decisión sobre cuál de las dos candidatas usar: del Director/jefatura."
+

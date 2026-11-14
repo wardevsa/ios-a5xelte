@@ -4,14 +4,15 @@
 
 ## 1. Corrección del alcance: no son 26 parches, y `herolte_gpu.c` no es solo de GPU
 Barrido automático (parches que tocan `herolte_gpu.c`, `HeroGPU.cpp`, `SweetSurface*`, `SweetFramebuffer*`, `herolte_gl.c` o llevan "gpu/mali/surface" en el nombre): **86 parches**. El núcleo de GPU propiamente dicho son unos **40**; el resto comparte fichero porque el proyecto usó `herolte_gpu.c` como **cajón de sastre del "hardware Exynos sin driver"**. Reparto por funciones del fichero final (líneas aproximadas por prefijo de función; nombres de función leídos):
-| Prefijo | Qué es | Líneas | Primeros parches |
+| Grupo (medido por funciones, ver S7GE_SPLIT_PLAN.md) | Qué es | Líneas | Primeros parches |
 |---|---|---|---|
-| `hg_` / `hgp_` / `hgu_` / `herolte_gpu_*` | GPU Mali: arranque, tablas, jobs, recuperación, cliente de usuario, presentación | ~2 700 | 0225-0235, 0239, 0243-0250, 0258, 0264-0267, 0273, 0307, 0333-0334 |
-| `ha_` + `hg_audio_thread` | audio (códec por SPI, I2S, tono) | ~410 | 0278-0283, 0300-0303 |
-| `hc_` + `hg_cpu_up` | reloj y subida de los núcleos Mongoose / CPU | ~130+ | 0270-0272, 0274, 0330-0331 |
-| `hw_` + `hg_wifi_thread` | Wi-Fi por PCIe (firmware, sondeo) | ~80+ | 0304-0308, 0315 |
-| `hfb_` y DECON/DSIM (`hg_decon_measure`, `herodisp`) | display y doble búfer del panel | ~75+ | 0292-0297, 0320, 0322 |
-| `hg_thread`, `hg_power_thread`, `hg_bus_thread`, `hg_twrp_thread` | hilos de energía, térmica y recuperación hacia TWRP | resto | 0277, 0330 |
+| GPU (`hg_*`, `hgp_*`, `hgu_*`, `herolte_gpu_*`, 52 funciones) | arranque, tablas, jobs, recuperación, cliente de usuario, presentación | **1 960** (57 %) | 0225-0235, 0239, 0243-0250, 0258, 0264-0267, 0273, 0307, 0333-0334 |
+| audio (`ha_*`, `hg_audio_thread`, 18 funciones) | códec por SPI, I2S, tono | 457 | 0278-0283, 0300-0303 |
+| Wi-Fi (`hw_*`, `hg_wifi_thread`, 7 funciones) | Wi-Fi por PCIe (firmware, sondeo) | 200 | 0304-0308, 0315 |
+| relojes de CPU (`hc_*`, `hg_cpu_up`, 7 funciones) | subida del clúster Mongoose | 205 | 0270-0272, 0274 |
+| hilos de energía y estado (`hg_power_thread`, `hg_thread`, `hg_pmic_dump`/`hp_*`, `hg_bus_thread`, `hg_twrp_thread`) | térmica por TMU, mediciones, bus/vsync, vuelta a TWRP | ~385 | 0277, 0330-0331 |
+| display (`hfb_*` compartido con la presentación, `hg_decon_measure`) | DECON/DSIM e IDMA del panel | ~100 | 0292-0297, 0320, 0322 |
+Total: **3 466 líneas; 3 307 dentro de funciones y 159 fuera** (macros, includes, variables). Los **no-GPU suman ~1 350 líneas (39 %)**.
 **Consecuencia para S7GE:** el principio **2.4 (Aislamiento de subsistemas)** del macroinforme **no se cumple hoy**: audio, Wi-Fi, relojes de CPU y display viven en el mismo fichero y comparten el mutex y el hilo de arranque con la GPU. Un rediseño de S7GPU debe **empezar sacando** esas partes, no reescribiendo la GPU.
 **Boot-args que lee `herolte_gpu.c`** (15): `herogpu`, `herogpu_flush`, `herogpu_mhz`, `herogpu_pdcycle`, `herogpu_sleep_present`, `herogpu_sleep_us`, `herofb2`, `herodisp`, `heroaudio`, `herocpu_mhz`, `herohot`, `heropower`, `herotmu`, `herotwrp`, `herowifi`. El límite de la línea de arranque es 607 caracteres (la de la candidata N2 usa 166, E-0038).
 

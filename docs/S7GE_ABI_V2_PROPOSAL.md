@@ -22,7 +22,9 @@ Todo identificador visible al userland es un **handle opaco de 64 bits**: `[ gen
 4. **Presupuesto de memoria:** por contexto, por cliente y global; `S7_E_BUDGET` en vez de agotar RAM cableada (hoy 4096 BO × 256 MiB por cliente).
 
 ## 4. Entitlements y descubrimiento
-`initWithTask` exige un entitlement (propuesta `com.s7ge.gpu.client`) vía `IOTaskHasEntitlement` o `IOUserClient::clientHasPrivilege`; sin él `kIOReturnNotPrivileged`. Los componentes que lo necesitan hoy: backboardd/hakios-gl, `hero-run`, apps del proyecto. Necesita **auditar el perfil de sandbox de iOS** para `iokit-open` sobre `HeroGPU` *(no verificado)*. Un selector de **versión y capacidades** (`S7_CAPS`) devuelve versión de ABI, número de AS, límites y flags; el cliente decide con eso.
+**Decisión de la jefatura técnica (2026-11-14, nivel B, incorporada como supuesto de diseño):** acceso por **entitlements explícitos** (lista declarativa de clientes autorizados), no por reglas de sandbox generales. `initWithTask` exige el entitlement (propuesta `com.s7ge.gpu.client`) vía `IOTaskHasEntitlement`; sin él `kIOReturnNotPrivileged`. Clientes hoy: backboardd/hakios-gl, `hero-run`, `herogpu-test` y las apps del proyecto. **Validación final pendiente** al integrar con el sandbox de iOS (perfil de `iokit-open` sobre `HeroGPU`: *no verificado*).
+**Límite que hay que tener presente:** un entitlement solo es tan fiable como la **aplicación de la firma de código**. Los arranques de este proyecto llevan `cs_enforcement_disable=1` (línea de N2, E-0038) y el kernel tiene parches de AMFI propios (0246, 0306): con la firma sin imponer, **cualquier proceso puede llevar el entitlement que quiera** en una firma ad-hoc auto-asertada. Por tanto, **mientras no se imponga la firma**, el entitlement es una **política declarativa y auditable**, no una barrera de seguridad; **la barrera real sigue siendo la address space por contexto (§3)**. Opciones a evaluar *(dependen de AMFI/CS, no verificadas)*: (a) imponer la firma para estos procesos; (b) lista blanca por **cdhash** de los binarios conocidos en lugar de por el texto del entitlement.
+Un selector de **versión y capacidades** (`S7_CAPS`) devuelve versión de ABI, número de AS, límites y flags; el cliente decide con eso.
 
 ## 5. Forma de las peticiones
 Estructuras de tamaño fijo con `{u32 version; u32 size; u32 selector; u32 flags; u64 client_op_id; ...; u32 reserved[N]}`; los reservados deben ser 0 o `S7_E_BADARG`. Se mantienen selectores **escalares** solo para operaciones triviales (`CAPS`, `FREE`); el resto usan `structureInput/Output` con límites de tamaño comprobados (overflow, alineación).
@@ -53,5 +55,5 @@ Tras un timeout el kernel no libera memoria del job hasta confirmar el reinicio 
 
 ## 10. Preguntas abiertas para la jefatura
 - ¿Cuántas AS reales tiene esta unidad? (leer `AS_PRESENT` en el primer arranque N2/N3; hasta entonces el diseño debe tolerar 1.)
-- ¿Entitlement real o regla de sandbox? ¿Qué proceso de Apple abre `HeroGPU` y con qué firma?
+- ~~¿Entitlement real o regla de sandbox?~~ Decidido por la jefatura: entitlement (§4). Queda: ¿qué proceso de Apple abre `HeroGPU` y con qué firma? ¿Se impone la firma de código para esos procesos?
 - ¿Se acepta que la validación fuerte espere a S7JMQ, aceptando mientras tanto que **la barrera es la AS por contexto**?

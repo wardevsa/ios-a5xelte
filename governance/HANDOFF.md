@@ -8,7 +8,15 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0012 — modelado S7GE Fases 0-3 hecho (solo documentos); el backup del S7 corre en otra terminal (2026-11-14)
+## Relevo vigente: H-0013 — modelado S7GE Fases 4-6 hecho; hallazgo sobre lo que hace N2 en el hardware (2026-11-14)
+- **Hecho (T-0031, solo documentos y una candidata en el PC):** `S7GE_SPLIT_PLAN.md` (mapa medido de `herolte_gpu.c`: GPU 1 960 líneas, el resto ~1 350; audio y Wi-Fi son autocontenidos; los no-GPU solo dependen de `hg_rd/hg_wr/msleep`; la presentación sí está acoplada al display), `S7GE_PATCH_DEPENDENCIES.md` (63 parches tocan `herolte_gpu.c`; candidatos a consolidar; la vía segura es una serie paralela con árbol idéntico, no quitar parches), `S7GE_MESA_INTEGRATION.md`, `S7GE_INCONSISTENCIES.md` (14 puntos), entitlements de la jefatura incorporados al ABI v2 **con su límite**: con `cs_enforcement_disable=1` el entitlement no es una barrera, la barrera es la AS por contexto.
+- **Hallazgo importante para el flasheo:** la candidata N2 es de solo lectura para el **almacenamiento**, no para el hardware: por defecto arranca el hilo de **Wi-Fi** (escribe GPIO, reloj, PMU y PCIe), el de bus/display y los de energía y medición. No toca tensión ni frecuencia de CPU (sin `herocpu_mhz`). Variante de menor huella construida y verificada: `xnu-boot-v2-s7-min-20261114.img` (SHA-256 `07ddfa06…5db3`, E-0040, +`herowifi=0 heropower=0 herogpu=0`). **El Director/jefatura elige cuál** (la solicitud en `docs/herolte-solicitud-n2.md` lo explica).
+- **Backup del Director (NVMe) sigue en otra terminal:** no tocar adb ni esa carpeta. Recortar la cola de dd al terminar (KI-0008).
+- **Pendiente:** autorización roja de flasheo (Director); decisiones de jefatura sobre separar `herolte_gpu.c` y la serie consolidada; ninguna tarea verde abierta.
+
+---
+
+## Relevo anterior: H-0012 — modelado S7GE Fases 0-3 hecho (solo documentos); el backup del S7 corre en otra terminal (2026-11-14)
 - **Hecho (T-0030, VERDE, sin tocar parches ni código):** `docs/S7GE_INVENTORY.md` (86 parches tocan los ficheros de GPU, ~40 son el núcleo; **`herolte_gpu.c` (3 465 líneas) también contiene audio, Wi-Fi, relojes de CPU y display**: hay que sacarlos antes de rediseñar S7GPU), `S7GE_EXECUTION_MODEL.md` (secuencia de job por sondeo, AS0 única, recuperación por escalera, causa de los `0x42` sin demostrar), `S7GE_ABI_V2_PROPOSAL.md` (contexto con AS propia, handles con generación, entitlement, errores estructurados, migración), `S7GE_IR_DESIGN.md` (10 categorías de nodo del macroinforme, validador, pruebas de host).
 - **Backup del Director en curso (NVMe):** no tocar adb ni esos ficheros. Hallazgo KI-0008: `adb exec-out dd` añade ~98 bytes de texto de dd a cada imagen; recortar después con `tools/herolte-trim-dd-tail.py` (informa por defecto) y comparar con el sha256 calculado EN el teléfono. La evidencia del backup será la siguiente entrada libre de evidence.toml.
 - **Pendiente del Director:** autorización roja de `device-write-boot` (texto y procedimiento en `docs/herolte-solicitud-n2.md`), tras completar y comprobar el backup. Sin L3/L4 de esta unidad.

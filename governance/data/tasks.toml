@@ -347,3 +347,14 @@ depends_on = ["T-0010"]
 actions = ["read-analysis", "docs-write", "local-commit"]
 acceptance = "Hecho: docs/S7GE_INVENTORY.md, S7GE_EXECUTION_MODEL.md, S7GE_ABI_V2_PROPOSAL.md y S7GE_IR_DESIGN.md. Sin tocar parches ni código; lo que depende de hardware o de fuentes no disponibles está marcado. Fases 4-6 y cualquier implementación esperan decisión de la jefatura."
 
+[[task]]
+id = "T-0031"
+title = "S7GE modelado Fases 4-6 y revisión cruzada: plan de separación de herolte_gpu.c, dependencias entre parches, integración con gpu/mesa, inconsistencias entre documentos; variante N2 de menor huella"
+status = "done"
+priority = 7
+owner = "ingeniero"
+depends_on = ["T-0030"]
+actions = ["read-analysis", "docs-write", "build-candidates", "local-commit"]
+evidence = ["E-0040"]
+acceptance = "Hecho: docs/S7GE_SPLIT_PLAN.md, S7GE_PATCH_DEPENDENCIES.md, S7GE_MESA_INTEGRATION.md, S7GE_INCONSISTENCIES.md; decisión de jefatura sobre entitlements incorporada al ABI v2 con su límite (cs_enforcement_disable); variante N2 de menor huella construida y verificada en el PC (E-0040), sin escribir en el teléfono."
+
