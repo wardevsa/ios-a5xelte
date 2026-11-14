@@ -482,3 +482,18 @@ min_evidence = { level = "L2", device = "this-unit" }
 requires_decisions = ["D-0038", "D-0040"]
 authorization_ref = "D-0040"
 resume = "D-0038 cubre solo lectura de RAM alrededor de 0x8ffff100 (máx. 1 MiB). TWRP no tiene /dev/mem; /proc/last_kmsg existe. Preguntar al Director antes de crear /dev/mem con mknod."
+
+[[task]]
+id = "T-0043"
+title = "Copia de seguridad verificada de SYSTEM, USERDATA y RECOVERY del S7 (solo lectura desde TWRP, al NVMe)"
+status = "ready"
+priority = 9
+owner = "ingeniero"
+depends_on = []
+actions = ["device-read"]
+acceptance = "Tres imágenes con tamaño = tamaño de la partición, .sha256 y trozos verificados contra el teléfono; RECOVERY comparada con la copia completa de 2026-11-12; evidencia registrada con hash; nada subido a git."
+evidence = []
+min_evidence = { level = "L2", device = "this-unit" }
+requires_decisions = ["D-0044"]
+authorization_ref = "D-0044"
+resume = "Ejecutar tools/herolte-backup-partition.py por partición (es reanudable por .state). No escribir BOOT mientras dure."
