@@ -8,7 +8,15 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0021 — primer arranque real: PANIC en kmem_range_init (clase B); causa probable = la configuración de RAM ya documentada (2026-11-14)
+## Relevo vigente: H-0022 — min2 AUTORIZADA (D-0034) pero NO escrita: el teléfono está `offline` en adb (2026-11-14 12:30)
+- **Director:** "Autorizo min2, firmado PioXI" → **D-0034** (`device-write-boot` + `device-read`, imagen `xnu-boot-v2-s7-min2-20261114.img`, SHA-256 `595316aa…edae21`, hasta 2026-11-16), colgada de **T-0012**. El `gate` autoriza.
+- **Intento de escritura:** `tools/herolte-flash-boot.sh … --execute` **abortó sin tocar nada** (`debe haber exactamente un dispositivo en recovery`): minutos antes `adb devices` mostraba `recovery`, ahora el dispositivo aparece `offline` (probablemente arrancó/entró en el bucle de panic). **Nada se escribió** (el script comprueba antes de cualquier escritura).
+- **Pendiente del Director:** dejar el teléfono en **TWRP** (Vol− + Power ~7 s, y enseguida Vol+ + Home + Power) y avisar; entonces el ingeniero repite el `--execute` (misma autorización) y el teléfono se queda en TWRP hasta que el Director grabe y reinicie.
+- Sigue pendiente: fotogramas del vídeo con las líneas `HEROLTE KMEM:` del primer panic (confirmarían la hipótesis) y archivar el vídeo con su hash.
+
+---
+
+## Relevo anterior: H-0021 — primer arranque real: PANIC en kmem_range_init (clase B); causa probable = la configuración de RAM ya documentada (2026-11-14)
 - **Observación (E-0044, transcripción de terceros; yo no vi el vídeo):** cargador → `COPYING KERNEL` → `RAM BASE 0x80000000` → **XNU hace panic en `kmem_range_init`** (`vm_map_locate_space failing…`) + `handshake structure not initialized` (que es del volcado de core, no la causa). El cargador y el kernel **ejecutan en esta unidad**; el kernel **no completó el arranque**. La transcripción dice `kext_range_init`: lectura defectuosa de `kmem_range_init` (medido con `strings` en el kernel del CI).
 - **Causa más probable (hipótesis fuerte):** nuestro ADT declara **2 GiB** (`dram-size 0x80000000`, leído del fichero) y la línea **no lleva `vm_compression_limit=98304`**: es el pánico que `HEROLTE_PROGRESS.md` (2026-10-23/24) ya documentó (compresor de 16×RAM). **Error de proceso mío:** el verificador no compara contra la configuración funcional (KI-0009; punto 20 de la lista previa).
 - **Candidata min2** (solo añade `vm_compression_limit=98304 vm_compressor=2`): `xnu-boot-v2-s7-min2-20261114.img`, SHA-256 `595316aa…edae21`, 47/56 PASS (E-0045). **NO escrita; requiere una autorización NUEVA con ese hash** (D-0033 cubre solo la imagen mínima 1 y la restauración).
