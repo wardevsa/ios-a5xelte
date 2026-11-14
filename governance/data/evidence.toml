@@ -684,3 +684,18 @@ size = 1111
 immutable = true
 note = "Es la ESCRITURA y su lectura de vuelta (D-0034). NO prueba que arranque: el teléfono no se había reiniciado al registrarla. El SHA-256 del EFS en vivo (b006b26d…) es DISTINTO del de la sesión anterior (eb8912ad…): cada sesión de TWRP cambia el superbloque ext4 (mismo fenómeno medido el 11-12 vs 11-14); lo que importa es que no cambia DENTRO de la sesión."
 
+[[evidence]]
+id = "E-0047"
+title = "Segundo arranque (min2): cargador y bloques de color de XNU visibles, pantalla fija, sin panic ni líneas HEROLTE KMEM (transcripción de terceros)"
+kind = "result"
+path = "~/HackiOS/builds/device-day/phase1-20261114/second-boot-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "9d4364af2db5987c31d9dabea97a06a08422ce4f90bfdd9942236541ceb8a412"
+size = 672
+immutable = true
+note = "Transcripción de Gemini; el ingeniero no ha visto el vídeo. 'NO XNU ON' no existe en el cargador ni en el kernel: probable mala lectura. Los bloques azul/cian/magenta corresponden a las etapas MMU, fp y tunables que dibuja start.s (S7GE_MIN2_ANALYSIS.md §2). No prueba que pasara kmem_range_init ni elevar nada."
+

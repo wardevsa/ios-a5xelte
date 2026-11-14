@@ -456,3 +456,14 @@ actions = ["read-analysis", "docs-write", "build-candidates", "local-commit"]
 evidence = ["E-0044", "E-0045"]
 acceptance = "Hecho: docs/S7GE_FIRST_BOOT_ANALYSIS.md; E-0044 (observación de segunda mano) y E-0045 (candidata min2, 47/56 PASS). NO hecho (rojo, no autorizado): escribir min2 (D-0033 cubre solo la imagen mínima 1 y la restauración)."
 
+[[task]]
+id = "T-0041"
+title = "Analizar el segundo arranque (min2): decodificar la pantalla con el código, corregir la lectura de terceros y pedir las fotos que decidan el siguiente paso"
+status = "done"
+priority = 3
+owner = "ingeniero"
+depends_on = ["T-0040"]
+actions = ["read-analysis", "docs-write", "local-commit"]
+evidence = ["E-0047"]
+acceptance = "Hecho: docs/S7GE_MIN2_ANALYSIS.md (tabla de bloques de start.s; NO XNU ON no existe; qué se puede y no concluir; opciones P-T). NO hecho: ninguna escritura ni lectura del teléfono; no se construyó min3 (sin datos)."
+

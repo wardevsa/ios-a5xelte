@@ -8,7 +8,15 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0023 — min2 ESCRITA y verificada (D-0034); el teléfono está en TWRP, SIN reiniciar (2026-11-14 12:31)
+## Relevo vigente: H-0024 — segundo arranque (min2): pantalla fija con los bloques de color de XNU; sin conclusión firme todavía (2026-11-14)
+- **Observación (E-0047, transcripción de terceros; no he visto el vídeo):** cargador → `RAM BASE` → pantalla fija con bloques de color (magenta, cian, azul), sin panic ni `HEROLTE KMEM:`. **`NO XNU ON` no existe** en cargador ni kernel (mala lectura probable). **Los bloques los dibuja XNU** (`start.s`: verde=entrada, azul=MMU, cian=fp, magenta=tunables, amarillo=`arm_init_jump`; 36×21 px en x=240, y=88/120/152/184/216; texto `XNU ENTRY`/`XNU MMU ON` en y=256/288): el ensamblador de arranque ejecutó **al menos hasta `tunables_done`**. Falta saber si están el verde y el amarillo (→ si entró en C).
+- **No concluir:** "ya no hay panic, luego `vm_compression_limit` funcionó" (un cuelgue silencioso también no muestra panic); "ADT incorrecto / handoff" (parten de la cadena inexistente). **Pregunta abierta:** con la consola de texto activa por defecto debería verse al menos el banner y `HEROLTE KMEM:`.
+- **El Director dijo "autorizo seguir con min3 o lo que tú veas":** NO es una autorización de escritura (no nombra imagen ni hash; no existe min3). **Nada se escribió ni se leyó del teléfono.** Estado: TWRP con min2 en BOOT. D-0034 sigue cubriendo solo min2 y la restauración.
+- **Siguiente:** pedir fotos fijas de la pantalla final y del instante del texto del cargador (`BOOTARGS`); luego elegir entre P (mirar), Q (leer RAM/pstore: lectura nueva que hay que autorizar), R (imagen con más marcas/diagnóstico), S (1 536 MiB) o T (restaurar Android). Detalle en `docs/S7GE_MIN2_ANALYSIS.md`. Tarea en curso: **T-0012**.
+
+---
+
+## Relevo anterior: H-0023 — min2 ESCRITA y verificada (D-0034); el teléfono está en TWRP, SIN reiniciar (2026-11-14 12:31)
 - **Hecho:** tras poner el Director el teléfono en TWRP y un `adb reconnect offline` (no reinicia el servidor), `tools/herolte-flash-boot.sh --execute` dio `OK: BOOT escrito y leído de vuelta (18 618 384 bytes, sha256 595316aa…edae21); EFS intacto` (E-0046). Los intentos anteriores de las 12:29-12:30 abortaron sin escribir (adb `offline`).
 - **El EFS en vivo cambió entre sesiones** (`eb8912ad…` → `b006b26d…`): el superbloque ext4 cambia con cada sesión de TWRP; el script compara dentro de la sesión (idéntico). Esperado, no un fallo.
 - **Tarea en curso: T-0012** (primer arranque N2). **Estado del teléfono:** TWRP, BOOT = min2. **Siguiente (Director):** grabar la pantalla (con fotogramas legibles de las líneas `HEROLTE KMEM:` si vuelve a haber panic), `adb reboot`, ≥ 2 min, pasar la transcripción literal; si no arranca, Vol− + Power ~7 s y Vol+ + Home + Power. Luego restaurar BOOT (`S7GE_FLASH_PROCEDURE.md` §4) si se quiere volver a Android. **Ningún otro intento está autorizado** (D-0034 = min2 + restauración).
