@@ -7,6 +7,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 | ID | Estado | Prio | Propietario | Título | Depende de | Nivel | Bloqueo |
 |---|---|---|---|---|---|---|---|
 | T-0001 | in_review | 1 | ingeniero | Misión 0: implantar el sistema de gobierno de ingeniería autónoma (governance/, tools/governance.py, puntero en AGENTS.md) | — | B amarillo | — |
+| T-0029 | ready | 1 | ingeniero | Push de herolte-drop-v2 al fork (remoto mio), lanzar el CI xnu y descargar el kernel; comprobar con ci_check.py por nombre completo | T-0016 | C rojo | — |
 | T-0002 | done | 2 | ingeniero | Auditoría Unicode HFS+ (XNU frente a Linux): causa, tabla de los 32 nombres, corrección propuesta | — | A verde | — |
 | T-0009 | done | 2 | ingeniero | Plan de integración con origin/herolte: aplicabilidad de sus 0332-0334 sobre nuestra rama y propuesta de renumeración (informe) | — | A verde | — |
 | T-0024 | done | 2 | ingeniero | Aplicar la corrección Unicode (D-0017): el generador entrega a Linux los nombres ya en forma XNU (hfs_component), un único punto de traducción, imagen NUEVA con nombre nuevo | T-0003 | A verde | — |
@@ -38,6 +39,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 ## Criterios de aceptación
 
 - **T-0001** Misión 0: implantar el sistema de gobierno de ingeniería autónoma (governance/, tools/governance.py, puntero en AGENTS.md): python3 tools/governance.py check sin errores; python3 tools/test_governance.py en OK; otro modelo puede incorporarse con README.md + HANDOFF.md; D-0001 ratificada o rechazada por el jefe técnico y el director.
+- **T-0029** Push de herolte-drop-v2 al fork (remoto mio), lanzar el CI xnu y descargar el kernel; comprobar con ci_check.py por nombre completo: La rama está en mio/herolte-drop-v2 (sin force, sin PR, sin push a origin); un run del workflow xnu terminó; ci_check.py 0337-herolte-drop-v2 da APLICADO y ningún parche propio saltado; el kernel descargado tiene SHA-256 registrado como evidencia; el escaneo previo de datos privados queda anotado.
 - **T-0002** Auditoría Unicode HFS+ (XNU frente a Linux): causa, tabla de los 32 nombres, corrección propuesta: Causa demostrada con código y datos; resultados reproducibles con hashes; imagen de laboratorio intacta. Cumplida: docs/herolte-unicode-hfsplus.md, 24/24 comprobaciones, 16+22 pruebas.
 - **T-0009** Plan de integración con origin/herolte: aplicabilidad de sus 0332-0334 sobre nuestra rama y propuesta de renumeración (informe): Informe con qué parches de origin/herolte aplican limpios sobre herolte-drop-v2 (usando la herramienta del CI sin publicar), qué colisiona y orden de renumeración; no renumera nada.
 - **T-0024** Aplicar la corrección Unicode (D-0017): el generador entrega a Linux los nombres ya en forma XNU (hfs_component), un único punto de traducción, imagen NUEVA con nombre nuevo: Hecho: tools/hfsplus-names/xnu_names_stage.py + 8 pruebas; medida sobre los 32 nombres (30 resueltos solo renombrando, 2 con U+0E33 necesitan nodecompose); informe docs/herolte-unicode-aplicacion.md. La imagen nueva es T-0025 (roja).

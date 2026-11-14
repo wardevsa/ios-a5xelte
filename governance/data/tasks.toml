@@ -323,3 +323,15 @@ actions = ["host-tests", "pc-implementation", "local-commit"]
 acceptance = "Cada mutante clasificado con evidencia (DETECTADO / EQUIVALENTE DEMOSTRADO / SOBREVIVE); M16 y N02 siguen como equivalentes conocidos; ningún SOBREVIVE nuevo sin explicar; sin llenar el disco (>= 12 GiB libres al empezar); sin montar nada ni usar sudo; r2_lib.sh de rev3 idéntico al de rev2 (sha256 52357bd5…)."
 resume = "EN CURSO desde 2026-11-14 (tras liberar espacio, E-0033): salida en el scratchpad de la sesión (t0028_out.txt, volátil); lanzada con t0005_guard.sh (aborta si <3 GiB libres, no borra). Si el proceso ya no existe, ver el último mutation_summary3-* de v2/rev3/tests y registrar el resultado. Desde v2/rev3/tests: bash run_mutations.sh (usa mutants_def.py y run_tests.sh de rev3). Lanzar con guardia de disco como en T-0005 (t0005_guard.sh). Ver docs/ y E-0030."
 
+
+[[task]]
+id = "T-0029"
+title = "Push de herolte-drop-v2 al fork (remoto mio), lanzar el CI xnu y descargar el kernel; comprobar con ci_check.py por nombre completo"
+status = "ready"
+priority = 1
+owner = "ingeniero"
+depends_on = ["T-0016"]
+actions = ["publish", "local-commit"]
+requires_decisions = ["D-0030"]
+authorization_ref = "D-0030"
+acceptance = "La rama está en mio/herolte-drop-v2 (sin force, sin PR, sin push a origin); un run del workflow xnu terminó; ci_check.py 0337-herolte-drop-v2 da APLICADO y ningún parche propio saltado; el kernel descargado tiene SHA-256 registrado como evidencia; el escaneo previo de datos privados queda anotado."
