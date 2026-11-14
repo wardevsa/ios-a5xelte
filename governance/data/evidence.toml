@@ -1959,3 +1959,18 @@ sha256 = "4e4f6f0d14cbf02fc2a0dc64b3955b47f46edeafa1efaa0a5152e5b41832ac2f"
 size = 498
 immutable = true
 note = "Colores coherentes con los de 0345-0347 (20 verde = sonda ok; 21 oro dibujado por el alias con TTBR0 vivo; 22 rojo-naranja justo tras apagar TTBR0; 23 oro; 24 rosa antes de pmap_bootstrap). Es la primera vez que se ve el kernel ejecutar DESPUÉS de apagar TTBR0. Sin vídeo."
+
+[[evidence]]
+id = "E-0134"
+title = "Tanda amplia D-0043, imagen 7: BOOT del S7 escrito con xnu-boot-v2-s7-min12h26-20261114.img (kernel 0347, herostop=26) y leído de vuelta (sha256 99fff0a4…2c4e); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min12h26-out.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "83d7bd1c71a8e8c640ea5dbf7fcb294da259d569c61005c68c37b5447d032e58"
+size = 727
+immutable = true
+note = "Solo escritura y lectura de vuelta (D-0043; hash registrado antes en E-0129). Difiere de min12 solo en herostop=26 (diff comprobado). Dos intentos anteriores se cortaron antes de escribir porque adb dejó de ver el teléfono (reenumeración USB); el tercero esperó a una conexión estable."
