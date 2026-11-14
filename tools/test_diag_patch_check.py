@@ -13,6 +13,12 @@ class C(unittest.TestCase):
         d = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'xnu', 'patches')
         ps = [os.path.join(d, n) for n in sorted(os.listdir(d)) if n[:4] in ('0338', '0339', '0340', '0341', '0342', '0343', '0344')]
         self.assertTrue(ps); self.assertEqual(run(*ps).returncode, 0)
+    def mkhook(self, added):
+        fd, p = tempfile.mkstemp(suffix='.patch'); os.write(fd, ('--- a/bsd/kern/kdebug.c\n+++ b/bsd/kern/kdebug.c\n@@ -1 +1 @@\n' + ''.join('+%s\n' % l for l in added)).encode()); os.close(fd); self.addCleanup(os.unlink, p); return p
+    def test_hook_only_accepts_drawing_hooks(self): self.assertEqual(run(self.mkhook(['#if defined(A5XELTE)', 'extern void sweet_early_phase(const char *message);', '#endif', '\tsweet_early_phase(message);'])).returncode, 0)
+    def test_hook_only_rejects_other_code(self):
+        r = run(self.mkhook(['\tsweet_early_phase(message);', '\tmem_size = 0;'])); self.assertEqual(r.returncode, 1); self.assertIn('mem_size', r.stdout)
+    def test_real_0349_passes_after_d0045(self): self.assertEqual(run(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'xnu', 'patches', '0349-herolte-min14-phase-names.patch')).returncode, 0)
     def test_real_non_diag_patches_fail(self):
         d = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'xnu', 'patches')
         self.assertEqual(run(os.path.join(d, '0337-herolte-drop-v2.patch')).returncode, 1)
