@@ -72,3 +72,7 @@ for f in "$OUT/lib/libheroeagl.dylib" "$OUT/lib/libhakiosgl.dylib" "$OUT/lib/lib
 done
 # hero-run asks LaunchServices and installd to register the system bundles and the staged apps.
 codesign -s - -f --entitlements "$HERE/test/hero-run.entitlements" "$OUT/hero-run"
+
+# hero-oslog (dropped as hero-run's test): iOS's own log, read from logd's store, into the kernel's log.
+$CC -O2 -Wall -fobjc-arc -o "$OUT/hero-oslog" "$HERE/test/hero-oslog.m" -framework Foundation
+codesign -s - -f --entitlements "$HERE/test/hero-run.entitlements" "$OUT/hero-oslog"
