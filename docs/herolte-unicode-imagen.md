@@ -17,7 +17,7 @@
 Los volúmenes `systemos` y `appos` no tienen ningún renombrado; solo `os` cambia.
 
 ## 2. Qué falta (necesita sudo; lo ejecuta el Director)
-`COMANDOS_SUDO_XNU.md` (en la carpeta de imágenes del laboratorio) trae los dos comandos: `populate_image.sh full-xnu` (~12 GB de escritura) y `verify_image.sh full-xnu` (renombra a `.valid` solo si todo pasa). **No** se autoriza `r6_failure_tests.sh`. El ingeniero no tiene `sudo`.
+**Primer intento (2026-11-14):** el Director ejecutó `sudo ./populate_image.sh full-xnu` y `sudo ./verify_image.sh full-xnu` directamente; ambos abortaron en `img_common.sh` por falta de `IOS_ROOT_LAB` y `IOS_LAB_IMGDIR_EXPECT` (`sudo` borra el entorno) **antes de escribir nada** (comprobado: la imagen anterior conserva su sha256 `e724f981…`, la nueva sigue vacía). Los scripts exigen esas variables a propósito: la comprobación de que la carpeta de imágenes es la esperada no debe poder deducirse sola. **Solución (opción A):** un envoltorio con las variables fijadas, `xnu_sudo_run.sh`, en la carpeta de imágenes del laboratorio (probado sin privilegios: llega a `need_root` y rechaza argumentos desconocidos). Comandos en `COMANDOS_SUDO_XNU.md`: `sudo bash <carpeta-imagenes>/xnu_sudo_run.sh populate` (~12 GB) y después `... verify` (renombra a `.valid` solo si todo pasa). **No** se autoriza `r6_failure_tests.sh`. El ingeniero no tiene `sudo`.
 
 ## 3. Hallazgos durante la copia
 - **Error corregido en mi herramienta:** `xnu_names_stage` usaba `hfs_component`, que convierte `:` en `/`; renombrar `a:b` a `a/b` habría movido el fichero a un directorio. Ahora no toca los `:` (los convierte el `hfsplus` de Linux). Prueba añadida.

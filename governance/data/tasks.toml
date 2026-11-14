@@ -287,7 +287,7 @@ depends_on = ["T-0024"]
 requires_decisions = ["D-0020", "D-0021"]
 authorization_ref = "D-0021"
 actions = ["privileged-or-mount", "pc-implementation", "host-tests"]
-blocked_on = "el Director debe ejecutar con sudo los 2 comandos de COMANDOS_SUDO_XNU.md (el ingeniero no tiene sudo); todo lo previo está hecho y verificado sin montar (docs/herolte-unicode-imagen.md, E-0028)"
+blocked_on = "el Director debe ejecutar con sudo los 2 comandos de COMANDOS_SUDO_XNU.md con el envoltorio xnu_sudo_run.sh (el primer intento, sin variables de entorno, abortó sin escribir nada; el ingeniero no tiene sudo); todo lo previo está hecho y verificado sin montar (docs/herolte-unicode-imagen.md, E-0028)"
 acceptance = "Imagen con nombre nuevo con 30 nombres en forma XNU y los 2 de U+0E33 excluidos (KI-0006); hashes de la anterior intactos; hfsx_check esperando forma XNU; evidencias nuevas con SHA-256."
 evidence = ["E-0026", "E-0028"]
 
@@ -304,10 +304,11 @@ acceptance = "Una prueba nueva que falle con R07 y pase con rev2, o una demostra
 [[task]]
 id = "T-0026"
 title = "Implementar D-0022 en policy.toml, AUTHORITY y governance.py: nivel NARANJA (autorizador: jefatura técnica) y ROJO CRÍTICO (solo Director), con pruebas y mutantes"
-status = "ready"
+status = "blocked"
 priority = 5
 owner = "ingeniero"
 depends_on = []
+blocked_on = "el Director debe confirmar con sus palabras la nueva clasificación pedida el 2026-11-14 (sudo/montaje/generación de imágenes en el host = VERDE autónomo, tres niveles), que contradice D-0022 (NARANJA autorizada por la jefatura) y le quita al Director el control de acciones privilegiadas; ver el informe"
 actions = ["policy-change", "pc-implementation", "host-tests", "local-commit"]
 requires_decisions = ["D-0022"]
 acceptance = "Un nivel nuevo en policy.toml con sus acciones (privileged-or-mount y las de compilación pesada/imágenes; NO borrar ficheros del host ni publicar, que D-0022 no reclasifica), gate con su código de salida, validación en check, pruebas (incluida la negativa: una acción naranja sin decisión del jefe técnico/Director se deniega), batería de mutantes con control y documentación. Cambiar policy.toml es nivel B con revisor director: el Director aprobó D-0022."
