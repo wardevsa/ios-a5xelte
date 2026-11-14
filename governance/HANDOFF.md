@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0063 — min16 (kernel 0351: anillo de mensajes de kprintf/printf) ESCRITA (D-0047, 17/20); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0064 — N2 ALCANZADO: XNU arranca hasta bsd_init y falla al montar la raíz (esperado); el 'reinicio' era una mala lectura (2026-11-15)
+- **Tarea en curso: T-0012.** E-0177 + `docs/S7GE_N2_REACHED.md`: min16 muestra el log del kernel (APM, TOUCH, GPU probe disabled, UFS, `cannot mount root, errno = %d`, Skywalk PASSED, `bsd_autoconf: calling kinit`) y se actualiza: resultado **A** de N2. BOOT del teléfono = min16 (17/20 escrituras de la tanda; no hace falta escribir más para esto).
+- **Corrección:** la pantalla 'XNU MMU ON + 3 bloques' que leí como reinicio eran marcas de start.s sobre el framebuffer con el kernel vivo y sin consola visible. Desde min2 el kernel arrancaba.
+- **Siguiente (decisión del Director):** de dónde sale la raíz iOS HFS+ (~20 GiB): A repo privado propio con el workflow `ios-root`, B construirla en este PC desde un IPSW (`tools/mkiosroot.sh`, apfs-fuse, sudo, ~40 GB), C que la facilite quien la tenga. Luego: escribir USERDATA (borra Android; autorización roja propia con hash; copias en E-0124/E-0125) y línea de arranque con `ufsrw=1`.
+- Restaurar BOOT original (E-0009) cubierto por D-0047.
+
+## Relevo anterior: H-0063 — min16 (kernel 0351: anillo de mensajes de kprintf/printf) ESCRITA (D-0047, 17/20); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** E-0169: el reinicio está tras el anuncio PE_lockdown_iokit (dentro de PE_lockdown_iokit/vm_set_restrictions/kperf_init_early/bsd_init); E-0173: -v no muestra el log. BOOT = `xnu-boot-v2-s7-min16-20261114.img` (sha256 `048add02…09cf`); EFS intacto (E-0176).
 - **Qué mirar (Director, tras `adb reboot`):** además de las dos columnas de fases (derecha 36, izquierda 28), el **tercio izquierdo** de la pantalla (x≈20-620) muestra un anillo de unas 73 líneas con el comienzo (36 caracteres) de cada mensaje de kprintf/printf; una **marca blanca** en el borde izquierdo señala la línea MÁS RECIENTE. Copiar: la línea de la marca y las 8-10 líneas anteriores (de arriba abajo en el orden de pantalla; el anillo da la vuelta, así que el orden temporal es hacia abajo desde la línea de la marca +1 y reinicia arriba). Cualquier línea con `panic`/`error`/`fail`/`mount`.
 - Restaurar BOOT original (E-0009) cubierto por D-0047.

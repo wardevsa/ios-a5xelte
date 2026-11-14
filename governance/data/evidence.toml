@@ -2589,3 +2589,18 @@ sha256 = "15db0603ce447f1e7464c844da2f3ca21eff120bcce46aa676d5f722e0304326"
 size = 724
 immutable = true
 note = "Solo escritura y lectura de vuelta (hash registrado antes en E-0175; revisión del kernel E-0174; autorización D-0047 de los dos enganches). Línea de arranque idéntica a min2 (sin -v)."
+
+[[evidence]]
+id = "E-0177"
+title = "Observación de min16: el kernel arranca hasta el final de bsd_init: APM, TOUCH, 'GPU probe disabled', HFS 'cannot mount root, errno = %d', UFS, pruebas Skywalk PASSED y 'bsd_autoconf: calling kinit'; la pantalla se sigue actualizando (el kernel está vivo): resultado A de N2"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min16-observation.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "fb8837fb38e37ce74dbda2be8a3a75c8a1bab4dc49c54a9134d8b39fd44d3da9"
+size = 1761
+immutable = true
+note = "Corresponde al resultado A de docs/S7GE_MIN_BOOT_VALIDATION.md (llega a la consola de C, lee el UFS y falla al montar la raíz: éxito de N2). Transcripción por IA de tres fotos no archivadas y no ordenadas en el tiempo; el anillo da cadenas de formato, no valores. Implicación sobre mis interpretaciones previas: la 'pantalla de reinicio' de min2-min13 (XNU MMU ON + 3 bloques) probablemente NO era un reinicio: eran las marcas de start.s que quedan sobre el framebuffer mientras el kernel seguía vivo y su consola no dibujaba."
