@@ -7,7 +7,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 | ID | Estado | Prio | Propietario | Título | Depende de | Nivel | Bloqueo |
 |---|---|---|---|---|---|---|---|
 | T-0001 | in_review | 1 | ingeniero | Misión 0: implantar el sistema de gobierno de ingeniería autónoma (governance/, tools/governance.py, puntero en AGENTS.md) | — | B amarillo | — |
-| T-0029 | ready | 1 | ingeniero | Push de herolte-drop-v2 al fork (remoto mio), lanzar el CI xnu y descargar el kernel; comprobar con ci_check.py por nombre completo | T-0016 | C rojo | — |
+| T-0029 | done | 1 | ingeniero | Push de herolte-drop-v2 al fork (remoto mio), lanzar el CI xnu y descargar el kernel; comprobar con ci_check.py por nombre completo | T-0016 | C rojo | — |
 | T-0002 | done | 2 | ingeniero | Auditoría Unicode HFS+ (XNU frente a Linux): causa, tabla de los 32 nombres, corrección propuesta | — | A verde | — |
 | T-0009 | done | 2 | ingeniero | Plan de integración con origin/herolte: aplicabilidad de sus 0332-0334 sobre nuestra rama y propuesta de renumeración (informe) | — | A verde | — |
 | T-0024 | done | 2 | ingeniero | Aplicar la corrección Unicode (D-0017): el generador entrega a Linux los nombres ya en forma XNU (hfs_component), un único punto de traducción, imagen NUEVA con nombre nuevo | T-0003 | A verde | — |
@@ -27,7 +27,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 | T-0028 | in_progress | 7 | ingeniero | rev3: ronda completa de 49 mutantes sobre la batería corregida (el stub de losetup ya simula el retraso de udev), con presupuesto de disco | T-0027 | A verde | — |
 | T-0011 | done | 8 | ingeniero | Auditoría de licencias de lo que se pretende reutilizar (Mesa, metal2vulkan, hakios-gl, A5XELTE) | — | A verde | — |
 | T-0023 | blocked | 8 | ingeniero | Implementar el aislamiento de clientes de HeroGPU (D-0015): handles con generación, validación de jc_va, entitlement, presupuesto, address space por cliente | T-0008, T-0010 | B amarillo | aprobación de D-0015 por el jefe técnico y auditoría previa de qué mapea AS0 (T-0010) |
-| T-0012 | blocked | 9 | director | Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP | T-0013 | C rojo | autorización explícita del director (D-0010); candidata y verificación en E-0001..E-0006 |
+| T-0012 | blocked | 9 | director | Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP | T-0013 | C rojo | autorización explícita del Director (device-write-boot, D-0010) nombrando imagen, hash y copias; la candidata reconstruida está LISTA en el PC (E-0038, solicitud en docs/herolte-solicitud-n2.md) |
 | T-0013 | done | 9 | director | Decidir el cargador de las pruebas: el de clang (conveniencia) o compilar con el GCC aarch64 de Arm | — | A verde | — |
 | T-0016 | done | 9 | ingeniero | Aplicar la renumeración de parches y fusionar con origin/herolte (si el jefe técnico aprueba D-0008) | T-0009 | B amarillo | — |
 | T-0014 | blocked | 10 | director | Decidir qué argumento quitar de la línea diaria (604/607 caracteres) para poder añadir herodrop=0 y herosplash=1 | — | B amarillo | decisión del director o del jefe técnico |

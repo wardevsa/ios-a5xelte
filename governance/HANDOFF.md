@@ -8,7 +8,15 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0010 — T-0016 hecha; D-0029/D-0030 del Director; push y CI (2026-11-14)
+## Relevo vigente: H-0011 — candidata N2 reconstruida con el kernel del CI; esperando la autorización roja (2026-11-14)
+- **Hecho:** push de `herolte-drop-v2` al remoto `mio` (D-0030), CI `xnu` run `43579309448` = success, `ci_check` por nombre completo: los 6 parches 0332..0337 APLICADOS, ninguno propio saltado (E-0037). Kernel `62ea7501…2d5b`. Candidata nueva **`xnu-boot-v2-s7-20261114.img`** (SHA-256 `2c155829…8f40`): verificador 47 PASS/0 FAIL, independiente 51 PASS/0 FAIL (E-0038). Copias del teléfono verificadas (E-0036). T-0016 y T-0029 hechas.
+- **Falta (Director):** autorizar `device-write-boot`; la solicitud completa, el procedimiento y la vuelta atrás están en `docs/herolte-solicitud-n2.md` (T-0012 sigue bloqueada hasta entonces). **Nada se ha escrito en el teléfono.** Sin L3/L4 de esta unidad.
+- **En curso:** T-0028 (mutantes de rev3, segundo plano). **Esperas:** T-0004 (R2), T-0023 (aislamiento de HeroGPU: la GPU no debe usarse con software no confiable).
+- **Aviso al próximo ingeniero:** no escribir al teléfono ni leer sus particiones sin la autorización del Director con imagen, hash y copias nombrados.
+
+---
+
+## Relevo anterior: H-0010 — T-0016 hecha; D-0029/D-0030 del Director; push y CI (2026-11-14)
 - **Decisiones del Director (firmadas):** D-0029 (el NVMe NTFS vale como zona de trabajo para imágenes grandes; ext4 sigue preferido para repositorios y bucles), D-0030 (push de `herolte-drop-v2` SOLO al remoto `mio` = `darkcloud9998/ios-a5xelte`, lanzar el workflow `xnu` y descargar artefactos; sin push a `origin`, sin PR, sin force), D-0014 (renumeración) aprobada.
 - **T-0016 hecha:** `0332-herolte-drop-marker-protocol` → `0336-…`, `0334-herolte-drop-v2` → `0337-…`; fusión local con `origin/herolte` (un conflicto de texto en `HEROLTE_PROGRESS.md`, ambas partes conservadas); la serie 0332..0337 aplica limpia en el orden final (E-0035; aplicabilidad, no compilación). `validate-repo.py`: 4 errores antiguos (KI-0001).
 - **Antes de publicar** se escaneó el contenido (sin secretos, sin binarios de Apple, sin IMEI/serie; solo direcciones USB de prueba 192.168.7.x y rutas con el usuario local).

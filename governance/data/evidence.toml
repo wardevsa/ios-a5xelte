@@ -140,13 +140,13 @@ level = "L2"
 device = "none"
 title = "Imagen de laboratorio HFSX poblada lab-full.img.partial (verificación FAILED por 32 nombres Unicode)"
 kind = "image"
-path = "scratchpad-de-sesion/t04r/image/lab-full.img.partial (volátil; copia en E-0034)"
-location = "host-volatile"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/lab-full-old-20261113.img"
+location = "ntfs-archive"
 created = "2026-11-13"
 sha256 = "e724f9818a28d2c9ce8e84798bd8e46f256f112ddb0ec48e7125a2f0c4c79496"
 size = 21474836480
 immutable = true
-note = "20 GiB aparentes, ~11,5 GiB asignados. Vive en /tmp (se pierde al reiniciar) y NO está archivada: ver T-0019. No reparar ni regenerar sobre ella."
+note = "[2026-11-14: la ruta apunta ya a la copia de NTFS (E-0034), mismo sha256; el original sigue en el scratchpad, volátil] 20 GiB aparentes, ~11,5 GiB asignados. Vive en /tmp (se pierde al reiniciar) y NO está archivada: ver T-0019. No reparar ni regenerar sobre ella."
 
 [[evidence]]
 id = "E-0011"
@@ -518,4 +518,49 @@ sha256 = "5310e7dd44790703390ac828db2662ad790d0ee9ac80431b88f3860f74f8cdb7"
 size = 735
 immutable = true
 note = "Aplicabilidad de los parches (git apply --check + apply), no compilación ni ejecución: eso lo hace el CI. Árbol base: buildtree-0332-fork-8d1cf43 (marcador antiguo quitado con -R); caduca el 2026-11-18."
+
+[[evidence]]
+id = "E-0036"
+title = "Copias de seguridad del teléfono verificadas por SHA256SUMS: BOOT original (= E-0009), EFS, CPEFS, PERSISTENT, PARAM, PERSDATA, RECOVERY, BOTA0/1; fuera del teléfono, permisos 600, no en git"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/backups-verification-20261114.txt"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "8d57ebc43383e92285cdb614913d4584bce5f8a0b8f2e22addf93b9ed2d7be79"
+size = 810
+immutable = true
+note = "Solo el registro de la verificación (hashes), sin contenido. Las copias están en un único disco (/dev/sda2): riesgo de punto único de fallo señalado al Director. No es una prueba en el teléfono."
+
+[[evidence]]
+id = "E-0037"
+title = "CI xnu run 43579309448 (success): los 6 parches 0332-0337 constan como APLICADOS, ninguno propio saltado; kernel.development.herolte descargado"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/ci-xnu-43579309448-20261114.txt"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "build"
+level = "L1"
+device = "none"
+sha256 = "97d00a3495ee64ef9b70948f6d23edad2cbfc5901183a96186e732f98930fdad"
+size = 721
+immutable = true
+note = "Kernel sha256 62ea7501ee4483dc83bb6402ac2210153ecb55e535208ddabf52942a3ec02d5b. Compilación en el CI, no arranque. Artefacto del CI caduca; copia local en builds/device-day/artifacts/kernel-0337-ci-43579309448 y en E-0038."
+
+[[evidence]]
+id = "E-0038"
+title = "Candidata N2 de solo lectura RECONSTRUIDA con el kernel del CI: xnu-boot-v2-s7-20261114.img, verificador del constructor 47 PASS/0 FAIL, independiente 51 PASS/0 FAIL"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/boot-candidates-n2-run3-20261114.tar"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "50a1b0af7ea514455a932041cc666ade4fe56afecfed510b6f6f7a71eb1aad4d"
+size = 52776960
+immutable = true
+note = "Imagen BOOT xnu-boot-v2-s7-20261114.img (sha256 2c155829b1c6c7c5161b0bf245ae4015e5b041a01ad907507c84f3b70a648f40). Mismas entradas que E-0001 salvo el kernel (E-0037); línea de arranque con ufsrw=0 herolog=0 herodrop=0. Solo comprobaciones de consistencia del PC: NO se ha escrito en el teléfono ni arrancado (el nivel real lo da el S7, L3)."
 
