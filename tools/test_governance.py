@@ -65,6 +65,7 @@ class Base(unittest.TestCase):
         # T-0016 se usa como tarea AMARILLA sin revisar y con una decisión requerida aún PROPUESTA (D-0007); la real ya se cerró: fixture en la copia.
         mutate(tp, 'task', 'T-0016', 'status', '"blocked"'); mutate(tp, 'task', 'T-0016', 'blocked_on', '"fixture de pruebas"'); mutate(tp, 'task', 'T-0016', 'review_ref', None)
         mutate(tp, 'task', 'T-0016', 'requires_decisions', '["D-0007", "D-0014"]'); mutate(tp, 'task', 'T-0016', 'evidence', None)
+        mutate(tp, 'task', 'T-0029', 'status', '"ready"')            # T-0029 depende de T-0016: no puede estar hecha si el fixture de T-0016 está bloqueado
         self.render()                                              # las vistas generadas siguen al dato (las pruebas de independencia comprueban 'render --check')
 
     def tearDown(self): shutil.rmtree(self.d, ignore_errors=True)       # only this test's own temporary copy
