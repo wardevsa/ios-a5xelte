@@ -8,7 +8,16 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0006 — T-0025 lista salvo los 2 sudo (2026-11-13)
+## Relevo vigente: H-0007 — T-0025 con verify real analizado; T-0027 cerrada; T-0026 en espera (2026-11-14)
+- **T-0025:** populate y primer verify REALES hechos por el Director (E-0029). Catálogo en bruto: 327/327 nombres en forma XNU exacta; los 195 `NAME-NORMALIZED` son avisos (Linux recompone al leer, KI-0007); el fallo real eran 2 EXTRA: `.journal` y `.journal_info_block` (omisión mía del punto 5, corregida en `tools/ios-root-lab/verify_image.sh`). **Falta que el Director repita `sudo bash <carpeta-imagenes>/xnu_sudo_run.sh verify`** (montaje de solo lectura); si pasa, la imagen se renombra a `.valid`. Ver `docs/herolte-unicode-imagen.md` §5. Después: archivar la imagen (12 GB, volátil en /tmp) y cerrar T-0025.
+- **T-0027 hecha (E-0030):** el hueco R07 era del stub de losetup (el retraso de udev nunca arrancaba), no de `r2_lib.sh`; rev3 lo corrige (rev2 intacto).
+- **T-0026 en espera:** la petición del 2026-11-14 (sudo/montaje/imágenes = VERDE, 3 niveles) contradice D-0022 (NARANJA) y quita controles al Director: necesita su confirmación con sus palabras.
+- **Siguiente (verde): T-0028** (ronda completa de 49 mutantes sobre rev3, con guardia de disco).
+- Otras esperas: T-0004 (R2, sin autorización), T-0019 (archivar lab-full), T-0023/T-0016 (decisiones de arquitectura).
+
+---
+
+## Relevo anterior: H-0006 — T-0025 lista salvo los 2 sudo (2026-11-13)
 - **Hecho:** T-0007 (E-0026), T-0005 (E-0027: 46/49 detectados; R07 abierto → T-0027), D-0020 (excluir los 2 `U+0E33`, KI-0006), D-0021 (autorización roja `privileged-or-mount`, un solo uso), D-0022 (nivel NARANJA: **solo registrado; implementarlo es T-0026**), D-0023, D-0024, `tools/ios-root-lab/` (copia con adaptador, 17 pruebas), staging restaurado y renombrado, imagen nueva vacía `lab-full-xnu.img.partial`. Ver `docs/herolte-unicode-imagen.md`.
 - **Pendiente de una persona:** ejecutar `COMANDOS_SUDO_XNU.md` (populate y verify). El ingeniero no tiene sudo. Después: leer `ver.full-xnu.*` en `r3/out`, archivar, registrar evidencia y cerrar T-0025.
 - **Siguiente (verde):** T-0026 (política NARANJA), T-0027 (R07), `python3 tools/governance.py next`.

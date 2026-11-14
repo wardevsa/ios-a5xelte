@@ -294,12 +294,13 @@ evidence = ["E-0026", "E-0028", "E-0029"]
 [[task]]
 id = "T-0027"
 title = "rev2: cubrir el mutante R07 (sin espera de desasociación) que sobrevive a la batería, o demostrar que es equivalente"
-status = "ready"
+status = "done"
 priority = 6
 owner = "ingeniero"
 depends_on = ["T-0005"]
 actions = ["host-tests", "pc-implementation", "local-commit"]
-acceptance = "Una prueba nueva que falle con R07 y pase con rev2, o una demostración de equivalencia; sin tocar el rev2 aprobado (nueva revisión con sus sumas) y sin ejecutar el runner real ni montar nada."
+acceptance = "Hecho (E-0030): el hueco era del STUB (el retraso de udev nunca arrancaba), no de r2_lib.sh. Corregido en rev3 (rev2 intacto): R07 detectado por T26/T26b; r2_lib.sh sin cambios 131 PASS. Pendiente, si se quiere: ronda completa de 49 mutantes sobre rev3 (no hecha)."
+evidence = ["E-0027", "E-0030"]
 
 [[task]]
 id = "T-0026"
@@ -312,4 +313,15 @@ blocked_on = "el Director debe confirmar con sus palabras la nueva clasificació
 actions = ["policy-change", "pc-implementation", "host-tests", "local-commit"]
 requires_decisions = ["D-0022"]
 acceptance = "Un nivel nuevo en policy.toml con sus acciones (privileged-or-mount y las de compilación pesada/imágenes; NO borrar ficheros del host ni publicar, que D-0022 no reclasifica), gate con su código de salida, validación en check, pruebas (incluida la negativa: una acción naranja sin decisión del jefe técnico/Director se deniega), batería de mutantes con control y documentación. Cambiar policy.toml es nivel B con revisor director: el Director aprobó D-0022."
+
+[[task]]
+id = "T-0028"
+title = "rev3: ronda completa de 49 mutantes sobre la batería corregida (el stub de losetup ya simula el retraso de udev), con presupuesto de disco"
+status = "ready"
+priority = 7
+owner = "ingeniero"
+depends_on = ["T-0027"]
+actions = ["host-tests", "pc-implementation", "local-commit"]
+acceptance = "Cada mutante clasificado con evidencia (DETECTADO / EQUIVALENTE DEMOSTRADO / SOBREVIVE); M16 y N02 siguen como equivalentes conocidos; ningún SOBREVIVE nuevo sin explicar; sin llenar el disco (>= 12 GiB libres al empezar); sin montar nada ni usar sudo; r2_lib.sh de rev3 idéntico al de rev2 (sha256 52357bd5…)."
+resume = "Desde v2/rev3/tests: bash run_mutations.sh (usa mutants_def.py y run_tests.sh de rev3). Lanzar con guardia de disco como en T-0005 (t0005_guard.sh). Ver docs/ y E-0030."
 

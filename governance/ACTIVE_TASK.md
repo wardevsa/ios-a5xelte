@@ -6,7 +6,7 @@
 
 Tareas pendientes de revisión: T-0001 (Misión 0: implantar el sistema de gobierno de ingeniería autónoma (governance/, tools/governance.py, puntero en AGENTS.md))
 
-Siguiente tarea que se puede empezar sin pedir autorización: **T-0027 — rev2: cubrir el mutante R07 (sin espera de desasociación) que sobrevive a la batería, o demostrar que es equivalente**
+Siguiente tarea que se puede empezar sin pedir autorización: **T-0028 — rev3: ronda completa de 49 mutantes sobre la batería corregida (el stub de losetup ya simula el retraso de udev), con presupuesto de disco**
 
 ## Cómo reanudar
 1. Lee `README.md` y `HANDOFF.md`; ejecuta `python3 tools/governance.py check` y `status`.

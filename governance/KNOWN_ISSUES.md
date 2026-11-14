@@ -30,7 +30,7 @@ Nuestros `0332`, `0334`, `0335` colisionan en número con `0332`, `0333`, `0334`
 La política es **disciplina asistida por herramienta**: `gate` y `check` informan, no impiden que un agente ejecute un comando. Alinear `settings.json` con la política es la acción `host-config-change` (roja). Pendiente de decisión del Director.
 
 ## KI-0005 — Baterías de rev2 incompletas
-**Actualizado (T-0005 hecha, E-0027):** la ronda 2 está completa: 46 de 49 detectados; sobreviven M16 y N02 (equivalentes conocidos) y **R07** (sin clasificar: hueco de cobertura; T-0027). La ronda anterior, cortada por disco lleno, no es válida.
+**Actualizado (T-0005 hecha, E-0027):** la ronda 2 está completa: 46 de 49 detectados; sobreviven M16 y N02 (equivalentes conocidos) y **R07** (T-0027: causa = el stub de losetup nunca simulaba el retraso de udev; corregido en rev3, E-0030; rev3 no tiene ronda completa de mutantes). La ronda anterior, cortada por disco lleno, no es válida.
 
 ## KI-0006 — 2 ficheros con U+0E33 excluidos del root (D-0020)
 Dos ficheros de `System/Library/PrivateFrameworks/WorkflowKit.framework/th.lproj/DefaultShortcuts/` (nombres tailandeses con `U+0E33`, SARA AM; carpetas `0C6A13DC-…` y `1401D3FE-…`) no se copian al root: la tabla de Linux descompone `U+0E33` y XNU lo conserva (`docs/herolte-unicode-aplicacion.md` §2). **Impacto esperado:** ninguno, según la jefatura (iOS usaría la localización inglesa); **no verificado** por el ingeniero. **Se vigila:** `xnu_names_stage.py plan --ko … --exclude-list` debe listar exactamente esos 2. **Resuelve:** nueva decisión (nodecompose o parche de la tabla). T-0025.

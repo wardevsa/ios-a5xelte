@@ -429,3 +429,18 @@ size = 1382400
 immutable = true
 note = "Primer montaje real de Linux (hfsplus por defecto, sin nodecompose). La imagen (sha256 747d0245...ec27f) sigue en el scratchpad (volátil) como .partial. No es evidencia de iOS ni del teléfono."
 
+[[evidence]]
+id = "E-0030"
+title = "rev3 (T-0027): corrección del retraso simulado de udev en el stub de losetup; R07 detectado (T26/T26b), r2_lib.sh intacto 131 PASS"
+kind = "archive"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/rev3-battery-20261114.tar"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "430d20a213d92051cb62d52a08663b88e4821fba1ea76222c0ee128527cff9dd"
+size = 112640
+immutable = true
+note = "Solo R07 y R09 se reejecutaron sobre rev3; no es una ronda completa. rev2 intacto. No valida R2 ni autoriza nada."
+
