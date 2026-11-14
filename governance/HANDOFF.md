@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0050 — copias SYSTEM/USERDATA/RECOVERY hechas y verificadas; min12 (kernel 0347, 8 bloques de alias) ESCRITA (D-0043, 5/20) (2026-11-14)
+## Relevo vigente: H-0051 — min12 ya no cuelga ni panica: acaba en reinicio; bisección con herostop 22-28 (2026-11-14)
+- **Tarea en curso: T-0012** (D-0043, 5/20 usadas). E-0131: sin página de stages, sin A5V, sin pánico; pantalla de reinicio. Lectura: la sonda del alias pasa; el kernel sigue y se reinicia como en min2-min7.
+- **Siguiente:** escribir **h24** (E-0128; kernel 0347; congela tras el bloque 24 = antes de `pmap_bootstrap`) y ver: congela con bloques 20…24 ⇒ el reinicio es posterior a 24 (h26, h28); no congela ⇒ anterior (h22).
+- Restaurar BOOT original (E-0009) cubierto por D-0043.
+
+## Relevo anterior: H-0050 — copias SYSTEM/USERDATA/RECOVERY hechas y verificadas; min12 (kernel 0347, 8 bloques de alias) ESCRITA (D-0043, 5/20) (2026-11-14)
 - **Tarea en curso: T-0012.** T-0043 (copias) hecha: E-0123 (RECOVERY = copia del 12-nov), E-0124 (SYSTEM 7,75 GB), E-0125 (USERDATA 23,4 GB), cada una verificada por trozos y contra el hash de la partición entera en el teléfono. Carpeta `IOS-S7-backup/2026-11-14-engineer-full/` en el NVMe. La SYSTEM del snapshot del Director NO es válida (más corta).
 - **BOOT = `xnu-boot-v2-s7-min12-20261114.img`** (sha256 `7718a774…c834`), leída de vuelta; EFS intacto (E-0126). Kernel 0347 (E-0121): el alias del framebuffer ahora cubre los 8 bloques de 2 MiB.
 - **Siguiente (Director):** `adb reboot`, mirar. Esperado tras el bloque 19: **20 (sonda: VERDE = bien)**, **21**, y bloques 22-29 después de apagar TTBR0 si el kernel sigue; texto `A5V TTBR1/TCR/…/PAR` como antes; si hay `A5 XNU PANIC`, transcribir literal.

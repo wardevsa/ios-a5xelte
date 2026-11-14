@@ -1854,3 +1854,78 @@ sha256 = "64399560f3cede65413ed137292b260fa57e5a0d908b760a1078af64385186dc"
 size = 724
 immutable = true
 note = "Solo escritura y lectura de vuelta, tras terminar la copia de seguridad (T-0043). Condiciones de D-0043: revisión E-0121, hash en E-0122, cmdline = min2 (diff)."
+
+[[evidence]]
+id = "E-0127"
+title = "Imagen preparada (kernel 0347, D-0043): xnu-boot-v2-s7-min12h22-20261114 = min12 + herostop=22; 47 PASS constructor y 58 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run13-min12/xnu-boot-v2-s7-min12h22-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "fdcd105949b739a757e3ae3da4baf51211f5e1e0c4ca7c179e8611c7df02aa25"
+size = 18618384
+immutable = true
+note = "Kernel 34222b5d1438516f0daab01f88c9310df60ce5c0464dad37fdd359edde75fd15 (revisión E-0121), ADT y cargador como antes; la línea difiere de min12 solo en herostop=22 (diff). Para localizar el reinicio posterior a la sonda del alias (slots 20-29)."
+
+[[evidence]]
+id = "E-0128"
+title = "Imagen preparada (kernel 0347, D-0043): xnu-boot-v2-s7-min12h24-20261114 = min12 + herostop=24; 47 PASS constructor y 58 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run13-min12/xnu-boot-v2-s7-min12h24-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "a69421832eeba046f433a3635a12f87bb7ae319c602f56997157b68a5b44df0c"
+size = 18618384
+immutable = true
+note = "Kernel 34222b5d1438516f0daab01f88c9310df60ce5c0464dad37fdd359edde75fd15 (revisión E-0121), ADT y cargador como antes; la línea difiere de min12 solo en herostop=24 (diff). Para localizar el reinicio posterior a la sonda del alias (slots 20-29)."
+
+[[evidence]]
+id = "E-0129"
+title = "Imagen preparada (kernel 0347, D-0043): xnu-boot-v2-s7-min12h26-20261114 = min12 + herostop=26; 47 PASS constructor y 58 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run13-min12/xnu-boot-v2-s7-min12h26-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "99fff0a4425b273de59c11229d20ecb3bb266ff86a57e3d1bf4af1483ff42c4e"
+size = 18618384
+immutable = true
+note = "Kernel 34222b5d1438516f0daab01f88c9310df60ce5c0464dad37fdd359edde75fd15 (revisión E-0121), ADT y cargador como antes; la línea difiere de min12 solo en herostop=26 (diff). Para localizar el reinicio posterior a la sonda del alias (slots 20-29)."
+
+[[evidence]]
+id = "E-0130"
+title = "Imagen preparada (kernel 0347, D-0043): xnu-boot-v2-s7-min12h28-20261114 = min12 + herostop=28; 47 PASS constructor y 58 PASS independiente, 0 FAIL (NO escrita)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n2-run13-min12/xnu-boot-v2-s7-min12h28-20261114.img"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "453009ce0d875840e2e7c4ad12fe9b0e6ae2afd210ee641ad1a580551fb234f5"
+size = 18618384
+immutable = true
+note = "Kernel 34222b5d1438516f0daab01f88c9310df60ce5c0464dad37fdd359edde75fd15 (revisión E-0121), ADT y cargador como antes; la línea difiere de min12 solo en herostop=28 (diff). Para localizar el reinicio posterior a la sonda del alias (slots 20-29)."
+
+[[evidence]]
+id = "E-0131"
+title = "Observación de min12 (Director): sin página de stages ni líneas A5V ni pánico; acaba en la pantalla de reinicio (azul, cian, magenta + XNU MMU ON): ya no hay cuelgue ni fallo en la sonda del alias"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min12-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "a1b3062865b59d8287c0303636f2f4ab8185bbd2cd9c76ab06021786959e8f88"
+size = 444
+immutable = true
+note = "Lectura: con el alias de 8 bloques la sonda ya no falla (ni cuelga ni entra en pánico), así que el kernel avanza más allá del bloque 19 y vuelve a ocurrir el reinicio original (por eso el texto y los bloques desaparecen: la pantalla es la de DESPUÉS del reinicio, como en min2-min7). Falta saber en qué punto exacto; herostop 22-28 (E-0127..E-0130)."
