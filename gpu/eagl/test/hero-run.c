@@ -279,6 +279,15 @@ ask_for_old_wallpaper(void)
    static const char *const image_path =
       "/Library/Wallpaper/Collections/Clownfish~iphone.wallpaperCollection/Wallpapers/"
       "7420.Clownfish-375w-812h@3x~iphone.wallpaper/7420.Clownfish_Background-375w-812h@3x~iphone.ca/assets/Background.HEIC";
+   /*
+    * (2026-11-14) Off unless DROP_DIR oldwallpaper.on: with the pictures made PNG (walls/) the poster shows the original
+    * wallpaper itself, and this old way, once the picture has pixels, took backboardd down (SIGSEGV in QuartzCore's
+    * memmove, past the end of a 5128192-byte image) right after it was asked, every boot (boot-walls, boot-walls8).
+    */
+   if (access(DROP_DIR "oldwallpaper.on", F_OK) != 0) {
+      dprintf(census_fd, "old wallpaper: not asked (no oldwallpaper.on)\n");
+      return;
+   }
    dlopen("/System/Library/Frameworks/UIKit.framework/UIKit", RTLD_NOW);
    dlopen("/System/Library/PrivateFrameworks/SpringBoardUIServices.framework/SpringBoardUIServices", RTLD_NOW);
    int (*set_images)(id, id, int, int) = (int (*)(id, id, int, int))dlsym(RTLD_DEFAULT, "SBSUIWallpaperSetImages");
