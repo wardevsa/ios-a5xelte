@@ -368,3 +368,13 @@ depends_on = ["T-0031"]
 actions = ["read-analysis", "docs-write", "local-commit"]
 acceptance = "Hecho: docs/S7GE_EXTRACTION_INTERFACES.md, S7GE_CONSOLIDATION_RISKS.md, S7GE_MIN_BOOT_VALIDATION.md, S7GE_EAGL_BRIDGES.md y S7GE_A5XELTE_LESSONS.md; docs/herolte-solicitud-n2.md actualizada (fases 1-4, autorización solo de la variante mínima); S7GE_INCONSISTENCIES.md con 17 filas. Sin tocar parches ni código, sin push, sin adb."
 
+[[task]]
+id = "T-0033"
+title = "S7GE Fases 10-13: expectativas de log del primer arranque, plan de restauración, análisis de versión de Mesa y licencias, resumen ejecutivo"
+status = "done"
+priority = 7
+owner = "ingeniero"
+depends_on = ["T-0032"]
+actions = ["read-analysis", "docs-write", "local-commit"]
+acceptance = "Hecho: docs/S7GE_BOOT_LOG_EXPECTATIONS.md, S7GE_ROLLBACK_PLAN.md, S7GE_MESA_VERSION_ANALYSIS.md (aplicabilidad medida sobre Mesa 25.0.7 y 26.2.4 descargados; licencias de Mesa y libdrm verificadas; OSMesa eliminado en 25.1) y S7GE_EXECUTIVE_SUMMARY.md; S7GE_LICENCIAS.md actualizado. Sin tocar código ni parches, sin push, sin adb."
+

@@ -8,7 +8,15 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0014 — decisión de jefatura: primer flasheo con la variante mínima; Fases 7-9 hechas (2026-11-14)
+## Relevo vigente: H-0015 — Fases 10-13 hechas; hallazgo: OSMesa no existe desde Mesa 25.1 (2026-11-14)
+- **Hecho (T-0033, solo documentos y descargas públicas):** `S7GE_BOOT_LOG_EXPECTATIONS.md`, `S7GE_ROLLBACK_PLAN.md` (**no restaurar con el BOOT del snapshot sin recortar**: lleva 98 bytes de más, KI-0008), `S7GE_MESA_VERSION_ANALYSIS.md` (parcheador: 12/12 sobre Mesa 25.0.7; **falla en 26.2.4 porque OSMesa fue eliminado en 25.1.0**; licencias de Mesa y libdrm verificadas: MIT), `S7GE_EXECUTIVE_SUMMARY.md`.
+- **Para el Director:** la fase 1 (variante mínima) sigue esperando tu autorización roja, el backup completo/recortado y, recomendado, una segunda copia de EFS. Plan, criterios y vuelta atrás están en `herolte-solicitud-n2.md`, `S7GE_MIN_BOOT_VALIDATION.md`, `S7GE_BOOT_LOG_EXPECTATIONS.md`, `S7GE_ROLLBACK_PLAN.md`. **Riesgo residual:** si TWRP no responde no hay camino de restauración documentado por Download/Odin.
+- **Decisión de jefatura nueva necesaria:** qué hacer con OSMesa (quedarse en 25.0.7 / mantenerlo / otra superficie de Mesa).
+- **Sin tareas verdes abiertas.**
+
+---
+
+## Relevo anterior: H-0014 — decisión de jefatura: primer flasheo con la variante mínima; Fases 7-9 hechas (2026-11-14)
 - **Decisión (jefatura, nivel B):** primer flasheo = `xnu-boot-v2-s7-min-20261114.img` (SHA-256 `07ddfa06…5db3`, E-0040); la candidata normal (`2c155829…8f40`, E-0038) queda para una **fase 3 con autorización propia**. `docs/herolte-solicitud-n2.md` está reescrita (fases 1-4, texto de autorización de la fase 1). **Siguen pendientes del Director:** backup completo y recortado (KI-0008) y la firma de la autorización roja.
 - **Hecho (T-0032, solo documentos):** `S7GE_MIN_BOOT_VALIDATION.md` (qué observar, criterios A-E fijados antes de arrancar, protocolo, qué no concluir), `S7GE_EXTRACTION_INTERFACES.md`, `S7GE_CONSOLIDATION_RISKS.md` (R1-R10), `S7GE_EAGL_BRIDGES.md` (propuesta: conservar hakios-gl, sin medir), `S7GE_A5XELTE_LESSONS.md` (la 8.ª: A5 se negó a exponer descriptores crudos; herolte los expone), `S7GE_INCONSISTENCIES.md` (17 filas; corrige dos afirmaciones de la directiva: el upstream de herolte es T880, no un A5/Exynos 7580; STATUS cita Mesa 26.2.4).
 - **Backup del Director en otra terminal:** no tocar adb ni esa carpeta.
