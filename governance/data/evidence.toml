@@ -1974,3 +1974,18 @@ sha256 = "83d7bd1c71a8e8c640ea5dbf7fcb294da259d569c61005c68c37b5447d032e58"
 size = 727
 immutable = true
 note = "Solo escritura y lectura de vuelta (D-0043; hash registrado antes en E-0129). Difiere de min12 solo en herostop=26 (diff comprobado). Dos intentos anteriores se cortaron antes de escribir porque adb dejó de ver el teléfono (reenumeración USB); el tercero esperó a una conexión estable."
+
+[[evidence]]
+id = "E-0135"
+title = "Observación de min12h26 (Director): congela con dos bloques nuevos (verde = 25 tras pmap_bootstrap, azul = 26 tras las tablas de E/S tempranas): el kernel pasa pmap_bootstrap y llega al bloque 26; el reinicio es posterior"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min12h26-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "e7ae8f23939581f1a4c55d02d6a13a16bfc82d9af2f30a2b302ebbd6bc2d3444"
+size = 444
+immutable = true
+note = "Colores por posición coherentes con 0343: 25 = 0x32cd32 (lima), 26 = 0x1e90ff (azul). Las líneas A5V igual que antes. Sin vídeo."

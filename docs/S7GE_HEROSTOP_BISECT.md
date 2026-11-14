@@ -57,3 +57,6 @@ Con el kernel 0344, **tanto con `herostop=23` como sin `herostop`** la pantalla 
 
 ## Kernel 0347: h24 (E-0133, 2026-11-14) — el kernel sobrevive a apagar TTBR0
 Con el alias de 8 bloques (0347) la sonda da **verde (slot 20)** y **h24 congela con los bloques 19-24**: el kernel apaga TTBR0 (22), reenlaza punteros (23) y llega antes de `pmap_bootstrap` (24). **El reinicio ocurre después del bloque 24.** Candidatos: `pmap_bootstrap` (25), tablas de E/S tempranas (26), volver de `arm_vm_init` (27), `serial_init` (28/29) y lo que sigue en `arm_init`. Siguiente: **h26** (ya preparada, E-0129); si congela ⇒ h28; si no ⇒ h25 (por construir).
+
+## Kernel 0347: h26 (E-0135, 2026-11-14) — pmap_bootstrap se supera
+**Congeló con los bloques 25 (tras `pmap_bootstrap`) y 26 (tablas de E/S tempranas).** El reinicio es posterior al bloque 26. Quedan: 27 (`arm_vm_init` devolvió el control a `arm_init`), 28 (justo antes de `serial_init`) y 29 (justo después). Siguiente: **h28** (preparada, E-0130).
