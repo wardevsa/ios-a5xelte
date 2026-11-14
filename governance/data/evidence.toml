@@ -474,3 +474,33 @@ size = 1392640
 immutable = true
 note = "Sustituye a E-0029 (primer verify, con los 2 EXTRA del diario) como resultado final; E-0029 se conserva."
 
+[[evidence]]
+id = "E-0033"
+title = "Registro del borrado de lab-full-xnu.img.valid y r3/work (D-0027/D-0028): hashes del archivo releídos antes, espacio 6232 -> 29468 MiB"
+kind = "result"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/04-audit-evidence/d0027-delete-archived-20261114.txt"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "9ced50466e0561c8f92c62d7e72840aa5855cd16b9f9c5f0c1814e7a235ac152"
+size = 658
+immutable = true
+note = "Las copias siguen en NTFS: E-0031 (imagen) y E-0013 (r3/work, estado previo al renombrado XNU; reproducible con xnu_names_stage.py apply)."
+
+[[evidence]]
+id = "E-0034"
+title = "Copia en NTFS de la imagen de laboratorio ANTERIOR lab-full.img.partial (nombres sin corregir; nunca validada), sha256 igual a E-0010"
+kind = "image"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-archive/02-extractions/lab-full-old-20261113.img"
+location = "ntfs-archive"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "e724f9818a28d2c9ce8e84798bd8e46f256f112ddb0ec48e7125a2f0c4c79496"
+size = 21474836480
+immutable = true
+note = "T-0019. Origen intacto en el scratchpad. Contiene binarios de Apple: NO va a git. Sustituida en uso por E-0031."
+

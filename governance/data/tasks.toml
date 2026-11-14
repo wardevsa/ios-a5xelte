@@ -211,14 +211,13 @@ acceptance = "validate-repo.py sale con 0 y se añade a las suites de regresión
 [[task]]
 id = "T-0019"
 title = "Archivar en el NTFS la imagen de laboratorio lab-full.img.partial (y os.apfs): hoy solo existen en /tmp, que se pierde al reiniciar"
-status = "blocked"
+status = "done"
 priority = 4
 owner = "ingeniero"
 depends_on = []
 actions = ["archive-copy"]
-blocked_on = "confirmación del director: ambos ficheros se reservaron a su decisión en el informe de almacenamiento (la copia no los mueve ni toca)"
 acceptance = "Copia dispersa (--sparse) con compare y SHA-256 igual al registrado en E-0010; origen intacto; entrada nueva en evidence.toml."
-evidence = ["E-0010"]
+evidence = ["E-0010", "E-0034"]
 
 [[task]]
 id = "T-0020"

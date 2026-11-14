@@ -15,7 +15,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 | T-0022 | done | 3 | ingeniero | ci_check.py y preflight.py: identificar el parche por nombre completo (hoy el prefijo 0334- casa con dos parches) | T-0009 | A verde | — |
 | T-0025 | done | 3 | ingeniero | Generar la imagen de laboratorio NUEVA con los nombres en forma XNU (monta HFS+: acción roja) y verificarla | T-0024 | A verde | — |
 | T-0005 | done | 4 | ingeniero | rev2: ronda 2 de mutación (49 mutantes) sobre las pruebas reforzadas, con presupuesto de disco | — | A verde | — |
-| T-0019 | blocked | 4 | ingeniero | Archivar en el NTFS la imagen de laboratorio lab-full.img.partial (y os.apfs): hoy solo existen en /tmp, que se pierde al reiniciar | — | A verde | confirmación del director: ambos ficheros se reservaron a su decisión en el informe de almacenamiento (la copia no los mueve ni toca) |
+| T-0019 | done | 4 | ingeniero | Archivar en el NTFS la imagen de laboratorio lab-full.img.partial (y os.apfs): hoy solo existen en /tmp, que se pierde al reiniciar | — | A verde | — |
 | T-0006 | blocked | 5 | ingeniero | rev2: revisión independiente nueva, PINNED/APPROVED.sha256 como artefactos de revisión e informe A-I | T-0005 | A verde | T-0005 |
 | T-0020 | blocked | 5 | jefe-tecnico | Ejecutar la parte 2 de la prueba de incorporación (governance/ONBOARDING_DRILL.md) con un modelo en frío distinto del autor | T-0001 | A verde | requiere un modelo que no haya escrito el gobierno y acceso de solo lectura a un clon: lo ejecuta el jefe técnico o el director |
 | T-0026 | done | 5 | ingeniero | Implementar D-0025 (sudo, montaje, compilación pesada e imágenes de prueba pasan a verde; sustituye a D-0022) | — | B amarillo | — |

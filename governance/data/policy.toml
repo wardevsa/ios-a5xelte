@@ -137,10 +137,16 @@ summary = "Compilación pesada (kernel, toolchains) y generación de imágenes d
 requires = ["presupuesto de disco comprobado antes (>= el doble de lo estimado libre) y guardia que aborte sin borrar nada", "nombre nuevo, nunca sobrescribir", "no es publicar: el CI, push y PR siguen siendo rojos"]
 
 [[actions]]
+id = "delete-archived"
+tier = "A"
+summary = "Borrar un artefacto TEMPORAL ya archivado: tiene copia verificada por hash en el archivo (NTFS) registrada como evidencia, y el borrado es por ruta exacta. Verde por decisión del Director (D-0028, 2026-11-14)."
+requires = ["la copia archivada existe y su sha256 coincide con el registrado (releído justo antes de borrar)", "rutas exactas, sin comodines ni sudo rm -rf sobre patrones; el borrado se limita a artefactos del scratchpad del laboratorio", "nunca evidencia sin copia, ni ficheros del repositorio, ni nada que no esté en la lista", "registro del borrado (lista + hashes + espacio antes/después) archivado como evidencia"]
+
+[[actions]]
 id = "delete-or-overwrite"
 tier = "C"
 authorizer = "director"
-summary = "Borrar, mover o sobrescribir datos: originales ya archivados, evidencias, sandboxes, imágenes, resultados."
+summary = "(Borrado GENERAL; el de artefactos temporales ya archivados es delete-archived, nivel A.) Borrar, mover o sobrescribir datos: originales ya archivados, evidencias, sandboxes, imágenes, resultados."
 requires = ["copia verificada en el destino", "lista exacta de rutas aprobada"]
 
 [[actions]]
