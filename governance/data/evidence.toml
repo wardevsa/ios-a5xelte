@@ -609,3 +609,18 @@ size = 955
 immutable = true
 note = "Carpeta con build-linux-host.log, meson-options.txt, smoke-test.txt, exported-osmesa-symbols.txt y libOSMesa.sha256. Compilación de COMPROBACIÓN en Linux con softpipe: NO es Darwin, NO es Panfrost, NO está probada en el teléfono. Sin copia en NTFS aún (NVMe ocupado por el backup)."
 
+[[evidence]]
+id = "E-0042"
+title = "Comprobación del snapshot de backup del 2026-11-14: BOOT bueno (prefijo = E-0009), EFS bueno (8 bytes de superbloque ext4 distintos), RECOVERY truncada, SYSTEM sin verificar, USERDATA vacío"
+kind = "result"
+path = "~/HackiOS/builds/device-day/backup-check-20261114/RESULTS.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ab2d5a3637698f61fe70a23035be270ed92e5ee1a6bef3e58097a41fc4a5449c"
+size = 782
+immutable = true
+note = "Solo lectura de ficheros de copia en el PC; no se leyó el teléfono. No es una comparación contra el teléfono (device-read, no hecha). Sin copia en NTFS aún."
+

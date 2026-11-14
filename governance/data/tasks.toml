@@ -422,3 +422,14 @@ actions = ["pc-implementation", "host-tests", "heavy-compile", "local-commit"]
 blocked_on = "libdrm-dev no está instalado en el PC (instalar herramientas del sistema es una acción roja): se puede resolver con el subproyecto de Meson (descarga) o compilando en el CI (publish, D-0030 solo cubre la rama herolte-drop-v2 en mio)"
 acceptance = "patch-mesa.py (o su sucesor) aplica 12/12 a Mesa 26.x y compila con Panfrost; los dylibs de iOS salen del CI con hash; comparar con 25.0.7."
 
+[[task]]
+id = "T-0038"
+title = "Comprobar el snapshot de backup, documentar su estado real (S7GE_BACKUP_STATUS.md) y actualizar la solicitud de flasheo con él"
+status = "done"
+priority = 4
+owner = "ingeniero"
+depends_on = ["T-0034"]
+actions = ["read-analysis", "docs-write", "local-commit"]
+evidence = ["E-0042"]
+acceptance = "Hecho: solo lectura de los ficheros del snapshot (sin adb, sin modificar nada); estado real por fichero; solicitud, checklist y plan de restauración actualizados. NO hecho (rojo, no autorizado): la comparación contra el teléfono (device-read)."
+

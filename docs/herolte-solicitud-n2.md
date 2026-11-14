@@ -31,8 +31,11 @@
 - La candidata anterior (`26a39560…`, E-0001) se conserva; esta es nueva con el kernel que incluye los parches de upstream.
 - Pruebas de host de DROP v2, de `ci_check` y del adaptador de nombres en verde.
 
-## 3. Copias de seguridad (E-0036, verificadas el 2026-11-14)
-`~/HackiOS/backups/device-herolte/2026-11-12/`: BOOT (= E-0009), EFS (contiene el IMEI), CPEFS, PERSISTENT, PARAM, PERSDATA, RECOVERY, BOTA0/1; todas con `SHA256SUMS` correcto, permisos 600, **fuera del teléfono**, no en git. **Riesgo señalado:** todas están en el mismo disco del PC; una segunda copia (sobre todo EFS) fuera de él es prudente (decisión del Director).
+## 3. Copias de seguridad (estado real: `docs/S7GE_BACKUP_STATUS.md`, 2026-11-14)
+- **Verificadas contra el teléfono el 2026-11-12 y re-verificadas hoy:** BOOT (= E-0009), EFS, CPEFS, PERSISTENT, PARAM, PERSDATA, **RECOVERY (completa)**, BOTA0/1 en `~/HackiOS/backups/device-herolte/2026-11-12/` (permisos 600, fuera del teléfono y de git).
+- **Snapshot del Director de hoy (NVMe):** `BOOT.img` bueno (el prefijo de 41 943 040 bytes = E-0009; 98 bytes de cola de `dd`); `EFS.img` bueno (difiere de la de 11-12 solo en 8 bytes del superbloque ext4: un montaje más); **`RECOVERY.img` truncada (16 %), no usar**; `SYSTEM.img` 5,7 GB **sin verificar**; **`USERDATA.img` 0 B (falló)**. Copia de USERDATA en tarjeta SD: **declarada, no verificada** (sin ruta ni hash).
+- **Lo que la fase 1 necesita está cubierto** (volver al BOOT original, EFS, RECOVERY); no se toca USERDATA. **Pendiente de tu decisión:** aceptar que SYSTEM/USERDATA no están verificados porque la fase 1 no los toca, y la lectura de las particiones en el teléfono (`device-read`) para comparar.
+- Riesgo señalado: las copias de 11-12 siguen en un solo disco; hay además `EFS.img` de hoy en el NVMe.
 
 ## 4. Qué se escribiría y qué no
 - **Solo la partición BOOT** (`/dev/block/platform/155a0000.ufs/by-name/BOOT`), desde TWRP, con la imagen de arriba. **Nunca** EFS, RECOVERY ni bootloaders (AGENTS.md; regla X).
@@ -53,5 +56,6 @@
 - Esta solicitud usa el módulo `herolte-verify-boot.py`, que comprueba consistencia, no comportamiento.
 
 ## 7. Texto que el Director puede usar para autorizar (solo la fase 1)
-> «Autorizo `device-write-boot` (y `device-read` de las particiones BOOT y EFS para comprobarlas antes y después) en el S7 para escribir `xnu-boot-v2-s7-min-20261114.img` (SHA-256 `07ddfa06…5db3`) en la partición BOOT, desde TWRP, siguiendo `docs/herolte-solicitud-n2.md` y `docs/S7GE_MIN_BOOT_VALIDATION.md`; solo BOOT; vuelta atrás con `BOOT.img` (E-0009). No autoriza ninguna otra imagen.»
-**Antes de firmar:** que el backup de esta jornada esté completo, recortado y comprobado contra el teléfono (KI-0008), y confirmar en TWRP con `ls -l /dev/block/platform/155a0000.ufs/by-name/` que BOOT es `sda5`.
+> «Autorizo `device-write-boot` (y `device-read` de las particiones BOOT y EFS para comprobarlas antes y después) en el S7 para escribir `xnu-boot-v2-s7-min-20261114.img` (SHA-256 `07ddfa069c7f53936964e05f174ddced6a75b6ff690180e648a082c941115db3`) en la partición BOOT (`/dev/block/sda5`), desde TWRP, siguiendo `docs/herolte-solicitud-n2.md` y `docs/S7GE_MIN_BOOT_VALIDATION.md`; solo BOOT; vuelta atrás con `BOOT.img` (E-0009). Acepto que SYSTEM y USERDATA no están verificados y que la fase 1 no los toca. No autoriza ninguna otra imagen.»
+**Antes de firmar:** confirmar en TWRP con `ls -l /dev/block/platform/155a0000.ufs/by-name/` que BOOT es `sda5`.
+**Dos advertencias sobre el borrador de jefatura:** (1) citaba el hash como `07ddfa06...8f40`: **`…8f40` es el final de la candidata NORMAL** (`2c155829…8f40`), no de la mínima (`…5db3`); la autorización **debe llevar el hash completo y exacto**, porque el script de escritura lo compara. (2) incluía el **número de serie del teléfono**: no debe ir en documentos ni en git; si hay más de un dispositivo conectado se usa `ANDROID_SERIAL` en el entorno de quien ejecuta.

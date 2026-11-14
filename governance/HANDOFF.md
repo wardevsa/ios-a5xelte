@@ -8,7 +8,17 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0017 — B2 autorizada por el Director (D-0032) y el OSMesa propio compila sobre Mesa 26.2.4 (2026-11-14)
+## Relevo vigente: H-0018 — el snapshot de backup del Director NO está completo; qué sirve y qué no (2026-11-14)
+- **Medido (T-0038, solo lectura, sin adb, nada modificado; E-0042; `docs/S7GE_BACKUP_STATUS.md`):** `BOOT.img` bueno (el prefijo = E-0009; 98 bytes de cola de `dd`); `EFS.img` bueno (8 bytes de superbloque ext4 distintos de 11-12: un montaje más); **`RECOVERY.img` TRUNCADA (7,8 de 48,2 MB)**; `SYSTEM.img` 5,7 GB sin verificar; **`USERDATA.img` 0 B**. La jefatura lo dio por "completo": no lo es. USERDATA en tarjeta SD: declarada, **sin ruta ni hash**, por eso **no** se registra como evidencia (el `E-0041` que proponía ya es del OSMesa).
+- **Lo que necesita la fase 1 SÍ está cubierto** por las copias verificadas de 2026-11-12 (BOOT, EFS, **RECOVERY completa**). La fase 1 no toca SYSTEM ni USERDATA.
+- **No hecho (rojo, no autorizado):** comparar contra el teléfono con `adb` (`device-read`). Comandos de solo lectura listos en `S7GE_BACKUP_STATUS.md` §6. **No se recortó nada en sitio** (innecesario: solo BOOT tiene cola y es redundante con E-0009).
+- **Errores del borrador de jefatura que no deben llegar a la firma:** el hash de la imagen terminaba en `…8f40` (es el de la NORMAL; la mínima termina en `…5db3`) y llevaba el **número de serie** del teléfono (privado). La solicitud (`herolte-solicitud-n2.md` §7) ya trae el hash completo y correcto y sin serie.
+- **Corrección de expectativa:** el EFS del teléfono **no tiene por qué coincidir con la copia de 11-12** (superbloque); el script compara antes/después de la sesión.
+- **Pendiente del Director:** la autorización roja de la fase 1 (y si quiere la lectura del teléfono), decidir si repite SYSTEM/USERDATA. **Siguiente (verde): T-0035.**
+
+---
+
+## Relevo anterior: H-0017 — B2 autorizada por el Director (D-0032) y el OSMesa propio compila sobre Mesa 26.2.4 (2026-11-14)
 - **Director:** "Autorizo B2". **Hecho (T-0036):** `gpu/mesa/osmesa-frontend/` (fuentes de Mesa 25.0.7 sin tocar + `patches/0001-osmesa-no-postprocess.patch` + `integrate.py` con anclas exactas + Meson 26.x + README + 7 pruebas; la prueba encontró y corrigió un fallo de idempotencia). **Compila en Linux sobre Mesa 26.2.4 (913/913) y una prueba mínima da el píxel correcto (E-0041).** Documentos: `S7GE_OSMESA_MESA26_COMPATIBILITY.md` (lo que rompió: Meson ≥1.4, opciones, `with_shared_glapi`, `libglapi_static`, `glapi.h`, módulo `postprocess` eliminado), `S7GE_OSMESA_TEST_PLAN.md`, `S7GE_OSMESA_B2_RISKS.md`.
 - **No resuelto:** el gancho de `mmap` de Panfrost (2 de 12 ediciones de `patch-mesa.py` fallan en 26.2.4), el glue `osmesa_hero.inc`/`hero_hw.c`, Panfrost compilado y Darwin (T-0037, bloqueada: falta `libdrm-dev`, instalar herramientas del sistema es rojo). **`gpu/mesa/build-mesa.sh` sigue en Mesa 25.0.7: el drop no cambia.**
 - **Corrección de un dato mío anterior:** "fallan 3 ediciones" salió de una segunda pasada sobre un árbol ya modificado; son 2.

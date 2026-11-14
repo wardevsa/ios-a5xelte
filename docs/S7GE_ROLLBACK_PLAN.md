@@ -6,7 +6,7 @@
 | Fichero | Tamaño | SHA-256 | ¿Usar para restaurar? |
 |---|---|---|---|
 | `~/HackiOS/backups/device-herolte/2026-11-12/BOOT.img` (E-0009) | 41 943 040 | `adc519d0f16fd314ea05b072820a81c3a623db2ba446397c87c7ed70776c3348` | **Sí** |
-| `…/IOS-S7-backup/2026-11-14-s7-snapshot/BOOT.img` | 41 943 138 (98 de más) | `7e225de8…cc2d` | **No tal cual**: lleva el texto de `dd` pegado (KI-0008). Solo vale **recortada** a 41 943 040 bytes (`tools/herolte-trim-dd-tail.py --apply`), y entonces su hash debe dar `adc519d0…3348` (se comprobó que los primeros 41 943 040 bytes son idénticos) |
+| `…/IOS-S7-backup/2026-11-14-s7-snapshot/BOOT.img` | 41 943 138 (98 de más) | `7e225de8…cc2d` (con la cola) | **No tal cual**: lleva el texto de `dd` pegado (KI-0008). Solo vale **recortada** a 41 943 040 bytes (`tools/herolte-trim-dd-tail.py --apply`), y entonces su hash debe dar `adc519d0…3348` (se comprobó que los primeros 41 943 040 bytes son idénticos) |
 Antes de cualquier restauración, en el PC: `sha256sum` del fichero elegido = `adc519d0…3348` y `stat -c %s` = 41943040.
 
 ## 2. Restauración con TWRP (camino principal)
@@ -16,7 +16,7 @@ Condiciones: teléfono en TWRP con `adb` funcionando. Solo se escribe **BOOT**; 
 3. **Escribir** (acción roja): `dd if=/tmp/BOOT.img of=/dev/block/platform/155a0000.ufs/by-name/BOOT bs=1048576 conv=fsync; sync` (la forma del README de la copia: `dd … of=/dev/block/sda5 bs=1048576 conv=fsync`).
 4. **Leer de vuelta y comprobar**: `dd if=/dev/block/platform/155a0000.ufs/by-name/BOOT bs=1048576 count=40 2>/dev/null | sha256sum` debe dar `adc519d0…3348` (40 MiB = 41 943 040). **Redirigir stderr dentro de la orden del teléfono** para no repetir el problema de KI-0008.
 5. Reiniciar; debe arrancar Android como antes (el BOOT original es el de Samsung).
-6. **Comprobar EFS sin escribir**: leer `EFS` y comparar con E-0036 (`adb shell "dd if=/dev/block/sda3 bs=1048576 2>/dev/null | sha256sum"` y el hash de `SHA256SUMS` de la copia); **no debe haber cambiado**.
+6. **Comprobar EFS sin escribir**: leer `EFS` (`adb shell "dd if=/dev/block/sda3 bs=1048576 2>/dev/null | sha256sum"`) y compararlo con la lectura hecha **antes de la sesión** (no con la copia del 2026-11-12: el superbloque ext4 cambia con cada montaje, 8 bytes medidos entre 11-12 y 11-14); **no debe haber cambiado entre el principio y el final de la sesión**.
 Alternativa en la interfaz de TWRP: Instalar → Instalar imagen → Boot (la que cita `herolte-bringup.md`); después, el mismo paso 4 de comprobación.
 
 ## 3. Si TWRP no responde (el teléfono no llega a recuperación)
