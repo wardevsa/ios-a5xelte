@@ -229,7 +229,9 @@ class Selection(unittest.TestCase):
         policy, tasks, decs = (gov.load(REPO, f) for f in ('policy.toml', 'tasks.toml', 'decisions.toml')); n, mode = gov.next_task(policy, tasks, decs)
         if n is None: return
         by = {t['id']: t for t in tasks['task']}
-        self.assertIn(mode, ('start', 'resume')); self.assertEqual(n['owner'], 'ingeniero'); self.assertIn(gov.tier_of_actions(policy, n['actions']), ('A', 'B'))
+        self.assertIn(mode, ('start', 'resume')); self.assertEqual(n['owner'], 'ingeniero')
+        if mode == 'resume' and gov.tier_of_actions(policy, n['actions']) == 'C': self.assertTrue(n.get('authorization_ref'), 'reanudar una tarea roja exige su authorization_ref')   # una tarea ya en curso con su autorización registrada
+        else: self.assertIn(gov.tier_of_actions(policy, n['actions']), ('A', 'B'))
         if mode == 'start':
             self.assertEqual(n['status'], 'ready'); self.assertFalse(n.get('blocked_on')); self.assertTrue(all(by[d]['status'] == 'done' for d in n.get('depends_on', [])))
 

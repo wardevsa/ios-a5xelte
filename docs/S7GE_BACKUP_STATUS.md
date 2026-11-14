@@ -6,7 +6,7 @@
 | Fichero | Tamaño | Qué se comprobó | Veredicto |
 |---|---|---|---|
 | `BOOT.img` | 41 943 138 B (partición: 41 943 040) | los primeros 41 943 040 bytes dan SHA-256 `adc519d0…3348` = **E-0009**; los 98 sobrantes son el texto de `dd` (KI-0008) | **bueno** (equivalente a E-0009); no usar sin recortar para restaurar |
-| `EFS.img` | 20 971 520 B (= la partición) | sin cola de `dd`; **difiere en 8 bytes** de la copia del 2026-11-12, todos en el **superbloque ext4**: `s_mtime`, `s_wtime`, `s_mnt_count` (0x59→0x5a: **un montaje más**) y `s_kbytes_written` (0x34→0x38 KiB); el resto idéntico | **bueno** (el sistema de ficheros se montó una vez más; no hay corrupción). SHA-256 `eb8912ad…7817` |
+| `EFS.img` | 20 971 520 B (= la partición); **comparada con el teléfono el 2026-11-14 (E-0043): el SHA-256 de `/dev/block/sda3` leído en vivo coincide con el de esta copia** | sin cola de `dd`; **difiere en 8 bytes** de la copia del 2026-11-12, todos en el **superbloque ext4**: `s_mtime`, `s_wtime`, `s_mnt_count` (0x59→0x5a: **un montaje más**) y `s_kbytes_written` (0x34→0x38 KiB); el resto idéntico | **bueno** (el sistema de ficheros se montó una vez más; no hay corrupción). SHA-256 `eb8912ad…7817` |
 | `RECOVERY.img` | **7 842 757 B** (la partición mide 48 234 496) | los 7 842 757 bytes **coinciden con el principio** del RECOVERY de 2026-11-12 | **TRUNCADA (16 %)**: **no vale**; usar la de 2026-11-12 |
 | `SYSTEM.img` | 5 736 967 084 B | sin cola de `dd`; **no hay forma de saber si está completa** sin el tamaño de la partición (no hay una copia anterior con la que compararla) | **sin verificar**; hash `ece5e85c…db8a` (de la copia, no del teléfono) |
 | `USERDATA.img` | **0 B** | SHA-256 `e3b0c442…` = el de un fichero vacío | **falló** (desconexión) |

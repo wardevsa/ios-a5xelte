@@ -41,6 +41,10 @@ class Flash(unittest.TestCase):
         shutil.copytree(REPO + '/governance', self.r + '/governance', ignore=shutil.ignore_patterns('__pycache__'))
         for n in ('governance.py', 'herolte-flash-boot.sh'): shutil.copy(REPO + '/tools/' + n, self.r + '/tools/' + n)
         shutil.copy(REPO + '/AGENTS.md', self.r)
+        tp = self.r + '/governance/data/tasks.toml'; t = open(tp).read(); i = t.index('id = "T-0012"'); j = t.index('[[task]]', i)   # la T-0012 real ya lleva la autorización D-0033: el fixture parte SIN ella
+        blk = re.sub(r'authorization_ref = .*\n', '', t[i:j]); blk = re.sub(r'status = "[a-z_]+"', 'status = "blocked"', blk, count=1)
+        if 'blocked_on' not in blk: blk = blk.rstrip('\n') + '\nblocked_on = "fixture"\n\n'
+        open(tp, 'w').write(t[:i] + blk + t[j:])
         self.img = self.t + '/img.bin'; open(self.img, 'wb').write(os.urandom(1 << 20)); self.sha = hashlib.sha256(open(self.img, 'rb').read()).hexdigest()
         open(self.f + '/adb', 'w').write(FAKE_ADB); os.chmod(self.f + '/adb', 0o755)
         self.state(devices=['SERIAL1'], bootlink='/dev/block/sda5', bootsize='41943040', efs='a' * 64)

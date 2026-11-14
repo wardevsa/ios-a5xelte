@@ -8,7 +8,16 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0019 — guía de flasheo corregida (2026-11-14)
+## Relevo vigente: H-0020 — FASE 1 AUTORIZADA Y BOOT ESCRITO; el teléfono sigue en TWRP, SIN reiniciar (2026-11-14 12:00)
+- **Director:** "Autorizo la fase 1, firmado PioXI" → **D-0033** (`device-write-boot` + `device-read`, imagen mínima `07ddfa06…5db3`, hasta 2026-11-16), colgada de **T-0012** (en curso). **Ejecutado por el ingeniero** con `tools/herolte-flash-boot.sh --execute`: `OK: BOOT escrito y leído de vuelta (18 618 384 bytes, sha256 07ddfa06…5db3); EFS intacto (eb8912ad…7817)` (E-0043; el EFS del teléfono coincide con el `EFS.img` del snapshot).
+- **Estado exacto del teléfono ahora:** en **TWRP**, con el BOOT **nuevo** (la variante mínima) escrito y verificado; **NO se ha reiniciado**: el experimento empieza cuando el Director reinicie, **con la pantalla grabada** (`adb reboot`). Nada más se ha escrito (ni `/sdcard`, ni EFS, ni RECOVERY, ni USERDATA).
+- **Siguiente (Director):** grabar, reiniciar, observar ≥ 2 min y, si no arranca, forzar TWRP (Vol− + Power ~7 s, luego Vol+ + Home + Power); transcribir la pantalla y pasársela al ingeniero: `tools/herolte-boot-transcript-check.py … --min`, criterios A-E en `S7GE_MIN_BOOT_VALIDATION.md`. Después **restaurar BOOT** (`S7GE_FLASH_PROCEDURE.md` §4) mientras no haya raíz.
+- **Si algo se tuerce, la vuelta atrás es la de siempre** (`BOOT.img` de E-0009, que está en el PC). La autorización cubre también esa restauración.
+- **Ningún otro paso está autorizado:** la candidata normal, fase 3, es otra imagen y otra autorización.
+
+---
+
+## Relevo anterior: H-0019 — guía de flasheo corregida (2026-11-14)
 - **Hecho (T-0039, solo documentos):** `docs/S7GE_FLASH_PROCEDURE.md` para el Director: recomienda `tools/herolte-flash-boot.sh` (ensayo + `--execute` solo con la autorización registrada) y da el equivalente manual **corregido**. Corrige 8 errores del borrador de jefatura, los de mayor impacto: `/sdcard` es USERDATA en TWRP (usar `/tmp`); `sha256sum` de la partición entera nunca coincide con el de la imagen (usar `head -c`); **no vuelve a TWRP solo** (teclas); **el BOOT original no está en el móvil** (se empuja desde el PC); `herolog=1` escribiría en USERDATA (otra imagen y otra autorización).
 - **No ejecuté la Fase 23 (comprobar el móvil con `adb ls`):** es leer el dispositivo (rojo) y la guía no lo necesita.
 - **Pendiente (Director):** firmar la autorización de la fase 1 con el texto de la solicitud §7; decidir si repite SYSTEM/USERDATA. **Siguiente (verde): T-0035.**
