@@ -1764,3 +1764,18 @@ sha256 = "438dd18d9c826153a4bb0e593e1fe6efd098a419a031a38367c9992ddb4309ba"
 size = 681
 immutable = true
 note = "Valores transcritos por IA de una foto no archivada, pero MUTUAMENTE COHERENTES al decodificarlos (TTBR1 = cpu_ttep; L1e apunta a una tabla en RAM del banco 2; L2e es un bloque alineado a 2 MiB cuyo PA coincide con el del PAR; PAR atributo 0x44). El VA está mal leído. Conclusión del análisis: el kernel traduce con granularidad de 4 KiB (bloque L2 = 2 MiB), no 16 KiB como supuso mi parche 0343."
+
+[[evidence]]
+id = "E-0119"
+title = "Revisión D-0043 del kernel … (CI 43620991169, parches 0338-0347): solo diagnóstico de arranque temprano; 0332-0337 intactos; ci_check aplica 0347"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/review-kernel-0347.txt"
+location = "host"
+created = "2026-11-14"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "fd090197a38cd310f4aea13444c4cb462a031b377877d8e667ebc76342a46f11"
+size = 1762
+immutable = true
+note = "Condición (1) de D-0043. Kernel sha256 . 0347 mapea 8 bloques de 2 MiB del framebuffer (solo dibujo)."
