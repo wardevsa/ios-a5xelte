@@ -22,6 +22,8 @@ HOOK_ONLY = {
     'osfmk/arm/model_dep.c',
     'osfmk/arm64/machine_routines.c',
     'osfmk/vm/vm_init.c',
+    'pexpert/arm/pe_kprintf.c',
+    'osfmk/kern/printf.c',
 }
 HOOK_OK = re.compile(r'^\s*(sweet_early_[a-z_]+\([^;]*\);|extern void sweet_early_[a-z_]+\([^;]*\);|#if defined\(A5XELTE\)|#endif|#else.*|)\s*$')
 def hook_violations(path):
