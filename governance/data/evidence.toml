@@ -2211,9 +2211,9 @@ domain = "host"
 level = "L2"
 device = "none"
 sha256 = "1a0c4d20c9cd185c1aae48c7c9b0114822a13fe646eae9b7d6e456fad370073b"
-size = 18618384
+size = 18620432
 immutable = true
-note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff)."
+note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff). [Corrección del 2026-11-15: el campo size se registró por error como 18618384; el fichero mide 18620432 B (el kernel 0349 es mayor); el SHA-256 siempre fue el correcto.]"
 
 [[evidence]]
 id = "E-0151"
@@ -2226,9 +2226,9 @@ domain = "host"
 level = "L2"
 device = "none"
 sha256 = "281f2bdef01bff7fb6ded3bbdf2b388b42d9b716cd7c95e1b52071b7198192b2"
-size = 18618384
+size = 18620432
 immutable = true
-note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff)."
+note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff). [Corrección del 2026-11-15: el campo size se registró por error como 18618384; el fichero mide 18620432 B (el kernel 0349 es mayor); el SHA-256 siempre fue el correcto.]"
 
 [[evidence]]
 id = "E-0152"
@@ -2241,9 +2241,9 @@ domain = "host"
 level = "L2"
 device = "none"
 sha256 = "f01f9ce3dd7bccdffab8aff4e808875a974ea864125ac7642cd3e9b5b45fa39e"
-size = 18618384
+size = 18620432
 immutable = true
-note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff)."
+note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff). [Corrección del 2026-11-15: el campo size se registró por error como 18618384; el fichero mide 18620432 B (el kernel 0349 es mayor); el SHA-256 siempre fue el correcto.]"
 
 [[evidence]]
 id = "E-0153"
@@ -2256,9 +2256,9 @@ domain = "host"
 level = "L2"
 device = "none"
 sha256 = "5eb7a44db928f4eb058e21d3c66166e882ad83239e02ca1ad262b004813e3566"
-size = 18618384
+size = 18620432
 immutable = true
-note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff)."
+note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff). [Corrección del 2026-11-15: el campo size se registró por error como 18618384; el fichero mide 18620432 B (el kernel 0349 es mayor); el SHA-256 siempre fue el correcto.]"
 
 [[evidence]]
 id = "E-0154"
@@ -2271,9 +2271,9 @@ domain = "host"
 level = "L2"
 device = "none"
 sha256 = "e4fd82928f1383cc96763f41bbed34bc55bd8f72f716bdc5b612eb79ed850499"
-size = 18618384
+size = 18620432
 immutable = true
-note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff)."
+note = "Kernel 4e10bb5ff816a6a7251494d4c9c3f7c3233c44fb9409f7f5903220a4e4e68fb5 (revisión E-0149), ADT dc817436… y cargador 0a68abbd… como antes; la línea difiere de min2 solo en herostop (diff). [Corrección del 2026-11-15: el campo size se registró por error como 18618384; el fichero mide 18620432 B (el kernel 0349 es mayor); el SHA-256 siempre fue el correcto.]"
 
 [[evidence]]
 id = "E-0155"

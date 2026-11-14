@@ -1,10 +1,10 @@
 # Estado actual de IOS S7
 
-<!-- state-commit: 4681456 -->
-**Verificado el 2026-11-14 sobre el commit `4681456`** (el estado se refresca en cada relevo; `check` avisa de la distancia).
+<!-- state-commit: 32793e5 -->
+**Verificado el 2026-11-15 sobre el commit `32793e5`** (el estado se refresca en cada relevo; `check` avisa de la distancia).
 
 ## 1. En una frase
-**Primer contacto con el hardware (2026-11-14):** seis imágenes BOOT escritas en el S7 (min1-min6) y una séptima (min7h08, tanda D-0041) escrita sin reiniciar. Ninguna llega a la consola de XNU: **la ejecución pasa por `start.s` y por `arm_init` hasta, al menos, la marca 6a** (min5, bloques de color vistos) y **se reinicia en pocos milisegundos** (la pantalla final es la de después del reinicio). No se sabe en qué fase; la bisección con `herostop=N` (0341) está en curso. iOS **no** está instalado ni arranca; USERDATA (Android) no se ha tocado. Para el resto (backups, GPU, Mesa/OSMesa, root de laboratorio) ver §2.
+**El kernel XNU de iOS 16.7.16 arranca en el Galaxy S7 hasta `bsd_init` y falla al montar la raíz (resultado A de N2, E-0177, 2026-11-15)**: se ven en pantalla 64 fases de `kernel_bootstrap`, los drivers propios (APM, táctil, UFS) y `cannot mount root`; la GPU, el Wi-Fi y la energía siguen apagados a propósito. iOS **no** está instalado: USERDATA sigue siendo Android ext4; el plan (`docs/S7GE_IOS_ROOT_PLAN.md`, vía B local) usa la imagen HFSX de laboratorio de 20 GiB ya verificada, un *tuning* con `sudo` y la escritura de USERDATA, que **borra Android** y exige autorización roja con hash. Hay copias verificadas de SYSTEM, USERDATA y RECOVERY (E-0123…E-0125). **Corrección:** la "pantalla de reinicio" de min2-min13 no era un reinicio (ver `S7GE_N2_REACHED.md`).
 
 ## 2. Hechos medidos (con evidencia)
 | Hecho | Evidencia | Nivel |

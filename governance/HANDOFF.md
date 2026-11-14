@@ -8,7 +8,14 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0064 — N2 ALCANZADO: XNU arranca hasta bsd_init y falla al montar la raíz (esperado); el 'reinicio' era una mala lectura (2026-11-15)
+## Relevo vigente: H-0065 — plan de la raíz iOS (vía B, local) listo; mañana F1 con sudo del Director (2026-11-15)
+- **Tarea en curso: T-0012** (test de N2: resultado A alcanzado, E-0177; D-0047 vigente, 17/20 escrituras de la tanda) y **siguiente: T-0045** (preparar la imagen final de la raíz iOS; necesita `sudo`, que teclea el Director). T-0044 (escribir USERDATA, ROJO) bloqueada hasta tener imagen y autorización con hash.
+- **Hecho esta noche:** `docs/S7GE_IOS_ROOT_PLAN.md` (F0-F5), F0 comprobada (E-0178: IPSW y `lab-full-xnu-20261114.img` coinciden con sus hashes), `tools/herolte-write-userdata.py` + `test_write_userdata.py` (7 pruebas con adb falso; escritor por `nc` ~18 MB/s, trozos verificados contra el teléfono, se niega sin autorización), informe a la jefatura `docs/S7GE_INFORME_JEFATURA_20261115.md`.
+- **Mañana (en orden):** F1 (Director con `!sudo`: copiar la imagen de laboratorio, montar rw, `tools/herolte-tune-ios-root.sh MONTAJE 20H392`, desmontar, `fsck.hfsplus -n`, hash); F2 prueba de transporte `--dry-transport`; F3 autorización roja de escribir USERDATA con el hash de F1; F4 arranque con el BOOT `min16`; F5 iterar.
+- **Teléfono:** en TWRP con BOOT `min16`. Copias SYSTEM/USERDATA/RECOVERY verificadas (E-0123…E-0125): la vuelta atrás de Android.
+- Restaurar BOOT original (E-0009) cubierto por D-0047.
+
+## Relevo anterior: H-0064 — N2 ALCANZADO: XNU arranca hasta bsd_init y falla al montar la raíz (esperado); el 'reinicio' era una mala lectura (2026-11-15)
 - **Tarea en curso: T-0012.** E-0177 + `docs/S7GE_N2_REACHED.md`: min16 muestra el log del kernel (APM, TOUCH, GPU probe disabled, UFS, `cannot mount root, errno = %d`, Skywalk PASSED, `bsd_autoconf: calling kinit`) y se actualiza: resultado **A** de N2. BOOT del teléfono = min16 (17/20 escrituras de la tanda; no hace falta escribir más para esto).
 - **Corrección:** la pantalla 'XNU MMU ON + 3 bloques' que leí como reinicio eran marcas de start.s sobre el framebuffer con el kernel vivo y sin consola visible. Desde min2 el kernel arrancaba.
 - **Siguiente (decisión del Director):** de dónde sale la raíz iOS HFS+ (~20 GiB): A repo privado propio con el workflow `ios-root`, B construirla en este PC desde un IPSW (`tools/mkiosroot.sh`, apfs-fuse, sudo, ~40 GB), C que la facilite quien la tenga. Luego: escribir USERDATA (borra Android; autorización roja propia con hash; copias en E-0124/E-0125) y línea de arranque con `ufsrw=1`.
