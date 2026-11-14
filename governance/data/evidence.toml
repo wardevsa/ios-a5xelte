@@ -2424,3 +2424,18 @@ sha256 = "268a86f03ae8303babbc11078382ad27609d1756f4e5592802bf833b8858f631"
 size = 724
 immutable = true
 note = "Solo escritura y lectura de vuelta (hash registrado antes en E-0150; revisión del kernel E-0149). Línea idéntica a min2 (diff). Se escribe SIN herostop porque con la consola temprana viva un pánico se dibujaría y quedaría en pantalla (como en min10/min11): así se ve si el reinicio es un pánico o un cuelgue con reinicio por vigilante."
+
+[[evidence]]
+id = "E-0165"
+title = "Observación de min14 (sin herostop): 36 fases del arranque visibles hasta thread_init y, encima, la pantalla de reinicio (XNU MMU ON + 3 bloques): el kernel avanza mucho más que nunca y luego start.s se ejecuta otra vez; el listado puede estar CORTADO por el límite de pantalla (slot 76)"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min14-observation.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "67d172f000b3b668b6cfb093830bf666ad75a7613f3d5bf1456af7d51aa2f27f"
+size = 1092
+immutable = true
+note = "Las 36 fases ocupan exactamente los slots 41-76, que es el tope de sweet_early_block (slot > 76 no dibuja): el listado termina en la última FILA de pantalla, no necesariamente donde ocurre el fallo. Tras thread_init el código llama a thread_init() y anuncia restartable_init, workq_init, turnstiles_init, mach_init_activity_id, exception_init, sfi_init, kernel_thread_create, 'load_context - done' y luego kernel_bootstrap_thread (idle_thread_create, sched_startup, …). El 'XNU MMU ON' + 3 bloques muestra que start.s volvió a ejecutarse (reinicio) sin borrar el framebuffer. Lista transcrita por IA de una foto no archivada."
