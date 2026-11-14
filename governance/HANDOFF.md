@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0062 — min15v (min15 + `-v`, kernel 0350) ESCRITA (D-0046, 16/20); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0063 — min16 (kernel 0351: anillo de mensajes de kprintf/printf) ESCRITA (D-0047, 17/20); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** E-0169: el reinicio está tras el anuncio PE_lockdown_iokit (dentro de PE_lockdown_iokit/vm_set_restrictions/kperf_init_early/bsd_init); E-0173: -v no muestra el log. BOOT = `xnu-boot-v2-s7-min16-20261114.img` (sha256 `048add02…09cf`); EFS intacto (E-0176).
+- **Qué mirar (Director, tras `adb reboot`):** además de las dos columnas de fases (derecha 36, izquierda 28), el **tercio izquierdo** de la pantalla (x≈20-620) muestra un anillo de unas 73 líneas con el comienzo (36 caracteres) de cada mensaje de kprintf/printf; una **marca blanca** en el borde izquierdo señala la línea MÁS RECIENTE. Copiar: la línea de la marca y las 8-10 líneas anteriores (de arriba abajo en el orden de pantalla; el anillo da la vuelta, así que el orden temporal es hacia abajo desde la línea de la marca +1 y reinicia arriba). Cualquier línea con `panic`/`error`/`fail`/`mount`.
+- Restaurar BOOT original (E-0009) cubierto por D-0047.
+
+## Relevo anterior: H-0062 — min15v (min15 + `-v`, kernel 0350) ESCRITA (D-0046, 16/20); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** E-0169: min15 llega a PE_lockdown_iokit (64 fases); el reinicio está en PE_lockdown_iokit/vm_set_restrictions/kperf_init_early/bsd_init o más allá. BOOT = `xnu-boot-v2-s7-min15v-20261114.img` (sha256 `79fdf35c…94f5`); EFS intacto (E-0172).
 - **Qué mirar (Director, tras `adb reboot`):** con `-v` XNU escribe el LOG del kernel en la pantalla en texto normal (líneas largas, muchas; pueden pasar rápido). Copiar: (1) cualquier línea con `panic`/`Panic`/`error`/`fail`; (2) las ÚLTIMAS líneas antes de que la pantalla se reinicie; (3) si hay un `A5 XNU PANIC`. Si se ve demasiado rápido, hacer vídeo corto o varias fotos; yo puedo sacar fotogramas con `tools/herolte-video-frames.sh`.
 - Restaurar BOOT original (E-0009) cubierto por D-0046.
