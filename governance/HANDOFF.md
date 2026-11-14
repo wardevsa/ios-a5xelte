@@ -8,7 +8,15 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0011 — candidata N2 reconstruida con el kernel del CI; esperando la autorización roja (2026-11-14)
+## Relevo vigente: H-0012 — modelado S7GE Fases 0-3 hecho (solo documentos); el backup del S7 corre en otra terminal (2026-11-14)
+- **Hecho (T-0030, VERDE, sin tocar parches ni código):** `docs/S7GE_INVENTORY.md` (86 parches tocan los ficheros de GPU, ~40 son el núcleo; **`herolte_gpu.c` (3 465 líneas) también contiene audio, Wi-Fi, relojes de CPU y display**: hay que sacarlos antes de rediseñar S7GPU), `S7GE_EXECUTION_MODEL.md` (secuencia de job por sondeo, AS0 única, recuperación por escalera, causa de los `0x42` sin demostrar), `S7GE_ABI_V2_PROPOSAL.md` (contexto con AS propia, handles con generación, entitlement, errores estructurados, migración), `S7GE_IR_DESIGN.md` (10 categorías de nodo del macroinforme, validador, pruebas de host).
+- **Backup del Director en curso (NVMe):** no tocar adb ni esos ficheros. Hallazgo KI-0008: `adb exec-out dd` añade ~98 bytes de texto de dd a cada imagen; recortar después con `tools/herolte-trim-dd-tail.py` (informa por defecto) y comparar con el sha256 calculado EN el teléfono. La evidencia del backup será la siguiente entrada libre de evidence.toml.
+- **Pendiente del Director:** autorización roja de `device-write-boot` (texto y procedimiento en `docs/herolte-solicitud-n2.md`), tras completar y comprobar el backup. Sin L3/L4 de esta unidad.
+- **Sin tareas verdes abiertas** salvo continuar el modelado (Fases 4-6, esperan a la jefatura).
+
+---
+
+## Relevo anterior: H-0011 — candidata N2 reconstruida con el kernel del CI; esperando la autorización roja (2026-11-14)
 - **Hecho:** push de `herolte-drop-v2` al remoto `mio` (D-0030), CI `xnu` run `43579309448` = success, `ci_check` por nombre completo: los 6 parches 0332..0337 APLICADOS, ninguno propio saltado (E-0037). Kernel `62ea7501…2d5b`. Candidata nueva **`xnu-boot-v2-s7-20261114.img`** (SHA-256 `2c155829…8f40`): verificador 47 PASS/0 FAIL, independiente 51 PASS/0 FAIL (E-0038). Copias del teléfono verificadas (E-0036). T-0016 y T-0029 hechas.
 - **Falta (Director):** autorizar `device-write-boot`; la solicitud completa, el procedimiento y la vuelta atrás están en `docs/herolte-solicitud-n2.md` (T-0012 sigue bloqueada hasta entonces). **Nada se ha escrito en el teléfono.** Sin L3/L4 de esta unidad.
 - **En curso:** T-0028 (mutantes de rev3, segundo plano). **Esperas:** T-0004 (R2), T-0023 (aislamiento de HeroGPU: la GPU no debe usarse con software no confiable).

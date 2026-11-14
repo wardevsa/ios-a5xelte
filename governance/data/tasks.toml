@@ -337,3 +337,13 @@ authorization_ref = "D-0030"
 acceptance = "La rama está en mio/herolte-drop-v2 (sin force, sin PR, sin push a origin); un run del workflow xnu terminó; ci_check.py 0337-herolte-drop-v2 da APLICADO y ningún parche propio saltado; el kernel descargado tiene SHA-256 registrado como evidencia; el escaneo previo de datos privados queda anotado."
 evidence = ["E-0037", "E-0038"]
 
+[[task]]
+id = "T-0030"
+title = "S7GE modelado en paralelo (Fases 0-3): inventario de los parches de GPU, modelo de ejecución T880, propuesta de ABI v2 y diseño parcial de S7GIR (solo documentos)"
+status = "done"
+priority = 7
+owner = "ingeniero"
+depends_on = ["T-0010"]
+actions = ["read-analysis", "docs-write", "local-commit"]
+acceptance = "Hecho: docs/S7GE_INVENTORY.md, S7GE_EXECUTION_MODEL.md, S7GE_ABI_V2_PROPOSAL.md y S7GE_IR_DESIGN.md. Sin tocar parches ni código; lo que depende de hardware o de fuentes no disponibles está marcado. Fases 4-6 y cualquier implementación esperan decisión de la jefatura."
+
