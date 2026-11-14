@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0059 — h52 congeló con kmem_init anunciada; h53 ESCRITA (D-0043/D-0045, 13/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+## Relevo vigente: H-0060 — h53 llegó a la fase 'kmem' (entradas STARTUP de KMEM); min14 SIN herostop ESCRITA (D-0043/D-0045, 14/20); teléfono en TWRP, sin reiniciar (2026-11-14)
+- **Tarea en curso: T-0012.** E-0163: kmem_init() termina y se anuncian las entradas STARTUP de KMEM (entre ellas kmem_range_init). herostop=53 solo prueba que se llegó al 53. BOOT = `xnu-boot-v2-s7-min14-20261114.img` (sha256 `1a0c4d20…0073b`); EFS intacto (E-0164).
+- **Qué mirar (Director, tras `adb reboot`):** los nombres de fase irán apareciendo; **si el reinicio es un PÁNICO, `A5 XNU PANIC: …` quedará en pantalla** (la consola temprana sigue viva; en min10/min11 los pánicos se quedaron): copiarlo literal. Si NO hay pánico y acaba en la pantalla de reinicio (azul, cian, magenta, XNU MMU ON), es un cuelgue + reinicio por vigilante: anotar los últimos nombres que alcance a ver.
+- Siguiente según el resultado: pánico ⇒ leer la causa; cuelgue ⇒ h54/h55/h56 (preparadas h56) para ver la fase tras 'kmem'.
+- Restaurar BOOT original (E-0009) cubierto por D-0045.
+
+## Relevo anterior: H-0059 — h52 congeló con kmem_init anunciada; h53 ESCRITA (D-0043/D-0045, 13/20); teléfono en TWRP, sin reiniciar (2026-11-14)
 - **Tarea en curso: T-0012.** E-0161: vm_object_bootstrap y vm_map_init terminan; kmem_init se anuncia (la función donde min1 hizo panic en kmem_range_init). BOOT = `xnu-boot-v2-s7-min14h53-20261114.img` (sha256 `5a97c6aa…b877`); EFS intacto (E-0162).
 - **Qué mirar (Director, tras `adb reboot`):** los nombres de antes y, debajo de `kmem_init`, **`vm_fault_init`** (slot 53). **Congela con `vm_fault_init` visible** ⇒ `kmem_init()` TERMINA y vm_mem_bootstrap casi acaba: el fallo es posterior (siguientes fases de kernel_bootstrap: hace falta h54+). **No congela** (reinicio) ⇒ el reinicio está DENTRO de `kmem_init()` (kmem_range_init y compañía).
 - Restaurar BOOT original (E-0009) cubierto por D-0045.

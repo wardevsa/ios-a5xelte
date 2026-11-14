@@ -2409,3 +2409,18 @@ sha256 = "099c3e8640cbb616bf8ef5c184c7f71a5e12b2701aad4014ba7e1e73f3c4a893"
 size = 520
 immutable = true
 note = "kmem_init() ha TERMINADO (se pasa a las entradas STARTUP de KMEM, entre ellas kmem_range_init, la que hizo panic en min1). Falta saber si esas entradas terminan: lo que viene es vm_fault_init (anunciada tras ellas). OJO: herostop=53 solo dice que se llegó al 53; no que el fallo esté después. Sin vídeo."
+
+[[evidence]]
+id = "E-0164"
+title = "Tanda D-0043/D-0045, imagen 14: BOOT del S7 escrito con xnu-boot-v2-s7-min14-20261114.img (kernel 0349, SIN herostop) y leído de vuelta (sha256 1a0c4d20…0073b); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min14-out.txt"
+location = "host"
+created = "2026-11-14"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "268a86f03ae8303babbc11078382ad27609d1756f4e5592802bf833b8858f631"
+size = 724
+immutable = true
+note = "Solo escritura y lectura de vuelta (hash registrado antes en E-0150; revisión del kernel E-0149). Línea idéntica a min2 (diff). Se escribe SIN herostop porque con la consola temprana viva un pánico se dibujaría y quedaría en pantalla (como en min10/min11): así se ve si el reinicio es un pánico o un cuelgue con reinicio por vigilante."
