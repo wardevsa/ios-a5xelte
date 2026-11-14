@@ -31,6 +31,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0023 | APPROVED | operation | 2026-11-13 | Autorización roja de un solo uso: borrar de ext4 los 224 sandboxes ya archivados en NTFS (T-0007) | jefe-tecnico | director | delete-or-overwrite | Mensaje del Director (pioxi), 2026-11-13: 'Yo el director pioxi, autorizo el siguiente informe' (directiva de jefatura técnica: nivel NARANJA, autorización de T-0007, copia de scripts del laboratorio y continuación de T-0025) |
 | D-0024 | APPROVED | architecture | 2026-11-13 | Copiar los scripts del laboratorio a tools/ios-root-lab/ con un adaptador de nombres XNU en un solo punto | jefe-tecnico | director | — | Mensaje del Director (pioxi), 2026-11-13: 'Yo el director pioxi, autorizo el siguiente informe' (directiva de jefatura técnica: nivel NARANJA, autorización de T-0007, copia de scripts del laboratorio y continuación de T-0025) |
 | D-0025 | APPROVED | policy | 2026-11-14 | sudo en el host, montaje de imágenes, compilación pesada y generación de imágenes de prueba pasan a nivel VERDE (autónomo); sustituye a D-0022 | jefe-tecnico | director | — | Mensaje del Director (pioxi), 2026-11-14: 'Confirmo que sudo en host, montaje de imágenes, compilación pesada y generación de imágenes de prueba pasan al nivel VERDE. Esto contradice y sustituye a D-0022. El ingeniero puede ejecutar estas operaciones de forma autónoma sin solicitar autorización adicional.' |
+| D-0027 | PROPOSED | operation | 2026-11-14 | Borrar de /tmp dos artefactos ya archivados y con hash en NTFS (lab-full-xnu.img.valid y r3/work) para liberar ~24 GiB para T-0028 | jefe-tecnico | — | — | — |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
 - **Estado:** APPROVED (director, 2026-11-13)
@@ -184,4 +185,10 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Consecuencias:** Acciones privileged-or-mount (ahora A) y heavy-compile (nueva, A). NO se reclasifican: borrar o mover datos (delete-or-overwrite), publicar/push/PR/CI, host-config-change, y todo lo que toque el teléfono (device-*, write-protected-partitions): siguen en su nivel. R2 sigue sin autorizar (D-0005, restricción específica). El criterio de seguridad de los ejecutores (guardas de img_common.sh/guard.py) no cambia. La estructura de niveles sigue siendo A verde, B amarillo, C/X rojo (tres colores): no se creó un nivel naranja.
 - **Cómo se revierte:** Nueva decisión del Director; git revert del cambio de policy.toml.
 - **Sustituye a:** D-0022
+
+## D-0027 — Borrar de /tmp dos artefactos ya archivados y con hash en NTFS (lab-full-xnu.img.valid y r3/work) para liberar ~24 GiB para T-0028
+- **Estado:** PROPOSED
+- **Razón:** E-0031 (imagen, sha256 747d0245…ec27f idéntico en NTFS) y E-0013 (r3/work, restaurable). Se necesitan >= 12 GiB libres y hoy hay ~6.
+- **Consecuencias:** La directiva de jefatura (2026-11-14) lo autoriza alegando que borrar es VERDE por D-0025: NO lo es, D-0025 solo reclasificó sudo, montaje, compilación pesada e imágenes de prueba; delete-or-overwrite sigue en nivel C y exige una decisión del Director que lo nombre (AUTHORITY.md §4). Queda PROPUESTA hasta que el Director lo autorice con sus palabras (D-0019 no cubre C según la lectura del ingeniero). Si se aprueba: authorizes = delete-or-overwrite, alcance exacto = esos dos rutas, sin comodines.
+- **Cómo se revierte:** Restaurar desde E-0031 y E-0013.
 

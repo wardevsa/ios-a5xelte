@@ -338,3 +338,14 @@ rationale = "El Director quita la burocracia de las operaciones de laboratorio e
 consequences = "Acciones privileged-or-mount (ahora A) y heavy-compile (nueva, A). NO se reclasifican: borrar o mover datos (delete-or-overwrite), publicar/push/PR/CI, host-config-change, y todo lo que toque el teléfono (device-*, write-protected-partitions): siguen en su nivel. R2 sigue sin autorizar (D-0005, restricción específica). El criterio de seguridad de los ejecutores (guardas de img_common.sh/guard.py) no cambia. La estructura de niveles sigue siendo A verde, B amarillo, C/X rojo (tres colores): no se creó un nivel naranja."
 reversal = "Nueva decisión del Director; git revert del cambio de policy.toml."
 
+[[decision]]
+id = "D-0027"
+title = "Borrar de /tmp dos artefactos ya archivados y con hash en NTFS (lab-full-xnu.img.valid y r3/work) para liberar ~24 GiB para T-0028"
+date = "2026-11-14"
+scope = "operation"
+status = "PROPOSED"
+proposer = "jefe-tecnico"
+rationale = "E-0031 (imagen, sha256 747d0245…ec27f idéntico en NTFS) y E-0013 (r3/work, restaurable). Se necesitan >= 12 GiB libres y hoy hay ~6."
+consequences = "La directiva de jefatura (2026-11-14) lo autoriza alegando que borrar es VERDE por D-0025: NO lo es, D-0025 solo reclasificó sudo, montaje, compilación pesada e imágenes de prueba; delete-or-overwrite sigue en nivel C y exige una decisión del Director que lo nombre (AUTHORITY.md §4). Queda PROPUESTA hasta que el Director lo autorice con sus palabras (D-0019 no cubre C según la lectura del ingeniero). Si se aprueba: authorizes = delete-or-overwrite, alcance exacto = esos dos rutas, sin comodines."
+reversal = "Restaurar desde E-0031 y E-0013."
+
