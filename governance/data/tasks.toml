@@ -586,3 +586,15 @@ evidence = ["E-0214"]
 authorization_ref = "D-0062"
 acceptance = "Run xnu en verde; 0355 aplicado; kernel descargado con su SHA-256 como evidencia; min26 construida y verificada."
 resume = "gh workflow run xnu -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2; min26 = min25 con el kernel nuevo; pedir firma de BOOT."
+
+[[task]]
+id = "T-0051"
+title = "Compilar en el CI mesa-ios el hero-run y las librerías del paquete DROP real: push de herolte-drop-v2 a mio y workflow mesa-ios (D-0069)"
+status = "ready"
+priority = 8
+owner = "ingeniero"
+depends_on = []
+actions = ["publish", "local-commit"]
+authorization_ref = "D-0069"
+acceptance = "Run mesa-ios en verde; artefacto descargado con SHA-256 registrados como evidencia; hero-run con la protección DROP v2 (drop_v2_userland.h)."
+resume = "gh workflow run mesa-ios -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2; luego armar el paquete real y pedir firma de escritura de la zona (SHA-256 + lista de ficheros)."
