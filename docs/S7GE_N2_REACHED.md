@@ -20,3 +20,6 @@ iOS no arranca: no hay raíz iOS (USERDATA sigue siendo Android ext4). La GPU, e
 2. **Escribir USERDATA** (borra Android): paso destructivo, con **autorización roja propia** que nombre la imagen y su hash. Las copias de SYSTEM y USERDATA ya están hechas y verificadas (E-0124, E-0125).
 3. **Línea de arranque definitiva**: `ufsrw=1 rootrw=1` etc. (`herolte-howto.md` §4) en vez de `ufsrw=0`: es una escritura del kernel en USERDATA; otra autorización.
 4. Cargar GPU/Wi-Fi/energía (`herogpu`, `herowifi`, `heropower`) **de uno en uno**, cada uno con su prueba y su permiso.
+
+## Aclaración sobre `cannot mount root` repetido (leído en `bsd/kern/bsd_init.c`)
+`bsd_init` monta la raíz dentro de un **`while (TRUE)`**: llama a `setconf()` y `vfs_mountroot()`; si falla, escribe `cannot mount root, errno = %d` y **vuelve a intentarlo** sin parar. Eso explica que el mensaje salga una y otra vez, que no haya pánico y que el kernel siga "vivo" indefinidamente: no es un reinicio ni un cuelgue, es el bucle de reintento de XNU. En cuanto exista una raíz HFS+ válida en USERDATA el bucle termina (`calling VFS_ROOT`, `IOSecureBSDRoot`, `bsd_utaskbootstrap` → `launchd`).

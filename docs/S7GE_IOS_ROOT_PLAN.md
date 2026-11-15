@@ -46,3 +46,10 @@ Texto de autorización a firmar (con el hash real de F1):
 
 ## Qué NO se hace sin su decisión
 Escribir USERDATA; cambiar `ufsrw`; cargar GPU/Wi-Fi/energía; tocar EFS, RECOVERY o los bootloaders (nunca).
+
+## Qué buscar en F4 (primer arranque con raíz iOS, anillo de mensajes)
+Ordenado por lo que esperaría ver (L1: leído en `bsd_init.c`/`herolte_ufs.c`; sin medir):
+1. **Desaparece** el `cannot mount root, errno = %d` repetido; aparecen líneas de `hfs_mount`/`hfs_mountfs` sin error y, justo después, las de `bsd_init` (`calling VFS_ROOT`…) — es el éxito del montaje.
+2. Mensajes de `launchd`/`xpc` o de `bsd_utaskbootstrap`; un `panic` con la cadena de arranque (p. ej. `launchd exited`, `Process 1 exec of /sbin/launchd failed`) **se dibuja** en la consola temprana: copiarlo literal.
+3. Si sigue el `cannot mount root`: leer el **`errno`**; mi anillo solo muestra la cadena de formato, así que habría que enganchar también los valores (mejora pendiente: imprimir el primer argumento entero).
+4. Mensajes de `HEROLTE UFS` con errores de lectura (`lun … cmd … failed`) indicarían un problema de almacenamiento, no de la imagen.
