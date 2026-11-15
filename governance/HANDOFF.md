@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0096 — lote D-0067: min30 (herocpu_mhz=2600) ESCRITA (1 de 3); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0097 — lote D-0067: min31 (herogpu_mhz=650) ESCRITA (2 de 3); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** min30 (E-0230) funcionó: 2600 MHz / 1075 mV, SoC 38-41 C. BOOT = `xnu-boot-v2-s7-min31-20261115.img` (sha256 `9a155ba6…2a4`, E-0228/E-0231). Queda 1 escritura de D-0067: min29 (`71c3344f…82fa7`) solo para volver atrás.
+- **Director:** `adb reboot`, 5 min de uso, fluidez/calor, TWRP. **Ingeniero:** log: 'HEROLTE GPU: clock … 650 MHz', vdd_g3d, JOB_READ_FAULT, avg_copy_us, fps, temperatura.
+- Si min31 falla: min29 (D-0067). Si va bien: quedarse con min31 y pasar al userland.
+- Fallos de userland vistos: Ajustes > About crashea, Messages crashea, Phone en blanco, assetsd, driverkitd.
+
+## Relevo anterior: H-0096 — lote D-0067: min30 (herocpu_mhz=2600) ESCRITA (1 de 3); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min30-20261115.img` (sha256 `add62cf6…cfdbe`, E-0227/E-0229). Quedan 2 escrituras de D-0067: min31 (`9a155ba6…a02a4`, +herogpu_mhz=650) y min29 (`71c3344f…82fa7`, vuelta atrás).
 - **Director:** `adb reboot`, 5 min de uso, calor/fluidez, TWRP. **Ingeniero:** log: 'Mongoose at 2600 MHz', vdd_mngs, SoC C, fps; si va bien -> min31; si no -> min29.
 - Restaurar BOOT: min29 (cubierta por D-0067) / original E-0009 (firma).
