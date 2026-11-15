@@ -1,11 +1,13 @@
 # iOS 16 on the Samsung Galaxy S7 (SM-G930F, Exynos 8890) — `herolte` branch
 
-**Status, 2026-11-07:** Apple's XNU kernel boots on a flat Galaxy S7 and runs the
+**Status, 2026-11-15:** Apple's XNU kernel boots on a flat Galaxy S7 and runs the
 unmodified **iPhone X iOS 16.7.16 userland** to the home screen with **GPU
-acceleration**, **Wi-Fi** and **sound**: CoreAnimation renders on the Mali-T880
-through OpenGL ES (Mesa Panfrost under HakiOS's EAGL bridge), the BCM4359 joins
-WPA2 networks, and the loudspeaker plays. Apps open and load, and it is usable
-day to day apart from the gaps below. There is no Metal.
+acceleration**, **Wi-Fi**, **Bluetooth**, **sound** and the **front camera**:
+CoreAnimation renders on the Mali-T880 through OpenGL ES (Mesa Panfrost under
+HakiOS's EAGL bridge), the display's own scaler puts the frames on the panel, the
+BCM4359 joins WPA2 networks and lists Bluetooth devices, and the loudspeaker plays.
+Apps open and load, and it is usable day to day apart from the gaps below. There
+is no Metal.
 
 **Try it:** [docs/herolte-howto.md](docs/herolte-howto.md). Apple's software and
 the Wi-Fi firmware are not in this repository: you build the iOS root from
@@ -14,17 +16,21 @@ Apple's IPSW in a private repository and take the firmware from your own phone.
 | Area | State |
 | --- | --- |
 | Boot | Samsung S-Boot loads our loader from BOOT (`shim/herolte/`), which starts XNU |
-| CPU | All 8 cores, Mongoose at 2288 MHz (Samsung's own voltage table). UI threads move from the A53s to an idle Mongoose (0274, 0321). No thermal limit yet |
+| CPU | All 8 cores, Mongoose at 2288 MHz (Samsung's own voltage table). UI threads move from the A53s to an idle Mongoose (0274, 0321). Thermal limit from the SoC's four TMU sensors: 728 MHz above 80 °C, back below 70 °C (0331); 728 MHz with the screen off (0330) |
 | RAM | About 3 GiB: the second DRAM bank (2 GiB) plus the first bank's free pieces (0326-0329, `tools/herolte-adt-ram-banks.py`) |
 | Storage | Own Exynos UFS driver; iOS root is HFSX in USERDATA, read/write, with the system apps |
-| GPU | Mali-T880 MP12 at 650 MHz through EAGL → OSMesa/Panfrost → our kernel job service |
-| Display | iOS draws an iPhone 8 screen, 750×1334 @2x, scaled to the 1440×2560 panel by the GPU into two buffers flipped on the display's IDMA (0322: no tearing). Panel at a real 60 Hz (0296); CoreAnimation told 120 Hz and the kernel's timer coalescing off (0323) |
+| GPU | Mali-T880 MP12 at 650 MHz through EAGL → OSMesa/Panfrost → our kernel job service; the kernel sleeps instead of spinning while it waits for the GPU (0333-0334) |
+| Display | iOS draws an iPhone 8 screen, 750×1334 @2x, into two buffers flipped on the display (0322: no tearing); the display's VGR0 scaler enlarges each frame to the 1440×2560 panel (0338; `herovgr=0` scales on the GPU instead). Panel at a real 60 Hz (0296); CoreAnimation told 120 Hz and the kernel's timer coalescing off (0323). Brightness floor so auto-brightness without a light sensor cannot turn the screen black (0343) |
 | Wi-Fi | BCM4359 over PCIe with the phone's own firmware, WPA2 handshake in the kernel, `en0` and Apple80211 for wifid: the Wi-Fi icon, internet, Safari (0308-0315) |
+| Bluetooth | Works (lists devices): the S7's Semco BCM4359C0 module with the patch file from your phone's VENDOR, `/arm-io/bluetooth` in the ADT (0342-0344, from the Galaxy Note FE port) |
+| Camera | Front camera (S5K4E6) works, through the Note FE port's camera library. Rear camera not yet |
 | Sound | The loudspeaker through the I2S block and an AudioServerPlugIn (`gpu/hakios-audio`, `heroaudio=3`) |
+| Vibration | The motor works in the kernel (a short test buzz at boot, 0339-0341); iOS does not drive it yet |
 | Navigation | Physical Home button (`home-button-type` 1). Home gestures need type 2, which brings UIKit's red rdar:45025538 status bar at this size; not solved |
-| Wallpaper | iOS's own wallpapers and gallery, except the stock iOS 16 one (black) |
-| Touch, buttons, battery | Working |
-| Not working | modem, Bluetooth, camera, sensors, sleep, Face ID, Metal (the Today view and Control Center blurs are black), Siri's voices |
+| Wallpaper | iOS's own wallpapers, including the stock iOS 16 one (its HEIC images are converted to PNG, since there is no HEVC decoder). The wallpaper gallery's thumbnails are still black |
+| Blur | Control Center blur works. The Today view and App Library blurs are still black |
+| Touch, buttons, battery | Working. Boot from TWRP (not by rebooting iOS), or the touch panel gets no power |
+| Not working | modem, rear camera, sensors, deep sleep, Face ID, Metal, Siri's voices |
 
 Thanks to [Scion](https://github.com/Scion-Project/scion-kernel) and
 [danstronics/ios-s9plus-exynos](https://github.com/danstronics/ios-s9plus-exynos) (Galaxy S9/S9+):
@@ -41,8 +47,14 @@ How to try it: [docs/herolte-howto.md](docs/herolte-howto.md) (erases USERDATA;
 Apple's software is not in this repository). The S7 kernel patches are
 `xnu/patches/0200` and up; the board config is `MACHINE_CONFIG=HEROLTE`.
 
-Next: thermal limit, audio, Wi-Fi, more optimization. Help is welcome. Please
-open an issue with the log from `tools/herolte-log-pull.py` and a photo of the screen.
+Next: iOS driving the vibration motor, zero-copy display, hardware video decoding
+(the MFC), more optimization. An experimental iOS 18 port (xnu-11215, Bergamota's
+Renegade plus `tools/ios18/` for the S7's ARMv8.0 cores) is on the `herolte-ios18`
+branch and does not boot yet. Help is welcome. Please open an issue with the log
+from `tools/herolte-log-pull.py` and a photo of the screen.
+
+Bluetooth, the front camera, the charger and the GPU interrupt path come from the Galaxy Note FE port
+([egemengunel/ios-a5xelte](https://github.com/egemengunel/ios-a5xelte), `gracerlte`, same Exynos 8890).
 
 Credits: Mesa/Panfrost, [HakiOS](https://github.com/oosexgang/hackios-xnu-kernel) EAGL bridge (`gpu/hakios-gl`, see its NOTICE),
 Bergamota's EAGL shim (`gpu/eagl`), [ios-sweet](https://github.com/dipa-studio/ios-sweet),
