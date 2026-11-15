@@ -501,14 +501,14 @@ resume = "Ejecutar tools/herolte-backup-partition.py por partición (es reanudab
 [[task]]
 id = "T-0044"
 title = "Escribir la raíz iOS (imagen HFSX tuneada) en USERDATA del S7 desde TWRP con tools/herolte-write-userdata.py"
-status = "blocked"
+status = "ready"
 priority = 8
 owner = "ingeniero"
 depends_on = ["T-0045"]
 actions = ["device-read", "device-write-userdata"]
-blocked_on = "Falta la autorización roja del Director con su ruta y SHA-256 (device-write-userdata; BORRA Android)"
 acceptance = "El hash del prefijo de USERDATA leído en el teléfono es el de la imagen autorizada; evidencia del dispositivo con hash; copias E-0124/E-0125 como vuelta atrás."
-requires_decisions = []
+requires_decisions = ["D-0048"]
+authorization_ref = "D-0048"
 
 [[task]]
 id = "T-0045"
