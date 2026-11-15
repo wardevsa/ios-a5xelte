@@ -2799,3 +2799,18 @@ sha256 = "08d2fde4fe5b98eaae6c56703a3d3764c6dfd9788af7664c96750f1e518b7e10"
 size = 340787
 immutable = true
 note = "Salidas no cero: launchd xstat 1 tras 'SPAWN FAILED /usr/libexec/HorizonSetup -> 2' (fichero ausente), MSUEarlyBootTask 1, sysstatuscheck 0x100, prng_seedctl 0xc00, driverkitd 9, DumpPanic 0x100, IOMFB_FDR_Loader 0x100, un xpcproxy 0x4e00. 178 exec xpcproxy; bluetoothd y fairplayd.H2 se relanzan 7 veces. Solo ~70 s de log (7 volcados). El fichero contiene identificadores de dispositivo: NO va a git. La lectura anterior como bucle (E-0187) era incorrecta: solo se veían cadenas de formato."
+
+[[evidence]]
+id = "E-0191"
+title = "Imagen preparada: xnu-boot-v2-s7-min20-20261115 = min19 con herogpu=1; 38 PASS del constructor y 43 PASS del verificador independiente, 0 FAIL (el único FAIL del constructor es su expectativa fija herolog=0, que no aplica a esta variante)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run4-min20/xnu-boot-v2-s7-min20-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "039b30dc1bf4a5580339098ab15d5b565b526dd8a7b2734f1184a3b341c82fb6"
+size = 18620432
+immutable = true
+note = "Mismo kernel (E-0174), ADT y cargador que min19; la línea difiere SOLO en herogpu=0 -> herogpu=1 (diff). herolog=1 se mantiene para conservar el log si la GPU cuelga. Verificación independiente: /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run4-min20/xnu-boot-v2-s7-min20-20261115.verify-independent.txt."
