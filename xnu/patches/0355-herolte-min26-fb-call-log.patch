@@ -1,0 +1,48 @@
+diag(min26): log the arguments of the first 120 IOMobileFramebuffer calls and the notification port registration
+
+min25 (E-0212, E-0213): backboardd and SpringBoard are idle in their run loops, the display surfaces stay all zero and 'vbl=0': nobody registers for vsync. The driver implements the registration as selector 72 and prints a line for it, but selector 72 is never called by iOS 16.7.16 (selectors 68, 74, 79, 84 are, and calls with selector >= 64 are all logged). To find the real registration, log each call's four scalar inputs, whether it is asynchronous (a wake port) and the first 16 bytes of the structure input, for the first 120 calls except SwapEnd, plus registerNotificationPort(). IOLog only; no behaviour change.
+
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -1178,10 +1178,11 @@
+ }
+ 
+ IOReturn
+-IOMobileFramebufferUserClient::registerNotificationPort(mach_port_t port, __unused UInt32 type,
+-    __unused io_user_reference_t refCon)
++IOMobileFramebufferUserClient::registerNotificationPort(mach_port_t port, UInt32 type,
++    io_user_reference_t refCon)
+ {
+ 	mach_port_t old;
++	IOLog("FBCALL registerNotificationPort type %u refcon 0x%llx port 0x%x\n", (unsigned)type, (unsigned long long)refCon, (unsigned)port);
+ 	IOLockLock(fFB->fLock);
+ 	old = fPort;
+ 	fPort = port;
+@@ -1326,6 +1327,27 @@
+ 		    args->scalarInputCount, args->structureInputSize,
+ 		    args->scalarOutputCount, args->structureOutputSize, ret);
+ 	}
++	{
++		/* min25 probe: the arguments of the first 120 calls, in full, and whether the call is asynchronous (a
++		 * notification port): where does iOS 16 register for vsync, if not selector 72? */
++		static uint32_t calls_logged;
++		if (calls_logged < 120 && selector != kSweetFBSwapEnd) {
++			calls_logged++;
++			char pname[32];
++			proc_selfname(pname, sizeof(pname));
++			IOLog("FBCALL %u %s sel %u async %d in %llx %llx %llx %llx n=%u sin=%u sout=%u hex %08x %08x %08x %08x\n",
++			    calls_logged, pname, selector, args->asyncWakePort != MACH_PORT_NULL,
++			    args->scalarInputCount > 0 ? args->scalarInput[0] : 0,
++			    args->scalarInputCount > 1 ? args->scalarInput[1] : 0,
++			    args->scalarInputCount > 2 ? args->scalarInput[2] : 0,
++			    args->scalarInputCount > 3 ? args->scalarInput[3] : 0,
++			    args->scalarInputCount, args->structureInputSize, args->structureOutputSize,
++			    args->structureInputSize >= 4 && args->structureInput ? ((const uint32_t *)args->structureInput)[0] : 0,
++			    args->structureInputSize >= 8 && args->structureInput ? ((const uint32_t *)args->structureInput)[1] : 0,
++			    args->structureInputSize >= 12 && args->structureInput ? ((const uint32_t *)args->structureInput)[2] : 0,
++			    args->structureInputSize >= 16 && args->structureInput ? ((const uint32_t *)args->structureInput)[3] : 0);
++		}
++	}
+ 	return ret;
+ }
+ #endif /* SWEET || A5XELTE */
