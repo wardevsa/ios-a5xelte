@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0081 — backboardd está BLOQUEADO esperando algo (no lento): 12 min, 25 presents, superficies a cero (2026-11-15)
+## Relevo vigente: H-0082 — min25 (min24 + sweetfb_native=1) preparada, NO escrita; BOOT sigue con min24 (2026-11-15)
+- **Tarea en curso: T-0012.** Hipótesis nueva (upstream, L4h): sin `sweetfb_native=1` el lienzo presentado (1125x2436) contradice el panel (1440x2560) y backboardd solo hace swaps negros; con él upstream vio Apple + "Hola". E-0210: imagen `xnu-boot-v2-s7-min25-20261115.img` sha256 `a55af158…6dc9e4`.
+- **Siguiente:** firma del Director; `adb reboot`, 4-5 min (sin pulsar), TWRP; `herolte-log-pull.py`; FBSRC/FBPROBE: ¿contenido no nulo?; ¿cambia 'presented as'?
+- Restaurar BOOT: min24/min23/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0081 — backboardd está BLOQUEADO esperando algo (no lento): 12 min, 25 presents, superficies a cero (2026-11-15)
 - **Tarea en curso: T-0012.** E-0209: FBSRC todo ceros en 25 presents/12 min; muestras SMP: hilos en espera. Hipótesis A reforzada (no B). BOOT sigue con min24.
 - **Siguiente:** (1) symbolizar los PC de las muestras SMP con la dyld cache de la raíz iOS (`/media/.../ios-root-herolte-20261115.img` montable en solo lectura con sudo del Director, o del IPSW os.dmg) para ver QUÉ espera backboardd; (2) mirar upstream: backboardd espera `DMPerformMigration` / `FBSystemShellInitialize`; en esta raíz podrían faltar flags (SetupDone, migración) o servicios; (3) instalar el userland de upstream por DROP (autorun/hero-run/herosb/disabled.list).
 - Restaurar BOOT: min23/min22/original E-0009 (cada escritura exige firma).

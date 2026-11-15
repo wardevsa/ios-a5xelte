@@ -3084,3 +3084,18 @@ sha256 = "7578d69db4d304aec2fe448c2acea0db4e1e5550ddb00fa462cf77767dee177a"
 size = 1661516
 immutable = true
 note = "Observación del Director (12:01 arranque): a las 12:02 aparece lo negro encima (los colores de la derecha siguen visibles), a las 12:06, 12:10 y 12:14 nada nuevo. Del log: 'display-off request ignored (a5fb_keep_on)'; FBSRC 10 pass 0/1 nz_rgb 0 nz_a 0; 6 muestras SMP con PC de espera (0x1f8869030 = trampa de mach_msg, 0x1f88694f0) en todos los hilos salvo 1-2; ritmo 0,1-0,3 fps; memoria libre 265->221 MB. Conclusión L2: backboardd no está componiendo y no consume CPU: está bloqueado esperando algo (no es lentitud del renderer). No se sabe qué. Incidencia: tras volver a TWRP el USB salía como SAMSUNG_Android MTP sin interfaz adb; desenchufar y enchufar lo arregló. El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0210"
+title = "Imagen preparada: xnu-boot-v2-s7-min25-20261115 = min24 + sweetfb_native=1 (mismo kernel 0354, E-0205); 47 PASS del verificador independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run9-min25/xnu-boot-v2-s7-min25-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "a55af15873a83a252539593c887b94f60b46e283ab67e1cd5576d95fbc6dc9e4"
+size = 18620432
+immutable = true
+note = "Solo cambia la línea de arranque (diff: +sweetfb_native=1). Motivo (HEROLTE_PROGRESS.md, upstream L4h, líneas 164-179): sin sweetfb_native el kernel presenta 'as 1125x2436' sobre un panel de 1440x2560 y backboardd crea superficies de ambos tamaños; los dos primeros swaps son negros y después no llega ningún swap con contenido (igual que en esta unidad: E-0201, E-0204, E-0208, E-0209); con sweetfb_native=1 upstream vio el logo de Apple y la pantalla 'Hola'. Es una hipótesis, no un hecho de esta unidad. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run9-min25/xnu-boot-v2-s7-min25-20261115.verify-independent.txt. El único FAIL del constructor es su expectativa fija herolog=0."
