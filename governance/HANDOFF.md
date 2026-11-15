@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0116 — kernel 0360 compilado y min36 (herowifi=1) preparada, NO escrita; firmware ya en la zona DROP (2026-11-15)
+## Relevo vigente: H-0117 — min36 (herowifi=1, kernel 0360) ESCRITA (D-0080); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012 / T-0059.** BOOT = `xnu-boot-v2-s7-min36-20261115.img` (sha256 `7c8363c5…e6`, E-0263/E-0264). Zona DROP con firmware (E-0261).
+- **Director:** `adb reboot`; 1-2 min; Ajustes > Wi-Fi: ¿redes?, conectar con su contraseña desde Ajustes; apagar desde iOS (-> TWRP). Si se cuelga: esperar 2-3 min, apagado forzado. **Ingeniero:** `herolte-log-pull.py` + `herolte-log-report.py`; `grep -a 'HEROLTE WIFI\|HEROLTE DROP\|HakiosWLAN\|apple80211'`; TOP con tiempo de sistema.
+- Vuelta atrás: min34 (E-0247).
+
+## Relevo anterior: H-0116 — kernel 0360 compilado y min36 (herowifi=1) preparada, NO escrita; firmware ya en la zona DROP (2026-11-15)
 - **Tarea en curso: T-0012 / T-0059.** E-0262 kernel 0360, E-0263 `xnu-boot-v2-s7-min36-20261115.img` sha256 `7c8363c5…1ee2b6` (531 caracteres): línea de min35 sin sweetsample_s=2 y con `herowifi=1`. La zona DROP ya tiene el paquete de Wi-Fi (E-0261).
 - **Siguiente:** firma de BOOT con hash; `adb reboot`; 3-5 min mirando Ajustes > Wi-Fi; apagar desde iOS (-> TWRP); log: `HEROLTE DROP: package 3 ready`, `HEROLTE WIFI:` (ltssm, chip id, firmware), TOP con tiempo de sistema (' backboardd N% sM').
 - Vuelta atrás: min34 (E-0247).

@@ -3894,3 +3894,18 @@ sha256 = "7c8363c5e376fa0d6e78663e9d8a20ee598ca629a50e8aeb7ee16886091ee2b6"
 size = 18620432
 immutable = true
 note = "(Corrección del mismo día: el título decía 536; son 531.) Imagen de Wi-Fi: el único cambio de comportamiento respecto a min34 es herowifi=1 (el kernel espera wifi/fw.bin, levanta el BCM4359 por PCIe y carga el firmware) y el TOP con tiempo de sistema. Riesgo declarado: primer uso de GPIO, relojes, PMU y PCIe del chip en esta unidad; posible cuelgue o consumo. Vuelta atrás: min34. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run20-min36/xnu-boot-v2-s7-min36-20261115.verify-independent.txt."
+
+[[evidence]]
+id = "E-0264"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min36-20261115.img (herowifi=1, kernel 0360) y leído de vuelta (sha256 7c8363c5…e6); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min36-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "1af792b57a9e10b55142cfc3b5e7af5c50abcd55b575999d969c3f257e8a656f"
+size = 724
+immutable = true
+note = "D-0080; hash registrado antes en E-0263. Primer intento."
