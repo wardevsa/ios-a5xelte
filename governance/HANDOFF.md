@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0115 — paquete DROP de Wi-Fi ESCRITO en la zona (D-0079, E-0261); falta min36 con herowifi=1 (2026-11-15)
+## Relevo vigente: H-0116 — kernel 0360 compilado y min36 (herowifi=1) preparada, NO escrita; firmware ya en la zona DROP (2026-11-15)
+- **Tarea en curso: T-0012 / T-0059.** E-0262 kernel 0360, E-0263 `xnu-boot-v2-s7-min36-20261115.img` sha256 `7c8363c5…1ee2b6` (531 caracteres): línea de min35 sin sweetsample_s=2 y con `herowifi=1`. La zona DROP ya tiene el paquete de Wi-Fi (E-0261).
+- **Siguiente:** firma de BOOT con hash; `adb reboot`; 3-5 min mirando Ajustes > Wi-Fi; apagar desde iOS (-> TWRP); log: `HEROLTE DROP: package 3 ready`, `HEROLTE WIFI:` (ltssm, chip id, firmware), TOP con tiempo de sistema (' backboardd N% sM').
+- Vuelta atrás: min34 (E-0247).
+
+## Relevo anterior: H-0115 — paquete DROP de Wi-Fi ESCRITO en la zona (D-0079, E-0261); falta min36 con herowifi=1 (2026-11-15)
 - **Tarea en curso: T-0012 / T-0059.** Zona DROP con el paquete de Wi-Fi (generación 3) verificada. BOOT sigue siendo min35 (herowifi=0 por defecto): con min35 el kernel instalaría los ficheros pero no levantaría la radio.
 - **Siguiente:** CI de 0360 (run 43731940530) -> kernel -> min36 = línea equivalente a min34 + `herowifi=1` -> firma de BOOT con hash -> arrancar 3-5 min -> TWRP (herohalt) -> log: `HEROLTE DROP: package 3 ready`, `HEROLTE WIFI: …` (ltssm, chip id, firmware), redes en Ajustes.
 - Vuelta atrás: min34 por BOOT; `herolte-drop.py adb --clear` vacía la cabecera.
