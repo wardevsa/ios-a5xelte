@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0090 — min27 (scale=1 lw=750 lh=1334) ESCRITA (D-0064); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0091 — iOS en pantalla con táctil (min27); log medido; min28 (sweetfb_gpu=1) preparada, NO escrita (2026-11-15)
+- **Tarea en curso: T-0012.** E-0220: lag = copia/reescalado por CPU 88 ms/cuadro; memoria libre cae a 72 MB; SpringBoard inició el apagado a los ~7 min (¿Vol-+Power del Director?); crashes: assetsd x13, MobileSMS, fileprovider(s). Sin temperatura (heropower=0). E-0221: min28 = min27 + `sweetfb_gpu=1`, sha256 `9811a265…09be56`.
+- **Siguiente:** firma del Director; `adb reboot`, 5 min con uso normal; log: avg_copy_us, fps, errores de GPU (JOB_READ_FAULT, fallos de gpuPresent). Si la GPU falla, volver a min27.
+- Pendiente aparte: fondo negro (herosb/hero-run por DROP), assetsd/autorun, memoria baja, temperatura (heropower=1 es riesgo), Messages crashea.
+- Restaurar BOOT: min27 (a59c26fa…, funciona) / min26 / original E-0009.
+
+## Relevo anterior: H-0090 — min27 (scale=1 lw=750 lh=1334) ESCRITA (D-0064); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min27-20261115.img` (sha256 `a59c26fa…f4640`, E-0218/E-0219).
 - **Director:** `adb reboot`, 5 min sin pulsar, apuntar qué ve; volver a TWRP (si falla el force reboot: Power+Vol- ~10 s para apagar, soltar y entrar a recovery). **Ingeniero:** `herolte-log-pull.py`; 'presented as'; FBSRC/FBPROBE con contenido; ¿arranca (riesgo 0xa0000000)?
 - Restaurar BOOT: min26/min25/original E-0009 (cada escritura exige firma).

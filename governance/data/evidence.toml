@@ -3234,3 +3234,33 @@ sha256 = "ded59d7b482c9f45564a0772ddcb725ed487f9494701511b69e7eea226d4e1ea"
 size = 724
 immutable = true
 note = "D-0064; hash registrado antes en E-0218. Primer intento. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."
+
+[[evidence]]
+id = "E-0220"
+title = "Log persistente de min27 (iOS en pantalla con táctil; flush #45, 4629318 B escritos, anillo de 4 MiB dado la vuelta): copia de cuadros 88 ms de media por cuadro (reescalado por CPU, ~2,8 fps de media y 12,9 fps máximo), memoria libre 477 -> 72 MB en 6 min, apagado ordenado iniciado por SpringBoard a los ~7 min, sin pánico del kernel registrado"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min27-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "cd48dd71ece4c93504b7115ed2d8d163c9e9209a1981dc5f682da438f7ac8934"
+size = 4194798
+immutable = true
+note = "Medido: 'A5XELTE FB: frames=… avg_copy_us' medio 88433 us (32 muestras): la copia/reescalado 750x1334 -> 1440x2560 por CPU cuesta ~88 ms por cuadro y explica el lag; con sweetfb_gpu=1 lo haría la Mali. FBSRC con 48060 píxeles muestreados no nulos en la superficie origen (antes siempre 0). Memoria libre: 477, 384, 340, 116, 98, 72 MB (60..360 s) y 1042 MB al apagar. CRASH: assetsd x13 (sig 6), MobileSMS x1 (sig 11, 'messages crashea'), PhotosFileProvider x1, fileproviderd x1. Apagado: '[System Event] System shutdown initiated by: SpringBoard[27]' a los 16:07:28 de launchd (~7 min tras el arranque), luego 'CPU halted'; el Director dice haber visto 'cargando' y un PANIC en pantalla y haber pulsado Vol- + Power; el log no tiene texto de pánico (el volcado se detiene en 'CPU halted'); se desconoce si el apagado lo provocó él con Vol-+Power (iOS lo interpreta como apagar) o iOS por su cuenta. Temperatura: NO medida (la lectura TMU/pila va dentro del gobernador heropower=1, desactivado). Observación del Director: 'solo abre ajustes, safari y app store, las demás se quedan en negro; messages crashea; va un poco lag pero no se congela'. El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0221"
+title = "Imagen preparada: xnu-boot-v2-s7-min28-20261115 = min27 + sweetfb_gpu=1 (mismo kernel 0355, E-0214); verificador independiente sin FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run12-min28/xnu-boot-v2-s7-min28-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "9811a265b8938907703d6d5a4a45adb0e8c6fa55a01193da51405b1a2409be56"
+size = 18620432
+immutable = true
+note = "Solo cambia la línea de arranque (diff: +sweetfb_gpu=1). Motivo: E-0220, la copia por CPU cuesta ~88 ms por cuadro; con sweetfb_gpu=1 la Mali dibuja el cuadro escalado (bilineal) y la copia por CPU queda de respaldo (tras 8 fallos seguidos, 300 cuadros por CPU; luego reintenta). Riesgo: primer uso real de la GPU en esta unidad (upstream anota un JOB_READ_FAULT tras el que no corre ningún trabajo, causa desconocida). Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run12-min28/xnu-boot-v2-s7-min28-20261115.verify-independent.txt."
