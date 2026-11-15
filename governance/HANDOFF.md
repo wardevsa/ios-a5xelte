@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0082 — min25 (min24 + sweetfb_native=1) preparada, NO escrita; BOOT sigue con min24 (2026-11-15)
+## Relevo vigente: H-0083 — min25 (min24 + sweetfb_native=1) ESCRITA (D-0060); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min25-20261115.img` (sha256 `a55af158…c9e4`, E-0210/E-0211).
+- **Director:** `adb reboot`, 5 min sin pulsar, apuntar si ve logo de Apple o texto de iOS; volver a TWRP (si adb no aparece: desenchufar y enchufar). **Ingeniero:** `herolte-log-pull.py`; FBSRC/FBPROBE con contenido; 'presented as'.
+- Restaurar BOOT: min24/min23/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0082 — min25 (min24 + sweetfb_native=1) preparada, NO escrita; BOOT sigue con min24 (2026-11-15)
 - **Tarea en curso: T-0012.** Hipótesis nueva (upstream, L4h): sin `sweetfb_native=1` el lienzo presentado (1125x2436) contradice el panel (1440x2560) y backboardd solo hace swaps negros; con él upstream vio Apple + "Hola". E-0210: imagen `xnu-boot-v2-s7-min25-20261115.img` sha256 `a55af158…6dc9e4`.
 - **Siguiente:** firma del Director; `adb reboot`, 4-5 min (sin pulsar), TWRP; `herolte-log-pull.py`; FBSRC/FBPROBE: ¿contenido no nulo?; ¿cambia 'presented as'?
 - Restaurar BOOT: min24/min23/original E-0009 (cada escritura exige firma).
