@@ -548,3 +548,15 @@ evidence = ["E-0198"]
 authorization_ref = "D-0055"
 acceptance = "Run xnu en verde; 0353 aplicado (no 'Skipping'); kernel descargado con su SHA-256 como evidencia; min22 construida y verificada."
 resume = "gh workflow run xnu -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2; después min22 = min21 con el kernel nuevo y pedir firma de BOOT."
+
+[[task]]
+id = "T-0048"
+title = "Compilar en el CI el kernel con 0354 (sonda de la superficie origen): push de herolte-drop-v2 a mio y workflow xnu (D-0058)"
+status = "ready"
+priority = 8
+owner = "ingeniero"
+depends_on = []
+actions = ["publish", "local-commit"]
+authorization_ref = "D-0058"
+acceptance = "Run xnu en verde; 0354 aplicado; kernel descargado con su SHA-256 como evidencia; min24 construida y verificada."
+resume = "gh workflow run xnu -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2; min24 = min23 con el kernel nuevo; pedir firma de BOOT."
