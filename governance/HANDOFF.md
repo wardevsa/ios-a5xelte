@@ -8,7 +8,11 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0108 — herohalt FUNCIONA (apagar desde iOS reinicia en TWRP); log 3x más limpio; PS_HOLD = 0x5300 (2026-11-15)
+## Relevo vigente: H-0109 — informe para la Jefatura Técnica escrito (docs/S7GE_INFORME_JEFATURA_20261115_IOS.md, E-0249); a la espera de la decisión de rumbo (2026-11-15)
+- **Tarea en curso: T-0012.** El Director pasa el informe a la Jefatura para decidir: fluidez vs S7GE (Metal), fusión 0352-0358 con upstream, Wi-Fi/audio, ratificaciones, copia en otro disco (§7 del informe).
+- BOOT actual = min34 (base buena). Sin acciones rojas pendientes. Siguiente sin permiso: análisis de `backboardd` (CPU) en el PC.
+
+## Relevo anterior: H-0108 — herohalt FUNCIONA (apagar desde iOS reinicia en TWRP); log 3x más limpio; PS_HOLD = 0x5300 (2026-11-15)
 - **Tarea en curso: T-0012.** E-0248: apagado -> TWRP directo; hfs 4751 -> 8 líneas; sondas 1700 -> 384. BOOT = min34 (base buena).
 - **Pendiente:** (1) power-off real (opcional): PS_HOLD 0x5300 -> escribir 0x5200 (parche 0359, `herohalt=3`); (2) Ajustes se queda pillado a veces (About); (3) fps medio ~11; backboardd ~300 % de un núcleo; (4) Messages (Metal), Photos (assetsd), fondo; (5) S7GE.
 - Sin acciones rojas pendientes ahora.

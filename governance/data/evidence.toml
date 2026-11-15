@@ -3669,3 +3669,18 @@ sha256 = "e72cb6b6ffae740a348554b382cae433ad74ca37e0389a94cf6f1d69948d33ee"
 size = 191336
 immutable = true
 note = "Medido: 'HEROLTE: herohalt=1: restart into recovery in 12 s (PS_HOLD_CONTROL 0x5300)' tras 'CPU halted'; PS_HOLD en 0x5300 = salida habilitada y dato a 1 (en Linux/Exynos el apagado limpia el bit 8: valor 0x5200); 3790 líneas frente a 11158 en el mismo tiempo de min33; fps medio 11,2 (máx 28,2), copia 6,1 ms; SoC máx 41 C; 59 líneas hero-run; Mongoose 2600 MHz, GPU 650 MHz. Observación del Director: 'Ahora About no funcionó, se quedó pillado Ajustes pero el teléfono siguió funcionando; procedo al apagado; apagó bien y directo a TWRP, wow, muy bien'. TOP final: backboardd 314 % de un núcleo. El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0249"
+title = "Informe a la Jefatura Técnica del 15-nov (tarde): iOS en pantalla con táctil, hitos min17-min34, rutas para leerlo en otra terminal, correcciones de método, rendimiento, estado de fallos y preguntas de decisión"
+kind = "document"
+path = "/home/pioxi/HackiOS/repos/wardevsa-ios-a5xelte-v2/docs/S7GE_INFORME_JEFATURA_20261115_IOS.md"
+location = "repo"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "this-unit"
+sha256 = "6235227b5e6266c3d1c2c70269635eae20cad3c416792144d5f3dd5cd23ba7ed"
+size = 12026
+immutable = true
+note = "Redactado por el ingeniero a petición del Director. Sin números de serie ni datos privados: cita rutas de logs privados que NO están en git. La línea de arranque de min34 citada coincide con la de la imagen (comprobado con grep)."
