@@ -3219,3 +3219,18 @@ sha256 = "a59c26fa713b19346e82e8bc323a51a49353527aeb6b08eee1c8d78dc66f4640"
 size = 18620432
 immutable = true
 note = "Solo cambia la línea de arranque (diff: +sweetfb_scale=1 +sweetfb_lw=750 +sweetfb_lh=1334); kernel, ADT y cargador idénticos a min26. Motivo: E-0217 (tamaño pedido por iOS 750x1334 contra 1440x2560 anunciado) y la configuración de upstream (L4h). La superficie por defecto con escala usa memoria física propia en 0xa0000000 (SweetFramebuffer.cpp); riesgo: si esa dirección no es libre en esta unidad el kernel podría fallar. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run11-min27/xnu-boot-v2-s7-min27-20261115.verify-independent.txt. El único FAIL del constructor es su expectativa fija herolog=0."
+
+[[evidence]]
+id = "E-0219"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min27-20261115.img (min26 + sweetfb_scale=1 sweetfb_lw=750 sweetfb_lh=1334) y leído de vuelta (sha256 a59c26fa…f4640); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min27-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ded59d7b482c9f45564a0772ddcb725ed487f9494701511b69e7eea226d4e1ea"
+size = 724
+immutable = true
+note = "D-0064; hash registrado antes en E-0218. Primer intento. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."
