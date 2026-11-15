@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0084 — min25 medida: sweetfb_native=1 no basta; backboardd sigue en espera; BOOT sigue con min25 (2026-11-15)
+## Relevo vigente: H-0085 — análisis: UI arrancada pero sin vsync registrado; parche 0355 (log de llamadas IOMFB) escrito, sin CI (2026-11-15)
+- **Tarea en curso: T-0012.** E-0213 / `docs/S7GE_BACKBOARDD_WAIT.md`: SpringBoard en GSEventRunModal, backboardd en run loop, superficies a cero, selector 72 nunca llamado (iOS 16.7.16 usa 68/74/79/84/50/52/55). `tools/herolte-smp-images.py` mapea PC -> librería (caché de dyld extraída con 7z de `systemos.dmg`; sin símbolos de función porque los linkedit están comprimidos con APFS).
+- **Siguiente:** firma del Director para push + CI de 0355 (commit 34fd5f9); min26 = línea de min25 + kernel 0355; firma de BOOT; arrancar 3 min; leer `FBCALL` (argumentos de las 120 primeras llamadas, asincronía, registerNotificationPort).
+- Pendiente aparte: DROP v2 (hero-run/autorun/herosb), assetsd aborta, táctil sin probar.
+- BOOT actual: min25. Restaurar: min24/min23/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0084 — min25 medida: sweetfb_native=1 no basta; backboardd sigue en espera; BOOT sigue con min25 (2026-11-15)
 - **Tarea en curso: T-0012.** E-0212: 'presented as 1440x2560' correcto, superficies de pantalla 1440x2560 a cero, hilos en espera. Quedan como sospechosos: assetsd aborta ('Too many corpses', sig 6), com.apple.datamigrator (3 ejecuciones), faltan hero-run/autorun/herosb/disabled.list (DROP), y el estado de migración/setup del root.
 - **Siguiente:** (1) symbolizar los PC del muestreo SMP (dyld cache de la raíz; `7z` lee el HFS sin montar pero los tamaños salen 0, hay que ver si extrae) para ver qué espera backboardd; (2) mirar el crash de assetsd (bt en el log, direcciones sin símbolos); (3) instalar el userland de upstream por DROP (herodrop=1) tras una firma.
 - Táctil: el driver arranca ('sensing, INT=0; polling 5 ms'); falta una prueba con toques (la pantalla no responde mientras no haya UI).

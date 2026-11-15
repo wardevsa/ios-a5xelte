@@ -3129,3 +3129,18 @@ sha256 = "f3afdf456da724802705b2490132d46e3527c780352915b7a1987c2278e95bbf"
 size = 1983411
 immutable = true
 note = "Observación del Director (12:29 arranque): a los 30 s toda la pantalla se oscurece/apaga; 12:35 nada nuevo, negro; después, al volver a TWRP, se equivocó con el reinicio forzado y el teléfono arrancó otra vez antes de entrar en TWRP (el log leído es el de 300 s de la prueba, flush #32). Del log: FBSRC 1..10 nz_rgb 0 nz_a 0 or 0; 43 líneas de táctil: 'HEROLTE TOUCH: sensing, INT=0; polling every 5 ms', 28 'status 01 32 02…' y subid ac a5 52, sin coordenadas porque no hubo toques; muestras SMP: 16 de 18 hilos de backboardd/SpringBoard en espera; EXIT launchd xstat 1 x92 (SPAWN FAILED de extensiones), assetsd aborta (sig 6, 'Too many corpses being created') y com.apple.datamigrator se lanza 3 veces (exit 0). Lo que NO se sabe: qué espera backboardd (las direcciones del muestreo no están simbolizadas); si el aborto de assetsd o el migrador lo bloquean. El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0213"
+title = "Análisis: backboardd y SpringBoard están inactivos en sus run loops (UI arrancada), las superficies de pantalla siguen a cero y iOS nunca llama al selector 72 (registro de vsync del driver); direcciones del muestreo SMP mapeadas a librerías de la caché de dyld"
+kind = "document"
+path = "/home/pioxi/HackiOS/repos/wardevsa-ios-a5xelte-v2/docs/S7GE_BACKBOARDD_WAIT.md"
+location = "repo"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "this-unit"
+sha256 = "3b31aba92639445c62970a838e61e6ad02a30c27124f42f0808fb95c800e2267"
+size = 1663
+immutable = true
+note = "Basado en E-0208, E-0209 y E-0212 (logs) y en la caché de dyld extraída de systemos.dmg del IPSW (en el disco de trabajo, no en git). Hipótesis sobre vsync NO probada; el parche 0355 la comprobará."
