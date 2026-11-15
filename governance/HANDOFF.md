@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0097 — lote D-0067: min31 (herogpu_mhz=650) ESCRITA (2 de 3); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0098 — min31 (CPU 2600 MHz, GPU 650 MHz) FUNCIONA y es la base; lote D-0067 con 1 escritura sin usar (min29) (2026-11-15)
+- **Tarea en curso: T-0012.** E-0232: GPU 649 MHz, vdd_g3d 0x40, sin errores; SoC <= 41 C; usable con algo de lag. BOOT actual = min31 (`9a155ba6…2a4`). Quedan 0 imágenes de BOOT preparadas; la 3.ª escritura de D-0067 (min29) solo sirve para volver atrás.
+- **Siguiente (sin tocar BOOT):** userland por DROP: fondo negro (herosb), `autorun`, assetsd/driverkitd, About y Messages crashean, Phone en blanco, 'Sign in to your iPad' (identidad iPad: mirar MobileGestalt/ADT DeviceClass). Varios arreglos en un paquete.
+- Aviso: sweetfb_gpu y los relojes ya no son el cuello; queda la composición CA en CPU.
+
+## Relevo anterior: H-0097 — lote D-0067: min31 (herogpu_mhz=650) ESCRITA (2 de 3); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** min30 (E-0230) funcionó: 2600 MHz / 1075 mV, SoC 38-41 C. BOOT = `xnu-boot-v2-s7-min31-20261115.img` (sha256 `9a155ba6…2a4`, E-0228/E-0231). Queda 1 escritura de D-0067: min29 (`71c3344f…82fa7`) solo para volver atrás.
 - **Director:** `adb reboot`, 5 min de uso, fluidez/calor, TWRP. **Ingeniero:** log: 'HEROLTE GPU: clock … 650 MHz', vdd_g3d, JOB_READ_FAULT, avg_copy_us, fps, temperatura.
 - Si min31 falla: min29 (D-0067). Si va bien: quedarse con min31 y pasar al userland.
