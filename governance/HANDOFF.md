@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0112 — min35 (kernel 0359, sweetsample_s=2) ESCRITA (D-0077); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0113 — min35 analizada: defaults OK; Wi-Fi: radio nunca iniciada (premisa de la jefatura corregida); backboardd sin perfil fiable; 0360 y script de extracción listos (2026-11-15)
+- **Tarea en curso: T-0012 / T-0056 / T-0059.** E-0256 log, E-0257 `docs/S7GE_MIN35_ANALYSIS.md`. BOOT = min35 (perfilado; para uso normal volver a min34).
+- **Pendiente del Director (rojo):** (a) firma de CI para 0360 (kernel con TOP de tiempo de sistema); (b) cuando quiera Wi-Fi: firma para `tools/herolte-wifi-extract.sh adb DIR --execute` (monta VENDOR en solo lectura desde TWRP), luego escribir `network.txt` él mismo, luego paquete DROP y imagen con herowifi=1 (cada una con su hash).
+- **Corrección a la jefatura:** la directiva de análisis suponía herowifi=1; el log dice 'en0 made … the radio comes later' (radio sin iniciar). Hace falta firmware + herowifi=1.
+- Siguiente verde: preparar min36 (0360 + E1-E3: a5fb_hz=30, heroquantum=500, heronoexec += wifid,identityservicesd).
+
+## Relevo anterior: H-0112 — min35 (kernel 0359, sweetsample_s=2) ESCRITA (D-0077); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012 / T-0056.** BOOT = `xnu-boot-v2-s7-min35-20261115.img` (sha256 `2ba461dc…dd4`, E-0254/E-0255).
 - **Director:** `adb reboot`, 3-4 min de uso MOVIDO (Ajustes, scroll, Safari, App Store), apagar desde iOS (-> TWRP). **Ingeniero:** log: comparar con min34 (GPU PRESENT, sin FBP/anillo, sin Wi-Fi) y perfilar los SMP de backboardd por librería; fps con sampler denso serán menores.
 - Vuelta atrás: min34 (E-0247).

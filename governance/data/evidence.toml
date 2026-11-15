@@ -3774,3 +3774,33 @@ sha256 = "46ba0ef88a7e3a0d2354262ad49db64b7ae46386bcd30b4ca761e4a66fa51ae0"
 size = 724
 immutable = true
 note = "D-0077; hash registrado antes en E-0254. Primer intento."
+
+[[evidence]]
+id = "E-0256"
+title = "Log persistente de min35 (kernel 0359, sweetsample_s=2; 394962 B, 300 s): los valores por defecto del S7 reproducen min34 (fps 10,3, GPU PRESENT, SoC máx. 45 C); la radio Wi-Fi NUNCA se inicia (herowifi=0): 'HEROLTE WIFI: en0 made … the radio comes later' y HakiosWLAN responde error 6 / REFUSED a canales, país y red actual; el muestreo denso (809 muestras de hilos de backboardd) apenas ve hilos ejecutando (13) aunque TOP da hasta 615 %"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min35-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "8272d87ef40e9ce6727a7f3ef3ee8174d6e8383b3f16ef9aa8e6bd72173cf317"
+size = 394962
+immutable = true
+note = "Observación del Director: 'el wifi se enciende pero no detecta redes, y puse mi red escribiéndola y nada, no la encontraba; por lo demás bien'. La directiva de análisis de la jefatura suponía herowifi=1; el log y la línea de arranque lo desmienten (herowifi por defecto 0 desde 0359, explícito 0 antes). TOP: backboardd media 128 % (máx. 615 %), SpringBoard 29 %, Preferences 13 %. El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0257"
+title = "Análisis de min35: confirmación de los valores por defecto de 0359, corrección de la premisa del Wi-Fi (radio nunca iniciada, faltan los ficheros del firmware y herowifi=1), límite del muestreador del kernel y plan de experimentos de fluidez y de Wi-Fi"
+kind = "document"
+path = "/home/pioxi/HackiOS/repos/wardevsa-ios-a5xelte-v2/docs/S7GE_MIN35_ANALYSIS.md"
+location = "repo"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "this-unit"
+sha256 = "685032aff17b86b79c69e181af86f99c2f400466d1755209df7b22f5a7730cea"
+size = 5955
+immutable = true
+note = "Sin datos privados. Acompaña a tools/herolte-wifi-extract.sh (probado solo con un adb falso: no se ha ejecutado contra el teléfono) y al parche 0360 (sin CI)."

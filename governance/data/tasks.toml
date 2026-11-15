@@ -682,3 +682,14 @@ evidence = ["E-0253"]
 authorization_ref = "D-0075"
 acceptance = "Run xnu en verde con 0359 aplicado y compilado; kernel descargado con SHA-256 como evidencia; min35 construida y verificada; firma de BOOT pedida con su SHA-256."
 resume = "gh workflow run xnu -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2; min35 = línea de min34 sin los 6 argumentos por defecto + sweetsample_s=2."
+
+[[task]]
+id = "T-0059"
+title = "Wi-Fi: extraer el firmware del propio teléfono (VENDOR en solo lectura), preparar el paquete DROP con wifi/ y una imagen con herowifi=1 (análisis en docs/S7GE_MIN35_ANALYSIS.md)"
+status = "ready"
+priority = 6
+owner = "ingeniero"
+depends_on = []
+actions = ["read-analysis", "docs-write", "pc-implementation", "local-commit"]
+acceptance = "Firmware extraído con SHA-256 (fuera de git), paquete DROP con wifi/ verificado en el PC, imagen herowifi=1 verificada; cada paso en el teléfono con su firma con hash; en el log 'HEROLTE WIFI' con enlace PCIe y firmware cargado y redes visibles en Ajustes."
+resume = "Pasos 1-4 de docs/S7GE_MIN35_ANALYSIS.md §5. network.txt lo escribe el Director (contraseña: nunca se registra)."
