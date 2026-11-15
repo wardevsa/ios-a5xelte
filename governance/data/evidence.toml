@@ -3864,3 +3864,33 @@ sha256 = "976b3994928fcfbb95ecf4e02ec3b09a8ae2354bead547f9dc82b57756d2dab7"
 size = 277
 immutable = true
 note = "D-0079; orden de E-0260 (drop-command.txt, SHA-256 e7a06328…bb07). Identificador de paquete 11097884673649695545. Solo la zona DROP; el volumen de iOS no se tocó. Pendiente: BOOT min36 con herowifi=1 (firma con hash) para que el kernel instale el paquete (herodrop por defecto) y levante el BCM4359; el paquete ya instalado en iOS desde min35/min33 permanece."
+
+[[evidence]]
+id = "E-0262"
+title = "Kernel con 0360 (tiempo de sistema en las líneas TOP) compilado en el CI (run 43731940530, commit 4961d26, éxito)"
+kind = "kernel"
+path = "/home/pioxi/HackiOS/builds/device-day/artifacts/kernel-0360-ci-43731940530/xnu-kernel-macos-15-intel/kernel.development.herolte"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "fe5ea19178621feee8a01420a09ba1a639c35b3dbd3aa4fc665b7c637caabc47"
+size = 17356112
+immutable = true
+note = "D-0078 / T-0060. Las líneas TOP pasan a ' nombre N% sM' (N = CPU total, M = la parte de sistema)."
+
+[[evidence]]
+id = "E-0263"
+title = "Imagen preparada: xnu-boot-v2-s7-min36-20261115 = línea de min35 sin sweetsample_s=2 y con herowifi=1, kernel 0360 (E-0262); línea de 536 caracteres; verificador independiente sin FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run20-min36/xnu-boot-v2-s7-min36-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "7c8363c5e376fa0d6e78663e9d8a20ee598ca629a50e8aeb7ee16886091ee2b6"
+size = 18620432
+immutable = true
+note = "Imagen de Wi-Fi: el único cambio de comportamiento respecto a min34 es herowifi=1 (el kernel espera wifi/fw.bin, levanta el BCM4359 por PCIe y carga el firmware) y el TOP con tiempo de sistema. Riesgo declarado: primer uso de GPIO, relojes, PMU y PCIe del chip en esta unidad; posible cuelgue o consumo. Vuelta atrás: min34. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run20-min36/xnu-boot-v2-s7-min36-20261115.verify-independent.txt."

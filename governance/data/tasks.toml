@@ -698,11 +698,12 @@ resume = "Pasos 1-4 de docs/S7GE_MIN35_ANALYSIS.md §5. network.txt lo escribe e
 [[task]]
 id = "T-0060"
 title = "Compilar en el CI el kernel con 0360 (tiempo de sistema en TOP): push de herolte-drop-v2 a mio y workflow xnu (D-0078)"
-status = "ready"
+status = "done"
 priority = 8
 owner = "ingeniero"
 depends_on = []
 actions = ["publish", "local-commit"]
+evidence = ["E-0262"]
 authorization_ref = "D-0078"
 acceptance = "Run xnu en verde con 0360 aplicado; kernel descargado con SHA-256 como evidencia; imágenes min36 (Wi-Fi) y de fluidez construidas y verificadas."
 resume = "gh workflow run xnu -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2; luego min36 = línea de min34 equivalente + herowifi=1."
