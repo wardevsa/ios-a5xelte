@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0069 — min19 (min18 con herolog=1) ESCRITA (D-0051, 20/20 de BOOT); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0070 — min20 (min19 con herogpu=1) ESCRITA (D-0052, 1 de la tanda nueva); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** E-0190: iOS llega a SpringBoard con herogpu=0. BOOT = `xnu-boot-v2-s7-min20-20261115.img` (sha256 `039b30dc…c82fb6`, E-0191/E-0192). Primera vez con la GPU Mali en esta unidad.
+- **Director:** `adb reboot`, dejar 5-10 min, volver a TWRP y avisar. **Ingeniero:** `python3 -I tools/herolte-log-pull.py adb OUT.txt`; mirar herolte_gpu (arranque, errores MMU/job), swaps de backboardd, si SpringBoard sale, y contar swaps/min. El log no va a git.
+- Restaurar BOOT: min19/min18/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0069 — min19 (min18 con herolog=1) ESCRITA (D-0051, 20/20 de BOOT); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** E-0187: launchd vivo y en bucle exec/EXIT; falta saber qué procesos y con qué código. BOOT = `xnu-boot-v2-s7-min19-20261115.img` (sha256 `4ab37c87…1e63`); EFS intacto (E-0189). **Contador de BOOT agotado (20/20):** otra escritura de BOOT exige decisión nueva.
 - **RESULTADO (E-0190):** log leído. iOS arranca: `Early boot complete`, configd, backboardd y SpringBoard lanzados; backboardd presenta cuadros en AppleCLCD. El "bucle" era arranque normal. Pendiente: ver por qué la pantalla muestra la consola y no la UI (¿flip del framebuffer de DECON?), salidas no cero (HorizonSetup ausente, driverkitd 9, IOMFB_FDR_Loader), relanzados de bluetoothd/fairplayd.H2 (7), y dejar correr más de 70 s.
 - Restaurar BOOT: min18 (E-0185/E-0186) o el original E-0009, cubierto por D-0051.

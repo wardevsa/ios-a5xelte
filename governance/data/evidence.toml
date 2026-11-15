@@ -2814,3 +2814,18 @@ sha256 = "039b30dc1bf4a5580339098ab15d5b565b526dd8a7b2734f1184a3b341c82fb6"
 size = 18620432
 immutable = true
 note = "Mismo kernel (E-0174), ADT y cargador que min19; la línea difiere SOLO en herogpu=0 -> herogpu=1 (diff). herolog=1 se mantiene para conservar el log si la GPU cuelga. Verificación independiente: /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run4-min20/xnu-boot-v2-s7-min20-20261115.verify-independent.txt."
+
+[[evidence]]
+id = "E-0192"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min20-20261115.img (min19 con herogpu=1) y leído de vuelta (sha256 039b30dc…c82fb6); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min20-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "abd4fa42b98df7ad6fe4bee364f500a8cf44ec8ead8e56dc83319d465c2d55a9"
+size = 723
+immutable = true
+note = "D-0052; hash registrado antes en E-0191. Primer intento. Observación: el hash de EFS que imprime la herramienta difiere entre sesiones (min18 cdb0036f…, min19 b860ecfa…, min20 335adf5a…); la comprobación es antes/después dentro de cada escritura y pasó, y entre sesiones el teléfono arrancó (modem/TWRP pueden modificar EFS por su cuenta). No se escribió EFS desde este equipo."
