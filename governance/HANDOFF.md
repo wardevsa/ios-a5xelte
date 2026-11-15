@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0073 — kernel 0353 (CI 43702827328) y min22 preparada, NO escrita; BOOT sigue con min21 (2026-11-15)
+## Relevo vigente: H-0074 — min22 (kernel 0353, miniatura FBPROBE) ESCRITA (D-0056); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min22-20261115.img` (sha256 `8bd3295b…dd4cea6`, E-0199/E-0200).
+- **Director:** `adb reboot`, 3-5 min, volver a TWRP. **Ingeniero:** `herolte-log-pull.py`; `grep -a "FBPROBE\|^FBP "` y leer las miniaturas (¿negro, bloqueo, fondo?; ¿off=1?).
+- Restaurar BOOT: min21/min20/min19/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0073 — kernel 0353 (CI 43702827328) y min22 preparada, NO escrita; BOOT sigue con min21 (2026-11-15)
 - **Tarea en curso: T-0012.** E-0197: min21 sin anillo, pantalla negra/apagada, teclas sin efecto. Display off = desvanecimiento por software (0079); on = repinta el último cuadro. Falta saber si los cuadros son negros: 0353 vuelca miniatura 32x64 (FBPROBE/FBP) al log.
 - **Imagen:** `xnu-boot-v2-s7-min22-20261115.img` sha256 `8bd3295b…91dd4cea6` (E-0199). Solo cambia el kernel respecto a min21.
 - **Siguiente:** firma del Director (decisión nueva: D-0054 nombra solo min21); `adb reboot`, 3-5 min, TWRP; `herolte-log-pull.py`; `grep FBPROBE/FBP` y leer las miniaturas.
