@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0067 — min17 (ufsrw=1 rootrw=1) ESCRITA (D-0049); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0068 — min18 (min17 + args de launchd del upstream) ESCRITA (D-0050, 19/20 de BOOT); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** E-0184: con la raíz iOS y ufsrw=1 rootrw=1 la raíz se monta, XNU lanza `/sbin/launchd` y lo mata `CS_KILLED` (panic + A5 XNU PANIC). BOOT = `xnu-boot-v2-s7-min18-20261115.img` (sha256 `cd8be9c5…d85e`); EFS intacto (E-0186). Queda UNA escritura de BOOT en la tanda D-0043/45/46/47/49/50 (20): la siguiente tanda necesitará una decisión nueva con su contador.
+- **Qué mirar (Director, tras `adb reboot`):** si desaparece el pánico de launchd; mensajes de `launchd`, `xpcproxy`, `dyld`, `libignition`, `Early boot complete`, SpringBoard...; o un panic nuevo (copiar literal). El anillo (tercio izquierdo) se mueve mucho: varias fotos.
+- Siguiente probable según resultado: si sigue CS_KILLED, mirar `kern_exec.c:7611` (condición del kill: firma del binario, ubc_cs_blob, `cs_enforcement`/`PE_i_can_has_debugger`), la caché de dyld de 16 KiB frente a páginas de 4 KiB (parche 0107 del A5XELTE) y el AMFI (0106) en este kernel.
+- Restaurar BOOT: min17 / min16 / original E-0009, cubierto por D-0050.
+
+## Relevo anterior: H-0067 — min17 (ufsrw=1 rootrw=1) ESCRITA (D-0049); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** E-0181: con la raíz iOS en USERDATA y ufsrw=0, XNU reconoce el HFS+ pero falla al inicializar el diario (`jnl: do_jnl_io: strategy err`, `journal_create: failed`). BOOT = `xnu-boot-v2-s7-min17-20261115.img` (sha256 `8c984503…19bd2`; min16 con `ufsrw=1 rootrw=1`); EFS intacto (E-0183). Escrituras de la tanda: 18/20.
 - **Qué mirar (Director, tras `adb reboot`):** que desaparezca `cannot mount root` y las líneas `jnl:`/`hfs: late jnl init`; después `calling VFS_ROOT`, mensajes de `launchd`/`xpc`, o un `A5 XNU PANIC`. Copiar literal; la línea de la marca blanca y 8-10 anteriores.
 - **Riesgo:** el kernel ahora puede escribir en USERDATA (solo ahí). Si algo corrompe la raíz: restaurar la imagen E-0179 con `tools/herolte-write-userdata.py` (nueva autorización, ~80 min) o las copias E-0124/E-0125.

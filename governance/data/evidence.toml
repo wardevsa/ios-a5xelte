@@ -2724,3 +2724,18 @@ sha256 = "cd8be9c5aa91a29debeab847ebed7063923d0b8ce1737b194df6892ea45bd85e"
 size = 18620432
 immutable = true
 note = "Mismo kernel bb042852b3a7e25587ddffe2dabee7f0a54aabda1d3ed50aa7712369b6ea8cf7 (E-0174), ADT y cargador que min17; la línea difiere SOLO en los tres argumentos añadidos (diff). Objetivo: evitar el CS_KILLED de launchd (E-0184) con los argumentos que usó el upstream en HEROLTE_PROGRESS.md; no se sabe si basta (la caché de dyld y las firmas son el siguiente obstáculo posible)."
+
+[[evidence]]
+id = "E-0186"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min18-20261115.img (min17 + unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1) y leído de vuelta (sha256 cd8be9c5…d85e); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min18-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "8b3b1af4bd13b21e449fa2ec8e6d64e782305d280f50aa2e4c09068795ad2fc9"
+size = 723
+immutable = true
+note = "Solo escritura y lectura de vuelta (D-0050; hash registrado antes en E-0185; kernel E-0174). El primer intento se cortó antes de escribir (adb dejó de ver el teléfono); el segundo escribió."
