@@ -2873,4 +2873,4 @@ device = "none"
 sha256 = "141a6d87d1ce977634d401eec9c470be235383052774332cdc5d52a7a8336a1e"
 size = 18620432
 immutable = true
-note = "Kernel, no cargador ni ADT iguales: el kernel es el nuevo (0352); ADT y cargador como min20. La línea difiere de min20 SOLO por heroring=0 y sweetfb_noconsole=1 (diff). herolog=1 y herogpu=1 se mantienen. El único FAIL del constructor es su expectativa fija herolog=0. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run5-min21/xnu-boot-v2-s7-min21-20261115.verify-independent.txt."
+note = "Kernel nuevo (0352, E-0194); ADT y cargador idénticos a min20. La línea difiere de min20 SOLO por heroring=0 y sweetfb_noconsole=1 (diff). herolog=1 y herogpu=1 se mantienen. El único FAIL del constructor es su expectativa fija herolog=0. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run5-min21/xnu-boot-v2-s7-min21-20261115.verify-independent.txt."
