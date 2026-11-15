@@ -2949,3 +2949,33 @@ sha256 = "cedfdfe843751e5293b99b5e024f76e41e44a6d1eb76c423d5c006098b8ccef7"
 size = 723
 immutable = true
 note = "D-0056; hash registrado antes en E-0199. Primer intento. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."
+
+[[evidence]]
+id = "E-0201"
+title = "Log persistente de min22 (kernel 0353, flush #11, 1747357 B) y observación del Director: el panel recibe cuadros 100 % negros; 9 miniaturas FBPROBE (presentes 1-12) son todo ceros salvo, en las 4 primeras, una columna residual en el borde derecho; off=0 en todas; pantalla apagada a los ~30 s, sin consola a la derecha"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min22-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "be744e0a8eaad2c9c709660fe28c59a9922e8ed73b01872f52188255d1fcdac7"
+size = 1747357
+immutable = true
+note = "Medida directa (L2): en 9 de 9 sondas el contenido del panel tras present() es negro (copied=10962000 B de superficie 1125x2436 todo ceros); 'off' no estaba activo, así que no es el desvanecimiento. Observación del Director: 'a los 30 segundos pantalla apagada, no ha habido consola en la derecha y poco más'. Las sondas solo cubren los primeros 12 presents (antes del display off de backboardd) y no se llegó a present 25. Lectura de HEROLTE_PROGRESS.md (upstream, L4h): backboardd rasteriza con el renderer de CPU de QuartzCore, el primer cuadro tarda minutos, y backboardd pide display off justo tras el primer swap; el argumento a5fb_keep_on=1 (SweetFramebuffer.cpp, bajo A5XELTE) ignora ese display off salvo tras pulsar Power; a5fb_noconsole es el nombre correcto bajo A5XELTE (min21/min22 usaron sweetfb_noconsole, que bajo A5XELTE no se lee). El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0202"
+title = "Imagen preparada: xnu-boot-v2-s7-min23-20261115 = min22 + a5fb_noconsole=1 a5fb_keep_on=1 (mismo kernel 0353, E-0198); 46 PASS del verificador independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run7-min23/xnu-boot-v2-s7-min23-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "595a146fe5da285c2c89f4f20cb95cec789061f424ec7dea85e818f4791898f2"
+size = 18620432
+immutable = true
+note = "Solo cambia la línea de arranque (diff: +a5fb_noconsole=1 +a5fb_keep_on=1); kernel, ADT y cargador idénticos a min22. El único FAIL del constructor es su expectativa fija herolog=0. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run7-min23/xnu-boot-v2-s7-min23-20261115.verify-independent.txt."

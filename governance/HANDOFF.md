@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0074 — min22 (kernel 0353, miniatura FBPROBE) ESCRITA (D-0056); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0075 — min22 medida: el panel recibe negro; min23 (a5fb_keep_on=1 a5fb_noconsole=1) preparada, NO escrita (2026-11-15)
+- **Tarea en curso: T-0012.** E-0201: 9/9 miniaturas negras, off=0: el contenido presentado es negro (no el fundido). Hipótesis (upstream, L4h): primer cuadro del renderer de CPU tarda minutos y backboardd pide display off tras el primer swap; `a5fb_keep_on=1` lo ignora. Además `a5fb_noconsole` (nombre bajo A5XELTE) en vez de `sweetfb_noconsole`.
+- **Imagen:** `xnu-boot-v2-s7-min23-20261115.img` sha256 `595a146f…1898f2` (E-0202): min22 + `a5fb_noconsole=1 a5fb_keep_on=1`. Mismo kernel 0353.
+- **Siguiente:** firma del Director; `adb reboot`, 6-8 min (el primer cuadro puede tardar), TWRP; `herolte-log-pull.py`; leer FBPROBE de present 25, 50, 75… ¿aparece contenido?
+- Restaurar BOOT: min22/min21/…/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0074 — min22 (kernel 0353, miniatura FBPROBE) ESCRITA (D-0056); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min22-20261115.img` (sha256 `8bd3295b…dd4cea6`, E-0199/E-0200).
 - **Director:** `adb reboot`, 3-5 min, volver a TWRP. **Ingeniero:** `herolte-log-pull.py`; `grep -a "FBPROBE\|^FBP "` y leer las miniaturas (¿negro, bloqueo, fondo?; ¿off=1?).
 - Restaurar BOOT: min21/min20/min19/original E-0009 (cada escritura exige firma).
