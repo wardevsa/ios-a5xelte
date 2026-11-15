@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0120 — min37 y paquete DROP 4 de la actualización grande preparados, NO escritos (2026-11-15)
+## Relevo vigente: H-0121 — actualización grande n.º 1 ESCRITA: paquete DROP 4 (E-0271) y min37 (E-0272); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012 / T-0056.** BOOT = `xnu-boot-v2-s7-min37-20261115.img` (sha256 `7db96c99…520d`). Zona DROP con el paquete 4.
+- **Director:** DOS arranques: (1) `adb reboot`, 3-5 min con Wi-Fi, probar la app HeroReddit y mirar el fondo; apagar desde iOS (-> TWRP); (2) volver a arrancar (el fondo propio entra en el 2.º arranque), mirar fondo/fluidez, apagar. **Ingeniero:** pull del log tras CADA arranque (`min37a-herolog.txt`, `min37b-herolog.txt`): `herolte-log-report.py`; `grep -a 'TOPMEM\|files.remove\|herosb: picture\|accepted\|app HeroReddit\|SPAWN FAILED'`.
+- Vuelta atrás: min36 (E-0264); app: `apps.remove`; fondo: `wallpaper.off`.
+
+## Relevo anterior: H-0120 — min37 y paquete DROP 4 de la actualización grande preparados, NO escritos (2026-11-15)
 - **Tarea en curso: T-0012 / T-0056.** Kernel 0362 y hero-run con files.remove compilados (E-0268). E-0269 `xnu-boot-v2-s7-min37-20261115.img` sha256 `7db96c99…7c520d` (597 caracteres). E-0270 paquete 4: command.txt `0cac981c…9b8109`, manifest `c588a0bb…39fbe8`.
 - **Siguiente (rojo, con hash):** (1) escribir la zona DROP con `~/HackiOS/builds/device-day/drop-mega-1/command.txt`; (2) BOOT min37; (3) arrancar DOS veces (el fondo entra en la 2.ª); (4) log: TOPMEM, `hero-run: files.remove`, `herosb: picture`, `apple80211 … accepted`, fps con a5fb_hz=30, SPAWN FAILED de los 4 procesos nuevos, app HeroReddit.
 - Vuelta atrás: min36 (E-0264); la app con `apps.remove`; el fondo con `wallpaper.off`.

@@ -3984,3 +3984,33 @@ sha256 = "c588a0bb0d36cf90af61828fd84b3337b4c1639fe4cd778522d49f8d8739fbe8"
 size = 614
 immutable = true
 note = "Orden exacta en /home/pioxi/HackiOS/builds/device-day/drop-mega-1/command.txt (SHA-256 0cac981c33f338913625f94e5dcb841d299bda4abdf3c4894441d8fb759b8109). wallpaper.png está en /home/pioxi/HackiOS/builds/device-day/drop-mega-1 (no va a git). No reinstala librerías ni el firmware Wi-Fi (paquetes 2 y 3). Efecto: hero-run borra wallpaper.off al arrancar y herosb pone el fondo desde el 2.º arranque; la app se registra con 'hero-run: app'."
+
+[[evidence]]
+id = "E-0271"
+title = "Zona DROP de USERDATA escrita con el paquete 4 (generación 4: hero-run nuevo, files.remove, wallpaper.png y la app HeroReddit; 552960 B) en el bloque 5686859 (byte 23293374464), verificado ('-> verified'); USERDATA no estaba montado"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/drop-mega-1-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "efe3983314ad83a3628c47df703149c57aa19027681124a07585a87d232b0e06"
+size = 345
+immutable = true
+note = "D-0082; orden de E-0270 (command.txt, SHA-256 0cac981c…9b8109). Identificador de paquete 5681031993828881347. Solo la zona DROP; el volumen de iOS no se tocó. Primero zona, luego BOOT."
+
+[[evidence]]
+id = "E-0272"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min37-20261115.img (kernel 0362, a5fb_hz=30, heroquantum=500, heronoexec ampliado) y leído de vuelta (sha256 7db96c99…520d); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min37-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "24e2244935987513dcaac96008a2324a6de97c91f486ca6c6b1f2b9398b8bb50"
+size = 724
+immutable = true
+note = "D-0082; hash registrado antes en E-0269. Primer intento, tras la escritura de la zona (E-0271)."
