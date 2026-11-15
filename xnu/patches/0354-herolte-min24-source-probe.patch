@@ -1,0 +1,67 @@
+diag(min24): log what the SOURCE surface holds at each probed present(), before and after cleaning the kernel's cache lines
+
+min23 (E-0204): 750 presents over 7 minutes at ~10 fps, all black on the panel, while backboardd and SpringBoard are alive and idle. Two explanations remain: the composited surface really is black, or the kernel reads stale lines of a write-combined surface. For the first 12 presents and every 25th (at most 40), present() scans every 7th pixel of every 3rd row of the source surface (non-zero RGB count, non-zero alpha count, OR of all pixels, first non-zero pixel), logs it as FBSRC pass 0, calls flush_dcache64 on the surface range, scans again (pass 1) and logs it. If pass 1 finds pixels pass 0 did not, it is a cache-coherency problem; if both are zero, the renderer drew nothing. IOLog and a cache clean of the surface only; no change otherwise.
+
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -56,6 +56,8 @@
+ #include <kern/thread.h>
+ #include <sys/proc.h>
+ 
++extern "C" void flush_dcache64(addr64_t addr, unsigned count, int phys);   /* osfmk/arm/caches_internal.h; as IOLib.cpp uses it */
++
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ static void sweet_fb_copy_init(void);
+ /* No CPU copies to the panel before this mach time (herolte_gpu.c). */
+@@ -851,6 +853,9 @@
+ {
+ 	uint32_t mask = get32(rec, 0x104);
+ 	uint64_t copied = 0;
++	static uint32_t src_presents, src_probes;
++	src_presents++;
++	bool src_due = src_probes < 40 && (src_presents <= 12 || src_presents % 25 == 0);
+ 
+ 
+ 	if (!fConsolePaused) {
+@@ -967,6 +972,41 @@
+ 			}
+ #endif
+ 		}
++		if (src_due && src != 0 && bpe == 4) {
++			/* min23 probe: what the SOURCE surface holds (every 7th pixel of every 3rd row), to tell a black frame
++			 * from a bad copy; then once more after cleaning and invalidating the kernel's cache lines. */
++			uint32_t scan_w = (uint32_t)s->width, scan_h = (uint32_t)s->height;
++			for (int pass = 0; pass < 2; pass++) {
++				uint32_t nz_rgb = 0, nz_a = 0, total = 0, fx = 0, fy = 0, fpx = 0, orv = 0;
++				for (uint32_t y = 0; y < scan_h; y += 3) {
++					const volatile uint32_t *row = (const volatile uint32_t *)(src + s->offset + (uint64_t)y * s->bytesPerRow);
++					for (uint32_t x = 0; x < scan_w; x += 7) {
++						uint32_t px = row[x];
++						total++;
++						orv |= px;
++						if ((px & 0x00ffffffu) != 0) {
++							if (nz_rgb == 0) {
++								fx = x;
++								fy = y;
++								fpx = px;
++							}
++							nz_rgb++;
++						}
++						if ((px >> 24) != 0) {
++							nz_a++;
++						}
++					}
++				}
++				IOLog("FBSRC %u pass %d id %u %ux%u bpr %u total %u nz_rgb %u nz_a %u or 0x%08x first %u,%u 0x%08x\n",
++				    src_probes + 1, pass, s->id, scan_w, scan_h, s->bytesPerRow, total, nz_rgb, nz_a, orv, fx, fy, fpx);
++				if (pass == 0) {
++					flush_dcache64((addr64_t)(src + s->offset), (unsigned)((uint64_t)scan_h * s->bytesPerRow), FALSE);
++				}
++			}
++			if (layer == 0) {
++				src_probes++;
++			}
++		}
+ 		s->release();
+ 	}
+ 	/*
