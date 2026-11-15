@@ -707,3 +707,15 @@ evidence = ["E-0262"]
 authorization_ref = "D-0078"
 acceptance = "Run xnu en verde con 0360 aplicado; kernel descargado con SHA-256 como evidencia; imágenes min36 (Wi-Fi) y de fluidez construidas y verificadas."
 resume = "gh workflow run xnu -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2; luego min36 = línea de min34 equivalente + herowifi=1."
+
+[[task]]
+id = "T-0061"
+title = "Actualización grande n.º 1: CI de kernel (0361, 0362) y de mesa-ios (hero-run con files.remove), luego min37 y el paquete DROP 4 (D-0081)"
+status = "ready"
+priority = 8
+owner = "ingeniero"
+depends_on = []
+actions = ["publish", "local-commit"]
+authorization_ref = "D-0081"
+acceptance = "Dos runs en verde (xnu y mesa-ios); artefactos descargados con SHA-256 como evidencia; min37 y el paquete 4 construidos y verificados en el PC; firmas de BOOT y zona DROP pedidas con hash."
+resume = "gh workflow run xnu y mesa-ios -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2; plan en docs/S7GE_MEGA_UPDATE_1.md."
