@@ -3939,3 +3939,48 @@ sha256 = "8acc1b7dd46e30de06891485e77616c60654ffd6ac99d86008aa70238cc6967a"
 size = 2533
 immutable = true
 note = "Pedida por el Director. Parches 0361 y 0362 y hero-run con files.remove commiteados en local, sin CI. El paquete (generación 4) y la imagen min37 se construyen tras los CI. Dry-run del empaquetador con el hero-run anterior: 10 entradas, 552960 B, HeroReddit aceptada (Mach-O arm64 sin cifrar)."
+
+[[evidence]]
+id = "E-0268"
+title = "Kernel con 0361 (TOPMEM) y 0362 (Wi-Fi acepta COUNTRY_CODE y selector 383) compilado en el CI (run 43734698003, commit c833e11, éxito); artefacto mesa-ios (run 43734697684, éxito) con hero-run con files.remove (2f925279…2d4)"
+kind = "kernel"
+path = "/home/pioxi/HackiOS/builds/device-day/artifacts/kernel-0362-ci-43734698003/xnu-kernel-macos-15-intel/kernel.development.herolte"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "e1b58eeadc60148892848fd4c0eae6ad0f76e8856fa4ee3f1bed5f5da87920a8"
+size = 17356176
+immutable = true
+note = "D-0081 / T-0061. La cadena TOPMEM está en el kernel y files.remove en hero-run (strings). SHA256SUMS del artefacto mesa-ios: /home/pioxi/HackiOS/builds/device-day/artifacts/mesa-ios-c833e11-43734697684/mesa-ios/SHA256SUMS (sha256 52725da60a4b290faf2b7d408146a36a0e3accd6829048a5ac320c00b7c68050); libhakiosgl cambió de hash al recompilar (56019b29… frente a 5136933d…) pero el paquete 4 NO reinstala librerías: solo autorun, files.remove, wallpaper.png y la app. El run manual de mesa-ios 43734700824 se canceló por duplicado: el push ya lanzó el 43734697684."
+
+[[evidence]]
+id = "E-0269"
+title = "Imagen preparada: xnu-boot-v2-s7-min37-20261115 = min36 con a5fb_hz=30, heroquantum=500 y heronoexec += identityservicesd,parsecd,photoanalysisd,wifip2pd, kernel 0362 (E-0268); línea de 597 caracteres; 57 PASS del verificador independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run21-min37/xnu-boot-v2-s7-min37-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "7db96c99ac7d409701332bcac548970f0119fcbc5e0b73c72a215e6b7d7c520d"
+size = 18620432
+immutable = true
+note = "Cambios de la actualización grande n.º 1 en la línea de arranque (diff respecto a min36: a5fb_hz 60->30, heronoexec con 4 procesos más, +heroquantum=500) y los dos parches de kernel. mediaanalysisd NO se añade a heronoexec porque ya está en disabled.list. Con 597 caracteres cabe en el límite de 607. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run21-min37/xnu-boot-v2-s7-min37-20261115.verify-independent.txt. Vuelta atrás: min36 (E-0264)."
+
+[[evidence]]
+id = "E-0270"
+title = "Paquete DROP 4 preparado (generación 4, 10 entradas, 552960 B): autorun = hero-run nuevo con files.remove, files.remove (wallpaper.off), wallpaper.png (degradado 750x1334 generado) y la app HeroReddit; el empaquetador lo acepta (dry-run sin adb); NO escrito en el teléfono"
+kind = "document"
+path = "/home/pioxi/HackiOS/builds/device-day/drop-mega-1/manifest.txt"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "c588a0bb0d36cf90af61828fd84b3337b4c1639fe4cd778522d49f8d8739fbe8"
+size = 614
+immutable = true
+note = "Orden exacta en /home/pioxi/HackiOS/builds/device-day/drop-mega-1/command.txt (SHA-256 0cac981c33f338913625f94e5dcb841d299bda4abdf3c4894441d8fb759b8109). wallpaper.png está en /home/pioxi/HackiOS/builds/device-day/drop-mega-1 (no va a git). No reinstala librerías ni el firmware Wi-Fi (paquetes 2 y 3). Efecto: hero-run borra wallpaper.off al arrancar y herosb pone el fondo desde el 2.º arranque; la app se registra con 'hero-run: app'."

@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0119 — actualización grande n.º 1 preparada en el PC (13 cambios); falta CI de kernel y de mesa-ios y las firmas (2026-11-15)
+## Relevo vigente: H-0120 — min37 y paquete DROP 4 de la actualización grande preparados, NO escritos (2026-11-15)
+- **Tarea en curso: T-0012 / T-0056.** Kernel 0362 y hero-run con files.remove compilados (E-0268). E-0269 `xnu-boot-v2-s7-min37-20261115.img` sha256 `7db96c99…7c520d` (597 caracteres). E-0270 paquete 4: command.txt `0cac981c…9b8109`, manifest `c588a0bb…39fbe8`.
+- **Siguiente (rojo, con hash):** (1) escribir la zona DROP con `~/HackiOS/builds/device-day/drop-mega-1/command.txt`; (2) BOOT min37; (3) arrancar DOS veces (el fondo entra en la 2.ª); (4) log: TOPMEM, `hero-run: files.remove`, `herosb: picture`, `apple80211 … accepted`, fps con a5fb_hz=30, SPAWN FAILED de los 4 procesos nuevos, app HeroReddit.
+- Vuelta atrás: min36 (E-0264); la app con `apps.remove`; el fondo con `wallpaper.off`.
+
+## Relevo anterior: H-0119 — actualización grande n.º 1 preparada en el PC (13 cambios); falta CI de kernel y de mesa-ios y las firmas (2026-11-15)
 - **Tarea en curso: T-0012 / T-0056.** Plan en `docs/S7GE_MEGA_UPDATE_1.md` (E-0267). Parches 0361 (TOPMEM) y 0362 (Wi-Fi acepta COUNTRY_CODE y 383) y `hero-run.c` con `files.remove` commiteados, sin CI (commit 292d5a4). Fondo `~/HackiOS/builds/device-day/drop-mega-1/wallpaper.png` (generado, 750x1334) y `files.remove` (`wallpaper.off`).
 - **Siguiente:** firma de push + CI xnu (kernel) + CI mesa-ios (hero-run); luego construir min37 (min36 con `a5fb_hz=30 heroquantum=500` y heronoexec += identityservicesd,parsecd,mediaanalysisd,photoanalysisd,wifip2pd) y el paquete 4 (autorun nuevo, files.remove, wallpaper.png, app=HeroReddit); firmas de BOOT y de zona DROP con hash; probar en DOS arranques (el fondo entra en el segundo).
 - Vuelta atrás: min36 (E-0264) y paquete con hero-run anterior.

@@ -56,7 +56,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 | T-0053 | done | 8 | ingeniero | Compilar en el CI el kernel con 0356 corregido, 0357 y 0358: push de herolte-drop-v2 a mio y workflow xnu (D-0073) | — | C rojo | — |
 | T-0058 | done | 8 | ingeniero | Compilar en el CI el kernel con 0359 (valores por defecto del S7): push de herolte-drop-v2 a mio y workflow xnu (D-0075); después construir min35 | — | C rojo | — |
 | T-0060 | done | 8 | ingeniero | Compilar en el CI el kernel con 0360 (tiempo de sistema en TOP): push de herolte-drop-v2 a mio y workflow xnu (D-0078) | — | C rojo | — |
-| T-0061 | ready | 8 | ingeniero | Actualización grande n.º 1: CI de kernel (0361, 0362) y de mesa-ios (hero-run con files.remove), luego min37 y el paquete DROP 4 (D-0081) | — | C rojo | — |
+| T-0061 | done | 8 | ingeniero | Actualización grande n.º 1: CI de kernel (0361, 0362) y de mesa-ios (hero-run con files.remove), luego min37 y el paquete DROP 4 (D-0081) | — | C rojo | — |
 | T-0012 | in_progress | 9 | ingeniero | Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP | T-0013 | C rojo | — |
 | T-0013 | done | 9 | director | Decidir el cargador de las pruebas: el de clang (conveniencia) o compilar con el GCC aarch64 de Arm | — | A verde | — |
 | T-0016 | done | 9 | ingeniero | Aplicar la renumeración de parches y fusionar con origin/herolte (si el jefe técnico aprueba D-0008) | T-0009 | B amarillo | — |
