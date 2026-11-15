@@ -506,17 +506,18 @@ priority = 8
 owner = "ingeniero"
 depends_on = ["T-0045"]
 actions = ["device-read", "device-write-userdata"]
-blocked_on = "Falta la imagen final (T-0045) y la autorización roja del Director con su ruta y SHA-256 (device-write-userdata; BORRA Android)"
+blocked_on = "Falta la autorización roja del Director con su ruta y SHA-256 (device-write-userdata; BORRA Android)"
 acceptance = "El hash del prefijo de USERDATA leído en el teléfono es el de la imagen autorizada; evidencia del dispositivo con hash; copias E-0124/E-0125 como vuelta atrás."
 requires_decisions = []
 
 [[task]]
 id = "T-0045"
 title = "Preparar la imagen final de la raíz iOS: copia de lab-full-xnu, montaje HFS+ rw, tuning herolte, fsck, firma y hash (necesita sudo del Director)"
-status = "ready"
+status = "done"
 priority = 8
 owner = "ingeniero"
 depends_on = []
 actions = ["privileged-or-mount", "heavy-compile", "local-commit"]
+evidence = ["E-0179"]
 acceptance = "Imagen con tamaño ≤ 23 431 790 592 B, firma HX en 1024, fsck -n limpio, SHA-256 registrado como evidencia; el tuning ejecutado sobre el montaje real sin errores."
 resume = "docs/S7GE_IOS_ROOT_PLAN.md F0-F1. sudo lo teclea el Director (sudo pide contraseña en este PC)."

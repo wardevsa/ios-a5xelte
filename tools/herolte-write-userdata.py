@@ -82,7 +82,7 @@ def main(argv):
     ap.add_argument('image'); ap.add_argument('sha256'); ap.add_argument('--execute', action='store_true')
     ap.add_argument('--task', default='T-0044'); ap.add_argument('--chunk-mib', type=int, default=64)
     ap.add_argument('--state'); ap.add_argument('--port', type=int, default=5556); ap.add_argument('--retries', type=int, default=4)
-    ap.add_argument('--dry-transport', action='store_true'); ap.add_argument('--no-gate', action='store_true', help='solo pruebas con adb falso')
+    ap.add_argument('--dry-transport', action='store_true'); ap.add_argument('--max-chunks', type=int, default=0, help='solo con --dry-transport: enviar solo los N primeros trozos'); ap.add_argument('--no-gate', action='store_true', help='solo pruebas con adb falso')
     a = ap.parse_args(argv)
     img = a.image
     if not os.path.isfile(img) or os.path.islink(img): print('ABORTA: la imagen no existe o es un symlink'); return 2
@@ -101,7 +101,8 @@ def main(argv):
     print('USERDATA -> %s, %d B (esperado %s, %d B)' % (link, psize, EXPECT_BLOCK, EXPECT_SIZE))
     if not link.endswith('/' + EXPECT_BLOCK) or psize != EXPECT_SIZE: print('ABORTA: la partición no es la esperada'); return 3
     if size > psize: print('ABORTA: la imagen no cabe'); return 3
-    if EXPECT_BLOCK in mounts or ' /data ' in mounts: print('ABORTA: USERDATA/data está montada en el teléfono'); return 3
+    if (EXPECT_BLOCK in mounts or ' /data ' in mounts) and not a.dry_transport: print('ABORTA: USERDATA/data está montada en el teléfono (desmontar /sdcard y /data en TWRP antes de escribir)'); return 3
+    if EXPECT_BLOCK in mounts: print('aviso: USERDATA está montada en TWRP (/data, /sdcard); es una prueba de transporte, no se escribe el disco')
     chunk = a.chunk_mib * 1048576 // UNIT; units = size // UNIT; n = (units + chunk - 1) // chunk
     print('plan: %d trozos de %d MiB hacia %s%s' % (n, a.chunk_mib, 'ESTO NO ES UNA PRUEBA: ' if a.execute and not a.dry_transport else '', '/dev/null (prueba del transporte)' if a.dry_transport else DEV))
     if not a.execute: print('ENSAYO: no se escribe nada. Con --execute y la autorización registrada se escribiría.'); return 0
@@ -118,6 +119,7 @@ def main(argv):
     with open(img, 'rb') as f:
         for i in range(n):
             if str(i) in state['done']: continue
+            if a.dry_transport and a.max_chunks and i >= a.max_chunks: break
             skip = i * chunk; count = min(chunk, units - skip); f.seek(skip * UNIT); data = f.read(count * UNIT); want = hashlib.sha256(data).hexdigest()
             ok = False
             for attempt in range(a.retries):
@@ -131,7 +133,7 @@ def main(argv):
             state['done'][str(i)] = want; json.dump(state, open(state_path + '.tmp', 'w')); os.replace(state_path + '.tmp', state_path)
             moved += count * UNIT
             if i % 10 == 0 or i == n - 1: print('trozo %d/%d  %.1f MB/s' % (i + 1, n, moved / 1e6 / max(time.time() - t0, 1e-6)), flush=True)
-    if a.dry_transport: print('OK transporte: %d trozos enviados a /dev/null' % n); return 0
+    if a.dry_transport: print('OK transporte: %d trozos enviados a /dev/null' % len(state['done'])); return 0
     mb = 1048576
     final = sh('dd if=%s bs=%d count=%d 2>/dev/null | sha256sum' % (DEV, mb if size % mb == 0 else UNIT, size // mb if size % mb == 0 else size // UNIT), timeout=3600).split()
     if not final or final[0] != a.sha256: print('FALLA: el hash del prefijo de USERDATA (%s) no es el de la imagen' % (final[0] if final else '?')); return 7

@@ -2619,3 +2619,18 @@ sha256 = "7eaea72a7e10b3bfb24a65bff7fe05c51e6e3a813e6a5bb1816178440e82d2e0"
 size = 610
 immutable = true
 note = "Comprobaciones previas del plan docs/S7GE_IOS_ROOT_PLAN.md; solo lectura. La imagen no se ha montado ni tuneado todavía (F1 necesita sudo)."
+
+[[evidence]]
+id = "E-0179"
+title = "Imagen final de la raíz iOS para el S7: ios-root-herolte-20261115.img (HFSX 20 GiB, lab-full-xnu + tuning HEROLTE build 20H392): fsck limpio antes y después, firma HX, sha256 8c448c05…587a"
+kind = "image"
+path = "/media/pioxi/F20C31440C31055F/IOS-S7-work/ios-root-herolte-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "8c448c055df4bb880b0c48c10ddb88d2b9af3a5b699bd96ae06d60f7b528587a"
+size = 21474836480
+immutable = true
+note = "Salida de tools/herolte-ios-root-f1.sh (ejecutado por el Director con sudo, 07:46-07:49): hash de origen 747d0245… comprobado, copia idéntica, fsck.hfsplus -n OK, tuning completo (CommCenter eliminado de launchd.plist, añadido com.herolte.autorun), fsck OK, firma 4858 (HX), cabe en USERDATA (23 431 790 592 B). NO escrita en el teléfono. Comprobación de contenido con montaje ro: tools/herolte-ios-root-verify-ro.sh (pendiente)."
