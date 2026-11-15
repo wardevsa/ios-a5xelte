@@ -17,6 +17,7 @@
 | Fallos de userland: `assetsd`/`PhotosFileProvider`/`fileproviderd` abortan (excepción sin capturar), Messages cae en CoreImage (puntero nulo, falta Metal), About crashea, Phone en blanco, fondo negro, «Sign in to your iPad» | E-0204, E-0220, E-0230, `docs/S7GE_USERLAND_FALLOS.md` | L2 / L0 |
 | Memoria libre baja con el uso (477 -> 53-72 MB en minutos) | E-0220, E-0232, log min32 | L2 |
 | Copias del teléfono (BOOT original E-0009, EFS, RECOVERY, SYSTEM, USERDATA Android) verificadas; USERDATA Android BORRADO por la escritura de la raíz iOS (D-0048) | E-0123, E-0124, E-0125 | L2 |
+| Imágenes históricas conservadas: la primera candidata de solo lectura (`26a39560…1d29`, E-0001) y la serie min1…min33 con su SHA-256 en `EVIDENCE.md` (E-0001…E-0242); el BOOT original de Samsung es E-0009 (`adc519d0…3348`) | E-0001, E-0009 | L2 |
 | Gobierno: decisiones D-0001..D-0071, evidencias hasta E-0242; cada escritura de BOOT/USERDATA lleva firma con SHA-256 del Director | `DECISIONS.md`, `EVIDENCE.md` | L2 |
 
 ## 3. Hipótesis (no demostradas)
