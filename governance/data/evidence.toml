@@ -3594,3 +3594,18 @@ sha256 = "c380dc871f47dc3c163da250b3964efe3af1c46b63518410a7b87c1c2e1a3d33"
 size = 407671
 immutable = true
 note = "Medido: hero-run: BTAudioHALPlugin movido; 'LS database: 2 files removed in 8 s; the NEXT boot has it made anew'; 'MobileGestalt cache: 0 removed' (no había caché); wallpapers 750x1334 (9 bundles); 28 trabajos en la lista de desactivados; fps medio 6,7 (16 muestras), SoC máx. 38 C, Mongoose 2600 MHz, GPU 650 MHz; TOP: lsd 84-140 % (reconstrucción de LaunchServices), usermanagerd 41-55 %, containermanager 23-32 %; 145 SPAWN FAILED = los 9 daemons de heronoexec (esperado); sin 'HEROLTE UFS' de error (las 3 líneas ocs 0x7 son del arranque, LUN 208). Observación del Director: 'adb reboot; tocando se congeló: al entrar en Ajustes -> Privacidad y seguridad, salí un poco lag y al buscar en la biblioteca (search library) se congeló'. El log termina en la línea de TOP tras toques en (970..1074, 1050..1250): congelación del sistema entero sin texto de pánico; causa NO conocida (candidatas: GPU con la capa GL, estancamiento de E/S de UFS, carga de lsd). El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0244"
+title = "Log persistente del 2.º arranque de min33 (herogl=1 + paquete real 1; flush hasta 420 s, 620352 B): sin congelación; el Director ve iOS con apps que cargan o se cierran (ya no en blanco), Privacidad y seguridad y About funcionan, el teléfono se presenta como iPhone X con 21 GB de capacidad y 8,63 GB libres; el apagado desde SpringBoard cierra servicios y desmonta los discos hasta 'CPU halted' pero el teléfono no se apaga (launchd al 200 %, pantalla negra con rueda lenta) y hay que forzarlo"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min33b-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "a6163aefef90aa69e5721cca1869be46d4dae213335f40541bc5cb16e383d8ad"
+size = 620352
+immutable = true
+note = "Medido: vida 420 s; memoria libre mínima 181 MB (3029 MB al final tras matar procesos); fps medio 8,5 (máx 20,4), copia por cuadro 6,1 ms; Mongoose 2600 MHz, GPU 650 MHz; SoC máx 47 C (39 al final); 62 líneas hero-run (28 trabajos desactivados, procesos a segundo plano); 'HEROLTE GL: backboardd launch 1 (pid 56): EAGL shim inserted (herogl=1)'; crashes: assetsd x5, mediaserverd, MobileSMS, PhotosFileProvider, MobileSlideShow; 'System shutdown initiated by: SpringBoard[27]' -> teardown de launchd -> 'syncing disks', 'vfs_unmountall', 'CPU halted' en 3-4 s de reloj de launchd y después 'TOP 5s: launchd 200 %' hasta el final del log. Observación del Director: 'mucho mejor, ya no hay apps en blanco, o cargan o crashean; privacy and security ahora sí funciona y About también; tenemos un iPhone X, 21 GB de capacidad y 8,63 libres; shutdown tarda mucho, pantalla negra con la rueda de pensando que se mueve muy poco; fuerzo el apagado'. El 1.er arranque (E-0243) se congeló mientras lsd reconstruía LaunchServices; en este 2.º arranque no hubo congelación (la hipótesis de la reconstrucción gana peso, sin probar). El log contiene identificadores: NO va a git."

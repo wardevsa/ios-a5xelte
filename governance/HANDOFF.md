@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0105 — min33 + paquete real 1: DROP y hero-run OK, capa GL insertada en backboardd; congelación a los ~160 s tocando Ajustes (2026-11-15)
+## Relevo vigente: H-0106 — min33 + paquete real 1 FUNCIONA (2.º arranque sin congelación); falta apagado real: parche 0356 (herohalt) escrito, sin CI (2026-11-15)
+- **Tarea en curso: T-0012.** E-0244: apps ya no en blanco, Privacidad y seguridad y About funcionan, iPhone X 21 GB (8,63 libres), GL activo en backboardd. El 1.er arranque se congeló con lsd reconstruyendo LaunchServices; el 2.º no.
+- **Apagado:** SpringBoard apaga, launchd cierra, discos desmontados, 'CPU halted', pero el teléfono no se apaga (no hay power-off en el kernel; launchd 200 %). `xnu/patches/0356-herolte-halt-restart.patch` (commit fd84920): `herohalt=1` reinicia (halt -> recovery/TWRP, restart -> normal) por SWRESET del PMU (como herotwrp); imprime PS_HOLD_CONTROL para añadir un power-off real luego. SIN CI ni imagen todavía.
+- **Siguiente:** (a) firma de push+CI de 0356 (rojo) -> kernel nuevo -> `min34` = min33 + `herohalt=1` (firma de BOOT); (b) seguir con userland: assetsd (5 abortos), MobileSMS (Metal), MediaServer; (c) fps 8,5 medios: mirar CPU de lsd/containermanager y A53/Mongoose.
+- Vuelta atrás: min33 es la base buena; min32 sin GL.
+
+## Relevo anterior: H-0105 — min33 + paquete real 1: DROP y hero-run OK, capa GL insertada en backboardd; congelación a los ~160 s tocando Ajustes (2026-11-15)
 - **Tarea en curso: T-0012.** E-0243. Éxito parcial: paquete 2 instalado, hero-run corre, `EAGL shim inserted (herogl=1)`. Fallo: el sistema se congela (sin pánico, sin errores de UFS, log termina). Candidatas: GPU con la capa GL, E/S de UFS, carga de lsd (130 %, reconstrucción de LaunchServices).
 - **Siguiente (sin escribir):** el Director reinicia min33 otra vez (2.º arranque con la base LS ya recreada), repite Ajustes -> Privacidad y seguridad y la búsqueda de biblioteca, y dice a qué hora/qué toque se congela. **Si se repite:** A/B con min32 (sin herogl; mismo paquete) con firma de BOOT; si min32 no se congela, la capa GL/GPU es la causa.
 - Si no se congela esta vez: era la reconstrucción de LaunchServices; seguir midiendo fps y fondo.
