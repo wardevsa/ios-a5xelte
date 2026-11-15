@@ -1,0 +1,40 @@
+diag(min21): boot-arg heroring=0 stops the 0351 kprintf ring so the GUI is not painted over
+
+min20 (E-0193): SpringBoard is alive and backboardd swaps surfaces, but the left third of the panel keeps showing kprintf format strings: the 0351 ring redraws 73 rows of 620 px on every kprintf()/printf(), with no way to turn it off. Now herolog=1 gives the full console with arguments, so the ring is not needed on a run that watches the GUI. heroring=0 (read once, lazily, when the ring is first used after sweet_early_phase_begin()) makes sweet_early_kprintf() return at once. Default (no arg or nonzero) is unchanged. sweet_early.c only.
+
+--- a/osfmk/arm64/sweet_early.c
++++ b/osfmk/arm64/sweet_early.c
+@@ -10,6 +10,7 @@
+ #if defined(SWEET) && defined(A5XELTE)
+ #include <stdint.h>
+ #include <kern/misc_protos.h>
++#include <pexpert/pexpert.h>
+ 
+ /* The bootstrap TTBR0 maps DECON scanout VA=PA until arm_vm_init. */
+ /* The bootstrap TTBR0 maps the scanout VA=PA; arm_vm_init relocates the pointer to a kernel VA alias before TTBR0 goes (min8). */
+@@ -208,7 +209,7 @@
+  * the screen (x=20..620, 73 rows of 32 px from y=88), with a white marker at the left edge on the newest line. The format string
+  * only (no arguments), enough to name what the kernel logged last before a reset. Active once sweet_early_phase_begin() ran.
+  */
+-static unsigned int a5_k_row;
++static unsigned int a5_k_row, a5_k_checked, a5_k_off;
+ 
+ void
+ sweet_early_kprintf(const char *fmt)
+@@ -217,6 +218,16 @@
+ 	if (!a5_active || !a5_phase_on || !fmt) {
+ 		return;
+ 	}
++	if (!a5_k_checked) {                                          /* min21: heroring=0 stops the ring so the GUI is not painted over */
++		int ring = 1;
++		a5_k_checked = 1;
++		if (PE_parse_boot_argn("heroring", &ring, sizeof(ring)) && ring == 0) {
++			a5_k_off = 1;
++		}
++	}
++	if (a5_k_off) {
++		return;
++	}
+ 	unsigned int r = a5_k_row++ % rows, prev = (r + rows - 1) % rows;
+ 	unsigned int y0 = 88 + 32 * r;
+ 	for (unsigned int y = 0; y < 32; y++) {                       /* clear this row and the old marker column */
