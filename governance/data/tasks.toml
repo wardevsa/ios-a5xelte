@@ -421,7 +421,7 @@ priority = 7
 owner = "ingeniero"
 depends_on = ["T-0036"]
 actions = ["pc-implementation", "host-tests", "heavy-compile", "local-commit"]
-blocked_on = "libdrm-dev no está instalado en el PC (instalar herramientas del sistema es una acción roja): se puede resolver con el subproyecto de Meson (descarga) o compilando en el CI (publish, D-0030 solo cubre la rama herolte-drop-v2 en mio)"
+blocked_on = "libdrm-dev no está instalado en el PC (instalar herramientas del sistema es una acción roja). Camino abierto desde la directiva de Jefatura del 15-nov (E-0250, Carril B): compilar en el CI mesa-ios (ya probado, run 43718791230) que exige una firma de publish del Director por cada commit; el trabajo local previo (parche de mmap y glue) puede hacerse ya sin compilar"
 acceptance = "patch-mesa.py (o su sucesor) aplica 12/12 a Mesa 26.x y compila con Panfrost; los dylibs de iOS salen del CI con hash; comparar con 25.0.7."
 
 [[task]]
@@ -623,3 +623,49 @@ evidence = ["E-0245"]
 authorization_ref = "D-0073"
 acceptance = "Run xnu en verde; 0356-0358 aplicados y compilados; kernel descargado con su SHA-256 como evidencia; min34 construida y verificada."
 resume = "gh workflow run xnu -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2; min34 = min33 sin herogpu=1 + herohalt=1; pedir firma de BOOT."
+
+[[task]]
+id = "T-0054"
+title = "Fusión de los parches 0352-0359 con origin/herolte: comprobar colisiones de numeración, preparar el diff completo y someterlo a la revisión de Jefatura antes de aplicar (directiva del 15-nov, Pregunta 2)"
+status = "ready"
+priority = 6
+owner = "ingeniero"
+depends_on = []
+actions = ["patch-series-change", "local-commit"]
+acceptance = "Informe de colisiones con origin/herolte, serie renumerada si hace falta, diff de los 8 parches y revisión de Jefatura registrada (review_ref) ANTES de consolidar; después fusión local y CI (publish con firma del Director)."
+resume = "Comparar xnu/patches/0352..0359 con `git ls-tree origin/herolte xnu/patches/`; precedente D-0014; no consolidar sin revisión."
+
+[[task]]
+id = "T-0055"
+title = "D-0015 (aislamiento de clientes de HeroGPU): plan de implementación con revisión de Jefatura del código antes de fusionar y pruebas de aislamiento antes de activar en el teléfono (diseño aprobado, directiva del 15-nov, Pregunta 4)"
+status = "ready"
+priority = 5
+owner = "ingeniero"
+depends_on = []
+actions = ["architecture-change", "docs-write", "local-commit"]
+requires_decisions = ["D-0015"]
+acceptance = "docs/S7GE_HEROGPU_ISOLATION_PLAN.md con el diseño (address space por cliente, jc_va validada contra los BO del cliente, entitlement, SurfaceBO con propiedad), el plan de pruebas de aislamiento y los parches propuestos sin aplicar; revisión de Jefatura registrada antes de cualquier merge."
+resume = "Partir de docs/S7GE_ABI.md (brechas y mejoras propuestas) y del código de HeroGPU.cpp / herolte_gpu.c; no tocar el teléfono."
+
+[[task]]
+id = "T-0056"
+title = "Carril A de la directiva (fluidez): perfilar backboardd (docs/S7GE_BACKBOARD_PROFILING.md) y preparar los experimentos E0-E4 como imágenes candidatas con nombre nuevo"
+status = "ready"
+priority = 7
+owner = "ingeniero"
+depends_on = []
+actions = ["read-analysis", "docs-write", "pc-implementation", "local-commit"]
+acceptance = "Documento de perfilado con datos medidos; imágenes candidatas verificadas para E0-E4; cada escritura en el teléfono con su firma; fps medio medido con tools/herolte-log-report.py antes y después."
+resume = "0359 necesita CI (publish, firma) antes de E0; E1-E3 (a5fb_hz=30, heroquantum=500, heronoexec) son solo línea de arranque."
+
+[[task]]
+id = "T-0057"
+title = "Copia de seguridad en un segundo disco (EFS, BOOT, RECOVERY, SYSTEM, USERDATA Android): precondición de Jefatura para Wi-Fi y otras escrituras (directiva del 15-nov, Pregunta 5)"
+status = "blocked"
+priority = 9
+owner = "ingeniero"
+depends_on = []
+actions = ["archive-copy", "local-commit"]
+blocked_on = "El segundo disco (nvme0n1p1 'Juegos' 931 GB o nvme1n1p3 465 GB, ambos NTFS y sin montar) debe montarlo el Director y firmar la copia con el destino exacto; hasta entonces las copias están en /dev/sda2 (EFS y particiones pequeñas, 144 MB) y en el NVMe F20C… (snapshot de 30 GB)"
+acceptance = "Dos copias verificadas por SHA-256 en discos físicos distintos, legibles en solo lectura; evidencia con hashes y rutas."
+resume = "Texto de autorización en el relevo H-0110; verificar espacio libre del destino (>= 50 GB) antes de copiar."

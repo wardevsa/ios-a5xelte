@@ -12,15 +12,15 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0004 | APPROVED | process | 2026-11-13 | Criterios de la candidata N2 de solo lectura: sin ufsrw/rootrw distintos de =0, con ufsrw=0 herolog=0 herodrop=0 explícitos, verificada con herolte-verify-boot.py --profile n2-readonly | ingeniero | director | — | Mensaje del Director 'cerrar correctamente el verificador BOOT y producir una candidata N2 inequívocamente de solo lectura', 2026-11-13 |
 | D-0005 | APPROVED | operation | 2026-11-13 | El experimento R2 (monta imágenes, usa sudo) no está autorizado | ingeniero | director | — | Restricciones reiteradas del Director en todos los mensajes de la serie T04-R2/Unicode: 'No ejecutes R2', 'No autorices R2', 'No monta imágenes' |
 | D-0006 | SUPERSEDED | operation | 2026-11-13 | Generación del root: no cambiar el generador ni regenerar lab-full.img.partial hasta decidir sobre el bloqueo Unicode | ingeniero | director | — | Mensajes del Director 'Espera mi decisión antes de implementar cambios que afecten a la generación del root filesystem' y 'No repares, regeneres ni sustituyas esa imagen todavía', 2026-11-13 |
-| D-0007 | PROPOSED | architecture | 2026-11-13 | Reservar el rango de parches 0400+ para S7GE (el 0300-0309 propuesto en S7GE_ARCHITECTURE.md ya está ocupado) | ingeniero | — | — | — |
+| D-0007 | APPROVED | architecture | 2026-11-13 | Reservar el rango de parches 0400+ para S7GE (el 0300-0309 propuesto en S7GE_ARCHITECTURE.md ya está ocupado) | ingeniero | director | — | Mensaje del Director (PioXI), 2026-11-15: 'Lo de los días, semanas, etc, no le hagas mucho caso. Autorizo el siguiente informe que viene de jefatura:' + directiva de Jefatura Técnica (Qwen) del 2026-11-15 (docs/S7GE_DIRECTIVA_JEFATURA_20261115.md, E-0250), §1 Pregunta 4: D-0007 APROBADA (arquitectura razonable, evita colisiones). |
 | D-0008 | SUPERSEDED | architecture | 2026-11-13 | Renumerar nuestros 0332 (marcador DROP), 0334 (DROP v2) y 0335 (splash) antes de fusionar con origin/herolte, que ya usa 0332-0334 para gráficos | ingeniero | — | — | — |
-| D-0009 | PROPOSED | architecture | 2026-11-13 | Ratificar las decisiones D1-D12 de DROP v2 de xnu/drop-v2/DECISIONES.md, tomadas por el jefe de proyecto suplente | ingeniero | — | — | — |
+| D-0009 | APPROVED | architecture | 2026-11-13 | Ratificar las decisiones D1-D12 de DROP v2 de xnu/drop-v2/DECISIONES.md, tomadas por el jefe de proyecto suplente | ingeniero | director | — | Mensaje del Director (PioXI), 2026-11-15: 'Lo de los días, semanas, etc, no le hagas mucho caso. Autorizo el siguiente informe que viene de jefatura:' + directiva de Jefatura Técnica (Qwen) del 2026-11-15 (docs/S7GE_DIRECTIVA_JEFATURA_20261115.md, E-0250), §1 Pregunta 4: D-0009 RATIFICADA (DROP v2 probado en el teléfono con min32, E-0233 a E-0237). |
 | D-0010 | APPROVED | operation | 2026-11-13 | Escribir en BOOT del S7 (peldaños N1/N2) requiere una autorización C específica; la candidata verificada del PC no la sustituye | ingeniero | director | — | Mensaje del Director 'Todavía NO hemos comenzado las pruebas reales en el Galaxy S7... No confundas imágenes generadas con un arranque real', 2026-11-13; AGENTS.md (solo BOOT) |
-| D-0011 | PROPOSED | process | 2026-11-13 | Mecanismo de autorización roja y de revisión amarilla: authorizes + valid_until + gate; review_ref antes de pasar a done | ingeniero | — | — | — |
-| D-0012 | PROPOSED | process | 2026-11-13 | Los niveles de evidencia (domain, level, device) se declaran y nunca se elevan automáticamente; una suite del PC no puede declarar hardware | ingeniero | — | — | — |
+| D-0011 | APPROVED | process | 2026-11-13 | Mecanismo de autorización roja y de revisión amarilla: authorizes + valid_until + gate; review_ref antes de pasar a done | ingeniero | director | — | Mensaje del Director (PioXI), 2026-11-15: 'Lo de los días, semanas, etc, no le hagas mucho caso. Autorizo el siguiente informe que viene de jefatura:' + directiva de Jefatura Técnica (Qwen) del 2026-11-15 (docs/S7GE_DIRECTIVA_JEFATURA_20261115.md, E-0250), §1 Pregunta 4: D-0011 RATIFICADA (autorización roja/revisión amarilla, implementada en tools/governance.py). |
+| D-0012 | APPROVED | process | 2026-11-13 | Los niveles de evidencia (domain, level, device) se declaran y nunca se elevan automáticamente; una suite del PC no puede declarar hardware | ingeniero | director | — | Mensaje del Director (PioXI), 2026-11-15: 'Lo de los días, semanas, etc, no le hagas mucho caso. Autorizo el siguiente informe que viene de jefatura:' + directiva de Jefatura Técnica (Qwen) del 2026-11-15 (docs/S7GE_DIRECTIVA_JEFATURA_20261115.md, E-0250), §1 Pregunta 4: D-0012 RATIFICADA (niveles de evidencia, codificados en evidence.toml). |
 | D-0013 | PROPOSED | policy | 2026-11-13 | Alinear los permisos de Claude Code (settings.json) con policy.toml para convertir la disciplina asistida en un control técnico | ingeniero | — | — | — |
 | D-0014 | APPROVED | architecture | 2026-11-13 | Renumerar solo los dos parches nuestros que colisionan con origin/herolte (0332 marcador -> 0336, 0334 DROP v2 -> 0337, manteniendo el orden relativo) y hacer que ci_check/preflight identifiquen el parche por nombre completo | ingeniero | director | — | Mensaje del Director (pioxi), 2026-11-14: 'Por parte del director, apruebo y firmo lo siguiente: [directiva de jefatura técnica: D-0029 NVMe como zona de trabajo, D-0030 push y CI, fusión T-0016 con renumeración 0332->0336 y 0334->0337, reconstrucción de la candidata y verificación de copias de seguridad]. Firmado Pioxi' (la directiva ordena exactamente esta renumeración) |
-| D-0015 | PROPOSED | architecture | 2026-11-13 | Aislamiento de clientes de HeroGPU: address space por cliente, jc_va validada contra los BO del cliente, entitlement en initWithTask, presupuesto de memoria y SurfaceBO con comprobación de propiedad | ingeniero | — | — | — |
+| D-0015 | APPROVED | architecture | 2026-11-13 | Aislamiento de clientes de HeroGPU: address space por cliente, jc_va validada contra los BO del cliente, entitlement en initWithTask, presupuesto de memoria y SurfaceBO con comprobación de propiedad | ingeniero | director | — | Mensaje del Director (PioXI), 2026-11-15: 'Lo de los días, semanas, etc, no le hagas mucho caso. Autorizo el siguiente informe que viene de jefatura:' + directiva de Jefatura Técnica (Qwen) del 2026-11-15 (docs/S7GE_DIRECTIVA_JEFATURA_20261115.md, E-0250), §1 Pregunta 4: D-0015 APROBADA CON CONDICIÓN: se aprueba el DISEÑO; la implementación necesita tarea propia con plan, revisión de Jefatura del código antes de fusionar y pruebas de aislamiento antes de activarlo en el teléfono (T-0055). |
 | D-0016 | APPROVED | architecture | 2026-11-13 | Cargador de las pruebas: usar el compilado con clang (loader-clang/, E-0008); no ejecutar el GCC descargado | ingeniero | jefe-tecnico | — | Directiva de jefatura técnica del 2026-11-13 (Qwen, relayada por el Director), apartado 'D-0013: Cargador para xnu_boot: clang'. La directiva la numeró D-0013, que ya existe (permisos de Claude Code): registrada aquí como D-0016. No autoriza ninguna acción de nivel C |
 | D-0017 | APPROVED | architecture | 2026-11-13 | Corrección Unicode: regenerar en el generador del root los nombres en forma XNU (sin tocar el kernel), antes de repetir R2 | jefe-tecnico | director | — | Mensaje del Director, 2026-11-13: 'Apruebo D-0001 y D-0017, autorizo cambiar el generador sin R2. Y si, la directiva responde por mi, por razones de seguridad yo seguire leyendo todo para que no haya problemas e intervendre de forma extraordinaria si se requiere.' |
 | D-0018 | APPROVED | operation | 2026-11-13 | Levantar la congelación del generador del root (D-0006) solo para aplicar D-0017: imagen NUEVA con nombre nuevo, sin R2 previo y sin tocar la anterior | ingeniero | director | — | Mensaje del Director, 2026-11-13: 'Apruebo D-0001 y D-0017, autorizo cambiar el generador sin R2. Y si, la directiva responde por mi, por razones de seguridad yo seguire leyendo todo para que no haya problemas e intervendre de forma extraordinaria si se requiere.' |
@@ -117,7 +117,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Cómo se revierte:** Decisión del director que elija una de las opciones.
 
 ## D-0007 — Reservar el rango de parches 0400+ para S7GE (el 0300-0309 propuesto en S7GE_ARCHITECTURE.md ya está ocupado)
-- **Estado:** PROPOSED
+- **Estado:** APPROVED (director, 2026-11-15)
 - **Razón:** 0300-0335 existen en el árbol (0301 audio, 0307 L3 de GPU, 0317 WebKit...). Reutilizar números rompe aplicabilidad y trazabilidad.
 - **Consecuencias:** Los nombres de parche de S7GE empezarían en 0400. Requiere revisión del jefe técnico porque toca la numeración de la serie.
 - **Cómo se revierte:** Renombrar los parches S7GE; no hay ninguno creado todavía.
@@ -129,7 +129,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Cómo se revierte:** Revertir el renombrado antes de publicar.
 
 ## D-0009 — Ratificar las decisiones D1-D12 de DROP v2 de xnu/drop-v2/DECISIONES.md, tomadas por el jefe de proyecto suplente
-- **Estado:** PROPOSED
+- **Estado:** APPROVED (director, 2026-11-15)
 - **Razón:** Ese documento dice que sus decisiones están 'pendientes de ratificación por el responsable del proyecto'. El sistema de gobierno distingue propuesta de decisión aprobada.
 - **Consecuencias:** Hasta la ratificación, DROP v2 se trata como propuesta madura, no como diseño aprobado.
 - **Cómo se revierte:** Rechazar o sustituir las decisiones individuales.
@@ -141,13 +141,13 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Cómo se revierte:** Decisión posterior del director que autorice la prueba.
 
 ## D-0011 — Mecanismo de autorización roja y de revisión amarilla: authorizes + valid_until + gate; review_ref antes de pasar a done
-- **Estado:** PROPOSED
+- **Estado:** APPROVED (director, 2026-11-15)
 - **Razón:** La auditoría de tools/governance.py (F-09, F-10) encontró que cualquier decisión del director servía de autorización para cualquier acción roja y que una tarea amarilla podía pasar a done sin revisión. La corrección exige que la decisión nombre la acción, sea vigente y del director, y que lo amarillo tenga review_ref del revisor que fija la política.
 - **Consecuencias:** Cambia cómo se registran las autorizaciones del Director (campo authorizes en decisions.toml) y las revisiones del jefe técnico (review_ref en tasks.toml). Ninguna herramienta ejecuta nada por ello.
 - **Cómo se revierte:** Quitar los campos y las comprobaciones de tools/governance.py (git revert).
 
 ## D-0012 — Los niveles de evidencia (domain, level, device) se declaran y nunca se elevan automáticamente; una suite del PC no puede declarar hardware
-- **Estado:** PROPOSED
+- **Estado:** APPROVED (director, 2026-11-15)
 - **Razón:** El director pidió separar pruebas del host, compilación, GPU física e integración iOS y prohibió elevar un nivel automáticamente (F-13). Se codifica en el esquema de evidence.toml y regression.toml y en check.
 - **Consecuencias:** Toda evidencia nueva debe llevar dominio, nivel y dispositivo; una tarea puede exigir min_evidence (p. ej. L3 en this-unit para las pruebas en el S7).
 - **Cómo se revierte:** Retirar los campos y las reglas de check.
@@ -166,7 +166,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Sustituye a:** D-0008
 
 ## D-0015 — Aislamiento de clientes de HeroGPU: address space por cliente, jc_va validada contra los BO del cliente, entitlement en initWithTask, presupuesto de memoria y SurfaceBO con comprobación de propiedad
-- **Estado:** PROPOSED
+- **Estado:** APPROVED (director, 2026-11-15)
 - **Razón:** docs/S7GE_ABI.md (T-0008) leyó HeroGPU.cpp y herolte_gpu.c y encontró: una sola AS0 compartida por todos los clientes, Submit con la VA de la cadena de jobs aportada por el cliente y sin validar, ningún entitlement ni presupuesto de memoria, SurfaceBO con búsqueda global por id y handles sin generación. Incumple los principios 2.5 y 23 de S7GE. T-0010 (docs/S7GE_HARDWARE.md §3) añade, por lectura de código y sin prueba en hardware, que el bloque de trabajo de 2 MiB mapeado RW en AS0 contiene la tabla L2 de los búferes de usuario y las L3 de presentación: un job podría reescribirlas y alcanzar memoria física arbitraria.
 - **Consecuencias:** Es una modificación del kernel y de la serie de parches (nivel B, revisor jefe técnico): se haría con una tarea nueva y tras esa revisión. Hasta entonces la GPU solo debe usarla software del proyecto en el teléfono de pruebas.
 - **Cómo se revierte:** Es una propuesta; si se implementa, git revert del parche.

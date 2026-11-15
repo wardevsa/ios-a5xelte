@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0109 — informe para la Jefatura Técnica escrito (docs/S7GE_INFORME_JEFATURA_20261115_IOS.md, E-0249); a la espera de la decisión de rumbo (2026-11-15)
+## Relevo vigente: H-0110 — directiva de Jefatura aplicada (ratificaciones, tareas, perfilado, parche 0359); falta la firma de la copia en segundo disco (2026-11-15)
+- **Tarea en curso: T-0012.** El Director autorizó la directiva (E-0250) ignorando los plazos. Hecho: D-0007, D-0009, D-0011, D-0012 y D-0015 (con condición) APPROVED; D-0013 sigue PROPOSED (pospuesta). Tareas nuevas: T-0054 (fusión 0352-0359, revisión de Jefatura), T-0055 (D-0015, plan), T-0056 (Carril A), T-0057 (copia en 2.º disco, bloqueada); T-0037 con su bloqueo actualizado. Perfilado: `docs/S7GE_BACKBOARD_PROFILING.md` (E-0251). Parche `0359` (valores por defecto del teléfono, libera ~85 caracteres de línea) escrito, sin CI.
+- **Pendiente del Director (rojo):** (1) montar un segundo disco (clic en el gestor de ficheros, sin sudo) y firmar la copia (T-0057; texto en la respuesta del ingeniero y en este relevo abajo); (2) firma de CI para 0359; (3) decidir D-0013.
+- **Texto de la copia (rellenar RUTA):** "Autorizo copia de seguridad de EFS, BOOT, RECOVERY, SYSTEM y USERDATA desde /media/pioxi/F20C31440C31055F/IOS-S7-backup/2026-11-14-engineer-full/ y ~/HackiOS/backups/device-herolte/2026-11-12/ hacia RUTA/IOS-S7-backup-copia2/, con verificación de SHA-256 y lectura de prueba. Solo lectura de origen, escritura solo en esa ruta, sin tocar el teléfono. Firmado PioXI."
+
+## Relevo anterior: H-0109 — informe para la Jefatura Técnica escrito (docs/S7GE_INFORME_JEFATURA_20261115_IOS.md, E-0249); a la espera de la decisión de rumbo (2026-11-15)
 - **Tarea en curso: T-0012.** El Director pasa el informe a la Jefatura para decidir: fluidez vs S7GE (Metal), fusión 0352-0358 con upstream, Wi-Fi/audio, ratificaciones, copia en otro disco (§7 del informe).
 - BOOT actual = min34 (base buena). Sin acciones rojas pendientes. Siguiente sin permiso: análisis de `backboardd` (CPU) en el PC.
 

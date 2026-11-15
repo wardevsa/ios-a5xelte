@@ -3684,3 +3684,33 @@ sha256 = "6235227b5e6266c3d1c2c70269635eae20cad3c416792144d5f3dd5cd23ba7ed"
 size = 12026
 immutable = true
 note = "Redactado por el ingeniero a petición del Director. Sin números de serie ni datos privados: cita rutas de logs privados que NO están en git. La línea de arranque de min34 citada coincide con la de la imagen (comprobado con grep)."
+
+[[evidence]]
+id = "E-0250"
+title = "Directiva de Jefatura Técnica (Qwen) del 15-nov: respuestas a las 5 preguntas del informe E-0249 (dos carriles: fluidez y S7GE; fusión de 0352-0358 con revisión; Wi-Fi primero; ratificación de D-0007, D-0009, D-0011, D-0012 y D-0015 con condición; copia en segundo disco obligatoria) y plan por fases"
+kind = "document"
+path = "/home/pioxi/HackiOS/repos/wardevsa-ios-a5xelte-v2/docs/S7GE_DIRECTIVA_JEFATURA_20261115.md"
+location = "repo"
+created = "2026-11-15"
+domain = "host"
+level = "L1"
+device = "none"
+sha256 = "439eb531158c6472c8442b8c139ca3b65099e4ad1f755cbea48cf825c3924721"
+size = 10765
+immutable = true
+note = "Texto copiado tal cual de lo pegado por el Director, con una cabecera añadida por el ingeniero. El Director dijo: 'Lo de los días, semanas, etc, no le hagas mucho caso. Autorizo el siguiente informe que viene de jefatura'. Se aplican las ratificaciones (D-0007, D-0009, D-0011, D-0012, D-0015 con condición; D-0013 pospuesta). Las acciones rojas de la directiva (copia en segundo disco, 2.4, 3.4, 4.1, 4.4) siguen necesitando la firma del Director con rutas y hashes concretos."
+
+[[evidence]]
+id = "E-0251"
+title = "Perfilado de backboardd y plan de fluidez: backboardd 94 % de un núcleo de media (146 % en min34, máx. 458 %), sistema 302 % de 800 %; el muestreador del kernel (1-3 muestras por arranque) no basta para hotspots; experimentos E0-E4 propuestos"
+kind = "document"
+path = "/home/pioxi/HackiOS/repos/wardevsa-ios-a5xelte-v2/docs/S7GE_BACKBOARD_PROFILING.md"
+location = "repo"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "this-unit"
+sha256 = "044abcd8e6fd30bbd4963ff182cec76d86372e79e294ce174da3dc7bd7b9e9f4"
+size = 3673
+immutable = true
+note = "Cálculo propio sobre las líneas 'TOP 5s' de los logs min33b y min34 (128 muestras); lo que NO se sabe: qué funciones consumen la CPU de backboardd (sin símbolos de la caché de dyld). Sin datos privados."
