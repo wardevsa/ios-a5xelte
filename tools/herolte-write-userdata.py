@@ -62,17 +62,16 @@ def send_chunk(data, skip, count, port, target):
         for _ in range(8):
             time.sleep(1.0)
             try:
-                c = socket.create_connection(('127.0.0.1', port), timeout=30); c.settimeout(120)
-                c.sendall(data); c.shutdown(socket.SHUT_WR)
-                try: c.recv(1)
-                except OSError: pass
-                c.close(); ok = True
-                # esperar a que dd termine (head cierra la tubería tras N bytes) ANTES de matar el sleep: si el sleep muere antes, nc ve EOF
-                # en su entrada y sale sin haber leído todo el socket (trozo truncado); luego sin el sleep la tubería no espera 300 s
-                for _ in range(480):
+                c = socket.create_connection(('127.0.0.1', port), timeout=30); c.settimeout(600)
+                c.sendall(data)
+                # NO se hace shutdown(SHUT_WR): el reenvío de adb no admite medio cierre y descarta lo que aún tiene en búfer (se perdían ~1,5 MB
+                # del final del trozo cuando el disco iba más lento que el enlace). `head -c N` termina la tubería por sí solo al recibir N bytes.
+                # Se espera a que dd termine ANTES de cerrar y de matar el sleep (si el sleep muere antes, nc ve EOF en su entrada y sale).
+                for _ in range(2400):
                     if not adb('shell', 'pidof dd').stdout.decode().strip(): break
                     time.sleep(0.25)
                 adb('shell', 'killall sleep 2>/dev/null')
+                c.close(); ok = True
                 break
             except OSError:
                 continue
