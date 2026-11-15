@@ -690,8 +690,8 @@ status = "ready"
 priority = 6
 owner = "ingeniero"
 depends_on = []
-actions = ["device-read", "read-analysis", "docs-write", "pc-implementation", "local-commit"]
-authorization_ref = "D-0078"
+actions = ["device-read", "device-write-userdata", "read-analysis", "docs-write", "pc-implementation", "local-commit"]
+authorization_ref = "D-0079"
 acceptance = "Firmware extraído con SHA-256 (fuera de git), paquete DROP con wifi/ verificado en el PC, imagen herowifi=1 verificada; cada paso en el teléfono con su firma con hash; en el log 'HEROLTE WIFI' con enlace PCIe y firmware cargado y redes visibles en Ajustes."
 resume = "Pasos 1-4 de docs/S7GE_MIN35_ANALYSIS.md §5. network.txt lo escribe el Director (contraseña: nunca se registra)."
 
