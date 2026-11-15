@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0071 — kernel 0352 (CI 43699443107) y min21 preparada, NO escrita; BOOT sigue con min20 (2026-11-15)
+## Relevo vigente: H-0072 — min21 (min20 + heroring=0 sweetfb_noconsole=1, kernel 0352) ESCRITA (D-0054); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min21-20261115.img` (sha256 `141a6d87…336a1e`, E-0195/E-0196).
+- **Director:** `adb reboot`, 5-10 min mirando la pantalla (¿consola, fondo, iconos, negro?), volver a TWRP. **Ingeniero:** `herolte-log-pull.py`; contar swaps y ver si SpringBoard/backboardd siguen vivos.
+- Restaurar BOOT: min20/min19/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0071 — kernel 0352 (CI 43699443107) y min21 preparada, NO escrita; BOOT sigue con min20 (2026-11-15)
 - **Tarea en curso: T-0012.** E-0193: UI de iOS viva, GPU arranca y nadie la usa; la pantalla muestra el anillo 0351. T-0046 hecha: kernel 0352 (E-0194). Imagen `xnu-boot-v2-s7-min21-20261115.img` sha256 `141a6d87…336a1e` (E-0195) = min20 + `heroring=0 sweetfb_noconsole=1`.
 - **Siguiente:** firma del Director para escribir min21 (decisión nueva: D-0052 nombra solo min20). Después `adb reboot`, 5-10 min, TWRP, `tools/herolte-log-pull.py`.
 - Investigación abierta (solo PC): por qué nadie abre HeroGPU/IOAccelerator; xstat 9 de widgets/UARP; assetsd xstat 6; `autorun` ausente.
