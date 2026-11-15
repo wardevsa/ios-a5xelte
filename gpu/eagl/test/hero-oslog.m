@@ -65,8 +65,9 @@ main(void)
 {
 	@autoreleasepool {
 		int seconds = number("HERO_OSLOG_SECONDS", 80), max = number("HERO_OSLOG_MAX", 300);
-		NSArray *procs = list("HERO_OSLOG_PROCS", "mediaserverd,audiomxd,springboard,backboardd,autorun");
-		NSArray *words = list("HERO_OSLOG_WORDS", "haptic,actuator,vibrat,vad,chain,route,systemsound");
+		/* boot-oslog2: 153581 events and none of mediaserverd's matched: every process now ("*"), with a count by process */
+		NSArray *procs = list("HERO_OSLOG_PROCS", "*");
+		NSArray *words = list("HERO_OSLOG_WORDS", "haptic,actuator,vibrat,systemsound,taptic,4095");
 		setvbuf(stdout, NULL, _IOLBF, 0);
 		printf("hero-oslog: following the live log for %d s; processes %s; words %s\n", seconds,
 		    [procs componentsJoinedByString:@","].UTF8String, [words componentsJoinedByString:@","].UTF8String);
@@ -86,6 +87,7 @@ main(void)
 			return 1;
 		}
 		__block int seen = 0, shown = 0;
+		NSMutableDictionary<NSString *, NSNumber *> *counts = [NSMutableDictionary dictionary];
 		__block id stream = nil;
 		NSDateFormatter *clock = [[NSDateFormatter alloc] init];
 		clock.dateFormat = @"HH:mm:ss.SSS";
@@ -107,7 +109,10 @@ main(void)
 					}
 					NSString *process = call0(event, @"process");
 					NSString *message = call0(event, @"composedMessage");
-					if (!process || !message || ![procs containsObject:process.lowercaseString]) {
+					if (process) {
+						counts[process] = @([counts[process] intValue] + 1);
+					}
+					if (!process || !message || (![procs containsObject:@"*"] && ![procs containsObject:process.lowercaseString])) {
 						return;
 					}
 					NSString *low = message.lowercaseString;
@@ -143,6 +148,14 @@ main(void)
 		call0(stream, @"invalidate");
 		@synchronized (clock) {
 			printf("hero-oslog: %d events seen, %d shown\n", seen, shown);
+			NSArray *busiest = [counts keysSortedByValueUsingComparator:^NSComparisonResult(NSNumber *a, NSNumber *b) {
+				return [b compare:a];
+			}];
+			NSMutableString *top = [NSMutableString string];
+			for (NSUInteger i = 0; i < busiest.count && i < 40; i++) {
+				[top appendFormat:@" %@ %@", busiest[i], counts[busiest[i]]];
+			}
+			printf("hero-oslog: by process:%.1500s\n", top.UTF8String);
 		}
 	}
 	return 0;
