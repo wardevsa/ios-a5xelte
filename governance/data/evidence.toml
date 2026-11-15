@@ -2664,3 +2664,18 @@ sha256 = "5de4bcfc28f9ca2a01c2062c33162b00950a672a90c82808fc9d3963f8407009"
 size = 1288
 immutable = true
 note = "Interpretación (L1, por el código y por 'mkfs.hfsplus -J'): Linux crea el diario marcado como 'por inicializar'; XNU intenta crearlo/escribir su cabecera en el montaje y la escritura falla porque el kernel arrancó con ufsrw=0 (UFS solo lectura): jnl_io 'strategy err' → journal_create falla → hfs_mountfs falla → bucle 'cannot mount root'. NO es un problema de la imagen ni del formato: el cabecero del volumen se reconoció. Siguiente: arrancar con ufsrw=1 rootrw=1 (cambio de línea de arranque: necesita autorización) o dejar el diario inicializado/desactivado en la imagen. Transcripción por IA de una foto no archivada."
+
+[[evidence]]
+id = "E-0182"
+title = "Imagen preparada (kernel 0351): xnu-boot-v2-s7-min17-20261115 = min16 con ufsrw=1 rootrw=1 (UFS y raíz en lectura-escritura; solo cambia la línea de arranque); 39 PASS constructor y 46 PASS independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run1-min17/xnu-boot-v2-s7-min17-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "8c98450335f3c7fb9d0f019d57c7f08f6fa79992f0f3ca205f30341404e19bd2"
+size = 18620432
+immutable = true
+note = "Mismo kernel bb042852b3a7e25587ddffe2dabee7f0a54aabda1d3ed50aa7712369b6ea8cf7 (E-0174), ADT dc817436… y cargador 0a68abbd… que min16. Línea: la de min16 con ufsrw=0 sustituido por ufsrw=1 rootrw=1 (diff). Construida con tools/herolte-build-n3.sh y verificada SIN el perfil n2-readonly (que prohíbe ufsrw). Solo el UFS de USERDATA puede escribirse (bsd/dev/herolte_ufs.c: 'writes need ufsrw=1 and stay inside it'). Objetivo: que XNU pueda inicializar el diario HFS+ y montar la raíz (E-0181)."
