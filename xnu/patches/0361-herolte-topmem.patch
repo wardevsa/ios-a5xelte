@@ -1,0 +1,74 @@
+diag: TOPMEM, the largest memory footprints every 30 s (0361)
+
+min36 (E-0265): free memory fell from 801 MB at one minute to 59 MB at five of use, and nothing in the log says who holds it. Every 30 s the TOP thread also prints the 8 processes with the largest phys_footprint (task_info TASK_VM_INFO): 'TOPMEM 30s: SpringBoard 112MB backboardd 90MB ...'. Logging only.
+
+--- a/bsd/dev/sweet_sample.c
++++ b/bsd/dev/sweet_sample.c
+@@ -100,6 +100,57 @@
+ static unsigned sweet_top_n;
+ static uint64_t sweet_top_gen;
+ 
++/*
++ * 0361: every 30 s the processes with the largest memory footprint ("TOPMEM 30s: SpringBoard 112MB backboardd 90MB ...").
++ * min36 (E-0265): 801 MB free at one minute and 59 MB at five; the CPU table says nothing about who holds it.
++ */
++#define SWEET_MEM_TOP 8
++static struct { char name[20]; uint64_t bytes; } sweet_mem[SWEET_MEM_TOP];
++
++static int
++sweet_mem_proc(proc_t p, __unused void *arg)
++{
++	task_t task = proc_task(p);
++	if (task == TASK_NULL) {
++		return PROC_RETURNED;
++	}
++	task_vm_info_data_t vi;
++	mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
++	if (task_info(task, TASK_VM_INFO, (task_info_t)&vi, &count) != KERN_SUCCESS) {
++		return PROC_RETURNED;
++	}
++	uint64_t bytes = vi.phys_footprint;
++	unsigned slot = SWEET_MEM_TOP;
++	for (unsigned i = 0; i < SWEET_MEM_TOP; i++) {
++		if (bytes > sweet_mem[i].bytes) {
++			slot = i;
++			break;
++		}
++	}
++	if (slot == SWEET_MEM_TOP) {
++		return PROC_RETURNED;
++	}
++	for (unsigned i = SWEET_MEM_TOP - 1; i > slot; i--) {
++		sweet_mem[i] = sweet_mem[i - 1];
++	}
++	sweet_mem[slot].bytes = bytes;
++	proc_name(proc_pid(p), sweet_mem[slot].name, sizeof(sweet_mem[slot].name));
++	return PROC_RETURNED;
++}
++
++static void
++sweet_mem_report(void)
++{
++	char line[300];
++	int len = snprintf(line, sizeof(line), "TOPMEM 30s:");
++	bzero(sweet_mem, sizeof(sweet_mem));
++	proc_iterate(PROC_ALLPROCLIST, sweet_mem_proc, NULL, NULL, NULL);
++	for (unsigned i = 0; i < SWEET_MEM_TOP && sweet_mem[i].bytes && len < (int)sizeof(line) - 40; i++) {
++		len += snprintf(line + len, sizeof(line) - len, " %s %lluMB", sweet_mem[i].name, sweet_mem[i].bytes >> 20);
++	}
++	printf("%s\n", line);
++}
++
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ /*
+  * WidgetKit extensions with a CPU limit of their own (boot-arg herowidgetcap=N percent of one core, default 30, 0 off).
+@@ -189,6 +240,9 @@
+ 		if (sweet_top_gen++ == 0) {
+ 			continue;               /* the first pass only takes the baseline */
+ 		}
++		if (sweet_top_gen % 6 == 0) {
++			sweet_mem_report();     /* 0361 */
++		}
+ 		char line[400];
+ 		int len = snprintf(line, sizeof(line), "TOP 5s:");
+ 		uint64_t total = 0;

@@ -1,0 +1,15 @@
+wifi: the stand-in accepts the country-code and selector-383 sets (0362)
+
+min36 (E-0265): wifid sets COUNTRY_CODE (51, 8 bytes, 12 times) and selector 383 (4104 bytes, 12 times) and both come back REFUSED while everything else works. They now get the same answer as the other no-ops (accepted, nothing to do): the chip keeps the world-wide default of its CLM blob. The join and scan paths are untouched.
+
+--- a/bsd/dev/sweet_apple80211.c
++++ b/bsd/dev/sweet_apple80211.c
+@@ -673,6 +673,8 @@
+ 	case 5:                                 /* (0132) power save: the driver has none */
+ 	case 365:                               /* (0132) the display on or off: nothing to do */
+ 	case 382:                               /* (0132) abort a scan: ours end by themselves (a scan is over) */
++	case 51:                                /* (0362) the country code wifid sets: the chip keeps its CLM's world-wide default */
++	case 383:                               /* (0362) a 4104-byte request wifid sets right after it: nothing here to apply */
+ 		snprintf(said, said_size, " (accepted, nothing to do)");
+ 		return 0;
+ 	default:
