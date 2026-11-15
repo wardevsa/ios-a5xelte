@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0102 — paquete DROP real 1 y min33 (herogl=1) preparados, NO escritos (2026-11-15)
+## Relevo vigente: H-0103 — min33 (herogl=1, línea de upstream) y paquete DROP real 1 ESCRITOS (D-0070); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min33-20261115.img` (sha256 `1199f813…abde`, E-0240/E-0241). Zona DROP con el paquete real 1 (generación 2), verificada (E-0239/E-0242).
+- **Director:** `adb reboot`, 5 min, mirar si cambia la pantalla (fondo, fluidez, negro); TWRP. **Ingeniero:** `herolte-log-pull.py`; `grep -E 'HEROLTE DROP|hero-run:|HEROLTE GL|herogl|libheroeagl|EAGL'`; fps/copy; crashes de backboardd; verify de ficheros (herolte-hfs-read.py).
+- Si negro/colgado: min32 (E-0235) por BOOT con firma; el autorun instalado persiste.
+
+## Relevo anterior: H-0102 — paquete DROP real 1 y min33 (herogl=1) preparados, NO escritos (2026-11-15)
 - **Tarea en curso: T-0012 / T-0051.** CI mesa-ios OK (E-0238). E-0239: paquete real 1 (12 ficheros, 17 MiB, generación 2). E-0240: `xnu-boot-v2-s7-min33-20261115.img` sha256 `1199f813…1aabde` (línea de upstream: herogl=1 sweettop=1 glsb3=1 herosb=1 a5fb_perf=1 a5fb_hz=60 heronoexec=...).
 - **Orden de escritura (TWRP):** (1) BOOT min33; (2) zona DROP con `drop-real-1/command.txt`; (3) arrancar 5 min; (4) log: 'hero-run:' y 'HEROLTE DROP: package 2 ready'; GL en backboardd.
 - **Riesgo:** pantalla en negro si backboardd falla con herogl=1; los ficheros instalados persisten; vuelta atrás min32 + paquete de reversión (no preparado).

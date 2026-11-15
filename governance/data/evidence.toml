@@ -3549,3 +3549,33 @@ sha256 = "1199f813d69b6524728484e1f2ab2edb2a91bc6b2dc10037c82942d7bf1aabde"
 size = 18620432
 immutable = true
 note = "Línea de uso diario de upstream (docs/herolte-howto.md §4) adaptada: con herogl=1 el kernel inyecta en backboardd la capa EAGL (libheroeagl = libhakiosgl del paquete) y la composición de CoreAnimation pasa a OpenGL ES sobre la Mali. Límite 607 caracteres. Por defecto herodrop=1 y heropower=1 (leído en 0337 y 0330), por eso se quitaron. glsb3 no está como cadena en el kernel: lo lee userland. Riesgo: si backboardd falla con herogl=1 la pantalla puede quedar en negro; vuelta atrás: min32 (sin herogl) por BOOT. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run17-min33/xnu-boot-v2-s7-min33-20261115.verify-independent.txt."
+
+[[evidence]]
+id = "E-0241"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min33-20261115.img (herogl=1 y línea de uso diario de upstream) y leído de vuelta (sha256 1199f813…abde); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min33-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "52029e4c659e564ba97590fdbbf81fcc3c242866796d6f9ce129c285fa9c126d"
+size = 724
+immutable = true
+note = "D-0070; hash registrado antes en E-0240. Primer intento."
+
+[[evidence]]
+id = "E-0242"
+title = "Zona DROP de USERDATA escrita con el paquete real 1 (generación 2, 12 ficheros, 17215488 B) en el bloque 5686859 (byte 23293374464), verificado ('-> verified')"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/drop-real-1-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "d2daaae903cd3332ab8a2f2ed9ff58f73feb525012f93b04710e5248f5a4425a"
+size = 767
+immutable = true
+note = "D-0070; orden de E-0239 (command.txt, SHA-256 8a0e17f8…6383), identificador de paquete 853868283021272427. Solo la zona DROP; el volumen de iOS no se tocó. Pendiente: arrancar con min33, buscar 'HEROLTE DROP: package 2 ready for userland' y las líneas 'hero-run:' del log, y comprobar si backboardd carga la capa GL (libheroeagl)."
