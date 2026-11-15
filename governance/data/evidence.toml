@@ -3804,3 +3804,18 @@ sha256 = "685032aff17b86b79c69e181af86f99c2f400466d1755209df7b22f5a7730cea"
 size = 5955
 immutable = true
 note = "Sin datos privados. Acompaña a tools/herolte-wifi-extract.sh (probado solo con un adb falso: no se ha ejecutado contra el teléfono) y al parche 0360 (sin CI)."
+
+[[evidence]]
+id = "E-0258"
+title = "Análisis de Jefatura Técnica del 15-nov sobre Wi-Fi: no hace falta un driver nuevo estilo S7GE; plan de tres fases (extraer firmware y probar el driver existente; diagnosticar si falla; driver nuevo solo como último recurso) y trabajo paralelo de fluidez"
+kind = "document"
+path = "/home/pioxi/HackiOS/repos/wardevsa-ios-a5xelte-v2/docs/S7GE_DIRECTIVA_WIFI_20261115.md"
+location = "repo"
+created = "2026-11-15"
+domain = "host"
+level = "L1"
+device = "none"
+sha256 = "4197bd0d606dc7155a6b8c062927d1ead49871b9c9af3281ce8dc760ee570c81"
+size = 2021
+immutable = true
+note = "Resumen fiel con cabecera del ingeniero (no es una copia literal completa). El Director dijo: 'Autorizo todo lo siguiente ya que lo he leído conscientemente. Firmado PioXI'. Origen de D-0078. Corrección del ingeniero: network.txt usa nombre en la 1.ª línea y contraseña en la 2.ª (no ssid=/password=) y es opcional (herolte_wifi.c)."
