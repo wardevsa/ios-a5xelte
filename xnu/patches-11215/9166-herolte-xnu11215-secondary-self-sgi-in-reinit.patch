@@ -1,0 +1,31 @@
+9166: HEROLTE secondaries no longer take their self-SGI in SweetCPU::initCPU (xnu-11215).
+
+xnu-11215's processor_cpu_reinit() enables IRQs to take it and first asserts cpu_signal == SIGPdisabled.
+The early IRQ window from 0208 cleared SIGPdisabled first: BOOT 18k4 panicked at cpu_common.c:855.
+
+diff --git a/iokit/Kernel/arm/SweetCPU.cpp b/iokit/Kernel/arm/SweetCPU.cpp
+index 9f42b97..4eba5a2 100644
+--- a/iokit/Kernel/arm/SweetCPU.cpp
++++ b/iokit/Kernel/arm/SweetCPU.cpp
+@@ -315,16 +315,11 @@ SweetCPU::initCPU(bool boot)
+ 	 * (osfmk/kern/machine.c) for every CPU, boot CPU included; doing it here too trips
+ 	 * the ml_cpu_up() assertion. */
+ 	setCPUState(kIOCPUStateRunning);
+-#if defined(HEROLTE)
+-	if (getCPUNumber() != 0) {
+-		/* As on the A5 (GICv2): a secondary enters at splsched with DAIF.I
+-		 * set; take the queued self-SGI here, then restore the mask that
+-		 * cpu_machine_init() expects. */
+-		boolean_t old_irq = ml_set_interrupts_enabled(TRUE);
+-		__builtin_arm_isb(ISB_SY);
+-		ml_set_interrupts_enabled(old_irq);
+-	}
+-#endif
++	/*
++	 * 9166: no early IRQ window here on HEROLTE (0208 took the self-SGI in initCPU, which xnu-8796 needed).
++	 * xnu-11215's processor_cpu_reinit() takes it itself and first asserts that SIGPdisabled is still set;
++	 * taking it here cleared it and panicked (BOOT 18k4: cpu_common.c:855, cpu_signal 0x8).
++	 */
+ 	kprintf(CPU_PORT_NAME " CPU: cpu=%u entered initCPU mpidr=0x%llx EL%llu IRQs=%u\n",
+ 	    getCPUNumber(), __builtin_arm_rsr64("MPIDR_EL1") & 0xffffULL,
+ 	    __builtin_arm_rsr64("CurrentEL") >> 2, ml_get_interrupts_enabled());
