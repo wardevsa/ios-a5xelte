@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0083 — min25 (min24 + sweetfb_native=1) ESCRITA (D-0060); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0084 — min25 medida: sweetfb_native=1 no basta; backboardd sigue en espera; BOOT sigue con min25 (2026-11-15)
+- **Tarea en curso: T-0012.** E-0212: 'presented as 1440x2560' correcto, superficies de pantalla 1440x2560 a cero, hilos en espera. Quedan como sospechosos: assetsd aborta ('Too many corpses', sig 6), com.apple.datamigrator (3 ejecuciones), faltan hero-run/autorun/herosb/disabled.list (DROP), y el estado de migración/setup del root.
+- **Siguiente:** (1) symbolizar los PC del muestreo SMP (dyld cache de la raíz; `7z` lee el HFS sin montar pero los tamaños salen 0, hay que ver si extrae) para ver qué espera backboardd; (2) mirar el crash de assetsd (bt en el log, direcciones sin símbolos); (3) instalar el userland de upstream por DROP (herodrop=1) tras una firma.
+- Táctil: el driver arranca ('sensing, INT=0; polling 5 ms'); falta una prueba con toques (la pantalla no responde mientras no haya UI).
+- Restaurar BOOT: min24/min23/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0083 — min25 (min24 + sweetfb_native=1) ESCRITA (D-0060); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min25-20261115.img` (sha256 `a55af158…c9e4`, E-0210/E-0211).
 - **Director:** `adb reboot`, 5 min sin pulsar, apuntar si ve logo de Apple o texto de iOS; volver a TWRP (si adb no aparece: desenchufar y enchufar). **Ingeniero:** `herolte-log-pull.py`; FBSRC/FBPROBE con contenido; 'presented as'.
 - Restaurar BOOT: min24/min23/original E-0009 (cada escritura exige firma).
