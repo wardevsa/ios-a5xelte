@@ -886,11 +886,43 @@ remove_listed_apps(void)
       unlink(LS_DB_GONE);       /* remove_ls_db_once, just after, takes the database */
 }
 
+/*
+ * DROP_DIR files.remove: one name a line, taken out of DROP_DIR once (the list itself goes after). DROP only adds and replaces
+ * files, so this is how a switch file such as wallpaper.off is turned back on (herosb looks for it with access()). Only these
+ * names: the three switches herosb reads; anything else, and any name with a slash or a dot first, is ignored.
+ */
+static void
+remove_listed_files(void)
+{
+   static const char *const allowed[] = { "wallpaper.off", "gestures.off", "fps.off" };
+   FILE *f = fopen(DROP_DIR "files.remove", "r");
+   char name[128];
+   while (f && fgets(name, sizeof(name), f)) {
+      char path[192];
+      name[strcspn(name, "\r\n")] = 0;
+      int ok = 0;
+      for (size_t i = 0; i < sizeof(allowed) / sizeof(allowed[0]); i++)
+         ok |= strcmp(name, allowed[i]) == 0;
+      if (!ok) {
+         herodrm_log("hero-run: files.remove: '%s' is not one of the switch files, left alone", name);
+         continue;
+      }
+      snprintf(path, sizeof(path), DROP_DIR "%s", name);
+      int r = unlink(path);
+      herodrm_log("hero-run: files.remove: %s taken out (%d)", name, r);
+   }
+   if (f) {
+      fclose(f);
+      unlink(DROP_DIR "files.remove");
+   }
+}
+
 int
 main(int main_argc, char **main_argv)
 {
    if (main_argc > 1 && strcmp(main_argv[1], "--register-apps") == 0)
       return register_apps(main_argc, main_argv);
+   remove_listed_files();
    disable_bluetooth_audio();
    install_audio_plugin();
    reduce_transparency();
