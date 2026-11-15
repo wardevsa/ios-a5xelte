@@ -3144,3 +3144,33 @@ sha256 = "3b31aba92639445c62970a838e61e6ad02a30c27124f42f0808fb95c800e2267"
 size = 1663
 immutable = true
 note = "Basado en E-0208, E-0209 y E-0212 (logs) y en la caché de dyld extraída de systemos.dmg del IPSW (en el disco de trabajo, no en git). Hipótesis sobre vsync NO probada; el parche 0355 la comprobará."
+
+[[evidence]]
+id = "E-0214"
+title = "Kernel con 0355 corregido (log de argumentos de las llamadas IOMFB) compilado en el CI (run 43711249983, commit 3ea3b71, éxito; el run 43710141555 con 34fd5f9 falló por un cast de puntero): la cadena FBCALL está en el binario"
+kind = "kernel"
+path = "/home/pioxi/HackiOS/builds/device-day/artifacts/kernel-0355-ci-43711249983/xnu-kernel-macos-15-intel/kernel.development.herolte"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "6cb529604a6a07cf4186ff94674eaa7a52539fb39084ad8ae3005e897c5ae253"
+size = 17339640
+immutable = true
+note = "D-0062 / T-0050. 0355 solo añade IOLog en IOMobileFramebufferUserClient::externalMethod y registerNotificationPort."
+
+[[evidence]]
+id = "E-0215"
+title = "Imagen preparada: xnu-boot-v2-s7-min26-20261115 = min25 con el kernel 0355 (E-0214); línea de arranque idéntica a min25; verificador independiente sin FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run10-min26/xnu-boot-v2-s7-min26-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "c08cd2217ae96b5cc885b6109142e5632ab46f60660125d58ef181d697c57fca"
+size = 18620432
+immutable = true
+note = "Solo cambia el kernel; ADT, cargador y línea idénticos a min25 (diff vacío). El único FAIL del constructor es su expectativa fija herolog=0. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run10-min26/xnu-boot-v2-s7-min26-20261115.verify-independent.txt."
