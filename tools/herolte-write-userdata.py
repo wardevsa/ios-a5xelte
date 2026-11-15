@@ -67,7 +67,12 @@ def send_chunk(data, skip, count, port, target):
                 try: c.recv(1)
                 except OSError: pass
                 c.close(); ok = True
-                adb('shell', 'killall sleep 2>/dev/null')   # sin esto la tubería espera los 300 s del sleep aunque los datos ya estén escritos
+                # esperar a que dd termine (head cierra la tubería tras N bytes) ANTES de matar el sleep: si el sleep muere antes, nc ve EOF
+                # en su entrada y sale sin haber leído todo el socket (trozo truncado); luego sin el sleep la tubería no espera 300 s
+                for _ in range(480):
+                    if not adb('shell', 'pidof dd').stdout.decode().strip(): break
+                    time.sleep(0.25)
+                adb('shell', 'killall sleep 2>/dev/null')
                 break
             except OSError:
                 continue
