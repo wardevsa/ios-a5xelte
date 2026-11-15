@@ -3924,3 +3924,18 @@ sha256 = "a6a483ce5c6a33285d0c72c9d6362954e9df88f07c334d02caed3bcf3cdadac6"
 size = 270841
 immutable = true
 note = "Medido: 'HEROLTE DROP: package 3 ready for userland'; 'the firmware's files after 1000 ms'; 'try 1: state 0x11 … id 0xabcd16c3'; 'chip 0x17094359 … firmware 594137 bytes, NVRAM 5122 bytes'; 'copied and read back in 370 ms, 0 words differ'; firmware 'RTE (SDIO-MSG_BUF) 9.96.17 (C0 Network/rsdb) on BCM43596'; 'scan done, status 0, 10 access points'; 'joining a network of 19 bytes, WPA2' y 'CONNECTED in 1807 ms'. Sin network.txt ('error 2': iOS elige la red). Aún REFUSED: COUNTRY_CODE y el selector 383; error 6 en HW_SUPPORTED_CHANNELS. CPU: backboardd 141 % de media, de los que 51 puntos son tiempo de sistema (36 %: el resto, 64 %, es de usuario); kernel_task 18 % (todo sistema); fps medio 14,8 (máx. 30). Memoria libre 801 -> 59 MB en 5 min de uso (vigilar: riesgo de jetsam). Observación del Director: 'conectado al wifi, le costó unos segundos desde el inicio en empezar a mostrar redes, y me conecté a google.com'. El log contiene el BSSID y el nivel de señal de la red del Director y otros identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0267"
+title = "Plan de la actualización grande n.º 1 (13 cambios: 2 argumentos de arranque, 5 procesos bloqueados, 2 parches de kernel nuevos 0361/0362, hero-run con files.remove, fondo propio y app de ejemplo) con vuelta atrás a min36"
+kind = "document"
+path = "/home/pioxi/HackiOS/repos/wardevsa-ios-a5xelte-v2/docs/S7GE_MEGA_UPDATE_1.md"
+location = "repo"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "8acc1b7dd46e30de06891485e77616c60654ffd6ac99d86008aa70238cc6967a"
+size = 2533
+immutable = true
+note = "Pedida por el Director. Parches 0361 y 0362 y hero-run con files.remove commiteados en local, sin CI. El paquete (generación 4) y la imagen min37 se construyen tras los CI. Dry-run del empaquetador con el hero-run anterior: 10 entradas, 552960 B, HeroReddit aceptada (Mach-O arm64 sin cifrar)."

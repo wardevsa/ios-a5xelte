@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0118 — Wi-Fi FUNCIONA (min36): escanea, se une y navega; memoria baja; el Director propone una actualización grande de userland (2026-11-15)
+## Relevo vigente: H-0119 — actualización grande n.º 1 preparada en el PC (13 cambios); falta CI de kernel y de mesa-ios y las firmas (2026-11-15)
+- **Tarea en curso: T-0012 / T-0056.** Plan en `docs/S7GE_MEGA_UPDATE_1.md` (E-0267). Parches 0361 (TOPMEM) y 0362 (Wi-Fi acepta COUNTRY_CODE y 383) y `hero-run.c` con `files.remove` commiteados, sin CI (commit 292d5a4). Fondo `~/HackiOS/builds/device-day/drop-mega-1/wallpaper.png` (generado, 750x1334) y `files.remove` (`wallpaper.off`).
+- **Siguiente:** firma de push + CI xnu (kernel) + CI mesa-ios (hero-run); luego construir min37 (min36 con `a5fb_hz=30 heroquantum=500` y heronoexec += identityservicesd,parsecd,mediaanalysisd,photoanalysisd,wifip2pd) y el paquete 4 (autorun nuevo, files.remove, wallpaper.png, app=HeroReddit); firmas de BOOT y de zona DROP con hash; probar en DOS arranques (el fondo entra en el segundo).
+- Vuelta atrás: min36 (E-0264) y paquete con hero-run anterior.
+
+## Relevo anterior: H-0118 — Wi-Fi FUNCIONA (min36): escanea, se une y navega; memoria baja; el Director propone una actualización grande de userland (2026-11-15)
 - **Tarea en curso: T-0012 / T-0059 (casi cerrada).** E-0265. BOOT = min36 (base buena actual; contiene herowifi=1). Zona DROP: paquetes 2 (hero-run y GL) y 3 (firmware Wi-Fi).
 - **Pendiente:** (1) COUNTRY_CODE y el selector 383 siguen REFUSED, HW_SUPPORTED_CHANNELS error 6 (revisar si importan para 5 GHz/2,4 GHz completos); (2) memoria libre cae a 59 MB en 5 min: investigar (vm_compressor, jetsam, apps); (3) fluidez (backboardd 141 %, 64 % usuario/36 % kernel); (4) "mega actualización" de userland (fondo, apps): solo DROP, sin tocar BOOT, con una firma por paquete.
 - Vuelta atrás: min34 (sin Wi-Fi) o min36 (esta).
