@@ -63,6 +63,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0056 | APPROVED | operation | 2026-11-15 | Autorización roja: escribir min22 en BOOT (misma línea que min21, kernel con 0353) | ingeniero | director | device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo escribir en BOOT la imagen xnu-boot-v2-s7-min22-20261115.img (misma línea de arranque que min21, kernel con el parche 0353). SHA-256 8bd3295b435db0b995b258d5d810b0f8b336b239ef8064d6e4b652391dd4cea6. Solo BOOT. Firmado PioXI.' |
 | D-0057 | APPROVED | operation | 2026-11-15 | Autorización roja: añadir a5fb_noconsole=1 y a5fb_keep_on=1 (resto igual que min22) y escribir min23 en BOOT | ingeniero | director | device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo añadir a5fb_noconsole=1 y a5fb_keep_on=1 a la línea de arranque (el resto igual que min22). Imagen: xnu-boot-v2-s7-min23-20261115.img, SHA-256 595a146fe5da285c2c89f4f20cb95cec789061f424ec7dea85e818f4791898f2. Solo BOOT. Firmado PioXI.' |
 | D-0058 | APPROVED | operation | 2026-11-15 | Autorización roja: push de herolte-drop-v2 al remoto mio y CI de kernel con el parche 0354 (commit 54c3d98) | ingeniero | director | publish | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo hacer push de la rama herolte-drop-v2 al remoto mio y ejecutar el CI de kernel con el parche 0354 (commit 54c3d98). Firmado PioXI.' |
+| D-0059 | APPROVED | operation | 2026-11-15 | Autorización roja: escribir min24 en BOOT (misma línea que min23, kernel con 0354) | ingeniero | director | device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo escribir en BOOT la imagen xnu-boot-v2-s7-min24-20261115.img (misma línea de arranque que min23, kernel con el parche 0354). SHA-256 968ddd3a8cc9067d3be5f2a32dea6c7b3a00423f0f0d3aa5d51eb32edfd64f64. Solo BOOT. Firmado PioXI.' |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
 - **Estado:** APPROVED (director, 2026-11-13)
@@ -409,4 +410,10 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Razón:** E-0204: cuadros presentados a ~10 fps pero negros; 0354 distingue superficie negra de problema de coherencia de caché.
 - **Consecuencias:** ALCANCE EXACTO: git push de herolte-drop-v2 SOLO a mio, nunca a origin; lanzar el workflow xnu y descargar artefactos. 0354 solo añade IOLog y una limpieza de caché de la superficie origen en AppleCLCD::present(). NO autoriza escribir en el teléfono: min24 necesitará su firma aparte.
 - **Cómo se revierte:** Borrar la rama remota o el run; lo publicado puede haberse copiado.
+
+## D-0059 — Autorización roja: escribir min24 en BOOT (misma línea que min23, kernel con 0354)
+- **Estado:** APPROVED (director, 2026-11-15)
+- **Razón:** E-0204: cuadros negros a ~10 fps; 0354 distingue superficie negra de problema de coherencia de caché (E-0205/E-0206).
+- **Consecuencias:** ALCANCE EXACTO: una escritura de BOOT con xnu-boot-v2-s7-min24-20261115.img (SHA-256 968ddd3a8cc9067d3be5f2a32dea6c7b3a00423f0f0d3aa5d51eb32edfd64f64). Autoriza además leer el log persistente (últimos 4 MiB de USERDATA) desde TWRP, solo lectura. NO autoriza otros argumentos, otra imagen, EFS, RECOVERY ni bootloaders; el kernel puede escribir solo en USERDATA (ufsrw=1).
+- **Cómo se revierte:** Restaurar BOOT con min23 (E-0203), min22 o el original (E-0009); cada escritura exige firma salvo que la cubra una decisión vigente.
 
