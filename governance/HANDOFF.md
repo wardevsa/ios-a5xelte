@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0110 — directiva de Jefatura aplicada (ratificaciones, tareas, perfilado, parche 0359); falta la firma de la copia en segundo disco (2026-11-15)
+## Relevo vigente: H-0111 — kernel 0359 compilado (CI 43728707463) y min35 de perfilado preparada, NO escrita (2026-11-15)
+- **Tarea en curso: T-0012 / T-0056.** E-0253 kernel con 0359. E-0254 `xnu-boot-v2-s7-min35-20261115.img` sha256 `2ba461dc…24fdd4`: min34 sin los 6 argumentos que ahora son por defecto (línea 536) + `sweetsample_s=2`.
+- **Siguiente:** firma de BOOT; `adb reboot`, 3-4 min de uso (Ajustes, scroll, apps), apagar desde iOS (herohalt=1 -> TWRP); `herolte-log-pull.py`; comprobar que se comporta como min34 (GPU PRESENT, consola muda, Wi-Fi apagado) y agrupar los `SMP backboardd` por librería (herolte-smp-images.py). Luego E1-E3 (a5fb_hz=30, heroquantum=500, heronoexec += wifid,identityservicesd).
+- Vuelta atrás: min34 (E-0247).
+
+## Relevo anterior: H-0110 — directiva de Jefatura aplicada (ratificaciones, tareas, perfilado, parche 0359); falta la firma de la copia en segundo disco (2026-11-15)
 - **Tarea en curso: T-0012.** El Director autorizó la directiva (E-0250) ignorando los plazos. Hecho: D-0007, D-0009, D-0011, D-0012 y D-0015 (con condición) APPROVED; D-0013 sigue PROPOSED (pospuesta). Tareas nuevas: T-0054 (fusión 0352-0359, revisión de Jefatura), T-0055 (D-0015, plan), T-0056 (Carril A), T-0057 (copia en 2.º disco, bloqueada); T-0037 con su bloqueo actualizado. Perfilado: `docs/S7GE_BACKBOARD_PROFILING.md` (E-0251). Parche `0359` (valores por defecto del teléfono, libera ~85 caracteres de línea) escrito, sin CI.
 - **Pendiente del Director (rojo):** (1) montar un segundo disco (clic en el gestor de ficheros, sin sudo) y firmar la copia (T-0057; texto en la respuesta del ingeniero y en este relevo abajo); (2) firma de CI para 0359; (3) decidir D-0013.
 - **Texto de la copia (rellenar RUTA):** "Autorizo copia de seguridad de EFS, BOOT, RECOVERY, SYSTEM y USERDATA desde /media/pioxi/F20C31440C31055F/IOS-S7-backup/2026-11-14-engineer-full/ y ~/HackiOS/backups/device-herolte/2026-11-12/ hacia RUTA/IOS-S7-backup-copia2/, con verificación de SHA-256 y lectura de prueba. Solo lectura de origen, escritura solo en esa ruta, sin tocar el teléfono. Firmado PioXI."
