@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0100 — min32 (herodrop=1) y paquete de autoprueba ESCRITOS (D-0068); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0101 — DROP v2 FUNCIONA en el teléfono (min32, autoprueba verificada); siguiente: paquete real (2026-11-15)
+- **Tarea en curso: T-0012.** E-0237: kernel instaló el paquete 1; verify_selftest 'todo correcto'; iOS arranca normal. BOOT = min32 (herodrop=1).
+- **Siguiente:** (1) compilar hero-run nuevo (CI mesa-ios: push + workflow, rojo con firma) y reunir libs/ficheros: fondo `herosb`, `disabled.list`, `autorun`; (2) paquete real con generación 2; (3) firma para escribir la zona; (4) leer 'hero-run:' del log. Limpieza opcional del v2test.
+- Vuelta atrás: min31 por BOOT; zona con `herolte-drop.py adb --clear` (firmas).
+
+## Relevo anterior: H-0100 — min32 (herodrop=1) y paquete de autoprueba ESCRITOS (D-0068); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min32-20261115.img` (sha256 `3b471aa3…1220`, E-0233/E-0235). Zona DROP (byte 23293374464, bloque 5686859) con el paquete de autoprueba, verificada (E-0234/E-0236).
 - **Director:** `adb reboot`, 3-5 min (no hace falta usar nada), TWRP. **Ingeniero:** `herolte-log-pull.py` + `HEROLTE_ADB=adb python3 -I xnu/drop-v2/deviceday/verify_selftest.py ~/HackiOS/builds/device-day/selftest-a-min32/expected.json` (solo lectura); `grep -E 'HEROLTE DROP|jnl:|F_FULLFSYNC'`.
 - Si DROP falla: min31 por BOOT (firma) y/o `herolte-drop.py adb --clear` (firma).
