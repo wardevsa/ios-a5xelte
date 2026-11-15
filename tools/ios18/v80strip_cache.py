@@ -34,8 +34,11 @@ PROT_EXEC = 4
 CSMAGIC_EMBEDDED_SIGNATURE, CSMAGIC_CODEDIRECTORY = 0xFADE0CC0, 0xFADE0C02
 HASH_NAMES = {1: 'sha1', 2: 'sha256', 3: 'sha256', 4: 'sha384'}
 
+# Tier 0 in this order (the hottest first: retain/release, locks, malloc, dispatch).
 TIER0 = ('libobjc.A.dylib', 'libswiftCore.dylib', 'libsystem_platform.dylib', 'libsystem_pthread.dylib',
-         'libsystem_kernel.dylib', 'libsystem_malloc.dylib', 'libsystem_c.dylib', 'libsystem_trace.dylib',
+         'libsystem_malloc.dylib', 'libdispatch.dylib', 'libsystem_kernel.dylib', 'libc++.1.dylib', 'libc++abi.dylib',
+         'CoreFoundation', 'Foundation', 'FoundationEssentials', 'libswift_Concurrency.dylib', 'libxpc.dylib',
+         'libsystem_trace.dylib', 'QuartzCore', 'UIKitCore', 'CoreGraphics', 'libsystem_c.dylib',
          'libsystem_info.dylib', 'libsystem_notify.dylib', 'libsystem_blocks.dylib', 'libsystem_darwin.dylib',
          'libsystem_containermanager.dylib', 'libsystem_coreservices.dylib', 'libsystem_m.dylib',
          'libdispatch.dylib', 'libxpc.dylib', 'libc++.1.dylib', 'libc++abi.dylib', 'libdyld.dylib', 'dyld',
@@ -53,7 +56,10 @@ TIER0 = ('libobjc.A.dylib', 'libswiftCore.dylib', 'libsystem_platform.dylib', 'l
          'CoreAnimation', 'Metal', 'MetalTools', 'IOAccelerator', 'OpenGLES', 'CoreVideo', 'CoreMedia',
          'AudioToolbox', 'CoreAudio', 'AVFAudio', 'MediaToolbox', 'libboringssl.dylib', 'libsystem_asl.dylib',
          'ManagedConfiguration', 'AppleAccount', 'Accounts', 'PersistentConnection', 'ProtocolBuffer',
-         'LaunchServices', 'CoreDuet', 'BiomeStreams', 'WebKit', 'JavaScriptCore', 'WebCore')
+         'LaunchServices', 'CoreDuet', 'BiomeStreams')
+TIER0_RANK = {}
+for _n in TIER0:
+    TIER0_RANK.setdefault(_n, len(TIER0_RANK))
 TIER3 = ('Recon3D', 'AppleCV3D', 'libusd_ms.dylib', 'VisualLogger', 'AppC3D', 'CorePhotogrammetry', 'Espresso',
          'TuriCore', 'GraphComputeRT', 'CoreRealityIO', 'LearnedFeatures', 'libBasebandManager.dylib',
          'libBasebandManagerICE.dylib', 'libIPTelephony.dylib', 'libBasebandManagerDAL.dylib', 'ABMHelper',
@@ -161,6 +167,23 @@ def find_pads(cache, info):
             last = (last + int(nz[-1]) + 1 + 15) & ~15
         if stop - last >= 64:
             pads.append([last, stop])
+    # the zero tail of every r-x mapping (the stub sub-caches between the big ones), outside every image
+    for a, size, foff, prot, p in cache.maps:
+        if not (prot & PROT_EXEC):
+            continue
+        end = a + size
+        span = min(size, 4 << 20)
+        data = np.frombuffer(bytes(cache.bufs[p][foff + size - span:foff + size]), dtype=np.uint8)
+        nz = np.nonzero(data)[0]
+        lo = ((end - span + int(nz[-1]) + 1) if len(nz) else end - span) + 16
+        lo = (lo + 15) & ~15
+        i = bisect.bisect_right(starts, lo)
+        if i > 0:
+            lo = max(lo, (taken[i - 1][1] + 15) & ~15)
+        hi = min(end, starts[i]) if i < len(starts) else end
+        if hi - lo >= 64 and not any(s <= lo < e or s < hi <= e for s, e in pads):
+            pads.append([lo, hi])
+            print(f'  mapping tail {lo:#x}..{hi:#x} ({(hi - lo) >> 10} KiB) in {os.path.basename(p)}')
     return sorted(pads)
 
 
@@ -239,8 +262,9 @@ def main():
                         continue
                 mine.append((at, word))
         t = tier(path)
+        rank = TIER0_RANK.get(path.rsplit('/', 1)[-1], 0) if t == 0 else len(mine)
         for at, word in mine:
-            sites.append((t, len(mine), at, word, path))
+            sites.append((t, rank, at, word, path))
     sites.sort()
     print(f'sites needing a routine: {len(sites)} ' + str(dict(Counter(s[0] for s in sites))))
 
