@@ -2694,3 +2694,18 @@ sha256 = "f5c3edf5be93fa4d867e4a77eac600280b4480f131cbf6989b8a54cf42d19642"
 size = 723
 immutable = true
 note = "Solo escritura y lectura de vuelta (D-0049; hash registrado antes en E-0182; kernel E-0174). Objetivo: permitir que XNU inicialice el diario HFS+ y monte la raíz iOS (E-0181)."
+
+[[evidence]]
+id = "E-0184"
+title = "min17 (ufsrw=1 rootrw=1): la raíz iOS SE MONTA (desaparece 'cannot mount root' y el error del diario; 'SWEET HFS registered') y XNU lanza launchd (load_init_program), que es matado: 'unexpected SIGKILL of launchd (CS_KILLED)' (panic + A5 XNU PANIC)"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min17-observation.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "e3950c9962333e3f8aa85fc519fa26eb721a44efa138a544f356474c2390b944"
+size = 1629
+immutable = true
+note = "Hito: primera vez que XNU monta la raíz iOS en este S7 y ejecuta /sbin/launchd (PID 1). El proceso muere por CS_KILLED: la firma de código de launchd/dyld/caché no pasa la comprobación de este kernel. El upstream, en su primer arranque de iOS (HEROLTE_PROGRESS.md), añadía unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 (y la caché de dyld 'de 16 KiB' era rechazada por las páginas VM de 4 KiB, docs/a5xelte-bringup.md). Transcripción por IA de fotos no archivadas."
