@@ -12,6 +12,7 @@ on:
     branches: [herolte]
     paths:
       - "tools/ios/**"
+      - "tools/ios18/**"
       - ".github/workflows/ios-tools.yml"
 
 jobs:
@@ -32,6 +33,28 @@ jobs:
             codesign -s - -f "out/$name"
             file "out/$name"
           done
+      - name: v80stress-r (LSE/RCpc rewritten to routines by tools/ios18/v80strip.py)
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --break-system-packages capstone
+          python3 tools/ios18/v80strip.py --dump 40 out/v80stress out/v80stress-r | tee strip.txt
+          python3 - strip.txt <<'PY'
+          import sys, capstone
+          md = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
+          for line in open(sys.argv[1]):
+              if not line.startswith('site '):
+                  continue
+              head, words = line.split(': ', 1)
+              _, site, w, _, _, at = head.split()
+              site, at = int(site, 16), int(at, 16)
+              orig = next(md.disasm(int(w, 16).to_bytes(4, 'little'), site))
+              print(f'{head}   ({orig.mnemonic} {orig.op_str})')
+              code = b''.join(int(x, 16).to_bytes(4, 'little') for x in words.split())
+              for i in md.disasm(code, at):
+                  print(f'    {i.address:#x}: {i.mnemonic} {i.op_str}')
+          PY
+          python3 tools/ios18/v80strip.py --scan out/v80stress-r || true
+          codesign -s - -f out/v80stress-r
           shasum -a 256 out/* | tee out/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
