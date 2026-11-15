@@ -35,7 +35,7 @@ jobs:
         run: |
           brew install blacktop/tap/ipsw
           ipsw version
-          python3 -m pip install --quiet numpy
+          python3 -m pip install --quiet --break-system-packages numpy
       - name: The shared cache
         run: |
           set -x
