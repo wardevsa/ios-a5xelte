@@ -3174,3 +3174,18 @@ sha256 = "c08cd2217ae96b5cc885b6109142e5632ab46f60660125d58ef181d697c57fca"
 size = 18620432
 immutable = true
 note = "Solo cambia el kernel; ADT, cargador y línea idénticos a min25 (diff vacío). El único FAIL del constructor es su expectativa fija herolog=0. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run10-min26/xnu-boot-v2-s7-min26-20261115.verify-independent.txt."
+
+[[evidence]]
+id = "E-0216"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min26-20261115.img (min25 con kernel 0355) y leído de vuelta (sha256 c08cd221…c57fca); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min26-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "6829f1dff0312e33d0d2ddfe0139dc915501a15bcebc111a5c46914472e22bd4"
+size = 724
+immutable = true
+note = "D-0063; hash registrado antes en E-0215. Primer intento. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."

@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0087 — kernel 0355 (CI 43711249983) y min26 preparada, NO escrita; BOOT sigue con min25 (2026-11-15)
+## Relevo vigente: H-0088 — min26 (kernel 0355, FBCALL) ESCRITA (D-0063); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min26-20261115.img` (sha256 `c08cd221…c57fca`, E-0215/E-0216).
+- **Director:** `adb reboot`, 3 min sin pulsar, TWRP (si adb no sale: desenchufar/enchufar). **Ingeniero:** `herolte-log-pull.py`; `grep -a FBCALL`.
+- Restaurar BOOT: min25/min24/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0087 — kernel 0355 (CI 43711249983) y min26 preparada, NO escrita; BOOT sigue con min25 (2026-11-15)
 - **Tarea en curso: T-0012.** E-0214 kernel, E-0215 imagen `xnu-boot-v2-s7-min26-20261115.img` sha256 `c08cd221…c57fca`: línea de min25 + kernel 0355 (FBCALL).
 - **Siguiente:** firma del Director; `adb reboot`, 3 min, TWRP (si adb no sale: desenchufar/enchufar); `herolte-log-pull.py`; `grep -a FBCALL`: ¿qué llamada es el registro de vsync? ¿registerNotificationPort?
 - Restaurar BOOT: min25/min24/original E-0009 (cada escritura exige firma).
