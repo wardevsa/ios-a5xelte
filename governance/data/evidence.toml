@@ -3849,3 +3849,18 @@ sha256 = "26db8521fc6ab7f9cebe1bb7909517cb6792aec17c33871194bad2390368ff67"
 size = 260
 immutable = true
 note = "Orden exacta en /home/pioxi/HackiOS/builds/device-day/wifi-firmware/drop-command.txt (SHA-256 e7a063283eb716055541aeae75ff923b4cf25b738e2016e6cb16c70140bbbb07). El kernel solo exige wifi/fw.bin para empezar (herolte_wifi_files_ready); sin wifi/network.txt 'iOS chooses the network'. Zona DROP: mismos bloques que antes (>= byte 23293374464); los ficheros de la generación 2 se conservan (los ficheros que no están en el paquete nuevo se quedan)."
+
+[[evidence]]
+id = "E-0261"
+title = "Zona DROP de USERDATA escrita con el paquete de Wi-Fi (generación 3: wifi/fw.bin, wifi/clm.blob, wifi/nvram.txt; 618496 B) en el bloque 5686859 (byte 23293374464), verificado ('-> verified'); USERDATA no estaba montado"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/drop-wifi-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "976b3994928fcfbb95ecf4e02ec3b09a8ae2354bead547f9dc82b57756d2dab7"
+size = 277
+immutable = true
+note = "D-0079; orden de E-0260 (drop-command.txt, SHA-256 e7a06328…bb07). Identificador de paquete 11097884673649695545. Solo la zona DROP; el volumen de iOS no se tocó. Pendiente: BOOT min36 con herowifi=1 (firma con hash) para que el kernel instale el paquete (herodrop por defecto) y levante el BCM4359; el paquete ya instalado en iOS desde min35/min33 permanece."

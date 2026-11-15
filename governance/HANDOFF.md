@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0114 — firmware Wi-Fi extraído (E-0259) y paquete DROP de Wi-Fi preparado (E-0260); CI de 0360 en curso; faltan min36 y las firmas de escritura (2026-11-15)
+## Relevo vigente: H-0115 — paquete DROP de Wi-Fi ESCRITO en la zona (D-0079, E-0261); falta min36 con herowifi=1 (2026-11-15)
+- **Tarea en curso: T-0012 / T-0059.** Zona DROP con el paquete de Wi-Fi (generación 3) verificada. BOOT sigue siendo min35 (herowifi=0 por defecto): con min35 el kernel instalaría los ficheros pero no levantaría la radio.
+- **Siguiente:** CI de 0360 (run 43731940530) -> kernel -> min36 = línea equivalente a min34 + `herowifi=1` -> firma de BOOT con hash -> arrancar 3-5 min -> TWRP (herohalt) -> log: `HEROLTE DROP: package 3 ready`, `HEROLTE WIFI: …` (ltssm, chip id, firmware), redes en Ajustes.
+- Vuelta atrás: min34 por BOOT; `herolte-drop.py adb --clear` vacía la cabecera.
+
+## Relevo anterior: H-0114 — firmware Wi-Fi extraído (E-0259) y paquete DROP de Wi-Fi preparado (E-0260); CI de 0360 en curso; faltan min36 y las firmas de escritura (2026-11-15)
 - **Tarea en curso: T-0012 / T-0059.** D-0078 cubrió la extracción (hecha: VENDOR=sda16 en solo lectura, módulo BCM4359 C0) y el CI de 0360 (run 43731940530). El teléfono sigue en TWRP, BOOT = min35.
 - **Siguiente (rojo, con firma y hash):** (1) escribir la zona DROP con `~/HackiOS/builds/device-day/wifi-firmware/drop-command.txt` (SHA-256 `e7a06328…bb07`; manifiesto `26db8521…ff67`); (2) BOOT min36 = línea equivalente a min34 + `herowifi=1` con el kernel 0360 (se construye cuando acabe el CI). `network.txt` es OPCIONAL (nombre en la 1.ª línea, contraseña en la 2.ª, NO `ssid=`): sin él se elige la red en Ajustes.
 - **Verde ya hecho:** script de extracción + 3 pruebas; paquete preparado; análisis `docs/S7GE_MIN35_ANALYSIS.md`.
