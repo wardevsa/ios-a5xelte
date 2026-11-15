@@ -3504,3 +3504,48 @@ sha256 = "501e995a881a4ccd610ab8695b7abc58184bd8d65732375709f64eb5162dce2c"
 size = 369
 immutable = true
 note = "Log min32 (/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min32-herolog.txt, sha256 725666c77f5cd7fbba489d4735335642a968b6abbd7724f177445011ad927c49, 883125 B): 'HEROLTE DROP: package 1 ready for userland'; 'jnl: replay_journal … journal replay done' (reproducción del diario por el apagado forzado anterior, esperado); sin 'F_FULLFSYNC failed' ni 'device cache flush failed' ni 'abandoned'. verify_selftest: 'todo correcto'. Observación del Director: 'nada, lo de siempre, está bien'. El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0238"
+title = "Artefacto mesa-ios (run 43718791230, commit 0ad027b, éxito): hero-run con DROP v2, eagl_ca_test, osmesa-test, libdrm, libOSMesa, libhakiosgl (=libheroeagl), libherosb, libheroapp y audio"
+kind = "binary"
+path = "/home/pioxi/HackiOS/builds/device-day/artifacts/mesa-ios-0ad027b-43718791230/mesa-ios/SHA256SUMS"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "e55cb1b19cf46b0ecf455978dd2734f36207ef3d9529e2a6fda9be872e585bbf"
+size = 790
+immutable = true
+note = "SHA256SUMS del artefacto: hero-run 21d37485…, libOSMesa c6d59125…, libhakiosgl 5136933d…, libherosb bf913b0d…, libheroapp 53d99b0e…, libdrm ea96614f…. Sin ficheros de Apple. Compilado por el CI (macos-15-intel)."
+
+[[evidence]]
+id = "E-0239"
+title = "Paquete DROP real 1 preparado (12 ficheros, 17215488 B, generación 2): autorun=hero-run, test=eagl_ca_test, gl.env, test.env, disabled.list (20 líneas), wallpaper.off, gestures.off y las 5 librerías GL/Mesa/herosb/heroapp; el empaquetador lo acepta (dry-run sin adb); NO escrito en el teléfono"
+kind = "document"
+path = "/home/pioxi/HackiOS/builds/device-day/drop-real-1/manifest.txt"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "2de1b51b6c7d28cc99ebd49e1430cd7f7fbdc4d032bf783ab078125f5ec8a916"
+size = 1039
+immutable = true
+note = "Orden exacta en /home/pioxi/HackiOS/builds/device-day/drop-real-1/command.txt (sha256 8a0e17f814d94df7246a02ca39704f26250a5208a9c143e94420d1e593c46383). Sigue docs/herolte-howto.md §5 sin Wi-Fi ni audio (no hay ficheros de Wi-Fi del teléfono ni red; no se publican). La zona DROP admite 128 MiB; el paquete usa 17 MiB. Sin datos privados. Instala hero-run, que mueve BTAudioHALPlugin, aplica disabled.list y registra apps en el próximo arranque (docs/S7GE_USERLAND_FALLOS.md). Riesgo: hero-run actúa en cada arranque; los ficheros instalados quedan en /private/var/herolte aunque se vacíe la zona."
+
+[[evidence]]
+id = "E-0240"
+title = "Imagen preparada: xnu-boot-v2-s7-min33-20261115 = min32 + herogl=1 sweettop=1 glsb3=1 herosb=1 a5fb_perf=1 a5fb_hz=60 heronoexec=vmd,bluetoothd,searchd,ReportCrash,aggregated,analyticsd,cloudd,homed,driverkitd (sin sweetfb_noconsole, heropower=1 ni herodrop=1, que son redundantes); 604 B de línea; 58 PASS del verificador independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run17-min33/xnu-boot-v2-s7-min33-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "1199f813d69b6524728484e1f2ab2edb2a91bc6b2dc10037c82942d7bf1aabde"
+size = 18620432
+immutable = true
+note = "Línea de uso diario de upstream (docs/herolte-howto.md §4) adaptada: con herogl=1 el kernel inyecta en backboardd la capa EAGL (libheroeagl = libhakiosgl del paquete) y la composición de CoreAnimation pasa a OpenGL ES sobre la Mali. Límite 607 caracteres. Por defecto herodrop=1 y heropower=1 (leído en 0337 y 0330), por eso se quitaron. glsb3 no está como cadena en el kernel: lo lee userland. Riesgo: si backboardd falla con herogl=1 la pantalla puede quedar en negro; vuelta atrás: min32 (sin herogl) por BOOT. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run17-min33/xnu-boot-v2-s7-min33-20261115.verify-independent.txt."

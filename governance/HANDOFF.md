@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0101 — DROP v2 FUNCIONA en el teléfono (min32, autoprueba verificada); siguiente: paquete real (2026-11-15)
+## Relevo vigente: H-0102 — paquete DROP real 1 y min33 (herogl=1) preparados, NO escritos (2026-11-15)
+- **Tarea en curso: T-0012 / T-0051.** CI mesa-ios OK (E-0238). E-0239: paquete real 1 (12 ficheros, 17 MiB, generación 2). E-0240: `xnu-boot-v2-s7-min33-20261115.img` sha256 `1199f813…1aabde` (línea de upstream: herogl=1 sweettop=1 glsb3=1 herosb=1 a5fb_perf=1 a5fb_hz=60 heronoexec=...).
+- **Orden de escritura (TWRP):** (1) BOOT min33; (2) zona DROP con `drop-real-1/command.txt`; (3) arrancar 5 min; (4) log: 'hero-run:' y 'HEROLTE DROP: package 2 ready'; GL en backboardd.
+- **Riesgo:** pantalla en negro si backboardd falla con herogl=1; los ficheros instalados persisten; vuelta atrás min32 + paquete de reversión (no preparado).
+- Vuelta atrás: min32 (E-0235).
+
+## Relevo anterior: H-0101 — DROP v2 FUNCIONA en el teléfono (min32, autoprueba verificada); siguiente: paquete real (2026-11-15)
 - **Tarea en curso: T-0012.** E-0237: kernel instaló el paquete 1; verify_selftest 'todo correcto'; iOS arranca normal. BOOT = min32 (herodrop=1).
 - **Siguiente:** (1) compilar hero-run nuevo (CI mesa-ios: push + workflow, rojo con firma) y reunir libs/ficheros: fondo `herosb`, `disabled.list`, `autorun`; (2) paquete real con generación 2; (3) firma para escribir la zona; (4) leer 'hero-run:' del log. Limpieza opcional del v2test.
 - Vuelta atrás: min31 por BOOT; zona con `herolte-drop.py adb --clear` (firmas).
