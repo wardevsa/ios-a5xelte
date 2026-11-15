@@ -42,7 +42,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 | T-0044 | done | 8 | ingeniero | Escribir la raíz iOS (imagen HFSX tuneada) en USERDATA del S7 desde TWRP con tools/herolte-write-userdata.py | T-0045 | C rojo | — |
 | T-0045 | done | 8 | ingeniero | Preparar la imagen final de la raíz iOS: copia de lab-full-xnu, montaje HFS+ rw, tuning herolte, fsck, firma y hash (necesita sudo del Director) | — | A verde | — |
 | T-0046 | done | 8 | ingeniero | Compilar en el CI el kernel con 0352 (heroring=0): push de herolte-drop-v2 a mio y workflow xnu (D-0053) | — | C rojo | — |
-| T-0047 | ready | 8 | ingeniero | Compilar en el CI el kernel con 0353 (miniatura de luminancia del panel): push de herolte-drop-v2 a mio y workflow xnu (D-0055) | — | C rojo | — |
+| T-0047 | done | 8 | ingeniero | Compilar en el CI el kernel con 0353 (miniatura de luminancia del panel): push de herolte-drop-v2 a mio y workflow xnu (D-0055) | — | C rojo | — |
 | T-0012 | in_progress | 9 | ingeniero | Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP | T-0013 | C rojo | — |
 | T-0013 | done | 9 | director | Decidir el cargador de las pruebas: el de clang (conveniencia) o compilar con el GCC aarch64 de Arm | — | A verde | — |
 | T-0016 | done | 9 | ingeniero | Aplicar la renumeración de parches y fusionar con origin/herolte (si el jefe técnico aprueba D-0008) | T-0009 | B amarillo | — |

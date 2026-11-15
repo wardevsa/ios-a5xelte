@@ -2904,3 +2904,33 @@ sha256 = "b606830c206589ee1b4db3538369d2b024b44c66e15633f22af5f3c0891cb13d"
 size = 1959586
 immutable = true
 note = "Observación del Director (texto suyo, no inferido): 'arrancó normal como siempre, salían los 3 colores de arriba izquierda y luego las columnas y colores de la derecha y centro pero la columna de la izquierda que se actualizaba no apareció; al cabo de un minuto la pantalla hizo como 4 actualizaciones de brillo y se apagó completamente; no apareció nada de iOS'. Del log: 16 líneas swap, 5 'display on' y 4 'display off'; hay pulsaciones de teclas (KEYS) solo al final y alrededor de 6211; SpringBoard crea superficies 750x1334; no hay trabajos de GPU. Lo que NO se sabe: si el contenido copiado al panel era negro o la UI, y si el apagado fue el auto-bloqueo de iOS o el panel/retroiluminación. El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0198"
+title = "Kernel con 0353 (miniatura de luminancia del panel) compilado en el CI (run 43702827328, commit ea4be35, éxito): 0332-0353 aplicados; la cadena FBPROBE está en el binario"
+kind = "kernel"
+path = "/home/pioxi/HackiOS/builds/device-day/artifacts/kernel-0353-ci-43702827328/xnu-kernel-macos-15-intel/kernel.development.herolte"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "0dea226a21e4567130ccfc5cd05303ca97ba9c42692d4eec5e3efa018fdeceef"
+size = 17355760
+immutable = true
+note = "D-0055 / T-0047. 0353 solo añade IOLog en AppleCLCD::present(). Mismo flujo que E-0194."
+
+[[evidence]]
+id = "E-0199"
+title = "Imagen preparada: xnu-boot-v2-s7-min22-20261115 = min21 con el kernel 0353 (E-0198); línea de arranque idéntica a min21; 45 PASS del verificador independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run6-min22/xnu-boot-v2-s7-min22-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "8bd3295b435db0b995b258d5d810b0f8b336b239ef8064d6e4b652391dd4cea6"
+size = 18620432
+immutable = true
+note = "Solo cambia el kernel (0353 añade la miniatura FBPROBE al log); ADT, cargador y línea de arranque idénticos a min21 (diff de la línea vacío). El único FAIL del constructor es su expectativa fija herolog=0. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run6-min22/xnu-boot-v2-s7-min22-20261115.verify-independent.txt."
