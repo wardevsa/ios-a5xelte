@@ -1,0 +1,27 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 4852d27..9656621 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -776,7 +776,8 @@ static bool
+ hg_irq_ready(void)
+ {
+ 	if (hg_irq_state == 0) {
+-		uint32_t on = 1;
++		/* (0344, S7) off by default: boot-0342 with it 19.5 fps on average (31.4 with the asleep polling, 0338b) */
++		uint32_t on = 0;
+ 		PE_parse_boot_argn("herogpuirq", &on, sizeof(on));
+ 		hg_irq_state = -1;
+ 		if (on && hg_gpu) {
+diff --git a/iokit/Kernel/IOUserClient.cpp b/iokit/Kernel/IOUserClient.cpp
+index ab5fd67..359d3bd 100644
+--- a/iokit/Kernel/IOUserClient.cpp
++++ b/iokit/Kernel/IOUserClient.cpp
+@@ -5022,7 +5022,7 @@ static void
+ notefe_uc_account(IOUserClient *client, uint32_t selector, uint64_t abs)
+ {
+ 	if (notefe_uc_on < 0) {
+-		uint32_t on = 1;
++		uint32_t on = 0;        /* (0344, S7) the accounting of every call is a diagnosis: off by default */
+ 		PE_parse_boot_argn("notefe_uc", &on, sizeof(on));
+ 		notefe_uc_lock = IOSimpleLockAlloc();
+ 		notefe_uc_on = (on && notefe_uc_lock) ? 1 : 0;

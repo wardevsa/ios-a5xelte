@@ -908,6 +908,185 @@ remove_listed_apps(void)
  * /product/haptics closed-loop, boot-0339), then the system's vibration (kSystemSoundID_Vibrate, 4095) three times:
  * whether Darwin plays it on the audio plug-in's Actuator says itself in the log ("the actuator plays").
  */
+/*
+ * Bluetooth and the front camera for every boot, as the Note FE port's test program (gracerlte/bot/bot.m, its 0432-0461)
+ * starts them; the kernel side is in 0342 (kern.notefe_bt, kern.notefe_bt_fw, kern.notefe_cam). From the drop zone:
+ *   bt.level   8: the chip patch (bt-murata.hcd: the phone's own bcm4359C0_*.hcd from VENDOR) into the kernel, the HCI
+ *              bridge up, what BlueTool and bluetoothd look for (/dev links, stand-in patch files, MobileGestalt's
+ *              WifiVendor), bluetoothd restarted. Other values: kern.notefe_bt=N alone (1-2 read only). None: nothing.
+ *   cam.level  8: /dev/hakios-camera (kern.notefe_cam=7), mediaserverd restarted (libheroapp loads libnotefecam with
+ *              cam.media = 1), the cameras in MobileGestalt's cache. 1-7: kern.notefe_cam=N alone. None: nothing.
+ */
+#include <CommonCrypto/CommonDigest.h>
+#define MG_CACHE_FILE "/private/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/com.apple.MobileGestalt.plist"
+
+static int
+drop_level(const char *name)
+{
+   char path[256], text[16] = "";
+   snprintf(path, sizeof(path), DROP_DIR "%s", name);
+   int fd = open(path, O_RDONLY);
+   if (fd < 0)
+      return -1;
+   ssize_t n = read(fd, text, sizeof(text) - 1);
+   close(fd);
+   text[n > 0 ? n : 0] = 0;
+   return atoi(text);
+}
+
+static int
+kill_by_name(const char *name, int sig)
+{
+   int mib[3] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL }, killed = 0;
+   size_t size = 0;
+   sysctl(mib, 3, NULL, &size, NULL, 0);
+   struct kinfo_proc *procs = malloc(size);
+   if (procs && sysctl(mib, 3, procs, &size, NULL, 0) == 0)
+      for (size_t i = 0; i < size / sizeof(*procs); i++)
+         if (strcmp(procs[i].kp_proc.p_comm, name) == 0)
+            killed += kill(procs[i].kp_proc.p_pid, sig) == 0;
+   free(procs);
+   return killed;
+}
+
+/* MobileGestalt's CacheExtra: the key is base64(MD5("MGCopyAnswer" + name)) cut to 22 characters (as the Note FE bot) */
+static void
+mg_cache_set(const char *name, CFTypeRef value)
+{
+   char in[128];
+   unsigned char md[CC_MD5_DIGEST_LENGTH];
+   snprintf(in, sizeof(in), "MGCopyAnswer%s", name);
+   CC_MD5(in, (CC_LONG)strlen(in), md);
+   static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+   char key[25] = "";
+   for (int i = 0, o = 0; i < 16; i += 3) {
+      uint32_t v = (uint32_t)md[i] << 16 | (i + 1 < 16 ? (uint32_t)md[i + 1] << 8 : 0) | (i + 2 < 16 ? md[i + 2] : 0);
+      key[o++] = b64[(v >> 18) & 63];
+      key[o++] = b64[(v >> 12) & 63];
+      key[o++] = b64[(v >> 6) & 63];
+      key[o++] = b64[v & 63];
+   }
+   key[22] = 0;
+   FILE *f = fopen(MG_CACHE_FILE, "rb");
+   if (!f) {
+      herodrm_log("hero-run: devices: no MobileGestalt cache, %s not set", name);
+      return;
+   }
+   CFMutableDataRef data = CFDataCreateMutable(NULL, 0);
+   UInt8 chunk[16384];
+   size_t got;
+   while ((got = fread(chunk, 1, sizeof(chunk), f)) > 0)
+      CFDataAppendBytes(data, chunk, (CFIndex)got);
+   fclose(f);
+   CFPropertyListFormat format = kCFPropertyListBinaryFormat_v1_0;
+   CFMutableDictionaryRef cache = (CFMutableDictionaryRef)CFPropertyListCreateWithData(NULL, data,
+       kCFPropertyListMutableContainersAndLeaves, &format, NULL);
+   CFRelease(data);
+   if (!cache || CFGetTypeID(cache) != CFDictionaryGetTypeID()) {
+      herodrm_log("hero-run: devices: the MobileGestalt cache does not parse, %s not set", name);
+      if (cache)
+         CFRelease(cache);
+      return;
+   }
+   CFMutableDictionaryRef extra = (CFMutableDictionaryRef)CFDictionaryGetValue(cache, CFSTR("CacheExtra"));
+   if (!extra || CFGetTypeID(extra) != CFDictionaryGetTypeID()) {
+      extra = CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+      CFDictionarySetValue(cache, CFSTR("CacheExtra"), extra);
+      CFRelease(extra);
+   }
+   CFStringRef k = CFStringCreateWithCString(NULL, key, kCFStringEncodingUTF8);
+   CFTypeRef old = CFDictionaryGetValue(extra, k);
+   if (old && CFEqual(old, value)) {
+      herodrm_log("hero-run: devices: MobileGestalt %s already set", name);
+   } else {
+      CFDictionarySetValue(extra, k, value);
+      CFDataRef out = CFPropertyListCreateData(NULL, cache, format, 0, NULL);
+      struct stat st;
+      int have = stat(MG_CACHE_FILE, &st) == 0;
+      char tmp[] = MG_CACHE_FILE ".hero";
+      FILE *w = out ? fopen(tmp, "wb") : NULL;
+      int ok = w && fwrite(CFDataGetBytePtr(out), 1, (size_t)CFDataGetLength(out), w) == (size_t)CFDataGetLength(out);
+      if (w)
+         fclose(w);
+      if (ok && have) {
+         chown(tmp, st.st_uid, st.st_gid);
+         chmod(tmp, st.st_mode & 07777);
+      }
+      ok = ok && rename(tmp, MG_CACHE_FILE) == 0;
+      herodrm_log("hero-run: devices: MobileGestalt %s (key %s): %s", name, key, ok ? "written" : "NOT written");
+      if (out)
+         CFRelease(out);
+   }
+   CFRelease(k);
+   CFRelease(cache);
+}
+
+static void *
+devices_start(__unused void *unused)
+{
+   int bt = drop_level("bt.level"), cam = drop_level("cam.level");
+   if (bt <= 0 && cam <= 0)
+      return NULL;
+   sleep(20);
+   if (bt == 8) {
+      symlink("/dev/null", "/dev/cu.bluetooth");      /* bluetoothd: "No valid serial port found" without one */
+      symlink("/dev/null", "/dev/uart.bluetooth");
+      mkdir("/usr/share/firmware/bluetooth", 0755);
+      static const unsigned char standin[] = { 0x4e, 0xfc, 0x04, 0xff, 0xff, 0xff, 0xff };   /* one Launch_RAM record */
+      static const char *names[] = { "Apollo_OS_MUR", "Apollo_OS_USI", "Pegasus_OS_MUR", "Pegasus_OS_USI", "Hercules_OS_MUR",
+                                     "Hercules_OS_USI", "Yoda_OS_MUR", "Yoda_OS_USI", "Tuborg_OS_MUR", "Tuborg_OS_USI" };
+      static const char *builds[] = { "5146", "5147", "5157", "5158", "5153", "5154", "5167", "5168", "5161", "5162" };
+      int made = 0;
+      for (int i = 0; i < 10; i++) {
+         char path[160];
+         snprintf(path, sizeof(path), "/usr/share/firmware/bluetooth/BCM4357B1_19.1.282.%s_%s_20210524.hcd", builds[i], names[i]);
+         if (access(path, F_OK) == 0) {
+            made++;
+            continue;
+         }
+         FILE *f = fopen(path, "wb");
+         if (f) {
+            fwrite(standin, 1, sizeof(standin), f);
+            fclose(f);
+            made++;
+         }
+      }
+      herodrm_log("hero-run: devices: bluetooth: /dev links, %d stand-in BlueTool patch files", made);
+      mg_cache_set("WifiVendor", CFSTR("Murata"));
+      FILE *f = fopen(DROP_DIR "bt-murata.hcd", "rb");
+      if (f) {
+         static unsigned char fw[256 * 1024];
+         size_t n = fread(fw, 1, sizeof(fw), f);
+         fclose(f);
+         herodrm_log("hero-run: devices: bluetooth patch %zu bytes: %s", n,
+             n && sysctlbyname("kern.notefe_bt_fw", NULL, NULL, fw, n) == 0 ? "loaded" : "NOT loaded");
+      } else {
+         herodrm_log("hero-run: devices: bluetooth: no bt-murata.hcd in the drop");
+      }
+   }
+   if (bt > 0) {
+      herodrm_log("hero-run: devices: bluetooth level %d: %s", bt,
+          sysctlbyname("kern.notefe_bt", NULL, NULL, &bt, sizeof(bt)) == 0 ? "set" : "refused");
+      if (bt == 8)
+         herodrm_log("hero-run: devices: bluetooth: bluetoothd restarted (%d)", kill_by_name("bluetoothd", SIGKILL));
+   }
+   if (cam == 8) {
+      int seven = 7;
+      herodrm_log("hero-run: devices: camera device: %s",
+          sysctlbyname("kern.notefe_cam", NULL, NULL, &seven, sizeof(seven)) == 0 ? "made" : "refused");
+      /* mediaserverd lists its capture sources once, at its start: again, now that /dev/hakios-camera is there */
+      herodrm_log("hero-run: devices: camera: mediaserverd restarted (%d)", kill_by_name("mediaserverd", SIGKILL));
+      sleep(8);
+      mg_cache_set("still-camera", kCFBooleanTrue);
+      mg_cache_set("front-facing-camera", kCFBooleanTrue);
+      mg_cache_set("rear-facing-camera", kCFBooleanTrue);
+   } else if (cam > 0) {
+      herodrm_log("hero-run: devices: camera level %d: %s", cam,
+          sysctlbyname("kern.notefe_cam", NULL, NULL, &cam, sizeof(cam)) == 0 ? "set" : "refused");
+   }
+   return NULL;
+}
+
 static id
 hr_send(id object, const char *selector)
 {
@@ -1070,6 +1249,9 @@ main(int main_argc, char **main_argv)
    pthread_t haptics;
    if (pthread_create(&haptics, NULL, haptics_probe, NULL) == 0)
       pthread_detach(haptics);
+   pthread_t devices;
+   if (pthread_create(&devices, NULL, devices_start, NULL) == 0)
+      pthread_detach(devices);
    sleep(20);
    load_env();
    posix_spawn_file_actions_t fa;

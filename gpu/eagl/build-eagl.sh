@@ -59,6 +59,14 @@ $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroapp.dylib" "$HERE/src/heroapp.c" -
   -framework Foundation -framework UIKit -framework CoreGraphics -framework ImageIO -framework IOSurface \
   -lobjc -L "$OUT/lib" -ldrm.2 -Wl,-rpath,/private/var/herolte/lib
 
+# The front camera's capture device in mediaserverd (gpu/camera, from the Note FE port's gracerlte/camera, after the S9
+# port's camera_device.c/camera_isp.c, MIT: LICENSE.HakiOS), loaded by libheroapp with the drop zone's cam.media = 1.
+$CC -O2 -fblocks -Wall -Wno-unused-function -Wno-deprecated-declarations -dynamiclib -o "$OUT/lib/libnotefecam.dylib" \
+  "$HERE/../camera/inject.c" "$HERE/../camera/camera_device.c" "$HERE/../camera/camera_isp.c" \
+  -install_name @rpath/libnotefecam.dylib -framework CoreFoundation -framework CoreMedia -framework CoreVideo \
+  -framework IOSurface -lobjc
+codesign -s - -f "$OUT/lib/libnotefecam.dylib"
+
 # The audio plug-in of mediaserverd, for hero-run to put in /System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver.
 mkdir -p "$OUT/audio"
 $CC -O2 -w -bundle -I"$HERE/../hakios-audio" -o "$OUT/audio/HakiosAudio" "$HERE/../hakios-audio/audio_plugin.c" \

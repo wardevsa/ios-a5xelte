@@ -9,6 +9,7 @@
  * is given, as on a device that cannot make one.
  */
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
 #include <stdarg.h>
@@ -242,6 +243,22 @@ heic_census_thread(void *unused)
 __attribute__((constructor)) static void
 install(void)
 {
+   /*
+    * The front camera's capture device (gpu/camera, libnotefecam.dylib; the Note FE port's 0458) in mediaserverd only,
+    * with the drop zone's cam.media = 1. hero-run makes /dev/hakios-camera (kern.notefe_cam=7) and restarts mediaserverd.
+    */
+   if (strcmp(getprogname(), "mediaserverd") == 0) {
+      char flag = '0';
+      int ff = open("/private/var/herolte/cam.media", O_RDONLY);
+      if (ff >= 0) {
+         (void)read(ff, &flag, 1);
+         close(ff);
+      }
+      if (flag == '1' && access("/private/var/herolte/lib/libnotefecam.dylib", F_OK) == 0) {
+         void *cam = dlopen("/private/var/herolte/lib/libnotefecam.dylib", RTLD_NOW);
+         herodrm_log("mediaserverd: libnotefecam %s", cam ? "loaded" : dlerror());
+      }
+   }
    if (strcmp(getprogname(), "CollectionsPoster") == 0) {
       pthread_t census;
       if (pthread_create(&census, NULL, heic_census_thread, NULL) == 0)
