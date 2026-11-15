@@ -52,26 +52,3 @@ index 0a0df2e..b884bbe 100644
  	}
  	props->release();
  	if (ret != kIOReturnSuccess) {
-@@ -1637,6 +1666,22 @@ IOSurfaceRootUserClient::externalMethod(uint32_t selector, IOExternalMethodArgum
- 		 * NULL+0x30.
- 		 */
- 		sweet_surf_log_once("sel", selector);
-+#if defined(ARM64_BOARD_CONFIG_HEROLTE)
-+		{
-+			static int told;
-+			if (told < 12) {
-+				const uint32_t *in = (const uint32_t *)args->structureInput;
-+				told++;
-+				IOLog("SWEET SURF: wrap sel %u refused: scalars %u [0x%llx 0x%llx] struct %u [%x %x %x %x %x %x %x %x]\n",
-+				    selector, args->scalarInputCount, arg0,
-+				    args->scalarInputCount > 1 ? args->scalarInput[1] : 0, args->structureInputSize,
-+				    in != NULL && args->structureInputSize >= 32 ? in[0] : 0, in != NULL && args->structureInputSize >= 32 ? in[1] : 0,
-+				    in != NULL && args->structureInputSize >= 32 ? in[2] : 0, in != NULL && args->structureInputSize >= 32 ? in[3] : 0,
-+				    in != NULL && args->structureInputSize >= 32 ? in[4] : 0, in != NULL && args->structureInputSize >= 32 ? in[5] : 0,
-+				    in != NULL && args->structureInputSize >= 32 ? in[6] : 0, in != NULL && args->structureInputSize >= 32 ? in[7] : 0);
-+			}
-+		}
-+#endif
- 		return kIOReturnUnsupported;
- 	default:
- 		/*

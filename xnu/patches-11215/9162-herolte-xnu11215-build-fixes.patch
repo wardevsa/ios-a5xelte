@@ -1,0 +1,35 @@
+diff --git a/pexpert/pexpert/arm64/A5XELTE.h b/pexpert/pexpert/arm64/A5XELTE.h
+--- a/pexpert/pexpert/arm64/A5XELTE.h
++++ b/pexpert/pexpert/arm64/A5XELTE.h
+@@ -55,6 +55,17 @@
+ #define HAS_GIC_V3                    0
+ #define A5XELTE_VTIMER_INTID         27
+
++/*
++ * xnu-11215: <pexpert/arm64/apple_arm64_cpu.h> is included unconditionally by
++ * sleh.c, pcb.c and machine_routines_common.c and needs these (normally from
++ * apple_arm64_regs.h), as SWEET.h defines them. Nothing here uses E/P cores.
++ */
++#define MPIDR_CORETYPE_SHIFT          (16)
++#define MPIDR_CORETYPE_WIDTH          (3)
++#define MPIDR_CORETYPE_MASK           ((1ULL << MPIDR_CORETYPE_WIDTH) - 1)
++#define MPIDR_CORETYPE_ACC_E          (0ULL)
++#define MPIDR_CORETYPE_ACC_P          (1ULL)
++
+ #ifndef ASSEMBLER
+ #define PLATFORM_PANIC_LOG_DISABLED
+ #endif
+diff --git a/osfmk/conf/Makefile.template b/osfmk/conf/Makefile.template
+--- a/osfmk/conf/Makefile.template
++++ b/osfmk/conf/Makefile.template
+@@ -115,6 +115,10 @@
+ else ifeq ($(CURRENT_MACHINE_CONFIG),SWEET)
+ # sweet: this is a DEVELOPMENT kernel on the macOS config (no ubsan_minimal runtime, built by the
+ # open-source toolchain); the verifier flags the XNUPOST type-ABI tests of vm_sanitize.c
++else ifeq ($(CURRENT_MACHINE_CONFIG),HEROLTE)
++# herolte (Galaxy S7): the same open-source DEVELOPMENT build as SWEET, the same verifier failure
++else ifeq ($(CURRENT_MACHINE_CONFIG),A5XELTE)
++# a5xelte: likewise
+ else ifeq ($(BUILD_CODE_COVERAGE),1)
+ # UBSan build-time validations disabled on code coverage builds
+ else
