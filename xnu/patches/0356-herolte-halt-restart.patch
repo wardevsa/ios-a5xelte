@@ -1,0 +1,78 @@
+herolte: boot-arg herohalt=N makes iOS shutdown and restart really restart the phone (0356)
+
+min33b (E-0244): the shutdown from SpringBoard goes through launchd teardown, syncs and unmounts the disks and prints 'CPU halted', and then nothing: the phone keeps spinning (launchd at 200 % of a core) with a black screen and a slow spinner, and has to be forced off. herolte_halt_restart() (bsd/dev/herolte_gpu.c), called from halt_all_cpus() (osfmk/arm64/machine_routines.c) when herohalt=N is given and the kernel is not panicking: waits 12 s so the persistent log gets its last flush, then writes SWRESET of the PMU (0x105c0000+0x400). herohalt=1: halt -> restart into recovery (TWRP; INFORM2/3 as herotwrp and Samsung's sec_reboot), restart -> normal restart; herohalt=2: both into recovery; 0 or absent: unchanged. It prints PS_HOLD_CONTROL (PMU+0x330c) so a real power-off can be added after reading this unit's value; no power-off is attempted.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3418,6 +3418,43 @@
+ 	herolte_wifi_firmware(cfg);
+ }
+ 
++/*
++ * Boot-arg herohalt=N: what the "shutdown" and "restart" of iOS do. XNU reaches halt_all_cpus() with the disks synced and
++ * the volumes unmounted, and until now the phone just kept spinning ("CPU halted" and launchd at 200 %). 0 (default): as
++ * before. 1: halt -> restart into recovery (TWRP), restart -> normal restart. 2: both into recovery. The PMU's SWRESET and
++ * the recovery code are the ones herotwrp already uses (Samsung's sec_reboot: INFORM3 = 0x12345674). Not from a panic. The
++ * persistent log is left 12 s for its last flush. A real power-off (PS_HOLD) is not done: this unit's register has not been
++ * read yet (the boot log prints it).
++ */
++extern unsigned panic_active(void);
++
++void
++herolte_halt_restart(unsigned int type)
++{
++	uint32_t mode = 0;
++	PE_parse_boot_argn("herohalt", &mode, sizeof(mode));
++	if (mode == 0 || panic_active()) {
++		return;
++	}
++	vm_offset_t pmu = ml_io_map(0x105c0000u, 0x4000);
++	if (!pmu) {
++		return;
++	}
++	boolean_t recovery = mode >= 2 || type != kPERestartCPU;
++	printf("HEROLTE: herohalt=%u: %s in 12 s (PS_HOLD_CONTROL %#x)\n", mode, recovery ? "restart into recovery" : "restart",
++	    *(volatile uint32_t *)(pmu + 0x330c));
++	hg_msleep(12000);
++	if (recovery) {
++		hg_wr(pmu, 0x808, 0x12345678);          /* INFORM2 */
++		hg_wr(pmu, 0x80c, 0x12345674);          /* INFORM3: REBOOT_MODE_PREFIX | REBOOT_MODE_RECOVERY */
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++	hg_wr(pmu, 0x400, 1);                           /* SWRESET */
++	for (;;) {
++		__asm__ volatile ("wfe");
++	}
++}
++
+ void
+ herolte_gpu_probe(void)
+ {
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
+@@ -742,15 +742,25 @@
+ 	return machine_info.memory_size;
+ }
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++extern void herolte_halt_restart(unsigned int type);
++#endif
++
+ __attribute__((noreturn))
+ void
+ halt_all_cpus(boolean_t reboot)
+ {
+ 	if (reboot) {
+ 		printf("MACH Reboot\n");
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		herolte_halt_restart(kPERestartCPU);    /* herohalt=N (bsd/dev/herolte_gpu.c); returns when it is 0 */
++#endif
+ 		PEHaltRestart(kPERestartCPU);
+ 	} else {
+ 		printf("CPU halted\n");
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		herolte_halt_restart(kPEHaltCPU);
++#endif
+ 		PEHaltRestart(kPEHaltCPU);
+ 	}
+ 	while (1) {
