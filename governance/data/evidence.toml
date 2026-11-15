@@ -3819,3 +3819,33 @@ sha256 = "4197bd0d606dc7155a6b8c062927d1ead49871b9c9af3281ce8dc760ee570c81"
 size = 2021
 immutable = true
 note = "Resumen fiel con cabecera del ingeniero (no es una copia literal completa). El Director dijo: 'Autorizo todo lo siguiente ya que lo he leído conscientemente. Firmado PioXI'. Origen de D-0078. Corrección del ingeniero: network.txt usa nombre en la 1.ª línea y contraseña en la 2.ª (no ssid=/password=) y es opcional (herolte_wifi.c)."
+
+[[evidence]]
+id = "E-0259"
+title = "Firmware Wi-Fi del propio teléfono extraído de VENDOR (sda16, solo lectura, montaje -o ro comprobado): fw.bin 594137 B (31a8c805…0805), clm.blob 11360 B (570b8520…f09d), nvram.txt 5122 B (6a702675…7a13); módulo SEMCO B90S BCM4359 C0, FW 9.75.121; VENDOR queda desmontado"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/wifi-firmware/SHA256SUMS"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "9a3fcdced25eb52952ca2febcb7c5990c701bf4771a6c7143d2048638a9da610"
+size = 224
+immutable = true
+note = "D-0078; ejecutado una vez con tools/herolte-wifi-extract.sh. Los ficheros están en /home/pioxi/HackiOS/builds/device-day/wifi-firmware (carpeta 700, ficheros 600) y NO van a git: nvram.txt trae una línea macaddr. Comprobación posterior: 0 montajes de /tmp/ven en TWRP. El resto del teléfono no se tocó. Este registro guarda solo los hashes."
+
+[[evidence]]
+id = "E-0260"
+title = "Paquete DROP de Wi-Fi preparado (generación 3, 3 ficheros, 618496 B): wifi/fw.bin, wifi/clm.blob, wifi/nvram.txt; el empaquetador lo acepta (dry-run sin adb); NO escrito en el teléfono; sin network.txt (opcional: iOS elige la red)"
+kind = "document"
+path = "/home/pioxi/HackiOS/builds/device-day/wifi-firmware/drop-manifest.txt"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "26db8521fc6ab7f9cebe1bb7909517cb6792aec17c33871194bad2390368ff67"
+size = 260
+immutable = true
+note = "Orden exacta en /home/pioxi/HackiOS/builds/device-day/wifi-firmware/drop-command.txt (SHA-256 e7a063283eb716055541aeae75ff923b4cf25b738e2016e6cb16c70140bbbb07). El kernel solo exige wifi/fw.bin para empezar (herolte_wifi_files_ready); sin wifi/network.txt 'iOS chooses the network'. Zona DROP: mismos bloques que antes (>= byte 23293374464); los ficheros de la generación 2 se conservan (los ficheros que no están en el paquete nuevo se quedan)."
