@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0103 — min33 (herogl=1, línea de upstream) y paquete DROP real 1 ESCRITOS (D-0070); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0104 — Director ausente (comer); min33 y paquete real 1 ya escritos, falta arrancarlos; trabajo verde hecho (2026-11-15)
+- **Tarea en curso: T-0012.** Escrito: min33 (E-0241) y paquete real 1 (E-0242). Director: `adb reboot`, 5 min, mirar pantalla, TWRP.
+- **Al volver a TWRP:** `python3 -I tools/herolte-log-pull.py adb LOG.txt` y `python3 -I tools/herolte-log-report.py LOG.txt` (resumen de una pantalla: vida, memoria, fps, relojes, temperatura, DROP, hero-run, GL, crashes, pánico). Detalle: `grep -aE 'HEROLTE DROP|hero-run:|HEROLTE GL:' LOG.txt`. Éxito: 'HEROLTE DROP: package 2 ready for userland' y 'HEROLTE GL: backboardd launch ... EAGL shim inserted'.
+- **Aviso al Director:** hero-run además borra UNA vez las bases `.csstore` de LaunchServices y la caché de MobileGestalt (`com.apple.MobileGestalt.plist`) en /private/var (cachés que iOS regenera en el siguiente arranque; no se hace en cada arranque: marcas `lsdb3.gone` y `mgcache.gone`); la caché de MobileGestalt puede arreglar 'Sign in to your iPad'.
+- **Hecho en la ausencia (verde, D-0071):** `tools/herolte-log-report.py`; STATE.md refrescado; tests de gobierno corregidos (fixture D-9050; 98 + 6 OK).
+
+## Relevo anterior: H-0103 — min33 (herogl=1, línea de upstream) y paquete DROP real 1 ESCRITOS (D-0070); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min33-20261115.img` (sha256 `1199f813…abde`, E-0240/E-0241). Zona DROP con el paquete real 1 (generación 2), verificada (E-0239/E-0242).
 - **Director:** `adb reboot`, 5 min, mirar si cambia la pantalla (fondo, fluidez, negro); TWRP. **Ingeniero:** `herolte-log-pull.py`; `grep -E 'HEROLTE DROP|hero-run:|HEROLTE GL|herogl|libheroeagl|EAGL'`; fps/copy; crashes de backboardd; verify de ficheros (herolte-hfs-read.py).
 - Si negro/colgado: min32 (E-0235) por BOOT con firma; el autorun instalado persiste.

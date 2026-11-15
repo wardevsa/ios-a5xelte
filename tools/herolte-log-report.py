@@ -58,7 +58,9 @@ def summarise(lines):
 
     drop = [l for l in lines if 'HEROLTE DROP' in l or 'F_FULLFSYNC' in l or 'cache flush' in l]
     out.append('DROP: ' + ('; '.join(d[:90] for d in drop[:4]) if drop else 'sin líneas'))
-    hero = [l for l in lines if l.startswith('hero-run:')]
+    hero = [l for l in lines if 'hero-run:' in l]
+    gl = [l for l in lines if l.startswith('HEROLTE GL:')]
+    out.append('GL en backboardd: ' + ('; '.join(g[:100] for g in gl[:3]) if gl else 'sin líneas HEROLTE GL'))
     out.append('hero-run: %d líneas' % len(hero))
     out.extend('  ' + h[:130] for h in hero[:12])
 
