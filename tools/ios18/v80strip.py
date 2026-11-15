@@ -171,6 +171,16 @@ class Asm:
         return self.words
 
 
+def save_regs(a, regs):
+    for i in range(0, len(regs), 2):
+        a.emit(stp_sp(regs[i], regs[i + 1], 8 * i) if i + 1 < len(regs) else str_sp(regs[i], 8 * i))
+
+
+def restore_regs(a, regs):
+    for i in reversed(range(0, len(regs), 2)):
+        a.emit(ldp_sp(regs[i], regs[i + 1], 8 * i) if i + 1 < len(regs) else ldr_sp(regs[i], 8 * i))
+
+
 def scratch(avoid, n):
     out = [r for r in SCRATCH if r not in avoid][:n]
     assert len(out) == n
@@ -239,8 +249,17 @@ def lse_routine(w, site, base):
     swp = (w >> 15) & 1
     opc = (w >> 12) & 7
     flags = not swp and opc >= 4
-    o, t, c, f = scratch({rs, rt, rn}, 4)
-    a.emit(sub_sp(FRAME)); a.emit(stp_sp(o, t, 0)); a.emit(stp_sp(c, f, 16))
+    # The old value is loaded straight into Rt when Rt is none of Rs, Rn, ZR (one scratch and the MOV less).
+    own = rt not in (31, rs, rn)
+    need = (0 if own else 1) + (0 if swp else 1) + 1 + (1 if flags else 0)
+    regs = scratch({rs, rt, rn}, need)
+    it = iter(regs)
+    o = rt if own else next(it)
+    t = None if swp else next(it)
+    c = next(it)
+    f = next(it) if flags else None
+    a.emit(sub_sp(FRAME))
+    save_regs(a, regs)
     if flags:
         a.emit(MRS_NZCV | f)
     loop = a.label()
@@ -266,9 +285,10 @@ def lse_routine(w, site, base):
     a.later(lambda pc: cbnz(pc, loop, c, 0))
     if flags:
         a.emit(MSR_NZCV | f)
-    if rt != 31:
+    if rt != 31 and not own:
         a.emit(mov(sf, rt, o))
-    a.emit(ldp_sp(c, f, 16)); a.emit(ldp_sp(o, t, 0)); a.emit(add_sp(FRAME))
+    restore_regs(a, regs)
+    a.emit(add_sp(FRAME))
     a.later(lambda pc: b(pc, back))
     return a.done(), ('swp' if swp else ('ld', 'ld', 'ld', 'ld', 'ldmax', 'ldmax', 'ldmax', 'ldmax')[opc])
 

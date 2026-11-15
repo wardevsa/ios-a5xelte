@@ -67,6 +67,12 @@ jobs:
           files=("$main")
           while IFS= read -r f; do files+=("$f"); done < <(find "$(dirname "$main")" -type f -name 'dyld_shared_cache_arm64e.[0-9]*' ! -name '*.symbols' | sort -V)
           python3 tools/dsc-tramp-space.py "${files[@]}"
+      - name: v80strip_cache plan (where each LSE routine would go, by priority)
+        run: |
+          main=$(find dsc -type f -name 'dyld_shared_cache_arm64e' | head -1)
+          files=("$main")
+          while IFS= read -r f; do files+=("$f"); done < <(find "$(dirname "$main")" -type f -name 'dyld_shared_cache_arm64e.[0-9]*' ! -name '*.symbols' | sort -V)
+          time python3 tools/ios18/v80strip_cache.py --scan "${files[@]}"
       - name: The hot functions
         run: |
           main=$(find dsc -type f -name 'dyld_shared_cache_arm64e' | head -1)
