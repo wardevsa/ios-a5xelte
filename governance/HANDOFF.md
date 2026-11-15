@@ -11,6 +11,7 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 ## Relevo vigente: H-0070 — min20 (min19 con herogpu=1) ESCRITA (D-0052, 1 de la tanda nueva); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** E-0190: iOS llega a SpringBoard con herogpu=0. BOOT = `xnu-boot-v2-s7-min20-20261115.img` (sha256 `039b30dc…c82fb6`, E-0191/E-0192). Primera vez con la GPU Mali en esta unidad.
 - **Director:** `adb reboot`, dejar 5-10 min, volver a TWRP y avisar. **Ingeniero:** `python3 -I tools/herolte-log-pull.py adb OUT.txt`; mirar herolte_gpu (arranque, errores MMU/job), swaps de backboardd, si SpringBoard sale, y contar swaps/min. El log no va a git.
+- **RESULTADO (E-0193):** GPU arranca bien (Mali-T880 r2p0) pero nadie la usa (sin jobs); SpringBoard vivo ~270 s; en pantalla sigue la consola. Siguiente: (1) por qué backboardd/SpringBoard no abren HeroGPU/IOAccelerator (¿falta entitlement/IOKit match, Metal sin renderer?); (2) por qué el panel no muestra la UI (la consola temprana 0348/0351 sigue pintando el framebuffer; swaps al DECON con superficie vacía?); (3) xstat 9 de widgets/UARP y assetsd 6. Cualquier cambio de kernel = parche + CI (publish, rojo) + imagen + firma.
 - Restaurar BOOT: min19/min18/original E-0009 (cada escritura exige firma).
 
 ## Relevo anterior: H-0069 — min19 (min18 con herolog=1) ESCRITA (D-0051, 20/20 de BOOT); teléfono en TWRP, sin reiniciar (2026-11-15)

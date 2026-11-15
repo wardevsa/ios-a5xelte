@@ -2829,3 +2829,18 @@ sha256 = "abd4fa42b98df7ad6fe4bee364f500a8cf44ec8ead8e56dc83319d465c2d55a9"
 size = 723
 immutable = true
 note = "D-0052; hash registrado antes en E-0191. Primer intento. Observación: el hash de EFS que imprime la herramienta difiere entre sesiones (min18 cdb0036f…, min19 b860ecfa…, min20 335adf5a…); la comprobación es antes/después dentro de cada escritura y pasó, y entre sesiones el teléfono arrancó (modem/TWRP pueden modificar EFS por su cuenta). No se escribió EFS desde este equipo."
+
+[[evidence]]
+id = "E-0193"
+title = "Log persistente de min20 (herogpu=1, flush #27, ~270 s, 2171399 B): la GPU Mali-T880 r2p0 se identifica y arranca sin fallo, pero ningún proceso abre HeroGPU/IOAccelerator (sin trabajos de GPU); SpringBoard vive todo el log (sin EXIT); 9 líneas SWEET FB swap (contador hasta 48)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min20-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "b1b0be4fa28a13e2e38a9db1b999b1fe359008122eb94230a7803208c89a3f69"
+size = 2171399
+immutable = true
+note = "GPU_ID=0x8802000 (Mali-T880 r2p0), AS=0xff JS=0x7, 'no GPU jobs'; HEROGPU registered + IOAcceleratorES registered; PMU G3D conf=0xf status=0x3000f. Sin cuelgue ni pánico. SPAWN FAILED: HorizonSetup (2), snapshottool (2), /private/var/herolte/autorun (2) y 13+ appex de voz (SiriTTS/Kona/MacinTalk, 1). Salidas con xstat 9 (SIGKILL, sin mensaje de jetsam): widgets, UARPUpdater*, maild; assetsd xstat 6 (abort) x3; SpringBoard AKS sel 8 -> 0xe00002c7 repetido. Esta observación del Director: en pantalla sigue viéndose la consola ('spawn failed y varios exit'). El log contiene identificadores: NO va a git."
