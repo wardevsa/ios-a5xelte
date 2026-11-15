@@ -3279,3 +3279,33 @@ sha256 = "74ad79de4776044f14c1cbaab08becbc977b3e2472965e9a67be162aa928e341"
 size = 724
 immutable = true
 note = "D-0065; hash registrado antes en E-0221. Primer intento. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."
+
+[[evidence]]
+id = "E-0223"
+title = "Log persistente de min28 (sweetfb_gpu=1; 920894 B): la Mali presenta los cuadros ('HEROLTE GPU PRESENT: frame … -> ok'), la copia por cuadro baja de 88 ms a 6,3 ms de media (máx. 28,8 ms) y los fps medios suben de 2,8 a 10,2 (máx. 27,1); sin fallos de GPU; pero los núcleos Mongoose van a ~242 MHz y los A53 a ~1055 MHz, la GPU a 260 MHz"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min28-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "396a8237e41b68c28cca61c5e90d9abbefd00e142ee69078ad296ea3996bd74c"
+size = 920894
+immutable = true
+note = "Medido: 'A5XELTE FB: frames=… fps=… avg_copy_us' 30 muestras: avg fps 10,18, max 27,1, avg copy 6317 us, max copy 28807 us. 'HEROLTE GPU PRESENT: ready, cores 0xff0f', superficies en slots 0-2, frames 1-3 ok. 'HEROLTE CPU: cpu 4 (Mongoose): ... about 242 MHz', 'cpu 0 (A53): ... about 1055 MHz', 'vdd_mngs reg 0x3c = 675000 uV' (valores del bootloader, sin subir), GPU 260 MHz. Observación del Director: 'va igual, un poco lag, se nota que no es nativo; quizás un pelín menos'. El lag restante apunta a la frecuencia de CPU (cluster rápido a 242 MHz) y a la composición de CoreAnimation en CPU. Memoria libre 361/278/228 MB (120/180/240 s). El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0224"
+title = "Imagen preparada: xnu-boot-v2-s7-min29-20261115 = min28 + heropower=1 herocpu_mhz=1976 (mismo kernel 0355, E-0214); 52 PASS del verificador independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run13-min29/xnu-boot-v2-s7-min29-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "71c3344f3028ee80188706fa17634099b1ee17bb663ff2733a7a61ec82832fa7"
+size = 18620432
+immutable = true
+note = "Línea: min28 con heropower=0 -> heropower=1 y +herocpu_mhz=1976 (diff). herocpu_mhz sube el cluster Mongoose de 728 MHz (S-Boot; medido ~242 MHz efectivos) a 1976 MHz con el voltaje correspondiente vía APM/PMIC (0272); heropower=1 activa el gobernador de calor (herohot) y la lectura de TMU/pila: temperatura en el log. Riesgo declarado: toca reguladores de tensión (vdd_mngs); upstream (L4h) lo probó en su S7 hasta 2600 MHz/1075 mV; si algo falla, volver a min28 por TWRP. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run13-min29/xnu-boot-v2-s7-min29-20261115.verify-independent.txt. El único FAIL del constructor es su expectativa fija herolog=0."
