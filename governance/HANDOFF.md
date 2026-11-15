@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0091 — iOS en pantalla con táctil (min27); log medido; min28 (sweetfb_gpu=1) preparada, NO escrita (2026-11-15)
+## Relevo vigente: H-0092 — min28 (min27 + sweetfb_gpu=1) ESCRITA (D-0065); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min28-20261115.img` (sha256 `9811a265…e56`, E-0221/E-0222).
+- **Director:** `adb reboot`, 5 min de uso normal, apuntar si hay menos lag o si se congela; volver a TWRP sin Vol-+Power. **Ingeniero:** `herolte-log-pull.py`; avg_copy_us/fps; errores de GPU (JOB_READ_FAULT, gpuPresent); vuelta a min27 si falla.
+- Restaurar BOOT: min27 (funciona) / min26 / original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0091 — iOS en pantalla con táctil (min27); log medido; min28 (sweetfb_gpu=1) preparada, NO escrita (2026-11-15)
 - **Tarea en curso: T-0012.** E-0220: lag = copia/reescalado por CPU 88 ms/cuadro; memoria libre cae a 72 MB; SpringBoard inició el apagado a los ~7 min (¿Vol-+Power del Director?); crashes: assetsd x13, MobileSMS, fileprovider(s). Sin temperatura (heropower=0). E-0221: min28 = min27 + `sweetfb_gpu=1`, sha256 `9811a265…09be56`.
 - **Siguiente:** firma del Director; `adb reboot`, 5 min con uso normal; log: avg_copy_us, fps, errores de GPU (JOB_READ_FAULT, fallos de gpuPresent). Si la GPU falla, volver a min27.
 - Pendiente aparte: fondo negro (herosb/hero-run por DROP), assetsd/autorun, memoria baja, temperatura (heropower=1 es riesgo), Messages crashea.

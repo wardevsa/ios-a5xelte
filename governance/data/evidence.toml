@@ -3264,3 +3264,18 @@ sha256 = "9811a265b8938907703d6d5a4a45adb0e8c6fa55a01193da51405b1a2409be56"
 size = 18620432
 immutable = true
 note = "Solo cambia la línea de arranque (diff: +sweetfb_gpu=1). Motivo: E-0220, la copia por CPU cuesta ~88 ms por cuadro; con sweetfb_gpu=1 la Mali dibuja el cuadro escalado (bilineal) y la copia por CPU queda de respaldo (tras 8 fallos seguidos, 300 cuadros por CPU; luego reintenta). Riesgo: primer uso real de la GPU en esta unidad (upstream anota un JOB_READ_FAULT tras el que no corre ningún trabajo, causa desconocida). Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run12-min28/xnu-boot-v2-s7-min28-20261115.verify-independent.txt."
+
+[[evidence]]
+id = "E-0222"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min28-20261115.img (min27 + sweetfb_gpu=1) y leído de vuelta (sha256 9811a265…e56); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min28-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "74ad79de4776044f14c1cbaab08becbc977b3e2472965e9a67be162aa928e341"
+size = 724
+immutable = true
+note = "D-0065; hash registrado antes en E-0221. Primer intento. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."
