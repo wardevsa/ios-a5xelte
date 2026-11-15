@@ -65,6 +65,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0058 | APPROVED | operation | 2026-11-15 | Autorización roja: push de herolte-drop-v2 al remoto mio y CI de kernel con el parche 0354 (commit 54c3d98) | ingeniero | director | publish | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo hacer push de la rama herolte-drop-v2 al remoto mio y ejecutar el CI de kernel con el parche 0354 (commit 54c3d98). Firmado PioXI.' |
 | D-0059 | APPROVED | operation | 2026-11-15 | Autorización roja: escribir min24 en BOOT (misma línea que min23, kernel con 0354) | ingeniero | director | device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo escribir en BOOT la imagen xnu-boot-v2-s7-min24-20261115.img (misma línea de arranque que min23, kernel con el parche 0354). SHA-256 968ddd3a8cc9067d3be5f2a32dea6c7b3a00423f0f0d3aa5d51eb32edfd64f64. Solo BOOT. Firmado PioXI.' |
 | D-0060 | APPROVED | operation | 2026-11-15 | Autorización roja: añadir sweetfb_native=1 (resto igual que min24) y escribir min25 en BOOT | ingeniero | director | device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo añadir sweetfb_native=1 a la línea de arranque (el resto igual que min24). Imagen: xnu-boot-v2-s7-min25-20261115.img, SHA-256 a55af15873a83a252539593c887b94f60b46e283ab67e1cd5576d95fbc6dc9e4. Solo BOOT. Firmado PioXI.' |
+| D-0061 | APPROVED | operation | 2026-11-15 | Autorización roja: push de herolte-drop-v2 al remoto mio y CI de kernel con el parche 0355 (commit 34fd5f9) | ingeniero | director | publish | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo hacer push de la rama herolte-drop-v2 al remoto mio y ejecutar el CI de kernel con el parche 0355 (commit 34fd5f9). Firmado PioXI.' |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
 - **Estado:** APPROVED (director, 2026-11-13)
@@ -423,4 +424,10 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Razón:** E-0209: backboardd bloqueado, superficies a cero; upstream (L4h) vio iOS en pantalla con sweetfb_native=1 y el lienzo 1125x2436 contradice el panel sin él (E-0210).
 - **Consecuencias:** ALCANCE EXACTO: una escritura de BOOT con xnu-boot-v2-s7-min25-20261115.img (SHA-256 a55af15873a83a252539593c887b94f60b46e283ab67e1cd5576d95fbc6dc9e4). Autoriza además leer el log persistente (últimos 4 MiB de USERDATA) desde TWRP, solo lectura. NO autoriza otros argumentos, otra imagen, EFS, RECOVERY ni bootloaders; el kernel puede escribir solo en USERDATA (ufsrw=1).
 - **Cómo se revierte:** Restaurar BOOT con min24 (E-0207), min23 o el original (E-0009); cada escritura exige firma salvo que la cubra una decisión vigente.
+
+## D-0061 — Autorización roja: push de herolte-drop-v2 al remoto mio y CI de kernel con el parche 0355 (commit 34fd5f9)
+- **Estado:** APPROVED (director, 2026-11-15)
+- **Razón:** E-0213: iOS nunca llama al selector 72 (registro de vsync); 0355 registra los argumentos de las llamadas del framebuffer para identificar el registro real.
+- **Consecuencias:** ALCANCE EXACTO: git push de herolte-drop-v2 SOLO a mio, nunca a origin; lanzar el workflow xnu y descargar artefactos. 0355 solo añade IOLog en IOMobileFramebufferUserClient. NO autoriza escribir en el teléfono: min26 necesitará su firma aparte.
+- **Cómo se revierte:** Borrar la rama remota o el run; lo publicado puede haberse copiado.
 
