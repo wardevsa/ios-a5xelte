@@ -1,0 +1,76 @@
+herolte: this phone's known-good settings become the defaults (0359)
+
+min34 (E-0248) needs 605 of the 607 characters of the boot line, which leaves no room for heroquantum, sweetsample_s or anything else. Six boot-args have been the same since min27 and only restate what this phone needs: sweetfb_native=1, sweetfb_gpu=1 (the Mali scales the frame), a5fb_noconsole=1, a5fb_keep_on=1, heroring=0 and herowifi=0. They are now the defaults on HEROLTE/A5XELTE and the same arguments still override them (=0 gives the old behaviour; heroring=1 brings the kprintf ring back). sweetfb_scale/lw/lh and glsb3 are NOT changed: hero-run and the GL library read them from kern.bootargs (screen class, shadow-blur path), so they must stay on the line. Frees about 85 characters.
+
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -239,6 +239,9 @@
+ 		return false;
+ 	}
+ 	int native = 0;
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	native = 1;     /* 0359: this phone's default; sweetfb_native=0 gives the old behaviour */
++#endif
+ 	PE_parse_boot_argn("sweetfb_native", &native, sizeof(native));
+ 	fLogicalW = fWidth;
+ 	fLogicalH = fHeight;
+@@ -270,7 +273,7 @@
+ 		}
+ 		/* sweetfb_gpu=1: full-screen frames go through the Mali instead
+ 		 * (herolte_gpu.c), bilinear; scaledCopy() stays the fallback. */
+-		int gpu = 0;
++		int gpu = 1;       /* 0359: the Mali scales the frame (sweetfb_gpu=0: CPU copy) */
+ 		PE_parse_boot_argn("sweetfb_gpu", &gpu, sizeof(gpu));
+ 		fGpu = gpu != 0;
+ 	}
+@@ -862,7 +865,9 @@
+ 		int quiet = 0;
+ 		fConsolePaused = true;
+ #if defined(ARM64_BOARD_CONFIG_A5XELTE)
+-		if (PE_parse_boot_argn("a5fb_noconsole", &quiet, sizeof(quiet)) && quiet != 0) {
++		quiet = 1;      /* 0359: the GUI is not drawn over by the console unless a5fb_noconsole=0 */
++		PE_parse_boot_argn("a5fb_noconsole", &quiet, sizeof(quiet));
++		if (quiet != 0) {
+ #else
+ 		if (PE_parse_boot_argn("sweetfb_noconsole", &quiet, sizeof(quiet)) && quiet != 0) {
+ #endif
+@@ -1276,8 +1281,11 @@
+ 		if (args->scalarInputCount >= 1) {
+ 			bool off = args->scalarInput[0] == 0;
+ #if defined(ARM64_BOARD_CONFIG_A5XELTE)
+-			int keep_on = 0;
+-			if (off && PE_parse_boot_argn("a5fb_keep_on", &keep_on, sizeof(keep_on)) && keep_on) {
++			int keep_on = 1;    /* 0359: default on (a5fb_keep_on=0 gives back backboardd's own display-off) */
++			if (off) {
++				PE_parse_boot_argn("a5fb_keep_on", &keep_on, sizeof(keep_on));
++			}
++			if (off && keep_on) {
+ 				/* backboardd also asks for off on its own (right after the
+ 				 * first swap, idle); only a Power press just before is the
+ 				 * user locking the phone (bsd/dev/a5xelte_keys.c). */
+--- a/osfmk/arm64/sweet_early.c
++++ b/osfmk/arm64/sweet_early.c
+@@ -219,9 +219,10 @@
+ 		return;
+ 	}
+ 	if (!a5_k_checked) {                                          /* min21: heroring=0 stops the ring so the GUI is not painted over */
+-		int ring = 1;
++		int ring = 0;       /* 0359: off by default; heroring=1 brings the kprintf ring back for early-boot diagnostics */
+ 		a5_k_checked = 1;
+-		if (PE_parse_boot_argn("heroring", &ring, sizeof(ring)) && ring == 0) {
++		PE_parse_boot_argn("heroring", &ring, sizeof(ring));
++		if (ring == 0) {
+ 			a5_k_off = 1;
+ 		}
+ 	}
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3465,7 +3465,7 @@
+ 	PE_parse_boot_argn("herogpu_flush", &hg_flush_mode, sizeof(hg_flush_mode));
+ 	PE_parse_boot_argn("herogpu_sleep_us", &hg_sleep_us, sizeof(hg_sleep_us));
+ 	PE_parse_boot_argn("herogpu_sleep_present", &hg_sleep_present, sizeof(hg_sleep_present));
+-	int wifi = 1;                                          /* herowifi=0: no Wi-Fi */
++	int wifi = 0;                                          /* 0359: no Wi-Fi unless herowifi=1 (no firmware in the drop zone yet) */
+ 	PE_parse_boot_argn("herowifi", &wifi, sizeof(wifi));
+ 	if (wifi &&
+ 	    kernel_thread_start(hg_wifi_thread, NULL, &thread) == KERN_SUCCESS) {
