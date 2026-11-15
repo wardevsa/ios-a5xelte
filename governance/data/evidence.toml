@@ -2754,3 +2754,18 @@ sha256 = "5aac5b47f6c7438bc3e7971317250ff5924dca83c48d4eaea9136d195809d2cd"
 size = 1635
 immutable = true
 note = "Hito: con los tres argumentos del upstream el CS_KILLED desaparece y launchd (PID 1) ejecuta procesos (exec/EXIT/XPC) sobre la raíz iOS. Falta saber CUÁLES y por qué terminan: el anillo solo ve la cadena de formato. Solución propuesta: herolog=1 (log persistente de la consola en los últimos 4 MiB de USERDATA, con argumentos; se lee en TWRP con tools/herolte-log-pull.py, sin fotos). Transcripción por IA de fotos no archivadas."
+
+[[evidence]]
+id = "E-0188"
+title = "Imagen preparada (kernel 0351): xnu-boot-v2-s7-min19-20261115 = min18 con herolog=1 (log persistente de la consola en los últimos 4 MiB de USERDATA); 38 PASS constructor y 49 PASS independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run3-min19/xnu-boot-v2-s7-min19-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "4ab37c872ad41d767a3f34f4c2ca7f3e3a072aa817dcdd01b048ce53c9f51e63"
+size = 18620432
+immutable = true
+note = "Mismo kernel bb042852b3a7e25587ddffe2dabee7f0a54aabda1d3ed50aa7712369b6ea8cf7 (E-0174), ADT y cargador que min18; la línea difiere SOLO en herolog=0 -> herolog=1 (diff). El kernel copia su anillo de consola cada 10 s a los últimos 4 MiB + 4 KiB de USERDATA, más allá del volumen HFSX (bsd/dev/herolte_ufs.c; se lee en TWRP con tools/herolte-log-pull.py, solo lectura). Da el log COMPLETO con argumentos, sin fotos."
