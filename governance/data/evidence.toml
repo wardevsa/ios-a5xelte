@@ -3069,3 +3069,18 @@ sha256 = "dff3b2e35185cece0860850e973aa667561c75f479e3bd314497e9be1aef349e"
 size = 1373476
 immutable = true
 note = "Medido: FBSRC 1..9, nz_rgb 0, nz_a 0, OR 0x00000000 en ambas pasadas (≈130 732 píxeles muestreados por superficie). Un negro opaco tendría alfa 0xff: la superficie nunca fue escrita por el renderer (memoria recién puesta a cero) o es otra memoria que la que ve el kernel. Descarta la hipótesis B (caché) para estos presents. Observación del Director: 'nada, lo mismo de antes, lo negro aparece a los 30 segundos o así; 4 minutos después nada'. Límite: solo cubre los primeros 12 presents (~190 s); en min23 se llegó a 750 presents en 7 min con ritmo de ~10 fps tardío, y allí solo hay miniaturas de rejilla (E-0204). Memoria libre 507->474 MB (más sana que en min23). El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0209"
+title = "Log persistente de min24, segunda prueba de 12 min (flush #75, 720 s, 1661516 B): solo 25 presents en 12 minutos y las 10 sondas FBSRC siguen TODO CEROS (superficies 3/5 nunca escritas); en las 6 muestras SMP todos los hilos de backboardd y SpringBoard están en espera (mach_msg/kevent), ninguno ejecutando"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min24b-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "7578d69db4d304aec2fe448c2acea0db4e1e5550ddb00fa462cf77767dee177a"
+size = 1661516
+immutable = true
+note = "Observación del Director (12:01 arranque): a las 12:02 aparece lo negro encima (los colores de la derecha siguen visibles), a las 12:06, 12:10 y 12:14 nada nuevo. Del log: 'display-off request ignored (a5fb_keep_on)'; FBSRC 10 pass 0/1 nz_rgb 0 nz_a 0; 6 muestras SMP con PC de espera (0x1f8869030 = trampa de mach_msg, 0x1f88694f0) en todos los hilos salvo 1-2; ritmo 0,1-0,3 fps; memoria libre 265->221 MB. Conclusión L2: backboardd no está componiendo y no consume CPU: está bloqueado esperando algo (no es lentitud del renderer). No se sabe qué. Incidencia: tras volver a TWRP el USB salía como SAMSUNG_Android MTP sin interfaz adb; desenchufar y enchufar lo arregló. El log contiene identificadores: NO va a git."

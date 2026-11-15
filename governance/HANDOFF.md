@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0080 — min24 medida: superficies origen todo ceros (no es la caché); BOOT sigue con min24 (2026-11-15)
+## Relevo vigente: H-0081 — backboardd está BLOQUEADO esperando algo (no lento): 12 min, 25 presents, superficies a cero (2026-11-15)
+- **Tarea en curso: T-0012.** E-0209: FBSRC todo ceros en 25 presents/12 min; muestras SMP: hilos en espera. Hipótesis A reforzada (no B). BOOT sigue con min24.
+- **Siguiente:** (1) symbolizar los PC de las muestras SMP con la dyld cache de la raíz iOS (`/media/.../ios-root-herolte-20261115.img` montable en solo lectura con sudo del Director, o del IPSW os.dmg) para ver QUÉ espera backboardd; (2) mirar upstream: backboardd espera `DMPerformMigration` / `FBSystemShellInitialize`; en esta raíz podrían faltar flags (SetupDone, migración) o servicios; (3) instalar el userland de upstream por DROP (autorun/hero-run/herosb/disabled.list).
+- Restaurar BOOT: min23/min22/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0080 — min24 medida: superficies origen todo ceros (no es la caché); BOOT sigue con min24 (2026-11-15)
 - **Tarea en curso: T-0012.** E-0208: FBSRC pass 0 = pass 1 = 0 (incluido alfa) en los 12 primeros presents (190 s). Hipótesis B (caché) descartada para ese tramo; el renderer no ha escrito las superficies 3/5. Falta saber si más tarde (min23: ~10 fps hacia el minuto 5-7) hay contenido: las sondas FBSRC solo cubren presents 1-12 y cada 25.
 - **Siguiente (sin escribir BOOT):** el Director reinicia con la misma min24 y la deja 12 min; yo leo FBSRC de presents 25, 50, 75... (si el ritmo sube). Después, según resultado: renderer negro => userland upstream (hero-run/autorun/herosb/disabled.list via DROP) y sampler de qué espera backboardd.
 - Restaurar BOOT: min23/min22/original E-0009 (cada escritura exige firma).
