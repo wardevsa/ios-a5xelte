@@ -1,0 +1,75 @@
+name: dsc-scan
+
+# How much of a newer iOS the S7's ARMv8.0 cores cannot run: the dyld shared cache of an IPSW
+# (iOS 18: the iPhone XR's, arm64e) is fetched on the runner and tools/dsc-lse-scan.py counts, in every
+# image's __text, the LSE atomics, RCpc loads and pointer-authentication operations ARMv8.0 lacks
+# (baseline, iOS 16.7.16's arm64 cache that runs on the S7: 990 LSE in 375 M words, none in libobjc,
+# CoreFoundation, Foundation, UIKitCore, QuartzCore). Then the hot retain/release functions are
+# disassembled and only their counts of such instructions are printed. Nothing of Apple's is kept:
+# no artifact, only numbers in the log.
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: IPSW device identifier
+        default: iPhone11,8
+      build:
+        description: iOS build (22H352 = 18.7.8)
+        default: 22H352
+  push:
+    branches: [herolte]
+    paths:
+      - ".github/workflows/dsc-scan.yml"
+
+jobs:
+  scan:
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      DEVICE: ${{ inputs.device || 'iPhone11,8' }}
+      BUILD: ${{ inputs.build || '22H352' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: |
+          brew install blacktop/tap/ipsw
+          ipsw version
+          python3 -m pip install --quiet numpy
+      - name: The shared cache
+        run: |
+          set -x
+          mkdir -p dsc
+          url=$(curl -sf "https://api.ipsw.me/v4/device/$DEVICE?type=ipsw" | python3 -c "
+          import json, os, sys
+          for f in json.load(sys.stdin)['firmwares']:
+              if f['buildid'] == os.environ['BUILD']:
+                  print(f['url']); break")
+          echo "IPSW: $url"
+          # only the cache, out of the remote IPSW (partial zip); else the whole IPSW
+          if ! ipsw extract --remote --dyld --dyld-arch arm64e -o dsc "$url"; then
+            curl -sfL -o fw.ipsw "$url"
+            ipsw extract --dyld --dyld-arch arm64e -o dsc fw.ipsw
+            rm -f fw.ipsw
+          fi
+          find dsc -type f -name 'dyld_shared_cache*' | head -80
+          du -sh dsc
+      - name: Count what ARMv8.0 lacks
+        run: |
+          main=$(find dsc -type f -name 'dyld_shared_cache_arm64e' | head -1)
+          [ -n "$main" ] || { echo 'no dyld_shared_cache_arm64e'; exit 1; }
+          files=("$main")
+          while IFS= read -r f; do files+=("$f"); done < <(find "$(dirname "$main")" -type f -name 'dyld_shared_cache_arm64e.[0-9]*' ! -name '*.symbols' | sort -V)
+          python3 tools/dsc-lse-scan.py "${files[@]}"
+      - name: The hot functions
+        run: |
+          main=$(find dsc -type f -name 'dyld_shared_cache_arm64e' | head -1)
+          for sym in _objc_retain _objc_release _objc_retainAutoreleasedReturnValue _objc_autoreleaseReturnValue \
+                     _swift_retain _swift_release _CFRetain _CFRelease _dispatch_once _os_unfair_lock_lock \
+                     _pthread_mutex_lock _malloc; do
+            out=$(ipsw dsc disass "$main" --symbol "$sym" 2>/dev/null | head -400 || true)
+            n=$(printf '%s\n' "$out" | grep -c . || true)
+            lse=$(printf '%s\n' "$out" | grep -ciE '\b(cas|casa|casl|casal|casb|cash|casp|caspal|ldadd|ldaddal|ldaddl|ldadda|ldclr|ldclral|ldset|ldsetal|ldeor|swp|swpal|stadd|stclr|stset)[a-z]*\b' || true)
+            pac=$(printf '%s\n' "$out" | grep -ciE '\b(retaa|retab|braa|brab|blraa|blrab|braaz|brabz|blraaz|blrabz|ldraa|ldrab|autda|autdb|autia|autib|pacda|pacdb|xpaci|xpacd)\b' || true)
+            echo "$sym: $n lines, LSE $lse, PAC ops $pac"
+          done
