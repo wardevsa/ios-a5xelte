@@ -2649,3 +2649,18 @@ sha256 = "f82c273d27f6457b08dd557ba8e9cddc55dea9d4e6f15535750d952d66287b0f"
 size = 1374
 immutable = true
 note = "D-0048, T-0044, tools/herolte-write-userdata.py (≈4,3 MB/s, ~80 min). Dos intentos previos no escribieron nada o solo parte del trozo 0 por fallos del transporte (nc con stdin cerrado; medio cierre del reenvío de adb que perdía ~1,5 MB del final de trozos lentos): corregidos y probados antes de la escritura buena. Los bytes de USERDATA posteriores a la imagen (Android) no se tocaron. Android BORRADO del inicio de USERDATA; copias verificadas E-0124/E-0125."
+
+[[evidence]]
+id = "E-0181"
+title = "Primer arranque con la raíz iOS en USERDATA (min16, ufsrw=0): XNU RECONOCE el volumen HFS+ y falla al inicializar el DIARIO ('jnl: do_jnl_io: strategy err', 'write_journal_header: error', 'journal_create: failed to w…', 'hfs: late jnl init: failed') y 'Cannot mount root, errno = %d'"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min16-root-observation.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "5de4bcfc28f9ca2a01c2062c33162b00950a672a90c82808fc9d3963f8407009"
+size = 1288
+immutable = true
+note = "Interpretación (L1, por el código y por 'mkfs.hfsplus -J'): Linux crea el diario marcado como 'por inicializar'; XNU intenta crearlo/escribir su cabecera en el montaje y la escritura falla porque el kernel arrancó con ufsrw=0 (UFS solo lectura): jnl_io 'strategy err' → journal_create falla → hfs_mountfs falla → bucle 'cannot mount root'. NO es un problema de la imagen ni del formato: el cabecero del volumen se reconoció. Siguiente: arrancar con ufsrw=1 rootrw=1 (cambio de línea de arranque: necesita autorización) o dejar el diario inicializado/desactivado en la imagen. Transcripción por IA de una foto no archivada."
