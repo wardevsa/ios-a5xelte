@@ -40,7 +40,11 @@ jobs:
           git init -q berg
           git -C berg fetch -q --depth 1 https://github.com/ry-diffusion/Bergamota "$BERGAMOTA_SHA"
           git -C berg checkout -q FETCH_HEAD
+          # newer Homebrew refuses formulae of untrusted taps
+          brew tap blacktop/tap
+          brew trust blacktop/tap || true
           brew install blacktop/tap/ipsw zstd pigz >/dev/null
+          ipsw version
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/python" -m pip install --quiet numpy
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
