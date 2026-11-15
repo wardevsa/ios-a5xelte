@@ -94,7 +94,7 @@ class Base(unittest.TestCase):
     def assertNoErr(self, needle, render=True):
         errs = self.errors(render); self.assertFalse(any(needle in e for e in errs), (needle, errs))
 
-    def authorize(self, ref='D-0050', actions='["delete-or-overwrite"]', extra=''):
+    def authorize(self, ref='D-9050', actions='["delete-or-overwrite"]', extra=''):
         with open(self.data('decisions.toml'), 'a') as f:
             f.write('\n[[decision]]\nid = "%s"\ntitle = "t"\ndate = "2026-11-13"\nscope = "operation"\nstatus = "APPROVED"\nproposer = "ingeniero"\napproved_by = "director"\n'
                     'approval_date = "2026-11-13"\napproval_ref = "mensaje"\nrationale = "r"\nreversal = "x"\nauthorizes = %s\n%s' % (ref, actions, extra))
@@ -170,10 +170,10 @@ class Tasks(Base):
         self.assertErr('no autoriza la acción delete-or-overwrite')
 
     def test_authorization_that_names_the_action_is_accepted(self):
-        self.authorize(); self.t('T-0007', 'status', '"in_progress"'); self.t('T-0007', 'authorization_ref', '"D-0050"'); self.assertNoErr('T-0007')
+        self.authorize(); self.t('T-0007', 'status', '"in_progress"'); self.t('T-0007', 'authorization_ref', '"D-9050"'); self.assertNoErr('T-0007')
 
     def test_expired_authorization_is_rejected(self):
-        self.authorize(extra='valid_until = "2020-01-01"\n'); self.t('T-0007', 'status', '"in_progress"'); self.t('T-0007', 'authorization_ref', '"D-0050"'); self.assertErr('caducó el 2020-01-01')
+        self.authorize(extra='valid_until = "2020-01-01"\n'); self.t('T-0007', 'status', '"in_progress"'); self.t('T-0007', 'authorization_ref', '"D-9050"'); self.assertErr('caducó el 2020-01-01')
 
     def test_authorizes_needs_director_approval_and_only_red_actions(self):
         with open(self.data('decisions.toml'), 'a') as f:
@@ -201,7 +201,7 @@ class Tasks(Base):
         self.t('T-0016', 'status', '"in_progress"'); self.t('T-0016', 'depends_on', '[]'); self.t('T-0016', 'blocked_on', None); self.assertErr('avanzada sin que la decisión D-0007 esté APPROVED')
 
     def test_min_evidence_is_never_raised_automatically(self):
-        self.t('T-0012', 'status', '"in_review"'); self.t('T-0012', 'depends_on', '[]'); self.t('T-0012', 'authorization_ref', '"D-0050"'); self.authorize('D-0050', '["device-read","device-write-boot"]')
+        self.t('T-0012', 'status', '"in_review"'); self.t('T-0012', 'depends_on', '[]'); self.t('T-0012', 'authorization_ref', '"D-9050"'); self.authorize('D-9050', '["device-read","device-write-boot"]')
         self.assertErr('exige evidencia L3 en this-unit')                                                      # its evidence is host L2 / device data
 
     def test_schema_types_and_duplicates(self):
@@ -296,21 +296,21 @@ class Gate(Base):
         self.assertEqual(r.returncode, 20); self.assertIn('no autoriza la acción', r.stdout)
 
     def test_red_is_registered_only_with_a_matching_director_decision_and_never_executes(self):
-        self.authorize(); mutate(self.data('tasks.toml'), 'task', 'T-0007', 'authorization_ref', '"D-0050"'); r = self.g('delete-or-overwrite', '--task', 'T-0007')
+        self.authorize(); mutate(self.data('tasks.toml'), 'task', 'T-0007', 'authorization_ref', '"D-9050"'); r = self.g('delete-or-overwrite', '--task', 'T-0007')
         self.assertEqual(r.returncode, 0); self.assertIn('NO ejecuta nada', r.stdout)
 
     def test_red_is_denied_if_the_task_does_not_declare_the_action(self):
-        self.authorize('D-0050', '["publish"]'); mutate(self.data('tasks.toml'), 'task', 'T-0007', 'authorization_ref', '"D-0050"')
+        self.authorize('D-9050', '["publish"]'); mutate(self.data('tasks.toml'), 'task', 'T-0007', 'authorization_ref', '"D-9050"')
         self.assertEqual(self.g('publish', '--task', 'T-0007').returncode, 20)
 
     def test_red_is_denied_if_expired_or_if_not_by_the_director(self):
-        self.authorize(extra='valid_until = "2020-01-01"\n'); mutate(self.data('tasks.toml'), 'task', 'T-0007', 'authorization_ref', '"D-0050"')
+        self.authorize(extra='valid_until = "2020-01-01"\n'); mutate(self.data('tasks.toml'), 'task', 'T-0007', 'authorization_ref', '"D-9050"')
         self.assertEqual(self.g('delete-or-overwrite', '--task', 'T-0007').returncode, 20)
-        mutate(self.data('decisions.toml'), 'decision', 'D-0050', 'approved_by', '"jefe-tecnico"'); mutate(self.data('decisions.toml'), 'decision', 'D-0050', 'valid_until', None)
+        mutate(self.data('decisions.toml'), 'decision', 'D-9050', 'approved_by', '"jefe-tecnico"'); mutate(self.data('decisions.toml'), 'decision', 'D-9050', 'valid_until', None)
         self.assertEqual(self.g('delete-or-overwrite', '--task', 'T-0007').returncode, 20)
 
     def test_a_proposed_decision_does_not_authorize(self):
-        self.authorize(); mutate(self.data('decisions.toml'), 'decision', 'D-0050', 'status', '"PROPOSED"'); mutate(self.data('tasks.toml'), 'task', 'T-0007', 'authorization_ref', '"D-0050"')
+        self.authorize(); mutate(self.data('decisions.toml'), 'decision', 'D-9050', 'status', '"PROPOSED"'); mutate(self.data('tasks.toml'), 'task', 'T-0007', 'authorization_ref', '"D-9050"')
         self.assertEqual(self.g('delete-or-overwrite', '--task', 'T-0007').returncode, 20)
 
     def test_yellow_consolidation_needs_a_recorded_review(self):
