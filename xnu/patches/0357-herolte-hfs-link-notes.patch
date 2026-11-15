@@ -1,0 +1,15 @@
+hfs: HEROLTE also reports only the first 8 hard-link repairs (0357)
+
+min33b (E-0244): 4751 of 11158 log lines and half of the persistent log's bytes are 'hfs: set hardlink bit on vol=IOSROOT cnid=N inoid=N', one per lookup of a hard link made by the Linux tools that built the root. 0041 limits them to the first 8, but only under ARM64_BOARD_CONFIG_SWEET (the Redmi), so on the Galaxy S7 every lookup printed, filled the 4 MiB ring in minutes and cost a printf each. The condition now includes ARM64_BOARD_CONFIG_HEROLTE. The repair itself (setting the bit in memory) is unchanged.
+
+--- a/bsd/sweet_hfs/core/hfs_catalog.c
++++ b/bsd/sweet_hfs/core/hfs_catalog.c
+@@ -757,7 +757,7 @@
+ }
+ 
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_HEROLTE)
+ /*
+  * SWEET: hard links made by Linux tools lack kHFSHasLinkChainBit and every
+  * lookup of them repairs (in memory) and reports it again; the console
