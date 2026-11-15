@@ -10,7 +10,7 @@ conexión de escritura). Con --execute exige TODO esto:
   - USERDATA no está montada en el teléfono;
   - `governance.py gate device-write-userdata --task TAREA` sale con 0 (decisión APPROVED del Director que NOMBRE la acción).
 Transporte (el de la copia de seguridad, ~18 MB/s; `adb push`/`exec-in` son lentos o no funcionan en este TWRP): el PC envía cada
-trozo a `nc -l -p PUERTO | dd of=USERDATA seek=…` en el teléfono por `adb forward`; después el teléfono calcula el SHA-256 del MISMO
+trozo a `sleep | nc -l -p PUERTO | head -c N | dd of=USERDATA seek=…` (el `sleep` mantiene abierta la entrada de nc: con stdin cerrado, nc sale sin leer; `head -c` acota los bytes; dd sin `count`: con lecturas parciales de la tubería `count` truncaría) en el teléfono por `adb forward`; después el teléfono calcula el SHA-256 del MISMO
 rango leído del disco y solo se acepta si coincide con el del PC (reintenta). Es REANUDABLE (--state). Al final el teléfono calcula el
 SHA-256 del prefijo del disco con el tamaño de la imagen y debe ser el de la imagen. --dry-transport manda los trozos a /dev/null en el
 teléfono (prueba el transporte sin escribir el disco). Nunca toca otra partición: la única ruta de escritura es USERDATA.
@@ -53,9 +53,9 @@ def sha_file_range(path, off, n):
 
 
 def send_chunk(data, skip, count, port, target):
-    adb('shell', 'killall nc 2>/dev/null')
+    adb('shell', 'killall nc sleep 2>/dev/null')
     adb('forward', 'tcp:%d' % port, 'tcp:%d' % port)
-    srv = subprocess.Popen([ADB, 'shell', 'nc -l -p %d | dd of=%s bs=%d seek=%d count=%d conv=fsync 2>/dev/null' % (port, target, UNIT, skip, count)],
+    srv = subprocess.Popen([ADB, 'shell', 'sleep 300 | nc -l -p %d | head -c %d | dd of=%s bs=%d seek=%d conv=fsync 2>/dev/null' % (port, count * UNIT, target, UNIT, skip)],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     ok = False
     try:
@@ -66,14 +66,16 @@ def send_chunk(data, skip, count, port, target):
                 c.sendall(data); c.shutdown(socket.SHUT_WR)
                 try: c.recv(1)
                 except OSError: pass
-                c.close(); ok = True; break
+                c.close(); ok = True
+                adb('shell', 'killall sleep 2>/dev/null')   # sin esto la tubería espera los 300 s del sleep aunque los datos ya estén escritos
+                break
             except OSError:
                 continue
         try: srv.wait(120)
         except subprocess.TimeoutExpired: srv.kill()
     finally:
         if srv.poll() is None: srv.kill()
-        adb('shell', 'killall nc 2>/dev/null')
+        adb('shell', 'killall nc sleep 2>/dev/null')
     return ok
 
 

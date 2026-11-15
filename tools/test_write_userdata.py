@@ -15,9 +15,9 @@ if a[0] == 'shell':
     if cmd.startswith('readlink'): out('/dev/block/' + os.environ.get('FAKE_BLOCK', 'sda18'))
     if 'getsize64' in cmd: out(str(os.path.getsize(disk)))
     if cmd.startswith('cat /proc/mounts'): out(os.environ.get('FAKE_MOUNTS', 'rootfs / rootfs rw 0 0'))
-    m = re.search(r'nc -l -p (\d+) \| dd of=(\S+) bs=4096 seek=(\d+) count=(\d+)', cmd)
+    m = re.search(r'sleep 300 \| nc -l -p (\d+) \| head -c (\d+) \| dd of=(\S+) bs=4096 seek=(\d+) conv=fsync', cmd)
     if m:
-        port, target, seek, count = int(m.group(1)), m.group(2), int(m.group(3)), int(m.group(4))
+        port, nbytes, target, seek = int(m.group(1)), int(m.group(2)), m.group(3), int(m.group(4))
         s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(('127.0.0.1', port)); s.listen(1)
         c, _ = s.accept(); buf = b''
         while True:
@@ -27,7 +27,7 @@ if a[0] == 'shell':
         c.close(); s.close()
         if target == '/dev/null': sys.exit(0)
         if seek == 256 and not os.path.exists(flag): open(flag, 'w').write('x'); buf = buf[:-1] + bytes([buf[-1] ^ 1])
-        with open(disk, 'r+b') as f: f.seek(seek * 4096); f.write(buf[:count * 4096])
+        with open(disk, 'r+b') as f: f.seek(seek * 4096); f.write(buf[:nbytes])
         sys.exit(0)
     m = re.search(r'dd if=\S+ bs=(\d+) (?:skip=(\d+) )?count=(\d+) 2>/dev/null \| sha256sum', cmd)
     if m:
