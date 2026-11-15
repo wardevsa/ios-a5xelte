@@ -52,6 +52,32 @@ def add_haptics(root):
     ]))
 
 
+def add_bluetooth_isp(root):
+    """From the Note FE port (its mkadt_gracerlte.py, 0435/0458): the iPhone X's Bluetooth node
+    (D22AP /arm-io/uart1/bluetooth's properties, bluetooth,n88), directly under /arm-io so the platform
+    expert makes it a nub (bluetoothd: "no bluetooth service in device tree" without it; boot-0344bt:
+    bluetoothd exited 0 again and again), and the S9 ports' camera node /arm-io/isp, where MobileGestalt
+    looks for cameras (no compatible, no device_type: no driver matches it). Idempotent."""
+    arm_io = child(root, 'arm-io')
+    names = {c.prop('name') for c in arm_io.children}
+    if mkadt.cstr('bluetooth') not in names:
+        arm_io.children.append(mkadt.node('bluetooth', [
+            ('device_type', mkadt.cstr('bluetooth')),
+            ('compatible', mkadt.cstr('bluetooth,n88')),
+            ('transport-speed', mkadt.u32(3000000)),
+            ('transport-encoding', mkadt.u32(3)),
+            ('vendor-id', mkadt.u32(0x05ac)),
+            ('product-id', mkadt.u32(0x12a0)),
+            ('coex', mkadt.u32(2)),
+            ('local-mac-address', bytes((0x02, 0x48, 0x45, 0x52, 0x4f, 0x02))),
+        ]))
+    if mkadt.cstr('isp') not in names:
+        arm_io.children.append(mkadt.node('isp', [
+            ('camera-rear', mkadt.u32(1)),
+            ('camera-front', mkadt.u32(1)),
+        ]))
+
+
 def child(node, name):
     for candidate in node.children:
         if candidate.prop('name') == mkadt.cstr(name):
@@ -114,6 +140,7 @@ def build(canvas=(FB_WIDTH, FB_HEIGHT), dram=(DRAM_BASE, DRAM_SIZE), scale=3):
     # never shows (Safari's pages and the stock wallpapers black, boot-0317).
     set_prop(child(root, 'product'), 'artwork-display-gamut', mkadt.cstr('sRGB'))
     add_haptics(root)
+    add_bluetooth_isp(root)
     cpus = child(root, 'cpus')
     cpu0 = child(cpus, 'cpu0')
     # S-Boot starts on the Cortex-A53 "Apollo" cluster: MPIDR 0x100..0x103
