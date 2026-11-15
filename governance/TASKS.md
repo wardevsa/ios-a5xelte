@@ -48,7 +48,7 @@ Ordenada por prioridad (1 = la más urgente). "Nivel" = el más alto de sus acci
 | T-0050 | done | 8 | ingeniero | Compilar en el CI el kernel con 0355 corregido: push de herolte-drop-v2 a mio y workflow xnu (D-0062) | — | C rojo | — |
 | T-0051 | ready | 8 | ingeniero | Compilar en el CI mesa-ios el hero-run y las librerías del paquete DROP real: push de herolte-drop-v2 a mio y workflow mesa-ios (D-0069) | — | C rojo | — |
 | T-0052 | ready | 8 | ingeniero | Compilar en el CI el kernel con 0356/0357/0358: push de herolte-drop-v2 a mio y workflow xnu (D-0072) | — | C rojo | — |
-| T-0053 | ready | 8 | ingeniero | Compilar en el CI el kernel con 0356 corregido, 0357 y 0358: push de herolte-drop-v2 a mio y workflow xnu (D-0073) | — | C rojo | — |
+| T-0053 | done | 8 | ingeniero | Compilar en el CI el kernel con 0356 corregido, 0357 y 0358: push de herolte-drop-v2 a mio y workflow xnu (D-0073) | — | C rojo | — |
 | T-0012 | in_progress | 9 | ingeniero | Pruebas N1 (sonda) y N2 (XNU solo lectura) en el S7: escribir BOOT desde TWRP | T-0013 | C rojo | — |
 | T-0013 | done | 9 | director | Decidir el cargador de las pruebas: el de clang (conveniencia) o compilar con el GCC aarch64 de Arm | — | A verde | — |
 | T-0016 | done | 9 | ingeniero | Aplicar la renumeración de parches y fusionar con origin/herolte (si el jefe técnico aprueba D-0008) | T-0009 | B amarillo | — |

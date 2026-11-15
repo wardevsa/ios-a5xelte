@@ -3609,3 +3609,33 @@ sha256 = "a6163aefef90aa69e5721cca1869be46d4dae213335f40541bc5cb16e383d8ad"
 size = 620352
 immutable = true
 note = "Medido: vida 420 s; memoria libre mínima 181 MB (3029 MB al final tras matar procesos); fps medio 8,5 (máx 20,4), copia por cuadro 6,1 ms; Mongoose 2600 MHz, GPU 650 MHz; SoC máx 47 C (39 al final); 62 líneas hero-run (28 trabajos desactivados, procesos a segundo plano); 'HEROLTE GL: backboardd launch 1 (pid 56): EAGL shim inserted (herogl=1)'; crashes: assetsd x5, mediaserverd, MobileSMS, PhotosFileProvider, MobileSlideShow; 'System shutdown initiated by: SpringBoard[27]' -> teardown de launchd -> 'syncing disks', 'vfs_unmountall', 'CPU halted' en 3-4 s de reloj de launchd y después 'TOP 5s: launchd 200 %' hasta el final del log. Observación del Director: 'mucho mejor, ya no hay apps en blanco, o cargan o crashean; privacy and security ahora sí funciona y About también; tenemos un iPhone X, 21 GB de capacidad y 8,63 libres; shutdown tarda mucho, pantalla negra con la rueda de pensando que se mueve muy poco; fuerzo el apagado'. El 1.er arranque (E-0243) se congeló mientras lsd reconstruía LaunchServices; en este 2.º arranque no hubo congelación (la hipótesis de la reconstrucción gana peso, sin probar). El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0245"
+title = "Kernel con 0356 (herohalt), 0357 (límite de notas HFS) y 0358 (menos sondas) compilado en el CI (run 43724507305, commit 0da15e6, éxito; el run 43722829199 con 7f79275 falló por kPERestartCPU)"
+kind = "kernel"
+path = "/home/pioxi/HackiOS/builds/device-day/artifacts/kernel-0358-ci-43724507305/xnu-kernel-macos-15-intel/kernel.development.herolte"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "f965e44c40566038c66c304498571c751e31a77619d949149cca9dfbe5ce5269"
+size = 17356112
+immutable = true
+note = "D-0073 / T-0053. La cadena herohalt está en el binario. 0356 solo actúa con herohalt=N fuera de pánico."
+
+[[evidence]]
+id = "E-0246"
+title = "Imagen preparada: xnu-boot-v2-s7-min34-20261115 = min33 sin herogpu=1 (valor por defecto) y con herohalt=1, kernel 0358 (E-0245); 605 caracteres de línea; verificador independiente sin FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run18-min34/xnu-boot-v2-s7-min34-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "8809bae538a77098f84e4888d69505970d4167f5d69a86d3f12792c82038a1ce"
+size = 18620432
+immutable = true
+note = "Línea de min33 con ' herogpu=1' quitado (herogpu por defecto 1 en herolte_gpu_probe) y 'herohalt=1' añadido (diff de dos líneas). Con herohalt=1 apagar desde iOS reinicia en TWRP y reiniciar reinicia normal; imprime PS_HOLD_CONTROL. Riesgo: un SWRESET con INFORM2/3 mal puede dejar el teléfono en un modo de arranque inesperado (no toca EFS ni particiones). Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run18-min34/xnu-boot-v2-s7-min34-20261115.verify-independent.txt."
