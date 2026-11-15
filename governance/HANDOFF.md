@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0070 — min20 (min19 con herogpu=1) ESCRITA (D-0052, 1 de la tanda nueva); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0071 — kernel 0352 (CI 43699443107) y min21 preparada, NO escrita; BOOT sigue con min20 (2026-11-15)
+- **Tarea en curso: T-0012.** E-0193: UI de iOS viva, GPU arranca y nadie la usa; la pantalla muestra el anillo 0351. T-0046 hecha: kernel 0352 (E-0194). Imagen `xnu-boot-v2-s7-min21-20261115.img` sha256 `141a6d87…6a1e`... (E-0195) = min20 + `heroring=0 sweetfb_noconsole=1`.
+- **Siguiente:** firma del Director para escribir min21 (decisión nueva, 2.ª de la tanda de D-0052 no vale: D-0052 nombra min20). Después `adb reboot`, 5-10 min, TWRP, `tools/herolte-log-pull.py`.
+- Investigación abierta (solo PC): por qué nadie abre HeroGPU/IOAccelerator; xstat 9 de widgets/UARP; assetsd xstat 6; `autorun` ausente.
+
+## Relevo anterior: H-0070 — min20 (min19 con herogpu=1) ESCRITA (D-0052, 1 de la tanda nueva); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** E-0190: iOS llega a SpringBoard con herogpu=0. BOOT = `xnu-boot-v2-s7-min20-20261115.img` (sha256 `039b30dc…c82fb6`, E-0191/E-0192). Primera vez con la GPU Mali en esta unidad.
 - **Director:** `adb reboot`, dejar 5-10 min, volver a TWRP y avisar. **Ingeniero:** `python3 -I tools/herolte-log-pull.py adb OUT.txt`; mirar herolte_gpu (arranque, errores MMU/job), swaps de backboardd, si SpringBoard sale, y contar swaps/min. El log no va a git.
 - **RESULTADO (E-0193):** GPU arranca bien (Mali-T880 r2p0) pero nadie la usa (sin jobs); SpringBoard vivo ~270 s; en pantalla sigue la consola. Siguiente: (1) por qué backboardd/SpringBoard no abren HeroGPU/IOAccelerator (¿falta entitlement/IOKit match, Metal sin renderer?); (2) por qué el panel no muestra la UI (la consola temprana 0348/0351 sigue pintando el framebuffer; swaps al DECON con superficie vacía?); (3) xstat 9 de widgets/UARP y assetsd 6. Cualquier cambio de kernel = parche + CI (publish, rojo) + imagen + firma.

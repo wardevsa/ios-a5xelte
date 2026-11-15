@@ -2844,3 +2844,33 @@ sha256 = "b1b0be4fa28a13e2e38a9db1b999b1fe359008122eb94230a7803208c89a3f69"
 size = 2171399
 immutable = true
 note = "GPU_ID=0x8802000 (Mali-T880 r2p0), AS=0xff JS=0x7, 'no GPU jobs'; HEROGPU registered + IOAcceleratorES registered; PMU G3D conf=0xf status=0x3000f. Sin cuelgue ni pánico. SPAWN FAILED: HorizonSetup (2), snapshottool (2), /private/var/herolte/autorun (2) y 13+ appex de voz (SiriTTS/Kona/MacinTalk, 1). Salidas con xstat 9 (SIGKILL, sin mensaje de jetsam): widgets, UARPUpdater*, maild; assetsd xstat 6 (abort) x3; SpringBoard AKS sel 8 -> 0xe00002c7 repetido. Esta observación del Director: en pantalla sigue viéndose la consola ('spawn failed y varios exit'). El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0194"
+title = "Kernel con 0352 (heroring=0) compilado en el CI (run 43699443107, commit ca1b18a, éxito): 0332-0352 aplicados, ninguno saltado; la cadena heroring está en el binario"
+kind = "kernel"
+path = "/home/pioxi/HackiOS/builds/device-day/artifacts/kernel-0352-ci-43699443107/xnu-kernel-macos-15-intel/kernel.development.herolte"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "a606b6ac841416528312b595c128188573719b8022b14524e670e74204096308"
+size = 17355600
+immutable = true
+note = "D-0053 / T-0046. Los parches saltados del log (iobuffermemd_monterey, skywalk_sonoma, syntax_checker_sonoma, TrustCache) no son nuestros y ya se saltaban antes. Mismo flujo que 0351 (E-0174) más 0352."
+
+[[evidence]]
+id = "E-0195"
+title = "Imagen preparada: xnu-boot-v2-s7-min21-20261115 = min20 + heroring=0 sweetfb_noconsole=1, con el kernel 0352 (E-0194); 45 PASS del verificador independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run5-min21/xnu-boot-v2-s7-min21-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "141a6d87d1ce977634d401eec9c470be235383052774332cdc5d52a7a8336a1e"
+size = 18620432
+immutable = true
+note = "Kernel, no cargador ni ADT iguales: el kernel es el nuevo (0352); ADT y cargador como min20. La línea difiere de min20 SOLO por heroring=0 y sweetfb_noconsole=1 (diff). herolog=1 y herogpu=1 se mantienen. El único FAIL del constructor es su expectativa fija herolog=0. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run5-min21/xnu-boot-v2-s7-min21-20261115.verify-independent.txt."
