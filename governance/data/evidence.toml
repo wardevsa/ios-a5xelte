@@ -3759,3 +3759,18 @@ sha256 = "2ba461dcbdc94b552955448faa73e055f1dac30590089a1ab09e03ebe124fdd4"
 size = 18620432
 immutable = true
 note = "Debe comportarse igual que min34 (misma pantalla con GPU, consola silenciada, sin Wi-Fi, sin anillo) con una línea 69 caracteres más corta; el único cambio de comportamiento es sweetsample_s=2: el muestreador del kernel toma una muestra de SpringBoard y backboardd cada 2 s (perfilado de backboardd, E-0251); ese muestreo carga el sistema y baja los fps medidos, así que es una imagen de perfilado, no de uso. Cada muestra ocupa unos 12 KB: el anillo de 4 MiB cubre ~10 minutos de uso con este ritmo. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run19-min35/xnu-boot-v2-s7-min35-20261115.verify-independent.txt."
+
+[[evidence]]
+id = "E-0255"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min35-20261115.img (kernel 0359, valores por defecto del S7 y sweetsample_s=2) y leído de vuelta (sha256 2ba461dc…dd4); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min35-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "46ba0ef88a7e3a0d2354262ad49db64b7ae46386bcd30b4ca761e4a66fa51ae0"
+size = 724
+immutable = true
+note = "D-0077; hash registrado antes en E-0254. Primer intento."

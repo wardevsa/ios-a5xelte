@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0111 — kernel 0359 compilado (CI 43728707463) y min35 de perfilado preparada, NO escrita (2026-11-15)
+## Relevo vigente: H-0112 — min35 (kernel 0359, sweetsample_s=2) ESCRITA (D-0077); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012 / T-0056.** BOOT = `xnu-boot-v2-s7-min35-20261115.img` (sha256 `2ba461dc…dd4`, E-0254/E-0255).
+- **Director:** `adb reboot`, 3-4 min de uso MOVIDO (Ajustes, scroll, Safari, App Store), apagar desde iOS (-> TWRP). **Ingeniero:** log: comparar con min34 (GPU PRESENT, sin FBP/anillo, sin Wi-Fi) y perfilar los SMP de backboardd por librería; fps con sampler denso serán menores.
+- Vuelta atrás: min34 (E-0247).
+
+## Relevo anterior: H-0111 — kernel 0359 compilado (CI 43728707463) y min35 de perfilado preparada, NO escrita (2026-11-15)
 - **Tarea en curso: T-0012 / T-0056.** E-0253 kernel con 0359. E-0254 `xnu-boot-v2-s7-min35-20261115.img` sha256 `2ba461dc…24fdd4`: min34 sin los 6 argumentos que ahora son por defecto (línea 536) + `sweetsample_s=2`.
 - **Siguiente:** firma de BOOT; `adb reboot`, 3-4 min de uso (Ajustes, scroll, apps), apagar desde iOS (herohalt=1 -> TWRP); `herolte-log-pull.py`; comprobar que se comporta como min34 (GPU PRESENT, consola muda, Wi-Fi apagado) y agrupar los `SMP backboardd` por librería (herolte-smp-images.py). Luego E1-E3 (a5fb_hz=30, heroquantum=500, heronoexec += wifid,identityservicesd).
 - Vuelta atrás: min34 (E-0247).
