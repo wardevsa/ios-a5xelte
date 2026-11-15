@@ -3639,3 +3639,18 @@ sha256 = "8809bae538a77098f84e4888d69505970d4167f5d69a86d3f12792c82038a1ce"
 size = 18620432
 immutable = true
 note = "Línea de min33 con ' herogpu=1' quitado (herogpu por defecto 1 en herolte_gpu_probe) y 'herohalt=1' añadido (diff de dos líneas). Con herohalt=1 apagar desde iOS reinicia en TWRP y reiniciar reinicia normal; imprime PS_HOLD_CONTROL. Riesgo: un SWRESET con INFORM2/3 mal puede dejar el teléfono en un modo de arranque inesperado (no toca EFS ni particiones). Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run18-min34/xnu-boot-v2-s7-min34-20261115.verify-independent.txt."
+
+[[evidence]]
+id = "E-0247"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min34-20261115.img (min33 sin herogpu=1 y con herohalt=1, kernel 0356/0357/0358) y leído de vuelta (sha256 8809bae5…a1ce); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min34-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "10e60ada723b6cd36e0c3b02babbd6336d8cb0913ef48ffd83d644979073e240"
+size = 724
+immutable = true
+note = "D-0074; hash registrado antes en E-0246. Primer intento. T-0012 vuelve a declarar solo device-read y device-write-boot (la acción device-write-userdata de D-0068/D-0070 ya no hace falta y D-0074 no la cubre)."

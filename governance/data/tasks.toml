@@ -134,7 +134,7 @@ status = "in_progress"
 priority = 9
 owner = "ingeniero"
 depends_on = ["T-0013"]
-actions = ["device-read", "device-write-boot", "device-write-userdata"]
+actions = ["device-read", "device-write-boot"]
 acceptance = "Imagen con SHA-256 y verificador PASS nombrada en la autorización; copias de BOOT y EFS fuera del teléfono; resultado registrado como evidencia del dispositivo, separado de las comprobaciones del PC."
 evidence = ["E-0036", "E-0037", "E-0038", "E-0043", "E-0044", "E-0048", "E-0050", "E-0052", "E-0055", "E-0058"]
 min_evidence = { level = "L3", device = "this-unit" }

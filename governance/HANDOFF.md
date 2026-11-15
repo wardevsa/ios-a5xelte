@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0106 — min33 + paquete real 1 FUNCIONA (2.º arranque sin congelación); falta apagado real: parche 0356 (herohalt) escrito, sin CI (2026-11-15)
+## Relevo vigente: H-0107 — min34 (herohalt=1, kernel 0356/0357/0358) ESCRITA (D-0074); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min34-20261115.img` (sha256 `8809bae5…a1ce`, E-0246/E-0247). Zona DROP con el paquete real 1 ya instalado (paquete 2).
+- **Director:** `adb reboot`, 5 min de uso, luego **apagar desde iOS** (botón de encendido + deslizar): debe reiniciarse en TWRP en ~15 s. Si no, apagado forzado. **Ingeniero:** `herolte-log-pull.py` + `herolte-log-report.py`; buscar `HEROLTE: herohalt=1: restart into recovery in 12 s (PS_HOLD_CONTROL 0x…)` (el valor de PS_HOLD sirve para un power-off real); menos 'hfs: set hardlink' y sondas; vida del log más larga.
+- Vuelta atrás: min33 (E-0241).
+
+## Relevo anterior: H-0106 — min33 + paquete real 1 FUNCIONA (2.º arranque sin congelación); falta apagado real: parche 0356 (herohalt) escrito, sin CI (2026-11-15)
 - **Tarea en curso: T-0012.** E-0244: apps ya no en blanco, Privacidad y seguridad y About funcionan, iPhone X 21 GB (8,63 libres), GL activo en backboardd. El 1.er arranque se congeló con lsd reconstruyendo LaunchServices; el 2.º no.
 - **Apagado:** SpringBoard apaga, launchd cierra, discos desmontados, 'CPU halted', pero el teléfono no se apaga (no hay power-off en el kernel; launchd 200 %). `xnu/patches/0356-herolte-halt-restart.patch` (commit fd84920): `herohalt=1` reinicia (halt -> recovery/TWRP, restart -> normal) por SWRESET del PMU (como herotwrp); imprime PS_HOLD_CONTROL para añadir un power-off real luego. SIN CI ni imagen todavía.
 - **Siguiente:** (a) firma de push+CI de 0356 (rojo) -> kernel nuevo -> `min34` = min33 + `herohalt=1` (firma de BOOT); (b) seguir con userland: assetsd (5 abortos), MobileSMS (Metal), MediaServer; (c) fps 8,5 medios: mirar CPU de lsd/containermanager y A53/Mongoose.
