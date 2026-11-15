@@ -18,7 +18,7 @@ jobs:
   root:
     if: github.event.repository.private == true
     runs-on: macos-15-intel
-    timeout-minutes: 330
+    timeout-minutes: 355            # GitHub-hosted jobs stop at 360; the macho stage alone took hours
     env:
       GH_TOKEN: ${{ github.token }}
       RENEGADE_TARGET: ios18

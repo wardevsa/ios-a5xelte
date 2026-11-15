@@ -41,8 +41,19 @@ _spec.loader.exec_module(mk)
 pacstrip = mk.pacstrip
 
 
+_seen = Counter()
+
+
+def _progress(what):
+    """mkroot-full.py logs only at file 0, 20000, ... and only when that file is a Mach-O: say something per worker."""
+    _seen[what] += 1
+    if what == 'files' and _seen['files'] % 5000 == 0:
+        mk.log(f'  worker {os.getpid()}: {_seen["files"]} files, {_seen["rewritten"]} Mach-Os rewritten')
+
+
 def macho_worker(path):
     """mkroot-full.py's macho_worker with v80strip between pacstrip and the re-sign."""
+    _progress('files')
     try:
         with open(path, 'rb') as f:
             if f.read(4) not in mk.MAGICS:
@@ -66,6 +77,7 @@ def macho_worker(path):
         with open(path, 'wb') as f:
             f.write(buf)
         old = pacstrip.sign(path)
+        _progress('rewritten')
         counts = dict(counts)
         counts['__ident'] = old
         return path, 'rewritten', counts

@@ -28,6 +28,11 @@ import struct
 import sys
 from collections import Counter
 
+try:
+    import numpy as np
+except ImportError:                                  # fall back to a plain word-by-word scan
+    np = None
+
 MH_MAGIC_64 = 0xFEEDFACF
 FAT_MAGIC, FAT_MAGIC_64 = 0xCAFEBABE, 0xCAFEBABF
 CPU_TYPE_ARM64 = 0x0100000C
@@ -381,12 +386,27 @@ def layout(buf, base):
     return ranges, free
 
 
+def candidates(buf, s, e):
+    """Offsets in [s, e) (step 4) whose word may be CAS/CASP/LD<op>/SWP/LDAPR/LDAPUR/STLUR, in order. A superset:
+    process() still applies the exact tests. numpy keeps the whole-root macho stage from walking every word in
+    Python (ios18-root run 43755727940: hours on 196k files)."""
+    n = (e - s) // 4
+    if n <= 0:
+        return []
+    if np is None:
+        return range(s, s + 4 * n, 4)
+    w = np.frombuffer(buf, dtype='<u4', count=n, offset=s)
+    m = (((w & 0x3FA07C00) == 0x08A07C00) | ((w & 0xBFA07C00) == 0x08207C00) |
+         ((w & 0x3F200C00) == 0x38200000) | ((w & 0x3F200C00) == 0x19000000))
+    return (s + 4 * np.nonzero(m)[0]).tolist()
+
+
 def process(buf, base, write, do_rcpc, do_lse, counts):
     ranges, free = layout(buf, base)
     room = sum(hi - lo for lo, hi, _ in free)
     counts['room bytes'] += room
     for s, e, bias in ranges:
-        for p in range(s, e - 3, 4):
+        for p in candidates(buf, s, e):
             w = struct.unpack_from('<I', buf, p)[0]
             if do_rcpc and (is_ldapr(w) or is_rcpc_imm(w)):
                 nw = rcpc_rewrite(w)
