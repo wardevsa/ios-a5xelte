@@ -3189,3 +3189,33 @@ sha256 = "6829f1dff0312e33d0d2ddfe0139dc915501a15bcebc111a5c46914472e22bd4"
 size = 724
 immutable = true
 note = "D-0063; hash registrado antes en E-0215. Primer intento. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."
+
+[[evidence]]
+id = "E-0217"
+title = "Log persistente de min26 (kernel 0355; flush hasta 240 s; 1774515 B): las 120 primeras llamadas de iOS al framebuffer NO incluyen ninguna asíncrona ni registerNotificationPort (nunca se registra un puerto de notificaciones); iOS pide el tamaño 750x1334 (selector 3 con 0x2ee 0x536) mientras el kernel anuncia 1440x2560 (sweetfb_native=1 sin escala)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min26-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "816075fa49a875d1f96f506ce1fcdbfbd0d24b37bb51641eaca3a2670e3acddc"
+size = 1774515
+immutable = true
+note = "Medido: FBCALL 1..120: selectores 4 (SwapBegin) x35, 6 x36, 52 x24 (argumento = id de superficie creciente), 50 x2, 68 x2, 79 x3, 3, 8, 12, 15, 17, 22, 27, 28, 29, 33, 55, 57, 74, 84; async=0 en todas; 0 líneas 'registerNotificationPort'. Sel 3 recibe (0x2ee,0x536)=750x1334, igual que las superficies de SpringBoard (750x1334) y el ADT; el kernel con native=1 sin scale anuncia 1440x2560. El comentario de SweetFramebuffer.cpp dice: 'The default surface must have the presented size (a mismatch left every swap layer empty)'. Upstream (L4h) usa sweetfb_native=1 sweetfb_scale=1 sweetfb_lw=750 sweetfb_lh=1334 con el ADT --iphone8. Observación del Director: 'lo mismo, pantalla de siempre, a los 30 s negro'; falló otra vez el reinicio forzado a TWRP (el log leído es de 240 s). NO se sabe: si la causa es el desajuste de tamaño (hipótesis nueva) o la falta de vsync. Las llamadas 121+ no se registraron (tope 120). El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0218"
+title = "Imagen preparada: xnu-boot-v2-s7-min27-20261115 = min26 + sweetfb_scale=1 sweetfb_lw=750 sweetfb_lh=1334 (mismo kernel 0355, E-0214); 50 PASS del verificador independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run11-min27/xnu-boot-v2-s7-min27-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "a59c26fa713b19346e82e8bc323a51a49353527aeb6b08eee1c8d78dc66f4640"
+size = 18620432
+immutable = true
+note = "Solo cambia la línea de arranque (diff: +sweetfb_scale=1 +sweetfb_lw=750 +sweetfb_lh=1334); kernel, ADT y cargador idénticos a min26. Motivo: E-0217 (tamaño pedido por iOS 750x1334 contra 1440x2560 anunciado) y la configuración de upstream (L4h). La superficie por defecto con escala usa memoria física propia en 0xa0000000 (SweetFramebuffer.cpp); riesgo: si esa dirección no es libre en esta unidad el kernel podría fallar. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run11-min27/xnu-boot-v2-s7-min27-20261115.verify-independent.txt. El único FAIL del constructor es su expectativa fija herolog=0."

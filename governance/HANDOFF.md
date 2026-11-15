@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0088 — min26 (kernel 0355, FBCALL) ESCRITA (D-0063); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0089 — min26 medida (sin registro de puerto; tamaño pedido 750x1334 != 1440x2560); min27 (scale=1 lw=750 lh=1334) preparada, NO escrita (2026-11-15)
+- **Tarea en curso: T-0012.** E-0217. Hipótesis: desajuste lógico/ADT (el comentario del driver: "a mismatch left every swap layer empty"). min27 = línea de min26 + `sweetfb_scale=1 sweetfb_lw=750 sweetfb_lh=1334`, mismo kernel 0355. E-0218, sha256 `a59c26fa…6f4640`.
+- **Riesgo:** con escala, la superficie por defecto usa memoria física en 0xa0000000 (primer banco); si choca el kernel puede fallar. Se volvería a min26/min25 por TWRP.
+- **Siguiente:** firma del Director; `adb reboot`, 5 min; TWRP; log: FBSRC/FBPROBE con contenido; 'presented as'.
+- Restaurar BOOT: min26/min25/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0088 — min26 (kernel 0355, FBCALL) ESCRITA (D-0063); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min26-20261115.img` (sha256 `c08cd221…c57fca`, E-0215/E-0216).
 - **Director:** `adb reboot`, 3 min sin pulsar, TWRP (si adb no sale: desenchufar/enchufar). **Ingeniero:** `herolte-log-pull.py`; `grep -a FBCALL`.
 - Restaurar BOOT: min25/min24/original E-0009 (cada escritura exige firma).
