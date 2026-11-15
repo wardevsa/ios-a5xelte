@@ -86,7 +86,7 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ## Relevo anterior: H-0106 — min33 + paquete real 1 FUNCIONA (2.º arranque sin congelación); falta apagado real: parche 0356 (herohalt) escrito, sin CI (2026-11-15)
 - **Tarea en curso: T-0012.** E-0244: apps ya no en blanco, Privacidad y seguridad y About funcionan, iPhone X 21 GB (8,63 libres), GL activo en backboardd. El 1.er arranque se congeló con lsd reconstruyendo LaunchServices; el 2.º no.
-- **Apagado:** SpringBoard apaga, launchd cierra, discos desmontados, 'CPU halted', pero el teléfono no se apaga (no hay power-off en el kernel; launchd 200 %). `xnu/patches/0356-herolte-halt-restart.patch` (commit fd84920): `herohalt=1` reinicia (halt -> recovery/TWRP, restart -> normal) por SWRESET del PMU (como herotwrp); imprime PS_HOLD_CONTROL para añadir un power-off real luego. SIN CI ni imagen todavía.
+- **Apagado:** SpringBoard apaga, launchd cierra, discos desmontados, 'CPU halted', pero el teléfono no se apaga (no hay power-off en el kernel; launchd 200 %). `xnu/patches/0421-herolte-halt-restart.patch` (commit fd84920): `herohalt=1` reinicia (halt -> recovery/TWRP, restart -> normal) por SWRESET del PMU (como herotwrp); imprime PS_HOLD_CONTROL para añadir un power-off real luego. SIN CI ni imagen todavía.
 - **Siguiente:** (a) firma de push+CI de 0356 (rojo) -> kernel nuevo -> `min34` = min33 + `herohalt=1` (firma de BOOT); (b) seguir con userland: assetsd (5 abortos), MobileSMS (Metal), MediaServer; (c) fps 8,5 medios: mirar CPU de lsd/containermanager y A53/Mongoose.
 - Vuelta atrás: min33 es la base buena; min32 sin GL.
 
@@ -649,7 +649,7 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 - **Decisiones del Director (firmadas):** D-0029 (el NVMe NTFS vale como zona de trabajo para imágenes grandes; ext4 sigue preferido para repositorios y bucles), D-0030 (push de `herolte-drop-v2` SOLO al remoto `mio` = `darkcloud9998/ios-a5xelte`, lanzar el workflow `xnu` y descargar artefactos; sin push a `origin`, sin PR, sin force), D-0014 (renumeración) aprobada.
 - **T-0016 hecha:** `0332-herolte-drop-marker-protocol` → `0336-…`, `0334-herolte-drop-v2` → `0337-…`; fusión local con `origin/herolte` (un conflicto de texto en `HEROLTE_PROGRESS.md`, ambas partes conservadas); la serie 0332..0337 aplica limpia en el orden final (E-0035; aplicabilidad, no compilación). `validate-repo.py`: 4 errores antiguos (KI-0001).
 - **Antes de publicar** se escaneó el contenido (sin secretos, sin binarios de Apple, sin IMEI/serie; solo direcciones USB de prueba 192.168.7.x y rutas con el usuario local).
-- **Siguiente:** push + CI + `ci_check.py` por nombre completo (`0337-herolte-drop-v2`) → kernel del CI → reconstruir la candidata BOOT con nombre nuevo, reverificar, archivar. T-0028 (mutantes rev3) sigue en curso en segundo plano.
+- **Siguiente:** push + CI + `ci_check.py` por nombre completo (`0402-herolte-drop-v2`) → kernel del CI → reconstruir la candidata BOOT con nombre nuevo, reverificar, archivar. T-0028 (mutantes rev3) sigue en curso en segundo plano.
 - **Antes de pedir el flasheo al Director** (acción roja): candidata verificada en el PC, BOOT original con hash (E-0009) y copia TWRP de EFS fuera del teléfono (el EFS NO está en este repositorio: lo respalda el Director).
 
 ---

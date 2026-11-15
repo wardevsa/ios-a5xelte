@@ -20,7 +20,7 @@ Total del sistema en `min34`: **302 % de 800 %** de media (máx. 1110 %). Es dec
 
 ## 2. Lo que el muestreador NO da todavía
 El muestreador del kernel toma 1-3 muestras por arranque (intervalo por defecto ~90-120 s) y casi todos los hilos están dormidos en `mach_msg`; en 6 muestras solo 2 hilos de `backboardd`/`SpringBoard` estaban ejecutando. **No hay hotspots que reportar con rigor.** Además solo mapeamos a librería + offset (`tools/herolte-smp-images.py`); los ficheros de símbolos de la caché de dyld vienen comprimidos con un método de APFS que `7z` no lee (hace falta `ipsw` o una librería LZFSE).
-Para perfilar de verdad: `sweetsample_s=2` (parche 0259; una muestra cada 2 s) durante 3-4 minutos de uso y agrupar los PC por librería. Hoy no cabe en la línea de arranque (605 de 607); el parche **0359** (`xnu/patches/0359-herolte-phone-defaults.patch`, sin CI aún) libera ~85 caracteres.
+Para perfilar de verdad: `sweetsample_s=2` (parche 0259; una muestra cada 2 s) durante 3-4 minutos de uso y agrupar los PC por librería. Hoy no cabe en la línea de arranque (605 de 607); el parche **0359** (`xnu/patches/0424-herolte-phone-defaults.patch`, sin CI aún) libera ~85 caracteres.
 
 ## 3. Experimentos propuestos (uno por imagen o en lotes con firma; cada BOOT lleva firma con SHA-256)
 | # | Cambio | Qué se espera | Riesgo |

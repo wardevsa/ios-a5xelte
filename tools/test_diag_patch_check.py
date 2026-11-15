@@ -18,8 +18,8 @@ class C(unittest.TestCase):
     def test_hook_only_accepts_drawing_hooks(self): self.assertEqual(run(self.mkhook(['#if defined(A5XELTE)', 'extern void sweet_early_phase(const char *message);', '#endif', '\tsweet_early_phase(message);'])).returncode, 0)
     def test_hook_only_rejects_other_code(self):
         r = run(self.mkhook(['\tsweet_early_phase(message);', '\tmem_size = 0;'])); self.assertEqual(r.returncode, 1); self.assertIn('mem_size', r.stdout)
-    def test_real_0349_passes_after_d0045(self): self.assertEqual(run(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'xnu', 'patches', '0349-herolte-min14-phase-names.patch')).returncode, 0)
+    def test_real_0349_passes_after_d0045(self): self.assertEqual(run(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'xnu', 'patches', '0414-herolte-min14-phase-names.patch')).returncode, 0)
     def test_real_non_diag_patches_fail(self):
         d = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'xnu', 'patches')
-        self.assertEqual(run(os.path.join(d, '0337-herolte-drop-v2.patch')).returncode, 1)
+        self.assertEqual(run(os.path.join(d, '0402-herolte-drop-v2.patch')).returncode, 1)
 if __name__ == '__main__': unittest.main()

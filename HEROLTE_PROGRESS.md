@@ -409,7 +409,7 @@ Para el 8890 (kernel de Samsung `drivers/video/fbdev/exynos/decon_8890`, GPL; co
 - **Apps:** `herolte-drop.py app=FILE.ipa|DIR.app` + hero-run (`/Applications` y LaunchServices). Rechaza binarios cifrados (FairPlay, App Store: el IPA de ipatool lo estaba) y los solo arm64e.
 - **Blur negro (Biblioteca de apps, Hoy, Centro de Control), en pausa:** el censo de hakios-gl muestra que ds8/vrd/vrb/vcm se dibujan con nuestros programas y solo 61 "edr" y 66 "lub" (pantalla completa) quedan sin dibujar. Cuadro trazado (`gltrace_at` desde `gl.args`): cada recuadro se arma aparte como rectángulo gris (programa 78, 0,7256) y se pega con programa 0 (sin shader de CoreAnimation), coordenadas de textura en píxeles, y después de ese dibujo el framebuffer no se puede leer. El trazado ahora dice qué función es cada dibujo sin programa (hakios-gl a743004): siguiente paso si se retoma.
 ## 2026-11-12: DROP v2 y estado del teléfono de pruebas
-- **DROP v2** (rama `herolte-drop-v2`, `xnu/drop-v2/`, parche `0334` entonces, hoy `0337-herolte-drop-v2`, D-0014): paquete con SHA-256 y generación, staging bajo `.drop/`, estado atómico,
+- **DROP v2** (rama `herolte-drop-v2`, `xnu/drop-v2/`, parche `0334` entonces, hoy `0402-herolte-drop-v2`, D-0014): paquete con SHA-256 y generación, staging bajo `.drop/`, estado atómico,
   `STAGED` duradero antes de tocar destinos, commit por `rename`, recuperación hacia delante y 3 intentos. Sustituye a 0332 (y deja sin
   efecto el borrador 0333). Probado en el anfitrión (cortes de alimentación, fallo de cada barrera, doble fallo); **sin compilar en el CI y sin
   probar en el teléfono**. Motivo: `fsync` plano de HFS+ no vacía journal ni caché, y HFS pierde el error de `DKIOCSYNCHRONIZE`.

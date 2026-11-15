@@ -1,5 +1,5 @@
 # S7GE — diseño de min5: bloques persistentes en C (parche 0339; 2026-11-14)
-**No construida, no publicada.** `xnu/patches/0339-herolte-min5-persistent-c-blocks.patch` está en un commit local; aplica limpio sobre el árbol con 0332-0338. Depende de la **lectura de min4**: solo se construye si min4 deja claro que el ensamblador termina o si el texto no es observable.
+**No construida, no publicada.** `xnu/patches/0404-herolte-min5-persistent-c-blocks.patch` está en un commit local; aplica limpio sobre el árbol con 0332-0338. Depende de la **lectura de min4**: solo se construye si min4 deja claro que el ensamblador termina o si el texto no es observable.
 
 ## 1. Qué hace
 `sweet_early_block(slot, argb)`: un bloque de 36×21 px en **x = 1300, y = 88 + 32·slot**, dibujado con el mismo alias físico y la misma puerta (`a5_active`) que el texto, y por tanto válido hasta que `arm_vm_init` cambia TTBR0. Está a la **derecha de la línea de texto más larga** (~1060 px), así que el texto de las etapas **no puede borrarlo** (ver `S7GE_STARTS_ANALYSIS.md` §3).

@@ -2,7 +2,7 @@
 
 ## 1. Qué es
 `xnu-boot-v2-s7-min4-20261114.img`, SHA-256 `8e8725f3fbe42c830daa34d88796d479ece1ff5e33e64269ecd63cf070b980b4`, 18 618 384 B (E-0050). Respecto a min2 cambia **solo el kernel**: el del CI 43594581291 (rama `herolte-drop-v2` en `0900772`, kernel `af7b8760…954a7a`) con el parche `0338`. ADT original de 2 GiB (`dc817436…`, copiado, no redimensionado) y línea de arranque **idéntica** a min2 (`cmdline.txt` igual). Se vuelve al ADT de min2 porque min3 (1536 MiB) no cambió el síntoma.
-Verificación: 47 PASS (constructor) y 57 PASS (independiente), 0 FAIL; `ci_check.py`: `0338-herolte-min4-diagnostic-marks: APLICADO`.
+Verificación: 47 PASS (constructor) y 57 PASS (independiente), 0 FAIL; `ci_check.py`: `0403-herolte-min4-diagnostic-marks: APLICADO`.
 
 ## 2. Qué añade el parche 0338 (solo dibuja, sin cambiar lógica)
 | Dónde | Qué | Cómo se ve |
