@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0095 — min29 medida (1976 MHz, SoC 34-43 C, 12 fps medios); min30 (herocpu_mhz=2600) preparada, NO escrita (2026-11-15)
+## Relevo vigente: H-0096 — lote D-0067: min30 (herocpu_mhz=2600) ESCRITA (1 de 3); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min30-20261115.img` (sha256 `add62cf6…cfdbe`, E-0227/E-0229). Quedan 2 escrituras de D-0067: min31 (`9a155ba6…a02a4`, +herogpu_mhz=650) y min29 (`71c3344f…82fa7`, vuelta atrás).
+- **Director:** `adb reboot`, 5 min de uso, calor/fluidez, TWRP. **Ingeniero:** log: 'Mongoose at 2600 MHz', vdd_mngs, SoC C, fps; si va bien -> min31; si no -> min29.
+- Restaurar BOOT: min29 (cubierta por D-0067) / original E-0009 (firma).
+
+## Relevo anterior: H-0095 — min29 medida (1976 MHz, SoC 34-43 C, 12 fps medios); min30 (herocpu_mhz=2600) preparada, NO escrita (2026-11-15)
 - **Tarea en curso: T-0012.** E-0226: Mongoose 1976 MHz a 912,5 mV sin fallos; temperatura baja; el Director ve mejora clara. E-0227: min30, sha256 `add62cf6…9cfdbe`.
 - **Siguiente:** firma del Director para min30 (opcional: la fluidez ya es aceptable) y, aparte, el plan de userland (fondo, assetsd, MobileSMS, hero-run por DROP), todavía sin hacer.
 - BOOT actual: min29 (funciona). Restaurar: min28/min27/original E-0009.

@@ -3369,3 +3369,18 @@ sha256 = "9a155ba6b809e8fa13135a0e36263fd55e5f55151715a9a845b915b0ea4a02a4"
 size = 18620432
 immutable = true
 note = "Solo añade herogpu_mhz=650 a min30 (diff). El parche 0267 acepta 338-650 MHz y sube vdd_g3d a la tabla de este teléfono; upstream (L4h) usa 650 MHz. Riesgo: primer reloj de GPU > 260 MHz en esta unidad; upstream anota un JOB_READ_FAULT de causa desconocida. Si falla, volver a min30 o min29. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run15-min31/xnu-boot-v2-s7-min31-20261115.verify-independent.txt."
+
+[[evidence]]
+id = "E-0229"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min30-20261115.img (min29 con herocpu_mhz=2600) y leído de vuelta (sha256 add62cf6…50509cfdbe); EFS idéntico antes y después de esta escritura (escritura 1 de 3 del lote D-0067)"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min30-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "bc7fb4bee8fb6cf8bd798c6845ec5fdf2d44ff8f4dc7bd6132bb1713c8035fdd"
+size = 724
+immutable = true
+note = "D-0067; hash registrado antes en E-0227. El primer intento no vio adb estable y se reintentó; el segundo escribió. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."
