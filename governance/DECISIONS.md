@@ -60,6 +60,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0053 | APPROVED | operation | 2026-11-15 | Autorización roja: push de herolte-drop-v2 al remoto mio y CI de kernel con el parche 0352 (commit a51c7dd) | ingeniero | director | publish | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo hacer push de la rama herolte-drop-v2 al remoto mio y ejecutar el CI de kernel con el parche 0352 (commit a51c7dd). Firmado PioXI.' |
 | D-0054 | APPROVED | operation | 2026-11-15 | Autorización roja: añadir heroring=0 y sweetfb_noconsole=1 (resto igual que min20) y escribir min21 en BOOT | ingeniero | director | device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo añadir heroring=0 y sweetfb_noconsole=1 a la línea de arranque (el resto igual que min20). Imagen: xnu-boot-v2-s7-min21-20261115.img, SHA-256 141a6d87d1ce977634d401eec9c470be235383052774332cdc5d52a7a8336a1e. Solo BOOT. Firmado PioXI.' |
 | D-0055 | APPROVED | operation | 2026-11-15 | Autorización roja: push de herolte-drop-v2 al remoto mio y CI de kernel con el parche 0353 (commit 916eac0), que toca SweetFramebuffer.cpp fuera de la lista blanca de diagnóstico | ingeniero | director | publish | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo hacer push de la rama herolte-drop-v2 al remoto mio y ejecutar el CI de kernel con el parche 0353 (commit 916eac0), aceptando que toca SweetFramebuffer.cpp fuera de la lista blanca de diagnóstico. Firmado PioXI.' |
+| D-0056 | APPROVED | operation | 2026-11-15 | Autorización roja: escribir min22 en BOOT (misma línea que min21, kernel con 0353) | ingeniero | director | device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo escribir en BOOT la imagen xnu-boot-v2-s7-min22-20261115.img (misma línea de arranque que min21, kernel con el parche 0353). SHA-256 8bd3295b435db0b995b258d5d810b0f8b336b239ef8064d6e4b652391dd4cea6. Solo BOOT. Firmado PioXI.' |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
 - **Estado:** APPROVED (director, 2026-11-13)
@@ -388,4 +389,10 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Razón:** E-0197: no se sabe si los cuadros que llegan al panel son negros o la UI; 0353 vuelca una miniatura de luminancia al log persistente.
 - **Consecuencias:** ALCANCE EXACTO: git push de herolte-drop-v2 SOLO a mio, nunca a origin; lanzar el workflow xnu y descargar artefactos. El parche 0353 solo añade IOLog (sin cambio de comportamiento) en AppleCLCD::present(); el comprobador de lista blanca da FALLA por el fichero, aceptado expresamente. NO autoriza escribir en el teléfono: min22 necesita su firma aparte.
 - **Cómo se revierte:** Borrar la rama remota o el run; lo publicado puede haberse copiado.
+
+## D-0056 — Autorización roja: escribir min22 en BOOT (misma línea que min21, kernel con 0353)
+- **Estado:** APPROVED (director, 2026-11-15)
+- **Razón:** E-0197: no se sabe si los cuadros presentados son negros; 0353 vuelca una miniatura al log (E-0198/E-0199).
+- **Consecuencias:** ALCANCE EXACTO: una escritura de BOOT con xnu-boot-v2-s7-min22-20261115.img (SHA-256 8bd3295b435db0b995b258d5d810b0f8b336b239ef8064d6e4b652391dd4cea6). Autoriza además leer el log persistente (últimos 4 MiB de USERDATA) desde TWRP, solo lectura. NO autoriza otros argumentos, otra imagen, EFS, RECOVERY ni bootloaders; el kernel puede escribir solo en USERDATA (ufsrw=1).
+- **Cómo se revierte:** Restaurar BOOT con min21 (E-0196), min20, min19 o el original (E-0009); cada escritura exige firma salvo que la cubra una decisión vigente.
 
