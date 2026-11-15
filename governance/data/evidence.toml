@@ -2634,3 +2634,18 @@ sha256 = "8c448c055df4bb880b0c48c10ddb88d2b9af3a5b699bd96ae06d60f7b528587a"
 size = 21474836480
 immutable = true
 note = "Salida de tools/herolte-ios-root-f1.sh (ejecutado por el Director con sudo, 07:46-07:49): hash de origen 747d0245… comprobado, copia idéntica, fsck.hfsplus -n OK, tuning completo (CommCenter eliminado de launchd.plist, añadido com.herolte.autorun), fsck OK, firma 4858 (HX), cabe en USERDATA (23 431 790 592 B). NO escrita en el teléfono. Comprobación de contenido con montaje ro: tools/herolte-ios-root-verify-ro.sh (pendiente)."
+
+[[evidence]]
+id = "E-0180"
+title = "USERDATA del S7 contiene la raíz iOS: 320 trozos de 64 MiB escritos y verificados, y SHA-256 de los primeros 21 474 836 480 B leído en el teléfono = 8c448c05…587a (la imagen autorizada, E-0179)"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/write-userdata-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "f82c273d27f6457b08dd557ba8e9cddc55dea9d4e6f15535750d952d66287b0f"
+size = 1374
+immutable = true
+note = "D-0048, T-0044, tools/herolte-write-userdata.py (≈4,3 MB/s, ~80 min). Dos intentos previos no escribieron nada o solo parte del trozo 0 por fallos del transporte (nc con stdin cerrado; medio cierre del reenvío de adb que perdía ~1,5 MB del final de trozos lentos): corregidos y probados antes de la escritura buena. Los bytes de USERDATA posteriores a la imagen (Android) no se tocaron. Android BORRADO del inicio de USERDATA; copias verificadas E-0124/E-0125."

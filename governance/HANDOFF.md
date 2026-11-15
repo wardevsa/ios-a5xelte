@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0065 — plan de la raíz iOS (vía B, local) listo; mañana F1 con sudo del Director (2026-11-15)
+## Relevo vigente: H-0066 — USERDATA ESCRITA con la raíz iOS (D-0048): Android borrado del inicio de USERDATA; falta el primer arranque con raíz (2026-11-15)
+- **Tarea en curso: T-0012** (test de arranque; D-0047 vigente, 17/20 escrituras de BOOT). T-0044 hecha: E-0180 (hash de los primeros 20 GiB de USERDATA leído en el teléfono = 8c448c05…587a). Vuelta atrás: E-0124/E-0125 + BOOT original E-0009.
+- **Siguiente (Director):** `adb reboot` con el BOOT `min16` (línea de min2: `ufsrw=0`, sin Wi-Fi/energía/GPU). Esperado: desaparece `cannot mount root`, `hfs_mount` sin error, `calling VFS_ROOT`, y entonces `launchd`/panic. Copiar literal lo que se vea en el anillo (tercio izquierdo) y las últimas líneas.
+- Si no monta: leer el `errno` (mi anillo muestra solo la cadena de formato; habría que enganchar el valor); si monta y falla `launchd`, anotar el mensaje.
+- Teléfono ahora: TWRP, USERDATA desmontada. Restaurar BOOT original cubierto por D-0047.
+
+## Relevo anterior: H-0065 — plan de la raíz iOS (vía B, local) listo; mañana F1 con sudo del Director (2026-11-15)
 - **Tarea en curso: T-0012** (test de N2: resultado A alcanzado, E-0177; D-0047 vigente, 17/20 escrituras de la tanda) y **siguiente: T-0045** (preparar la imagen final de la raíz iOS; necesita `sudo`, que teclea el Director). T-0044 (escribir USERDATA, ROJO) bloqueada hasta tener imagen y autorización con hash.
 - **Hecho esta noche:** `docs/S7GE_IOS_ROOT_PLAN.md` (F0-F5), F0 comprobada (E-0178: IPSW y `lab-full-xnu-20261114.img` coinciden con sus hashes), `tools/herolte-write-userdata.py` + `test_write_userdata.py` (7 pruebas con adb falso; escritor por `nc` ~18 MB/s, trozos verificados contra el teléfono, se niega sin autorización), informe a la jefatura `docs/S7GE_INFORME_JEFATURA_20261115.md`.
 - **Mañana (en orden):** F1 (Director con `!sudo`: copiar la imagen de laboratorio, montar rw, `tools/herolte-tune-ios-root.sh MONTAJE 20H392`, desmontar, `fsck.hfsplus -n`, hash); F2 prueba de transporte `--dry-transport`; F3 autorización roja de escribir USERDATA con el hash de F1; F4 arranque con el BOOT `min16`; F5 iterar.
