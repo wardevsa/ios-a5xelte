@@ -1,0 +1,45 @@
+diff --git a/iokit/Kernel/arm/SweetPlatformExpert.cpp b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+index 7dc8363..4f54549 100644
+--- a/iokit/Kernel/arm/SweetPlatformExpert.cpp
++++ b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+@@ -61,6 +61,8 @@ SweetPlatformExpert::start(IOService *provider)
+ int
+ SweetPlatformExpert::haltRestart(unsigned int type)
+ {
++	/* bsd/dev/sweet_reboot.c (PM8998 PS_HOLD) is the Poco F1's: A5XELTE/HEROLTE keep the stock path. */
++#if !defined(A5XELTE)
+ 	switch (type) {
+ 	case kPEPanicBegin:
+ 	case kPEPanicSync:
+@@ -78,6 +80,7 @@ SweetPlatformExpert::haltRestart(unsigned int type)
+ 	default:
+ 		break;
+ 	}
++#endif
+ 	return IODTPlatformExpert::haltRestart(type);
+ }
+ 
+@@ -85,15 +88,23 @@ SweetPlatformExpert::haltRestart(unsigned int type)
+ long
+ SweetPlatformExpert::getGMTTimeOfDay(void)
+ {
++#if defined(A5XELTE)
++	return IODTPlatformExpert::getGMTTimeOfDay();
++#else
+ 	return sweet_board_beryllium() ? (long)sweet_rtc_get() : 0;
++#endif
+ }
+ 
+ void
+ SweetPlatformExpert::setGMTTimeOfDay(long secs)
+ {
++#if defined(A5XELTE)
++	IODTPlatformExpert::setGMTTimeOfDay(secs);
++#else
+ 	if (sweet_board_beryllium() && secs > 0) {
+ 		sweet_rtc_set((uint64_t)secs);
+ 	}
++#endif
+ }
+ 
+ const char *
