@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0079 — min24 (kernel 0354, sonda FBSRC) ESCRITA (D-0059); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0080 — min24 medida: superficies origen todo ceros (no es la caché); BOOT sigue con min24 (2026-11-15)
+- **Tarea en curso: T-0012.** E-0208: FBSRC pass 0 = pass 1 = 0 (incluido alfa) en los 12 primeros presents (190 s). Hipótesis B (caché) descartada para ese tramo; el renderer no ha escrito las superficies 3/5. Falta saber si más tarde (min23: ~10 fps hacia el minuto 5-7) hay contenido: las sondas FBSRC solo cubren presents 1-12 y cada 25.
+- **Siguiente (sin escribir BOOT):** el Director reinicia con la misma min24 y la deja 12 min; yo leo FBSRC de presents 25, 50, 75... (si el ritmo sube). Después, según resultado: renderer negro => userland upstream (hero-run/autorun/herosb/disabled.list via DROP) y sampler de qué espera backboardd.
+- Restaurar BOOT: min23/min22/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0079 — min24 (kernel 0354, sonda FBSRC) ESCRITA (D-0059); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min24-20261115.img` (sha256 `968ddd3a…fd64f64`, E-0206/E-0207).
 - **Director:** `adb reboot`, 3-4 min sin pulsar nada, TWRP. **Ingeniero:** `herolte-log-pull.py`; `grep -a FBSRC`: pass1 > pass0 = caché; ambos 0 = renderer negro.
 - Restaurar BOOT: min23/min22/original E-0009 (cada escritura exige firma).

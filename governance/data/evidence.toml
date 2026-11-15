@@ -3054,3 +3054,18 @@ sha256 = "2f61504739f4c67889b79befe5cbc3bafb37d15ed04ac5af7093b9e0b5e11dfb"
 size = 723
 immutable = true
 note = "D-0059; hash registrado antes en E-0206. Primer intento. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."
+
+[[evidence]]
+id = "E-0208"
+title = "Log persistente de min24 (kernel 0354; flush #19, ~190 s, 1373476 B): las 9 superficies origen sondeadas (ids 3 y 5, 1125x2436, presents 1-12) son TODO CEROS, también el alfa, antes y después de limpiar la caché del kernel (FBSRC pass 0 = pass 1); no es coherencia de caché; solo ~12 presents en 190 s (0,1 fps)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min24-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "dff3b2e35185cece0860850e973aa667561c75f479e3bd314497e9be1aef349e"
+size = 1373476
+immutable = true
+note = "Medido: FBSRC 1..9, nz_rgb 0, nz_a 0, OR 0x00000000 en ambas pasadas (≈130 732 píxeles muestreados por superficie). Un negro opaco tendría alfa 0xff: la superficie nunca fue escrita por el renderer (memoria recién puesta a cero) o es otra memoria que la que ve el kernel. Descarta la hipótesis B (caché) para estos presents. Observación del Director: 'nada, lo mismo de antes, lo negro aparece a los 30 segundos o así; 4 minutos después nada'. Límite: solo cubre los primeros 12 presents (~190 s); en min23 se llegó a 750 presents en 7 min con ritmo de ~10 fps tardío, y allí solo hay miniaturas de rejilla (E-0204). Memoria libre 507->474 MB (más sana que en min23). El log contiene identificadores: NO va a git."
