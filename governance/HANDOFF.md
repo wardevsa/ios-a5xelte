@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0068 — min18 (min17 + args de launchd del upstream) ESCRITA (D-0050, 19/20 de BOOT); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0069 — min19 (min18 con herolog=1) ESCRITA (D-0051, 20/20 de BOOT); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** E-0187: launchd vivo y en bucle exec/EXIT; falta saber qué procesos y con qué código. BOOT = `xnu-boot-v2-s7-min19-20261115.img` (sha256 `4ab37c87…1e63`); EFS intacto (E-0189). **Contador de BOOT agotado (20/20):** otra escritura de BOOT exige decisión nueva.
+- **Siguiente (Director):** `adb reboot`, dejar el teléfono 3-5 min (el kernel vuelca el anillo cada 10 s), volver a TWRP y avisar.
+- **Siguiente (ingeniero):** `python3 -I tools/herolte-log-pull.py adb OUT.txt` (solo lectura, D-0051); analizar nombres/códigos de salida; el log NO va a git (puede contener identificadores).
+- Restaurar BOOT: min18 (E-0185/E-0186) o el original E-0009, cubierto por D-0051.
+
+## Relevo anterior: H-0068 — min18 (min17 + args de launchd del upstream) ESCRITA (D-0050, 19/20 de BOOT); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** E-0184: con la raíz iOS y ufsrw=1 rootrw=1 la raíz se monta, XNU lanza `/sbin/launchd` y lo mata `CS_KILLED` (panic + A5 XNU PANIC). BOOT = `xnu-boot-v2-s7-min18-20261115.img` (sha256 `cd8be9c5…d85e`); EFS intacto (E-0186). Queda UNA escritura de BOOT en la tanda D-0043/45/46/47/49/50 (20): la siguiente tanda necesitará una decisión nueva con su contador.
 - **Qué mirar (Director, tras `adb reboot`):** si desaparece el pánico de launchd; mensajes de `launchd`, `xpcproxy`, `dyld`, `libignition`, `Early boot complete`, SpringBoard...; o un panic nuevo (copiar literal). El anillo (tercio izquierdo) se mueve mucho: varias fotos.
 - Siguiente probable según resultado: si sigue CS_KILLED, mirar `kern_exec.c:7611` (condición del kill: firma del binario, ubc_cs_blob, `cs_enforcement`/`PE_i_can_has_debugger`), la caché de dyld de 16 KiB frente a páginas de 4 KiB (parche 0107 del A5XELTE) y el AMFI (0106) en este kernel.

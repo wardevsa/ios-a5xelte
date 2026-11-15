@@ -2769,3 +2769,18 @@ sha256 = "4ab37c872ad41d767a3f34f4c2ca7f3e3a072aa817dcdd01b048ce53c9f51e63"
 size = 18620432
 immutable = true
 note = "Mismo kernel bb042852b3a7e25587ddffe2dabee7f0a54aabda1d3ed50aa7712369b6ea8cf7 (E-0174), ADT y cargador que min18; la línea difiere SOLO en herolog=0 -> herolog=1 (diff). El kernel copia su anillo de consola cada 10 s a los últimos 4 MiB + 4 KiB de USERDATA, más allá del volumen HFSX (bsd/dev/herolte_ufs.c; se lee en TWRP con tools/herolte-log-pull.py, solo lectura). Da el log COMPLETO con argumentos, sin fotos."
+
+[[evidence]]
+id = "E-0189"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min19-20261115.img (min18 con herolog=1) y leído de vuelta (sha256 4ab37c87…1e63); EFS idéntico (b860ecfa…8620)"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min19-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "29aab829ad6fe36a1d6bef781d3761e39d0d52a19f0957aab34e9d7ce1983ae8"
+size = 723
+immutable = true
+note = "Solo escritura y lectura de vuelta (D-0051; hash registrado antes en E-0188). Escritura al primer intento con conexión estable. Contador de BOOT de la tanda: 20/20."
