@@ -3654,3 +3654,18 @@ sha256 = "10e60ada723b6cd36e0c3b02babbd6336d8cb0913ef48ffd83d644979073e240"
 size = 724
 immutable = true
 note = "D-0074; hash registrado antes en E-0246. Primer intento. T-0012 vuelve a declarar solo device-read y device-write-boot (la acción device-write-userdata de D-0068/D-0070 ya no hace falta y D-0074 no la cubre)."
+
+[[evidence]]
+id = "E-0248"
+title = "Log persistente de min34 (herohalt=1; 191336 B, 3790 líneas): el apagado desde iOS REINICIA EN TWRP por sí solo (observación del Director: 'apagó bien y directo a TWRP'); PS_HOLD_CONTROL = 0x5300 (bit 8 a 1); 'hfs: set hardlink' baja de 4751 a 8 líneas y las sondas FBP de ~1700 a 384"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min34-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "e72cb6b6ffae740a348554b382cae433ad74ca37e0389a94cf6f1d69948d33ee"
+size = 191336
+immutable = true
+note = "Medido: 'HEROLTE: herohalt=1: restart into recovery in 12 s (PS_HOLD_CONTROL 0x5300)' tras 'CPU halted'; PS_HOLD en 0x5300 = salida habilitada y dato a 1 (en Linux/Exynos el apagado limpia el bit 8: valor 0x5200); 3790 líneas frente a 11158 en el mismo tiempo de min33; fps medio 11,2 (máx 28,2), copia 6,1 ms; SoC máx 41 C; 59 líneas hero-run; Mongoose 2600 MHz, GPU 650 MHz. Observación del Director: 'Ahora About no funcionó, se quedó pillado Ajustes pero el teléfono siguió funcionando; procedo al apagado; apagó bien y directo a TWRP, wow, muy bien'. TOP final: backboardd 314 % de un núcleo. El log contiene identificadores: NO va a git."

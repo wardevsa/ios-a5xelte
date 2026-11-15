@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0107 — min34 (herohalt=1, kernel 0356/0357/0358) ESCRITA (D-0074); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0108 — herohalt FUNCIONA (apagar desde iOS reinicia en TWRP); log 3x más limpio; PS_HOLD = 0x5300 (2026-11-15)
+- **Tarea en curso: T-0012.** E-0248: apagado -> TWRP directo; hfs 4751 -> 8 líneas; sondas 1700 -> 384. BOOT = min34 (base buena).
+- **Pendiente:** (1) power-off real (opcional): PS_HOLD 0x5300 -> escribir 0x5200 (parche 0359, `herohalt=3`); (2) Ajustes se queda pillado a veces (About); (3) fps medio ~11; backboardd ~300 % de un núcleo; (4) Messages (Metal), Photos (assetsd), fondo; (5) S7GE.
+- Sin acciones rojas pendientes ahora.
+
+## Relevo anterior: H-0107 — min34 (herohalt=1, kernel 0356/0357/0358) ESCRITA (D-0074); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min34-20261115.img` (sha256 `8809bae5…a1ce`, E-0246/E-0247). Zona DROP con el paquete real 1 ya instalado (paquete 2).
 - **Director:** `adb reboot`, 5 min de uso, luego **apagar desde iOS** (botón de encendido + deslizar): debe reiniciarse en TWRP en ~15 s. Si no, apagado forzado. **Ingeniero:** `herolte-log-pull.py` + `herolte-log-report.py`; buscar `HEROLTE: herohalt=1: restart into recovery in 12 s (PS_HOLD_CONTROL 0x…)` (el valor de PS_HOLD sirve para un power-off real); menos 'hfs: set hardlink' y sondas; vida del log más larga.
 - Vuelta atrás: min33 (E-0241).
