@@ -2784,3 +2784,18 @@ sha256 = "29aab829ad6fe36a1d6bef781d3761e39d0d52a19f0957aab34e9d7ce1983ae8"
 size = 723
 immutable = true
 note = "Solo escritura y lectura de vuelta (D-0051; hash registrado antes en E-0188). Escritura al primer intento con conexión estable. Contador de BOOT de la tanda: 20/20."
+
+[[evidence]]
+id = "E-0190"
+title = "Log persistente de min19 (herolog=1, flush #7, 340787 B, leído de USERDATA en solo lectura): el 'bucle' de min18 era un arranque normal de iOS; launchd completa 'Early boot complete', lanza configd, backboardd y SpringBoard, y backboardd presenta cuadros (SWEET FB swap) en AppleCLCD 1440x2560; no hay pánico ni salida de SpringBoard/backboardd en el log"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min19-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "08d2fde4fe5b98eaae6c56703a3d3764c6dfd9788af7664c96750f1e518b7e10"
+size = 340787
+immutable = true
+note = "Salidas no cero: launchd xstat 1 tras 'SPAWN FAILED /usr/libexec/HorizonSetup -> 2' (fichero ausente), MSUEarlyBootTask 1, sysstatuscheck 0x100, prng_seedctl 0xc00, driverkitd 9, DumpPanic 0x100, IOMFB_FDR_Loader 0x100, un xpcproxy 0x4e00. 178 exec xpcproxy; bluetoothd y fairplayd.H2 se relanzan 7 veces. Solo ~70 s de log (7 volcados). El fichero contiene identificadores de dispositivo: NO va a git. La lectura anterior como bucle (E-0187) era incorrecta: solo se veían cadenas de formato."

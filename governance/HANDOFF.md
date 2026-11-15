@@ -10,8 +10,7 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ## Relevo vigente: H-0069 — min19 (min18 con herolog=1) ESCRITA (D-0051, 20/20 de BOOT); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** E-0187: launchd vivo y en bucle exec/EXIT; falta saber qué procesos y con qué código. BOOT = `xnu-boot-v2-s7-min19-20261115.img` (sha256 `4ab37c87…1e63`); EFS intacto (E-0189). **Contador de BOOT agotado (20/20):** otra escritura de BOOT exige decisión nueva.
-- **Siguiente (Director):** `adb reboot`, dejar el teléfono 3-5 min (el kernel vuelca el anillo cada 10 s), volver a TWRP y avisar.
-- **Siguiente (ingeniero):** `python3 -I tools/herolte-log-pull.py adb OUT.txt` (solo lectura, D-0051); analizar nombres/códigos de salida; el log NO va a git (puede contener identificadores).
+- **RESULTADO (E-0190):** log leído. iOS arranca: `Early boot complete`, configd, backboardd y SpringBoard lanzados; backboardd presenta cuadros en AppleCLCD. El "bucle" era arranque normal. Pendiente: ver por qué la pantalla muestra la consola y no la UI (¿flip del framebuffer de DECON?), salidas no cero (HorizonSetup ausente, driverkitd 9, IOMFB_FDR_Loader), relanzados de bluetoothd/fairplayd.H2 (7), y dejar correr más de 70 s.
 - Restaurar BOOT: min18 (E-0185/E-0186) o el original E-0009, cubierto por D-0051.
 
 ## Relevo anterior: H-0068 — min18 (min17 + args de launchd del upstream) ESCRITA (D-0050, 19/20 de BOOT); teléfono en TWRP, sin reiniciar (2026-11-15)
