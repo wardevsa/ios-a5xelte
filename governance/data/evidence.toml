@@ -3579,3 +3579,18 @@ sha256 = "d2daaae903cd3332ab8a2f2ed9ff58f73feb525012f93b04710e5248f5a4425a"
 size = 767
 immutable = true
 note = "D-0070; orden de E-0239 (command.txt, SHA-256 8a0e17f8…6383), identificador de paquete 853868283021272427. Solo la zona DROP; el volumen de iOS no se tocó. Pendiente: arrancar con min33, buscar 'HEROLTE DROP: package 2 ready for userland' y las líneas 'hero-run:' del log, y comprobar si backboardd carga la capa GL (libheroeagl)."
+
+[[evidence]]
+id = "E-0243"
+title = "Log persistente de min33 (herogl=1 + paquete real 1; flush #16, 407671 B, ~160 s): DROP instala el paquete 2 ('HEROLTE DROP: package 2 ready for userland'), hero-run corre (34 líneas), backboardd recibe la capa EAGL ('HEROLTE GL: backboardd launch 1 (pid 58): EAGL shim inserted (herogl=1)') y SpringBoard libherosb; el sistema se congela a los ~160 s tocando Ajustes y el log termina sin pánico ni errores de UFS"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min33-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "c380dc871f47dc3c163da250b3964efe3af1c46b63518410a7b87c1c2e1a3d33"
+size = 407671
+immutable = true
+note = "Medido: hero-run: BTAudioHALPlugin movido; 'LS database: 2 files removed in 8 s; the NEXT boot has it made anew'; 'MobileGestalt cache: 0 removed' (no había caché); wallpapers 750x1334 (9 bundles); 28 trabajos en la lista de desactivados; fps medio 6,7 (16 muestras), SoC máx. 38 C, Mongoose 2600 MHz, GPU 650 MHz; TOP: lsd 84-140 % (reconstrucción de LaunchServices), usermanagerd 41-55 %, containermanager 23-32 %; 145 SPAWN FAILED = los 9 daemons de heronoexec (esperado); sin 'HEROLTE UFS' de error (las 3 líneas ocs 0x7 son del arranque, LUN 208). Observación del Director: 'adb reboot; tocando se congeló: al entrar en Ajustes -> Privacidad y seguridad, salí un poco lag y al buscar en la biblioteca (search library) se congeló'. El log termina en la línea de TOP tras toques en (970..1074, 1050..1250): congelación del sistema entero sin texto de pánico; causa NO conocida (candidatas: GPU con la capa GL, estancamiento de E/S de UFS, carga de lsd). El log contiene identificadores: NO va a git."

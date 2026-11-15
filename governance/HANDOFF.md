@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0104 — Director ausente (comer); min33 y paquete real 1 ya escritos, falta arrancarlos; trabajo verde hecho (2026-11-15)
+## Relevo vigente: H-0105 — min33 + paquete real 1: DROP y hero-run OK, capa GL insertada en backboardd; congelación a los ~160 s tocando Ajustes (2026-11-15)
+- **Tarea en curso: T-0012.** E-0243. Éxito parcial: paquete 2 instalado, hero-run corre, `EAGL shim inserted (herogl=1)`. Fallo: el sistema se congela (sin pánico, sin errores de UFS, log termina). Candidatas: GPU con la capa GL, E/S de UFS, carga de lsd (130 %, reconstrucción de LaunchServices).
+- **Siguiente (sin escribir):** el Director reinicia min33 otra vez (2.º arranque con la base LS ya recreada), repite Ajustes -> Privacidad y seguridad y la búsqueda de biblioteca, y dice a qué hora/qué toque se congela. **Si se repite:** A/B con min32 (sin herogl; mismo paquete) con firma de BOOT; si min32 no se congela, la capa GL/GPU es la causa.
+- Si no se congela esta vez: era la reconstrucción de LaunchServices; seguir midiendo fps y fondo.
+
+## Relevo anterior: H-0104 — Director ausente (comer); min33 y paquete real 1 ya escritos, falta arrancarlos; trabajo verde hecho (2026-11-15)
 - **Tarea en curso: T-0012.** Escrito: min33 (E-0241) y paquete real 1 (E-0242). Director: `adb reboot`, 5 min, mirar pantalla, TWRP.
 - **Al volver a TWRP:** `python3 -I tools/herolte-log-pull.py adb LOG.txt` y `python3 -I tools/herolte-log-report.py LOG.txt` (resumen de una pantalla: vida, memoria, fps, relojes, temperatura, DROP, hero-run, GL, crashes, pánico). Detalle: `grep -aE 'HEROLTE DROP|hero-run:|HEROLTE GL:' LOG.txt`. Éxito: 'HEROLTE DROP: package 2 ready for userland' y 'HEROLTE GL: backboardd launch ... EAGL shim inserted'.
 - **Aviso al Director:** hero-run además borra UNA vez las bases `.csstore` de LaunchServices y la caché de MobileGestalt (`com.apple.MobileGestalt.plist`) en /private/var (cachés que iOS regenera en el siguiente arranque; no se hace en cada arranque: marcas `lsdb3.gone` y `mgcache.gone`); la caché de MobileGestalt puede arreglar 'Sign in to your iPad'.
