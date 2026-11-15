@@ -2889,3 +2889,18 @@ sha256 = "f2301ef35d72910d13f99e9a664838edb4832f3ae87b846f90ee5425ff706f88"
 size = 723
 immutable = true
 note = "D-0054; hash registrado antes en E-0195. Primer intento. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."
+
+[[evidence]]
+id = "E-0197"
+title = "Log persistente de min21 (kernel 0352, heroring=0 sweetfb_noconsole=1; flush #24, 1959586 B) y observación del Director: la columna izquierda de la consola ya no aparece (heroring=0 funciona); al minuto el brillo cambió 4 veces y la pantalla se apagó; no se vio nada de iOS. El log muestra backboardd/SpringBoard vivos, copias de cuadros al framebuffer (A5XELTE FB frames=…, ~0.1-0.8 fps) y ciclos 'SWEET FB: display off/on'"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min21-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "b606830c206589ee1b4db3538369d2b024b44c66e15633f22af5f3c0891cb13d"
+size = 1959586
+immutable = true
+note = "Observación del Director (texto suyo, no inferido): 'arrancó normal como siempre, salían los 3 colores de arriba izquierda y luego las columnas y colores de la derecha y centro pero la columna de la izquierda que se actualizaba no apareció; al cabo de un minuto la pantalla hizo como 4 actualizaciones de brillo y se apagó completamente; no apareció nada de iOS'. Del log: 16 líneas swap, 5 'display on' y 4 'display off'; hay pulsaciones de teclas (KEYS) solo al final y alrededor de 6211; SpringBoard crea superficies 750x1334; no hay trabajos de GPU. Lo que NO se sabe: si el contenido copiado al panel era negro o la UI, y si el apagado fue el auto-bloqueo de iOS o el panel/retroiluminación. El log contiene identificadores: NO va a git."
