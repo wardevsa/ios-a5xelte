@@ -12,7 +12,7 @@ for f in "$K" "$A" "$L" "$S"; do [[ -f $f ]] || { echo "missing $f" >&2; exit 2;
 mkdir -p "$O"
 for ext in img payload.bin cmdline.txt verify.txt PROVENANCE.txt; do [[ ! -e $O/$N.$ext ]] || { echo "refusing to overwrite $O/$N.$ext" >&2; exit 3; }; done
 # N3: línea de diagnóstico, consola, 8 núcleos, UFS y raíz en lectura-escritura; herolog=0 herodrop=0 explícitos a propósito.
-CMD="debug=0xc keepsyms=1 -noprogress cpus=8 rd=ufsroot0 ufsroot=USERDATA cs_enforcement_disable=1 wdt=-1 -wdt_no_pmu wdt_test=no_user_checkin ufsrw=1 rootrw=1 herolog=0 herodrop=0"
+CMD="debug=0xc keepsyms=1 -noprogress cpus=8 rd=ufsroot0 ufsroot=USERDATA cs_enforcement_disable=1 wdt=-1 -wdt_no_pmu wdt_test=no_user_checkin ufsrw=1 rootrw=1 herolog=${N3_HEROLOG:-0} herodrop=0"
 # N2_EXTRA_ARGS (opcional): argumentos EXTRA al final, p. ej. "herowifi=0 heropower=0 herogpu=0" para el arranque de menor huella de hardware (S7GE_SPLIT_PLAN.md §3). Por defecto, ninguno: la candidata queda igual que antes.
 [[ -z ${N2_EXTRA_ARGS:-} ]] || CMD="$CMD $N2_EXTRA_ARGS"
 printf '%s\n' "$CMD" > "$O/$N.cmdline.txt"

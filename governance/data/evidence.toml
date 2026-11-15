@@ -2739,3 +2739,18 @@ sha256 = "8b3b1af4bd13b21e449fa2ec8e6d64e782305d280f50aa2e4c09068795ad2fc9"
 size = 723
 immutable = true
 note = "Solo escritura y lectura de vuelta (D-0050; hash registrado antes en E-0185; kernel E-0174). El primer intento se cortó antes de escribir (adb dejó de ver el teléfono); el segundo escribió."
+
+[[evidence]]
+id = "E-0187"
+title = "Observación de min18: ya NO hay pánico de launchd; la pantalla muestra un bucle de 'exec %s' / 'EXIT %s[%d] xstat' / 'hfs: set hardlink bit' y 'XPC[%d]': launchd está vivo y lanzando procesos que terminan; no se ven los nombres ni los códigos (solo cadenas de formato)"
+kind = "observation"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min18-observation.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "5aac5b47f6c7438bc3e7971317250ff5924dca83c48d4eaea9136d195809d2cd"
+size = 1635
+immutable = true
+note = "Hito: con los tres argumentos del upstream el CS_KILLED desaparece y launchd (PID 1) ejecuta procesos (exec/EXIT/XPC) sobre la raíz iOS. Falta saber CUÁLES y por qué terminan: el anillo solo ve la cadena de formato. Solución propuesta: herolog=1 (log persistente de la consola en los últimos 4 MiB de USERDATA, con argumentos; se lee en TWRP con tools/herolte-log-pull.py, sin fotos). Transcripción por IA de fotos no archivadas."
