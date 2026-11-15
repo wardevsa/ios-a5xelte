@@ -673,11 +673,12 @@ resume = "Texto de autorización en el relevo H-0110; verificar espacio libre de
 [[task]]
 id = "T-0058"
 title = "Compilar en el CI el kernel con 0359 (valores por defecto del S7): push de herolte-drop-v2 a mio y workflow xnu (D-0075); después construir min35"
-status = "ready"
+status = "done"
 priority = 8
 owner = "ingeniero"
 depends_on = []
 actions = ["publish", "local-commit"]
+evidence = ["E-0253"]
 authorization_ref = "D-0075"
 acceptance = "Run xnu en verde con 0359 aplicado y compilado; kernel descargado con SHA-256 como evidencia; min35 construida y verificada; firma de BOOT pedida con su SHA-256."
 resume = "gh workflow run xnu -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2; min35 = línea de min34 sin los 6 argumentos por defecto + sweetsample_s=2."
