@@ -6,10 +6,10 @@ move the console there before TTBR0 goes, print two-digit stages, and add marks 
 arm_vm_init so a hang or panic before serial_init shows where it stopped.
 
 diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
-index 656897c..94baf6b 100644
+index 656897c..5562b43 100644
 --- a/osfmk/arm64/arm_vm_init.c
 +++ b/osfmk/arm64/arm_vm_init.c
-@@ -1883,6 +1883,50 @@ sweet_early_map_final(void)
+@@ -1883,6 +1883,55 @@ sweet_early_map_final(void)
  }
  #endif
  
@@ -26,7 +26,12 @@ index 656897c..94baf6b 100644
 +	const uint64_t pa = A5XELTE_FB_PA & ~(uint64_t)ARM_TT_L2_OFFMASK;
 +	const uint64_t end = A5XELTE_FB_PA + (uint64_t)A5XELTE_FB_STRIDE * A5XELTE_FB_HEIGHT;
 +	const unsigned int blocks = (unsigned int)((end - pa + ARM_TT_L2_SIZE - 1) / ARM_TT_L2_SIZE);
-+	const vm_map_address_t va = VM_MIN_KERNEL_ADDRESS + ARM_TT_L2_SIZE;
++	/*
++	 * Right after the low globals' block, whose L1 entry arm_vm_init has just made a table. Not
++	 * VM_MIN_KERNEL_ADDRESS + one block as on SWEET: with 4 KiB pages that is another L1 entry, with no table
++	 * (BOOT 18k3: "no room for a TTBR1 framebuffer alias").
++	 */
++	const vm_map_address_t va = LOW_GLOBAL_BASE_ADDRESS + ARM_TT_L2_SIZE;
 +
 +	if (va + (vm_map_address_t)blocks * ARM_TT_L2_SIZE > gVirtBase) {
 +		return 0;
@@ -60,7 +65,7 @@ index 656897c..94baf6b 100644
  void
  arm_vm_init(uint64_t memory_size, boot_args * args)
  {
-@@ -1985,6 +2029,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -1985,6 +2034,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  	if (dynamic_memory_begin > VM_MAX_KERNEL_ADDRESS) {
  		panic("Unsupported memory configuration %lx", mem_size);
  	}
@@ -68,7 +73,7 @@ index 656897c..94baf6b 100644
  
  	boot_tte = (tt_entry_t *)&bootstrap_pagetables;
  	boot_ttep = kvtophys((vm_offset_t)boot_tte);
-@@ -2018,6 +2063,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2018,6 +2068,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  	arm_replace_identity_map();
  #endif
  
@@ -76,7 +81,7 @@ index 656897c..94baf6b 100644
  	/* Initialize invalid tte page */
  	invalid_tte = (tt_entry_t *)alloc_ptpage(TRUE);
  	invalid_ttep = kvtophys((vm_offset_t)invalid_tte);
-@@ -2045,7 +2091,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2045,7 +2096,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  	 *
  	 *   the so called physical aperture should be statically mapped
  	 */
@@ -86,7 +91,7 @@ index 656897c..94baf6b 100644
  
  #if defined(ARM_LARGE_MEMORY)
  	/*
-@@ -2169,7 +2217,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2169,7 +2222,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  	vm_prelink_sdata = segPRELINKDATAB;
  	vm_prelink_edata = segPRELINKDATAB + segSizePRELINKDATA;
  
@@ -96,7 +101,7 @@ index 656897c..94baf6b 100644
  
  	/*
  	 * Initialize the page tables for the low globals:
-@@ -2215,11 +2265,17 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2215,11 +2270,17 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  
  	arm_set_user_tbi();
  
@@ -114,7 +119,7 @@ index 656897c..94baf6b 100644
  	set_mmu_ttb_alternate(cpu_ttep & TTBR_BADDR_MASK);
  
  	ml_enable_monitor();
-@@ -2227,6 +2283,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2227,6 +2288,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
  #if defined(SWEET) && !defined(A5XELTE)
  	/* The final TTBR1 is live; leave the outgoing VA=PA framebuffer alias. */
  	sweet_early_relocate(SWEET_EARLY_FB_VA);
