@@ -139,6 +139,11 @@ def pack(items):
     if have_apps:
         files.append(('apps/.ready', b'ready\n', 0o644))     # last: hero-run waits for it
     for dest, data, mode in files:
+        if dest.startswith('/'):
+            # an absolute destination, only where the kernel takes one (Note FE 0404, in 0342):
+            # /System/Library/xpc/launchd.plist and files in /private/var/mobile/Library/TCC/
+            entries.append((dest, mode, data))
+            continue
         dest = dest.strip('/')
         parts = dest.split('/')
         for i in range(1, len(parts)):
