@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0093 — min28 medida (GPU presenta: 88 -> 6,3 ms/cuadro; 10 fps); min29 (heropower=1 herocpu_mhz=1976) preparada, NO escrita (2026-11-15)
+## Relevo vigente: H-0094 — min29 (heropower=1 herocpu_mhz=1976) ESCRITA (D-0066); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min29-20261115.img` (sha256 `71c3344f…2fa7`, E-0224/E-0225).
+- **Director:** `adb reboot`, 5 min de uso normal, apuntar fluidez y calor; volver a TWRP. **Ingeniero:** `herolte-log-pull.py`; 'HEROLTE CPU ... MHz', 'HEROLTE TMU', temperatura de la pila, fps, fallos.
+- Restaurar BOOT: min28 (funciona) / min27 / original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0093 — min28 medida (GPU presenta: 88 -> 6,3 ms/cuadro; 10 fps); min29 (heropower=1 herocpu_mhz=1976) preparada, NO escrita (2026-11-15)
 - **Tarea en curso: T-0012.** E-0223: lag restante por CPU a 242 MHz (Mongoose) / 1055 MHz (A53) y composición CA en CPU. E-0224: min29, sha256 `71c3344f…832fa7`.
 - **Riesgo:** sube tensión/frecuencia del cluster rápido (upstream L4h, hasta 2600 MHz). heropower=1 añade el gobernador de calor y la temperatura en el log. Volver a min28 (funciona).
 - **Siguiente:** firma del Director; `adb reboot`, 5 min de uso; log: 'HEROLTE CPU: ... MHz', temperatura/TMU, fps, fallos.

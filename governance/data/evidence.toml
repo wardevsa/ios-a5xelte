@@ -3309,3 +3309,18 @@ sha256 = "71c3344f3028ee80188706fa17634099b1ee17bb663ff2733a7a61ec82832fa7"
 size = 18620432
 immutable = true
 note = "Línea: min28 con heropower=0 -> heropower=1 y +herocpu_mhz=1976 (diff). herocpu_mhz sube el cluster Mongoose de 728 MHz (S-Boot; medido ~242 MHz efectivos) a 1976 MHz con el voltaje correspondiente vía APM/PMIC (0272); heropower=1 activa el gobernador de calor (herohot) y la lectura de TMU/pila: temperatura en el log. Riesgo declarado: toca reguladores de tensión (vdd_mngs); upstream (L4h) lo probó en su S7 hasta 2600 MHz/1075 mV; si algo falla, volver a min28 por TWRP. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run13-min29/xnu-boot-v2-s7-min29-20261115.verify-independent.txt. El único FAIL del constructor es su expectativa fija herolog=0."
+
+[[evidence]]
+id = "E-0225"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min29-20261115.img (min28 + heropower=1 herocpu_mhz=1976) y leído de vuelta (sha256 71c3344f…2fa7); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min29-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "e1d3458495283a2c1b2a671c282bdb79228711c68459fbbb1be4396110d50a07"
+size = 724
+immutable = true
+note = "D-0066; hash registrado antes en E-0224. Primer intento. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."
