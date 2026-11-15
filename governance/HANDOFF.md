@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0078 — kernel 0354 (CI 43705328859) y min24 preparada, NO escrita; BOOT sigue con min23 (2026-11-15)
+## Relevo vigente: H-0079 — min24 (kernel 0354, sonda FBSRC) ESCRITA (D-0059); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min24-20261115.img` (sha256 `968ddd3a…fd64f64`, E-0206/E-0207).
+- **Director:** `adb reboot`, 3-4 min sin pulsar nada, TWRP. **Ingeniero:** `herolte-log-pull.py`; `grep -a FBSRC`: pass1 > pass0 = caché; ambos 0 = renderer negro.
+- Restaurar BOOT: min23/min22/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0078 — kernel 0354 (CI 43705328859) y min24 preparada, NO escrita; BOOT sigue con min23 (2026-11-15)
 - **Tarea en curso: T-0012.** E-0205 kernel, E-0206 imagen `xnu-boot-v2-s7-min24-20261115.img` sha256 `968ddd3a…d64f64`: min23 con kernel 0354 (FBSRC pass 0/1 de la superficie origen).
 - **Siguiente:** firma del Director; `adb reboot`, 3-4 min, TWRP; `herolte-log-pull.py`; `grep -a FBSRC`: si pass1 > pass0 es caché; si ambos 0 el renderer dibuja negro (A).
 - Restaurar BOOT: min23/min22/original E-0009 (cada escritura exige firma).
