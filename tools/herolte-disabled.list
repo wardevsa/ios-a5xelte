@@ -18,3 +18,8 @@ com.apple.ap.adprivacyd
 com.apple.ap.promotedcontentd
 com.apple.amsengagementd
 com.apple.watchlistd
+com.apple.identityservicesd
+com.apple.parsecd
+com.apple.photoanalysisd
+com.apple.wifip2pd
+com.apple.driverkitd
