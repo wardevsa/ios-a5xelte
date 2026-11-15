@@ -1,0 +1,93 @@
+name: ios18-root
+
+# The iOS 18.7.8 root volume for herolte: the iPhone XR's (iPhone11,8, 22H352) userland, merged and
+# rewritten by Bergamota's Renegade (github.com/ry-diffusion/Bergamota, tools/renegade, pinned below) for a
+# CPU without pointer authentication, plus tools/ios18/v80strip*.py for the S7's ARMv8.0 cores (LSE
+# atomics, RCpc), then tools/herolte-tune-ios-root.sh. Published like ios-root.yml: a raw HFS+ image,
+# gzip, split, as assets of a release in THIS repository. The image contains Apple software: the job
+# refuses to run in a public repository, and the release must stay private to its owner.
+on:
+  push:
+    branches: [ios18-root-build]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  root:
+    if: github.event.repository.private == true
+    runs-on: macos-15-intel
+    timeout-minutes: 330
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RENEGADE_TARGET: ios18
+      BERGAMOTA_SHA: 37a7a7a917fc09945ed2f7d1ae68b84d4525b4cb
+      BUILD: 22H352
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space (Xcode and simulators are not needed; codesign is part of macOS)
+        run: |
+          df -h /
+          sudo rm -rf /Applications/Xcode*.app /Library/Developer/CoreSimulator ~/Library/Developer/CoreSimulator \
+            /Users/runner/Library/Android /usr/local/share/dotnet /usr/local/lib/android || true
+          df -h /
+
+      - name: Renegade and tools
+        run: |
+          set -euo pipefail
+          git init -q berg
+          git -C berg fetch -q --depth 1 https://github.com/ry-diffusion/Bergamota "$BERGAMOTA_SHA"
+          git -C berg checkout -q FETCH_HEAD
+          brew install blacktop/tap/ipsw zstd pigz >/dev/null
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install --quiet numpy
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+
+      - name: Fetch and decrypt the root, SystemOS and AppOS images (~8.3 GB)
+        working-directory: berg
+        run: |
+          set -euo pipefail
+          bash tools/renegade/fetch-root.sh
+          df -h /
+
+      - name: Copy, PAC + v80 rewrite of every Mach-O and of the shared cache, Renegade's tweaks
+        working-directory: berg
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/tools/ios18/mkroot-s7.py" --renegade . --size 20g \
+            --stages copy,macho,cache,tweaks --delete-sources --no-jb --no-bglrender --no-bluetooth
+          df -h /
+
+      - name: S7 tweaks (tools/herolte-tune-ios-root.sh)
+        run: |
+          set -euo pipefail
+          root="$PWD/berg/research/ios18/full/root"
+          mount | grep -F "$root"
+          sudo bash tools/herolte-tune-ios-root.sh "$root" "$BUILD"
+
+      - name: Seal and verify
+        working-directory: berg
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/tools/ios18/mkroot-s7.py" --renegade . --stages seal,verify
+          ls -l research/ios18/
+
+      - name: Raw image, compressed and split
+        run: |
+          set -euo pipefail
+          img=berg/research/ios18/ios18-root-full.img
+          pigz -1 -c "$img" > root18.img.gz
+          rm -f "$img"
+          split -b 1900m -d -a 2 root18.img.gz root18.img.gz.part
+          rm root18.img.gz
+          shasum -a 256 root18.img.gz.part* | tee SHA256SUMS
+
+      - name: Publish as a private release
+        run: |
+          set -euo pipefail
+          tag="ios18-root-18.7.8-${{ github.run_id }}"
+          gh release create "$tag" root18.img.gz.part* SHA256SUMS \
+            --title "iOS 18.7.8 root for herolte (Renegade + v80strip, 20 GiB)" \
+            --notes "Apple software for personal use on the owner's device. Do not make this repository or release public."
