@@ -662,10 +662,22 @@ resume = "0359 necesita CI (publish, firma) antes de E0; E1-E3 (a5fb_hz=30, hero
 id = "T-0057"
 title = "Copia de seguridad en un segundo disco (EFS, BOOT, RECOVERY, SYSTEM, USERDATA Android): precondición de Jefatura para Wi-Fi y otras escrituras (directiva del 15-nov, Pregunta 5)"
 status = "blocked"
-priority = 9
+priority = 2
 owner = "ingeniero"
 depends_on = []
 actions = ["archive-copy", "local-commit"]
-blocked_on = "El segundo disco (nvme0n1p1 'Juegos' 931 GB o nvme1n1p3 465 GB, ambos NTFS y sin montar) debe montarlo el Director y firmar la copia con el destino exacto; hasta entonces las copias están en /dev/sda2 (EFS y particiones pequeñas, 144 MB) y en el NVMe F20C… (snapshot de 30 GB)"
+blocked_on = "POSPUESTA por el Director y la jefatura (D-0076, riesgo aceptado). Cuando convenga: el segundo disco (nvme0n1p1 'Juegos' 931 GB o nvme1n1p3 465 GB, ambos NTFS y sin montar) debe montarlo el Director y firmar la copia con el destino exacto; hasta entonces las copias están en /dev/sda2 (EFS y particiones pequeñas, 144 MB) y en el NVMe F20C… (snapshot de 30 GB)"
 acceptance = "Dos copias verificadas por SHA-256 en discos físicos distintos, legibles en solo lectura; evidencia con hashes y rutas."
 resume = "Texto de autorización en el relevo H-0110; verificar espacio libre del destino (>= 50 GB) antes de copiar."
+
+[[task]]
+id = "T-0058"
+title = "Compilar en el CI el kernel con 0359 (valores por defecto del S7): push de herolte-drop-v2 a mio y workflow xnu (D-0075); después construir min35"
+status = "ready"
+priority = 8
+owner = "ingeniero"
+depends_on = []
+actions = ["publish", "local-commit"]
+authorization_ref = "D-0075"
+acceptance = "Run xnu en verde con 0359 aplicado y compilado; kernel descargado con SHA-256 como evidencia; min35 construida y verificada; firma de BOOT pedida con su SHA-256."
+resume = "gh workflow run xnu -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2; min35 = línea de min34 sin los 6 argumentos por defecto + sweetsample_s=2."

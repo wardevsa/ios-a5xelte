@@ -3714,3 +3714,18 @@ sha256 = "044abcd8e6fd30bbd4963ff182cec76d86372e79e294ce174da3dc7bd7b9e9f4"
 size = 3673
 immutable = true
 note = "Cálculo propio sobre las líneas 'TOP 5s' de los logs min33b y min34 (128 muestras); lo que NO se sabe: qué funciones consumen la CPU de backboardd (sin símbolos de la caché de dyld). Sin datos privados."
+
+[[evidence]]
+id = "E-0252"
+title = "Reevaluación de Jefatura Técnica del 15-nov: aceptar los backups actuales como suficientes, posponer la copia en segundo disco, continuar con el parche 0359 (CI, min35, firma roja con hash)"
+kind = "document"
+path = "/home/pioxi/HackiOS/repos/wardevsa-ios-a5xelte-v2/docs/S7GE_REEVALUACION_JEFATURA_20261115.md"
+location = "repo"
+created = "2026-11-15"
+domain = "host"
+level = "L1"
+device = "none"
+sha256 = "d9ec18a09a62c34900651d62edddf50045cd627a2c7927b72a87297973affd3a"
+size = 2865
+immutable = true
+note = "Copiado de lo pegado por el Director ('Autorizo lo siguiente:') con una cabecera del ingeniero que aclara que la plantilla de §4 no es una firma. Origen de D-0075 (CI de 0359, estrechada) y D-0076 (backups aceptados)."
