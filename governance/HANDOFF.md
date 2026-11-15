@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0099 — DROP v2: min32 (herodrop=1) y paquete de autoprueba preparados, NO escritos; BOOT sigue con min31 (2026-11-15)
+## Relevo vigente: H-0100 — min32 (herodrop=1) y paquete de autoprueba ESCRITOS (D-0068); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min32-20261115.img` (sha256 `3b471aa3…1220`, E-0233/E-0235). Zona DROP (byte 23293374464, bloque 5686859) con el paquete de autoprueba, verificada (E-0234/E-0236).
+- **Director:** `adb reboot`, 3-5 min (no hace falta usar nada), TWRP. **Ingeniero:** `herolte-log-pull.py` + `HEROLTE_ADB=adb python3 -I xnu/drop-v2/deviceday/verify_selftest.py ~/HackiOS/builds/device-day/selftest-a-min32/expected.json` (solo lectura); `grep -E 'HEROLTE DROP|jnl:|F_FULLFSYNC'`.
+- Si DROP falla: min31 por BOOT (firma) y/o `herolte-drop.py adb --clear` (firma).
+- Después: paquete real (hero-run nuevo, herosb).
+
+## Relevo anterior: H-0099 — DROP v2: min32 (herodrop=1) y paquete de autoprueba preparados, NO escritos; BOOT sigue con min31 (2026-11-15)
 - **Tarea:** instalar el userland de upstream (hero-run/herosb) por DROP; primero la AUTOPRUEBA. E-0233 imagen `xnu-boot-v2-s7-min32-20261115.img` sha256 `3b471aa3…cf1220`; E-0234 paquete de autoprueba (variante a, generación 1).
 - **Orden (RUNBOOK §3):** (1) escribir min32 en BOOT; (2) desde TWRP escribir la zona DROP con `command.txt` (USERDATA, zona >= byte 23293374464, fuera del volumen); (3) arrancar iOS 3-5 min; (4) TWRP: `herolte-log-pull.py` + `verify_selftest.py expected.json`; buscar `HEROLTE DROP: package 1 ready for userland`.
 - **Después:** paquete real (hero-run nuevo compilado por el CI de mesa-ios, herosb, disabled.list); el hero-run de a43e3e5 es antiguo.

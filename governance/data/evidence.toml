@@ -3459,3 +3459,33 @@ sha256 = "2c996905489cdc86378f061d94e2b8401a6aa1011ae04a63ee84899157411b36"
 size = 534
 immutable = true
 note = "Orden de escritura exacta en command.txt (herolte-drop.py adb ...); resultado esperado en expected.json (sha256 41dafaf8d86e937b5d601236e74b26c64b5b466bf7af717f0b0f375acdd2ab31). La zona de escritura empieza en el byte 23293374464 de USERDATA (tamaño 23431790592 menos 33793 bloques de 4096), por encima de los 21474836480 B del volumen HFS iOS: no se solapan. No contiene datos privados (ficheros de prueba)."
+
+[[evidence]]
+id = "E-0235"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min32-20261115.img (min31 con herodrop=1) y leído de vuelta (sha256 3b471aa3…1220); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min32-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "409d578b42d63406b5988a7e3d5c392c00839014b9d4a64f649b465a83140511"
+size = 724
+immutable = true
+note = "D-0068; hash registrado antes en E-0233. Primer intento."
+
+[[evidence]]
+id = "E-0236"
+title = "Zona DROP de USERDATA escrita con el paquete de autoprueba (variante a, generación 1): 2629632 B en el bloque 5686859 (byte 23293374464), verificado ('-> verified')"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/drop-selftest-a-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "5af3f777aa88d592f388a9ddb60f6cc47cc03cfcff0c3f8720dee23bc888f4e0"
+size = 649
+immutable = true
+note = "D-0068; orden de E-0234 (command.txt). Identificador de paquete 7749185925768496661. Primero cabecera a cero, luego contenido verificado, luego cabecera verificada. 5 ficheros de prueba bajo /private/var/herolte/v2test. El resto de USERDATA no se tocó (el bloque 5686859 está por encima de los 21474836480 B del volumen HFS). Pendiente: arrancar iOS con min32 y comprobar 'HEROLTE DROP: package N ready for userland' + verify_selftest.py."
