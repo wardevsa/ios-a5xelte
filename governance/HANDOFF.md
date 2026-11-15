@@ -8,7 +8,11 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0085 — análisis: UI arrancada pero sin vsync registrado; parche 0355 (log de llamadas IOMFB) escrito, sin CI (2026-11-15)
+## Relevo vigente: H-0086 — CI de 0355 falló (cast de puntero); corregido en local (3decc3e), a la espera de nueva firma de CI (2026-11-15)
+- **Tarea en curso: T-0012 / T-0049.** Run 43710141555: error `SweetFramebuffer.cpp:1185: cast from pointer to smaller type 'unsigned int'` (mach_port_t es puntero aquí). Corregido: se imprime como `(unsigned long long)(uintptr_t)port`. El parche nunca produjo kernel, así que se corrigió en su sitio. D-0061 nombra el commit 34fd5f9: un commit nuevo (3decc3e) necesita firma nueva.
+- BOOT actual: min25. Siguiente: firma de CI de 3decc3e; min26; firma de BOOT; leer FBCALL.
+
+## Relevo anterior: H-0085 — análisis: UI arrancada pero sin vsync registrado; parche 0355 (log de llamadas IOMFB) escrito, sin CI (2026-11-15)
 - **Tarea en curso: T-0012.** E-0213 / `docs/S7GE_BACKBOARDD_WAIT.md`: SpringBoard en GSEventRunModal, backboardd en run loop, superficies a cero, selector 72 nunca llamado (iOS 16.7.16 usa 68/74/79/84/50/52/55). `tools/herolte-smp-images.py` mapea PC -> librería (caché de dyld extraída con 7z de `systemos.dmg`; sin símbolos de función porque los linkedit están comprimidos con APFS).
 - **Siguiente:** firma del Director para push + CI de 0355 (commit 34fd5f9); min26 = línea de min25 + kernel 0355; firma de BOOT; arrancar 3 min; leer `FBCALL` (argumentos de las 120 primeras llamadas, asincronía, registerNotificationPort).
 - Pendiente aparte: DROP v2 (hero-run/autorun/herosb), assetsd aborta, táctil sin probar.
