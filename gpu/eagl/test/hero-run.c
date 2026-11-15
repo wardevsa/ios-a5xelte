@@ -908,6 +908,97 @@ remove_listed_apps(void)
  * /product/haptics closed-loop, boot-0339), then the system's vibration (kSystemSoundID_Vibrate, 4095) three times:
  * whether Darwin plays it on the audio plug-in's Actuator says itself in the log ("the actuator plays").
  */
+static id
+hr_send(id object, const char *selector)
+{
+   return object ? ((id (*)(id, SEL))objc_msgSend)(object, sel_registerName(selector)) : NULL;
+}
+
+static const char *
+hr_text(id string)
+{
+   const char *utf8 = string ? ((const char *(*)(id, SEL))objc_msgSend)(string, sel_registerName("UTF8String")) : NULL;
+   return utf8 ? utf8 : "(none)";
+}
+
+static id
+hr_haptics_constant(const char *name)
+{
+   static void *framework;
+   if (!framework)
+      framework = dlopen("/System/Library/Frameworks/CoreHaptics.framework/CoreHaptics", RTLD_NOW);
+   id *constant = framework ? (id *)dlsym(framework, name) : NULL;
+   return constant ? *constant : NULL;
+}
+
+static id
+hr_haptic_event(double at, double duration, float intensity, float sharpness)
+{
+   id p1 = ((id (*)(id, SEL, id, float))objc_msgSend)(hr_send((id)objc_getClass("CHHapticEventParameter"), "alloc"),
+       sel_registerName("initWithParameterID:value:"), hr_haptics_constant("CHHapticEventParameterIDHapticIntensity"), intensity);
+   id p2 = ((id (*)(id, SEL, id, float))objc_msgSend)(hr_send((id)objc_getClass("CHHapticEventParameter"), "alloc"),
+       sel_registerName("initWithParameterID:value:"), hr_haptics_constant("CHHapticEventParameterIDHapticSharpness"), sharpness);
+   const void *parameters[2] = { p1, p2 };
+   CFArrayRef list = CFArrayCreate(NULL, parameters, 2, &kCFTypeArrayCallBacks);
+   id event = hr_send((id)objc_getClass("CHHapticEvent"), "alloc");
+   if (duration > 0)
+      event = ((id (*)(id, SEL, id, id, double, double))objc_msgSend)(event,
+          sel_registerName("initWithEventType:parameters:relativeTime:duration:"),
+          hr_haptics_constant("CHHapticEventTypeHapticContinuous"), (id)list, at, duration);
+   else
+      event = ((id (*)(id, SEL, id, id, double))objc_msgSend)(event, sel_registerName("initWithEventType:parameters:relativeTime:"),
+          hr_haptics_constant("CHHapticEventTypeHapticTransient"), (id)list, at);
+   CFRelease(list);
+   return event;
+}
+
+/*
+ * CoreHaptics, as an application (and UIKit's feedback generators) plays haptics: what the hardware is said to support,
+ * whether an engine starts, and a pattern (a tap, half a second at half strength, a tap); each failure with CoreHaptics'
+ * own error. The way Scion's sound_test (S9) asks it.
+ */
+static void
+haptics_engine_probe(void)
+{
+   if (!hr_haptics_constant("CHHapticEventTypeHapticTransient")) {
+      herodrm_log("hero-run: haptics: no CoreHaptics");
+      return;
+   }
+   id capabilities = hr_send((id)objc_getClass("CHHapticEngine"), "capabilitiesForHardware");
+   BOOL supports = capabilities && ((BOOL (*)(id, SEL))objc_msgSend)(capabilities, sel_registerName("supportsHaptics"));
+   SEL first = sel_registerName("supports1stPartyHaptics");
+   BOOL answers = capabilities && ((BOOL (*)(id, SEL, SEL))objc_msgSend)(capabilities, sel_registerName("respondsToSelector:"), first);
+   herodrm_log("hero-run: haptics: CoreHaptics: the hardware %s haptics%s", supports ? "supports" : "DOES NOT SUPPORT",
+       !answers ? "" : ((BOOL (*)(id, SEL))objc_msgSend)(capabilities, first) ? " (and the system's own)" : " (NOT the system's own)");
+   id error = NULL;
+   id engine = ((id (*)(id, SEL, id *))objc_msgSend)(hr_send((id)objc_getClass("CHHapticEngine"), "alloc"),
+       sel_registerName("initAndReturnError:"), &error);
+   if (!engine) {
+      herodrm_log("hero-run: haptics: CoreHaptics: no engine: %s", hr_text(hr_send(error, "description")));
+      return;
+   }
+   BOOL started = ((BOOL (*)(id, SEL, id *))objc_msgSend)(engine, sel_registerName("startAndReturnError:"), &error);
+   herodrm_log("hero-run: haptics: CoreHaptics: the engine %s%s", started ? "has started" : "DOES NOT START: ",
+       started ? "" : hr_text(hr_send(error, "description")));
+   if (!started)
+      return;
+   const void *events[3] = { hr_haptic_event(0, 0, 1.0f, 0.5f), hr_haptic_event(0.3, 0.5, 0.5f, 0.3f),
+       hr_haptic_event(1.0, 0, 1.0f, 0.8f) };
+   CFArrayRef list = CFArrayCreate(NULL, events, 3, &kCFTypeArrayCallBacks);
+   CFArrayRef none = CFArrayCreate(NULL, NULL, 0, &kCFTypeArrayCallBacks);
+   id pattern = ((id (*)(id, SEL, id, id, id *))objc_msgSend)(hr_send((id)objc_getClass("CHHapticPattern"), "alloc"),
+       sel_registerName("initWithEvents:parameters:error:"), (id)list, (id)none, &error);
+   id player = pattern ? ((id (*)(id, SEL, id, id *))objc_msgSend)(engine, sel_registerName("createPlayerWithPattern:error:"),
+       pattern, &error) : NULL;
+   if (!player || !((BOOL (*)(id, SEL, double, id *))objc_msgSend)(player, sel_registerName("startAtTime:error:"), 0.0, &error)) {
+      herodrm_log("hero-run: haptics: CoreHaptics: the pattern does not play: %s", hr_text(hr_send(error, "description")));
+   } else {
+      herodrm_log("hero-run: haptics: CoreHaptics: playing a tap, half a second, a tap");
+      sleep(2);
+   }
+   ((void (*)(id, SEL, id))objc_msgSend)(engine, sel_registerName("stopWithCompletionHandler:"), NULL);
+}
+
 static void *
 haptics_probe(__unused void *unused)
 {
@@ -933,6 +1024,7 @@ haptics_probe(__unused void *unused)
       CFRelease(key);
       herodrm_log("hero-run: haptics: MobileGestalt %s = %s", keys[i], text);
    }
+   haptics_engine_probe();
    void *at = dlopen("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", RTLD_NOW);
    void (*play)(uint32_t) = at ? (void (*)(uint32_t))dlsym(at, "AudioServicesPlaySystemSound") : NULL;
    for (int i = 0; play && i < 3; i++) {

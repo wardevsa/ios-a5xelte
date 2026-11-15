@@ -13,6 +13,7 @@
  */
 #import <Foundation/Foundation.h>
 #include <dlfcn.h>
+#include <objc/runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -107,8 +108,31 @@ main(void)
 					if (shown >= max) {
 						return;
 					}
+					if (seen == 1) {
+						/* boot-oslog3: no event answered process or composedMessage: say what the events are */
+						unsigned n = 0;
+						Method *methods = class_copyMethodList([event class], &n);
+						NSMutableString *names = [NSMutableString string];
+						for (unsigned i = 0; i < n && i < 120; i++) {
+							[names appendFormat:@" %s", sel_getName(method_getName(methods[i]))];
+						}
+						free(methods);
+						printf("hero-oslog: the events are %s (super %s):%.2500s\n", class_getName([event class]),
+						    class_getName(class_getSuperclass([event class])), names.UTF8String);
+						printf("hero-oslog: the first: %.800s\n", [[event description] UTF8String]);
+					}
 					NSString *process = call0(event, @"process");
-					NSString *message = call0(event, @"composedMessage");
+					if (!process) {
+						NSString *path = call0(event, @"processImagePath");
+						process = path.lastPathComponent;
+					}
+					NSString *message = call0(event, @"composedMessage") ?: call0(event, @"formatString");
+					if (!message) {
+						message = [event description];
+					}
+					if (!process) {
+						process = @"?";
+					}
 					if (process) {
 						counts[process] = @([counts[process] intValue] + 1);
 					}
