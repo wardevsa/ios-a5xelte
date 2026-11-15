@@ -3909,3 +3909,18 @@ sha256 = "1af792b57a9e10b55142cfc3b5e7af5c50abcd55b575999d969c3f257e8a656f"
 size = 724
 immutable = true
 note = "D-0080; hash registrado antes en E-0263. Primer intento."
+
+[[evidence]]
+id = "E-0265"
+title = "Wi-Fi FUNCIONA en el S7: con min36 (herowifi=1, kernel 0360) y el firmware de la zona DROP el kernel levanta el BCM4359 por PCIe (enlace en el intento 1, chip id 0x441514e4), carga el firmware ('THE FIRMWARE RUNS'), escanea (7-10 puntos de acceso) y se une a una red WPA2 ('CONNECTED in 1807 ms', -62 dBm, en0 con enlace); el Director ve las redes en Ajustes tras unos segundos y se conecta a google.com"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min36-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "a6a483ce5c6a33285d0c72c9d6362954e9df88f07c334d02caed3bcf3cdadac6"
+size = 270841
+immutable = true
+note = "Medido: 'HEROLTE DROP: package 3 ready for userland'; 'the firmware's files after 1000 ms'; 'try 1: state 0x11 … id 0xabcd16c3'; 'chip 0x17094359 … firmware 594137 bytes, NVRAM 5122 bytes'; 'copied and read back in 370 ms, 0 words differ'; firmware 'RTE (SDIO-MSG_BUF) 9.96.17 (C0 Network/rsdb) on BCM43596'; 'scan done, status 0, 10 access points'; 'joining a network of 19 bytes, WPA2' y 'CONNECTED in 1807 ms'. Sin network.txt ('error 2': iOS elige la red). Aún REFUSED: COUNTRY_CODE y el selector 383; error 6 en HW_SUPPORTED_CHANNELS. CPU: backboardd 141 % de media, de los que 51 puntos son tiempo de sistema (36 %: el resto, 64 %, es de usuario); kernel_task 18 % (todo sistema); fps medio 14,8 (máx. 30). Memoria libre 801 -> 59 MB en 5 min de uso (vigilar: riesgo de jetsam). Observación del Director: 'conectado al wifi, le costó unos segundos desde el inicio en empezar a mostrar redes, y me conecté a google.com'. El log contiene el BSSID y el nivel de señal de la red del Director y otros identificadores: NO va a git."

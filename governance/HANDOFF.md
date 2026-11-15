@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0117 — min36 (herowifi=1, kernel 0360) ESCRITA (D-0080); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0118 — Wi-Fi FUNCIONA (min36): escanea, se une y navega; memoria baja; el Director propone una actualización grande de userland (2026-11-15)
+- **Tarea en curso: T-0012 / T-0059 (casi cerrada).** E-0265. BOOT = min36 (base buena actual; contiene herowifi=1). Zona DROP: paquetes 2 (hero-run y GL) y 3 (firmware Wi-Fi).
+- **Pendiente:** (1) COUNTRY_CODE y el selector 383 siguen REFUSED, HW_SUPPORTED_CHANNELS error 6 (revisar si importan para 5 GHz/2,4 GHz completos); (2) memoria libre cae a 59 MB en 5 min: investigar (vm_compressor, jetsam, apps); (3) fluidez (backboardd 141 %, 64 % usuario/36 % kernel); (4) "mega actualización" de userland (fondo, apps): solo DROP, sin tocar BOOT, con una firma por paquete.
+- Vuelta atrás: min34 (sin Wi-Fi) o min36 (esta).
+
+## Relevo anterior: H-0117 — min36 (herowifi=1, kernel 0360) ESCRITA (D-0080); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012 / T-0059.** BOOT = `xnu-boot-v2-s7-min36-20261115.img` (sha256 `7c8363c5…e6`, E-0263/E-0264). Zona DROP con firmware (E-0261).
 - **Director:** `adb reboot`; 1-2 min; Ajustes > Wi-Fi: ¿redes?, conectar con su contraseña desde Ajustes; apagar desde iOS (-> TWRP). Si se cuelga: esperar 2-3 min, apagado forzado. **Ingeniero:** `herolte-log-pull.py` + `herolte-log-report.py`; `grep -a 'HEROLTE WIFI\|HEROLTE DROP\|HakiosWLAN\|apple80211'`; TOP con tiempo de sistema.
 - Vuelta atrás: min34 (E-0247).
