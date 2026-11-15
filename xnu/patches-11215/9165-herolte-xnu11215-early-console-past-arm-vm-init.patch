@@ -125,7 +125,7 @@ index 656897c..94baf6b 100644
  	set_mmu_ttb(invalid_ttep & TTBR_BADDR_MASK);
  
 diff --git a/osfmk/arm64/sweet_early.c b/osfmk/arm64/sweet_early.c
-index fce81af..72ee680 100644
+index aecf005..5a31bf9 100644
 --- a/osfmk/arm64/sweet_early.c
 +++ b/osfmk/arm64/sweet_early.c
 @@ -11,8 +11,13 @@
