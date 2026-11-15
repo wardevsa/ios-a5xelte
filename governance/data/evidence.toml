@@ -2994,3 +2994,18 @@ sha256 = "2680387f5b6e3b0c23212071a6b15bf3a1a6aedbfe873612f9058522f9ad09c7"
 size = 723
 immutable = true
 note = "D-0057; hash registrado antes en E-0202. Primer intento. El hash de EFS impreso cambia entre sesiones (como en E-0192); la comprobación es antes/después dentro de la escritura."
+
+[[evidence]]
+id = "E-0204"
+title = "Log persistente de min23 (a5fb_keep_on=1 a5fb_noconsole=1; flush #44, ~7 min, 1890765 B): con keep_on la pantalla no se apaga y backboardd presenta ~10 fps (750 presents), pero las 40 miniaturas del panel son negras salvo una columna residual del borde derecho; backboardd y SpringBoard vivos y ociosos (muestreo SMP: todos los hilos en mach_msg); memoria libre baja de 268 a 98 MB en 7 min"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min23-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "54d5b7e8a183988fc1d03151ba4f12188220ca56befe91c510a34e48380b5047"
+size = 1890765
+immutable = true
+note = "Medido: 'A5XELTE FB: display-off request ignored (a5fb_keep_on)'; FBPROBE 1..40 (presents 1-12 y cada 25 hasta 750) off=0, copied=10962000, 28 celdas no nulas siempre en la misma columna (borde derecho, resto de la consola temprana). Observación del Director (11:39 tras 8 min): aparecieron las dos líneas de colores, la consola derecha desaparecida, al cabo de 1-2 min un cuadrado negro cubrió parte de la pantalla (los colores de la derecha seguían visibles) y 'no pasó nada más'. Contradicción a resolver: se presentan cuadros a ~10 fps pero el contenido es negro; las sondas de rejilla 32x64 podrían perder texto pequeño, de ahí el parche 0354 (escanea la superficie origen antes y después de limpiar la caché). Lo que NO se sabe: si la superficie origen es negra o es un problema de coherencia de caché. El log contiene identificadores: NO va a git."
