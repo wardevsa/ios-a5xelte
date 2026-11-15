@@ -68,7 +68,7 @@ main(void)
 		int seconds = number("HERO_OSLOG_SECONDS", 80), max = number("HERO_OSLOG_MAX", 300);
 		/* boot-oslog2: 153581 events and none of mediaserverd's matched: every process now ("*"), with a count by process */
 		NSArray *procs = list("HERO_OSLOG_PROCS", "*");
-		NSArray *words = list("HERO_OSLOG_WORDS", "haptic,actuator,vibrat,systemsound,taptic,4095");
+		NSArray *words = list("HERO_OSLOG_WORDS", "haptic,actuator,vibe,vibrat,systemsound,taptic,4810,hsp");
 		setvbuf(stdout, NULL, _IOLBF, 0);
 		printf("hero-oslog: following the live log for %d s; processes %s; words %s\n", seconds,
 		    [procs componentsJoinedByString:@","].UTF8String, [words componentsJoinedByString:@","].UTF8String);
@@ -139,6 +139,17 @@ main(void)
 					if (!process || !message || (![procs containsObject:@"*"] && ![procs containsObject:process.lowercaseString])) {
 						return;
 					}
+					/* boot-chhaptic: the events give their format, not the composed message: the arguments after it */
+					NSArray *arguments = call0(event, @"formatArguments");
+					if ([arguments isKindOfClass:[NSArray class]] && arguments.count) {
+						NSMutableString *with = [NSMutableString stringWithString:message];
+						[with appendString:@" | args:"];
+						for (id a in arguments) {
+							id value = call0(a, @"objectRepresentation");
+							[with appendFormat:@" «%@»", value ?: a];
+						}
+						message = with;
+					}
 					NSString *low = message.lowercaseString;
 					BOOL hit = NO;
 					for (NSString *w in words) {
@@ -146,6 +157,12 @@ main(void)
 							hit = YES;
 							break;
 						}
+					}
+					/* and failures that name audio or haptics (CoreHaptics' -4810: its server did not start) */
+					if (!hit && ([low containsString:@"fail"] || [low containsString:@"error"] || [low containsString:@"unable"]) &&
+					    ([low containsString:@"aptic"] || [low containsString:@"vibe"] || [low containsString:@"actuat"] ||
+					    [low containsString:@"audio"] || [low containsString:@"hal"] || [low containsString:@"server"])) {
+						hit = YES;
 					}
 					if (!hit) {
 						return;
