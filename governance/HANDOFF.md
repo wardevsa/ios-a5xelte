@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0066 — USERDATA ESCRITA con la raíz iOS (D-0048): Android borrado del inicio de USERDATA; falta el primer arranque con raíz (2026-11-15)
+## Relevo vigente: H-0067 — min17 (ufsrw=1 rootrw=1) ESCRITA (D-0049); teléfono en TWRP, sin reiniciar (2026-11-15)
+- **Tarea en curso: T-0012.** E-0181: con la raíz iOS en USERDATA y ufsrw=0, XNU reconoce el HFS+ pero falla al inicializar el diario (`jnl: do_jnl_io: strategy err`, `journal_create: failed`). BOOT = `xnu-boot-v2-s7-min17-20261115.img` (sha256 `8c984503…19bd2`; min16 con `ufsrw=1 rootrw=1`); EFS intacto (E-0183). Escrituras de la tanda: 18/20.
+- **Qué mirar (Director, tras `adb reboot`):** que desaparezca `cannot mount root` y las líneas `jnl:`/`hfs: late jnl init`; después `calling VFS_ROOT`, mensajes de `launchd`/`xpc`, o un `A5 XNU PANIC`. Copiar literal; la línea de la marca blanca y 8-10 anteriores.
+- **Riesgo:** el kernel ahora puede escribir en USERDATA (solo ahí). Si algo corrompe la raíz: restaurar la imagen E-0179 con `tools/herolte-write-userdata.py` (nueva autorización, ~80 min) o las copias E-0124/E-0125.
+- Restaurar BOOT: min16 (ufsrw=0) o el original E-0009, cubierto por D-0049.
+
+## Relevo anterior: H-0066 — USERDATA ESCRITA con la raíz iOS (D-0048): Android borrado del inicio de USERDATA; falta el primer arranque con raíz (2026-11-15)
 - **Tarea en curso: T-0012** (test de arranque; D-0047 vigente, 17/20 escrituras de BOOT). T-0044 hecha: E-0180 (hash de los primeros 20 GiB de USERDATA leído en el teléfono = 8c448c05…587a). Vuelta atrás: E-0124/E-0125 + BOOT original E-0009.
 - **Siguiente (Director):** `adb reboot` con el BOOT `min16` (línea de min2: `ufsrw=0`, sin Wi-Fi/energía/GPU). Esperado: desaparece `cannot mount root`, `hfs_mount` sin error, `calling VFS_ROOT`, y entonces `launchd`/panic. Copiar literal lo que se vea en el anillo (tercio izquierdo) y las últimas líneas.
 - Si no monta: leer el `errno` (mi anillo muestra solo la cadena de formato; habría que enganchar el valor); si monta y falla `launchd`, anotar el mensaje.

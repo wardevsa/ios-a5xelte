@@ -2679,3 +2679,18 @@ sha256 = "8c98450335f3c7fb9d0f019d57c7f08f6fa79992f0f3ca205f30341404e19bd2"
 size = 18620432
 immutable = true
 note = "Mismo kernel bb042852b3a7e25587ddffe2dabee7f0a54aabda1d3ed50aa7712369b6ea8cf7 (E-0174), ADT dc817436… y cargador 0a68abbd… que min16. Línea: la de min16 con ufsrw=0 sustituido por ufsrw=1 rootrw=1 (diff). Construida con tools/herolte-build-n3.sh y verificada SIN el perfil n2-readonly (que prohíbe ufsrw). Solo el UFS de USERDATA puede escribirse (bsd/dev/herolte_ufs.c: 'writes need ufsrw=1 and stay inside it'). Objetivo: que XNU pueda inicializar el diario HFS+ y montar la raíz (E-0181)."
+
+[[evidence]]
+id = "E-0183"
+title = "BOOT del S7 escrito con xnu-boot-v2-s7-min17-20261115.img (min16 + ufsrw=1 rootrw=1) y leído de vuelta (sha256 8c984503…19bd2); EFS idéntico antes y después de la sesión"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min17-out.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "f5c3edf5be93fa4d867e4a77eac600280b4480f131cbf6989b8a54cf42d19642"
+size = 723
+immutable = true
+note = "Solo escritura y lectura de vuelta (D-0049; hash registrado antes en E-0182; kernel E-0174). Objetivo: permitir que XNU inicialice el diario HFS+ y monte la raíz iOS (E-0181)."
