@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0094 — min29 (heropower=1 herocpu_mhz=1976) ESCRITA (D-0066); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0095 — min29 medida (1976 MHz, SoC 34-43 C, 12 fps medios); min30 (herocpu_mhz=2600) preparada, NO escrita (2026-11-15)
+- **Tarea en curso: T-0012.** E-0226: Mongoose 1976 MHz a 912,5 mV sin fallos; temperatura baja; el Director ve mejora clara. E-0227: min30, sha256 `add62cf6…9cfdbe`.
+- **Siguiente:** firma del Director para min30 (opcional: la fluidez ya es aceptable) y, aparte, el plan de userland (fondo, assetsd, MobileSMS, hero-run por DROP), todavía sin hacer.
+- BOOT actual: min29 (funciona). Restaurar: min28/min27/original E-0009.
+
+## Relevo anterior: H-0094 — min29 (heropower=1 herocpu_mhz=1976) ESCRITA (D-0066); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012.** BOOT = `xnu-boot-v2-s7-min29-20261115.img` (sha256 `71c3344f…2fa7`, E-0224/E-0225).
 - **Director:** `adb reboot`, 5 min de uso normal, apuntar fluidez y calor; volver a TWRP. **Ingeniero:** `herolte-log-pull.py`; 'HEROLTE CPU ... MHz', 'HEROLTE TMU', temperatura de la pila, fps, fallos.
 - Restaurar BOOT: min28 (funciona) / min27 / original E-0009 (cada escritura exige firma).
