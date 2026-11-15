@@ -3429,3 +3429,33 @@ sha256 = "04f54f7919742a00f18043f3535bed248962384da9ce1c55f9e5ace3e86724c9"
 size = 769756
 immutable = true
 note = "Medido: 'HEROLTE GPU: clock: G3D_PLL 0xa0a00402 -> 0xa0c80401: locked', '13061705 GPU cycles in 20095 us -> 649 MHz', 'vdd_g3d 0x30 -> 0x40'; 14 muestras FB: avg fps 7,8 (sesión corta, ~120 s de latidos), avg copy 4355 us; CRASH: assetsd x2, PhotosFileProvider, fileproviderd, driverkitd. Observación del Director: 'sigue con un poco de lag pero ya es bastante usable, me gusta'; en Ajustes aparece 'Sign in to your iPad' (el dispositivo se presenta como iPad en vez de iPhone: pendiente, posible MobileGestalt/ADT). El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0233"
+title = "Imagen preparada: xnu-boot-v2-s7-min32-20261115 = min31 con herodrop=1 (kernel 0355 con DROP v2 integrado, E-0214); 53 PASS del verificador independiente, 0 FAIL; preflight de DROP v2 14 correctas, 0 fallos (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run16-min32/xnu-boot-v2-s7-min32-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "3b471aa388e6118f47d391322e57d177689691e9bc86898154edd8fc13cf1220"
+size = 18620432
+immutable = true
+note = "Construida a mano con mkpayload/herolte-pack-boot (el constructor n3 fija herodrop=0): la línea de min31 con herodrop=0 -> herodrop=1 (diff de una línea); 496 B de línea. Con herodrop=1 el kernel instala al arrancar el paquete HERODRP2 de la zona de USERDATA (bajo /private/var/herolte/) si existe; sin paquete no hace nada. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run16-min32/xnu-boot-v2-s7-min32-20261115.verify-independent.txt; preflight: python3 -I xnu/drop-v2/deviceday/preflight.py --kernel <kernel 0355>."
+
+[[evidence]]
+id = "E-0234"
+title = "Paquete de autoprueba DROP v2 (variante a, generación 1): 5 ficheros de prueba bajo /private/var/herolte/v2test (imagen de zona de 2629632 B, token ready 1|6b8aa38a…), ensayado contra el núcleo C en el PC (14 correctas, 0 fallos); NO escrito en el teléfono"
+kind = "document"
+path = "/home/pioxi/HackiOS/builds/device-day/selftest-a-min32/command.txt"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "2c996905489cdc86378f061d94e2b8401a6aa1011ae04a63ee84899157411b36"
+size = 534
+immutable = true
+note = "Orden de escritura exacta en command.txt (herolte-drop.py adb ...); resultado esperado en expected.json (sha256 41dafaf8d86e937b5d601236e74b26c64b5b466bf7af717f0b0f375acdd2ab31). La zona de escritura empieza en el byte 23293374464 de USERDATA (tamaño 23431790592 menos 33793 bloques de 4096), por encima de los 21474836480 B del volumen HFS iOS: no se solapan. No contiene datos privados (ficheros de prueba)."

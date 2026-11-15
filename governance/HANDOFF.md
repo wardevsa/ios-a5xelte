@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0098 — min31 (CPU 2600 MHz, GPU 650 MHz) FUNCIONA y es la base; lote D-0067 con 1 escritura sin usar (min29) (2026-11-15)
+## Relevo vigente: H-0099 — DROP v2: min32 (herodrop=1) y paquete de autoprueba preparados, NO escritos; BOOT sigue con min31 (2026-11-15)
+- **Tarea:** instalar el userland de upstream (hero-run/herosb) por DROP; primero la AUTOPRUEBA. E-0233 imagen `xnu-boot-v2-s7-min32-20261115.img` sha256 `3b471aa3…cf1220`; E-0234 paquete de autoprueba (variante a, generación 1).
+- **Orden (RUNBOOK §3):** (1) escribir min32 en BOOT; (2) desde TWRP escribir la zona DROP con `command.txt` (USERDATA, zona >= byte 23293374464, fuera del volumen); (3) arrancar iOS 3-5 min; (4) TWRP: `herolte-log-pull.py` + `verify_selftest.py expected.json`; buscar `HEROLTE DROP: package 1 ready for userland`.
+- **Después:** paquete real (hero-run nuevo compilado por el CI de mesa-ios, herosb, disabled.list); el hero-run de a43e3e5 es antiguo.
+- Vuelta atrás: min31 (E-0232) por BOOT, `herolte-drop.py adb --clear` para vaciar la zona.
+
+## Relevo anterior: H-0098 — min31 (CPU 2600 MHz, GPU 650 MHz) FUNCIONA y es la base; lote D-0067 con 1 escritura sin usar (min29) (2026-11-15)
 - **Tarea en curso: T-0012.** E-0232: GPU 649 MHz, vdd_g3d 0x40, sin errores; SoC <= 41 C; usable con algo de lag. BOOT actual = min31 (`9a155ba6…2a4`). Quedan 0 imágenes de BOOT preparadas; la 3.ª escritura de D-0067 (min29) solo sirve para volver atrás.
 - **Siguiente (sin tocar BOOT):** userland por DROP: fondo negro (herosb), `autorun`, assetsd/driverkitd, About y Messages crashean, Phone en blanco, 'Sign in to your iPad' (identidad iPad: mirar MobileGestalt/ADT DeviceClass). Varios arreglos en un paquete.
 - Aviso: sweetfb_gpu y los relojes ya no son el cuello; queda la composición CA en CPU.
