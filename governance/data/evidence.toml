@@ -3009,3 +3009,33 @@ sha256 = "54d5b7e8a183988fc1d03151ba4f12188220ca56befe91c510a34e48380b5047"
 size = 1890765
 immutable = true
 note = "Medido: 'A5XELTE FB: display-off request ignored (a5fb_keep_on)'; FBPROBE 1..40 (presents 1-12 y cada 25 hasta 750) off=0, copied=10962000, 28 celdas no nulas siempre en la misma columna (borde derecho, resto de la consola temprana). Observación del Director (11:39 tras 8 min): aparecieron las dos líneas de colores, la consola derecha desaparecida, al cabo de 1-2 min un cuadrado negro cubrió parte de la pantalla (los colores de la derecha seguían visibles) y 'no pasó nada más'. Contradicción a resolver: se presentan cuadros a ~10 fps pero el contenido es negro; las sondas de rejilla 32x64 podrían perder texto pequeño, de ahí el parche 0354 (escanea la superficie origen antes y después de limpiar la caché). Lo que NO se sabe: si la superficie origen es negra o es un problema de coherencia de caché. El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0205"
+title = "Kernel con 0354 (sonda de la superficie origen) compilado en el CI (run 43705328859, commit 4934a21, éxito): 0332-0354 aplicados; la cadena FBSRC está en el binario"
+kind = "kernel"
+path = "/home/pioxi/HackiOS/builds/device-day/artifacts/kernel-0354-ci-43705328859/xnu-kernel-macos-15-intel/kernel.development.herolte"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "250c99a60bf90cabf76c1d9ced21ccd468b0faefedf43579569585389afc4533"
+size = 17355872
+immutable = true
+note = "D-0058 / T-0048. 0354 solo añade IOLog y una limpieza de caché de la superficie origen en AppleCLCD::present(). Mismo flujo que E-0198."
+
+[[evidence]]
+id = "E-0206"
+title = "Imagen preparada: xnu-boot-v2-s7-min24-20261115 = min23 con el kernel 0354 (E-0205); línea de arranque idéntica a min23; 46 PASS del verificador independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run8-min24/xnu-boot-v2-s7-min24-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "968ddd3a8cc9067d3be5f2a32dea6c7b3a00423f0f0d3aa5d51eb32edfd64f64"
+size = 18620432
+immutable = true
+note = "Solo cambia el kernel; ADT, cargador y línea idénticos a min23 (diff vacío). El único FAIL del constructor es su expectativa fija herolog=0. Verificación independiente en /home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run8-min24/xnu-boot-v2-s7-min24-20261115.verify-independent.txt."

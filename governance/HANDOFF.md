@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0077 — min23 medida: cuadros a ~10 fps pero negros; parche 0354 (sonda de la superficie origen) escrito, sin CI (2026-11-15)
+## Relevo vigente: H-0078 — kernel 0354 (CI 43705328859) y min24 preparada, NO escrita; BOOT sigue con min23 (2026-11-15)
+- **Tarea en curso: T-0012.** E-0205 kernel, E-0206 imagen `xnu-boot-v2-s7-min24-20261115.img` sha256 `968ddd3a…d64f64`: min23 con kernel 0354 (FBSRC pass 0/1 de la superficie origen).
+- **Siguiente:** firma del Director; `adb reboot`, 3-4 min, TWRP; `herolte-log-pull.py`; `grep -a FBSRC`: si pass1 > pass0 es caché; si ambos 0 el renderer dibuja negro (A).
+- Restaurar BOOT: min23/min22/original E-0009 (cada escritura exige firma).
+
+## Relevo anterior: H-0077 — min23 medida: cuadros a ~10 fps pero negros; parche 0354 (sonda de la superficie origen) escrito, sin CI (2026-11-15)
 - **Tarea en curso: T-0012.** E-0204: keep_on funciona (la pantalla no se apaga), el cuadrado negro del Director = el lienzo presentado; 40/40 miniaturas negras; backboardd/SpringBoard ociosos. Hipótesis A: la superficie compuesta es realmente negra (CA sin contenido/ sin GPU; upstream usa hero-run/herosb/drop con disabled.list). Hipótesis B: coherencia de caché (superficies WC). 0354 las separa (FBSRC pass 0/1).
 - **Siguiente:** firma del Director para push + CI de 0354 (commit 54c3d98); construir min24 (misma línea que min23, kernel nuevo); firma de BOOT; arrancar 3-4 min.
 - Pendiente aparte: userland de upstream no instalado (`/private/var/herolte/autorun` ausente: SPAWN FAILED; herodrop=0). DROP v2 sirve para instalar hero-run/herosb/disabled.list; evaluarlo después de 0354.
