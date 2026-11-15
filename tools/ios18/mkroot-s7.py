@@ -42,18 +42,44 @@ pacstrip = mk.pacstrip
 
 
 _seen = Counter()
+_current = [None, 0.0]          # path being worked on, since when (read by the watchdog thread)
+_watchdog = None
+SLOW = 120                      # seconds on one file before the worker says which file and where it is
 
 
-def _progress(what):
-    """mkroot-full.py logs only at file 0, 20000, ... and only when that file is a Mach-O: say something per worker."""
+def _watch():
+    import faulthandler
+    import threading
+    import time
+    warned = None
+    while True:
+        time.sleep(15)
+        path, t0 = _current
+        if path and path != warned and time.time() - t0 > SLOW:
+            warned = path
+            mk.log(f'  worker {os.getpid()}: {time.time() - t0:.0f}s on {path}')
+            faulthandler.dump_traceback(all_threads=True)
+
+
+def _progress(what, path=None):
+    """mkroot-full.py logs only at file 0, 20000, ... and only when that file is a Mach-O: say something per worker,
+    and name any file that takes more than SLOW seconds (ios18-root run 43755727940 went silent for hours)."""
+    global _watchdog
+    import time
+    if _watchdog is None:
+        import threading
+        _watchdog = threading.Thread(target=_watch, daemon=True)
+        _watchdog.start()
     _seen[what] += 1
+    if path:
+        _current[:] = [path, time.time()]
     if what == 'files' and _seen['files'] % 5000 == 0:
         mk.log(f'  worker {os.getpid()}: {_seen["files"]} files, {_seen["rewritten"]} Mach-Os rewritten')
 
 
 def macho_worker(path):
     """mkroot-full.py's macho_worker with v80strip between pacstrip and the re-sign."""
-    _progress('files')
+    _progress('files', path)
     try:
         with open(path, 'rb') as f:
             if f.read(4) not in mk.MAGICS:
