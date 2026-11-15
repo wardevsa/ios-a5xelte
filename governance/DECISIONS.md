@@ -78,6 +78,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0071 | APPROVED | operation | 2026-11-15 | Delegación acotada durante la ausencia del Director: trabajo autónomo verde (leer, analizar, escribir herramientas y documentos, construir imágenes candidatas, commits locales); las acciones rojas siguen necesitando su firma con SHA-256 | ingeniero | director | — | Mensaje del Director (PioXI), 2026-11-15: 'lo hago luego, me voy a comer, ve planeando cosas y haciendo cosas, tienes mi autorización para leer escribir, modificar, etc'. El texto no nombra imágenes, paquetes ni SHA-256: el ingeniero lo estrecha a lo que la política ya considera verde. |
 | D-0072 | APPROVED | operation | 2026-11-15 | Autorización roja: push de herolte-drop-v2 al remoto mio y CI de kernel con los parches 0356 (herohalt), 0357 (límite de notas HFS) y 0358 (menos sondas) (commit 7f79275) | ingeniero | director | publish | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo hacer push de la rama herolte-drop-v2 al remoto mio y ejecutar el CI de kernel con los parches 0356, 0357 y 0358 (commit 7f79275). Firmado PioXI.' |
 | D-0073 | APPROVED | operation | 2026-11-15 | Autorización roja: push de herolte-drop-v2 al remoto mio y CI de kernel con 0356 (corregido), 0357 y 0358 (commit 37e89b1) | ingeniero | director | publish | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo hacer push de la rama herolte-drop-v2 al remoto mio y ejecutar el CI de kernel con los parches 0356 (corregido), 0357 y 0358 (commit 37e89b1). Firmado PioXI.' |
+| D-0074 | APPROVED | operation | 2026-11-15 | Autorización roja: escribir min34 (herohalt=1, kernel con 0356/0357/0358) en BOOT | ingeniero | director | device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-15: 'Autorizo escribir en BOOT la imagen xnu-boot-v2-s7-min34-20261115.img (línea de min33 sin herogpu=1 y con herohalt=1, kernel con los parches 0356, 0357 y 0358). SHA-256 8809bae538a77098f84e4888d69505970d4167f5d69a86d3f12792c82038a1ce. Solo BOOT. Firmado PioXI.' |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
 - **Estado:** APPROVED (director, 2026-11-13)
@@ -514,4 +515,10 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Razón:** El run 43722829199 (D-0072) falló al compilar por kPERestartCPU en herolte_gpu.c; corregido en 37e89b1.
 - **Consecuencias:** ALCANCE EXACTO: git push de herolte-drop-v2 SOLO a mio, nunca a origin; lanzar el workflow xnu y descargar artefactos. 0356 solo actúa con herohalt=N y fuera de pánico; 0357 y 0358 solo reducen logs. NO autoriza escribir en el teléfono: min34 necesitará su firma aparte.
 - **Cómo se revierte:** Borrar la rama remota o el run; lo publicado puede haberse copiado.
+
+## D-0074 — Autorización roja: escribir min34 (herohalt=1, kernel con 0356/0357/0358) en BOOT
+- **Estado:** APPROVED (director, 2026-11-15)
+- **Razón:** E-0244: el apagado desde iOS no apaga el teléfono; 0356 lo reinicia en recovery con herohalt=1; 0357 y 0358 recortan logs (E-0245, E-0246).
+- **Consecuencias:** ALCANCE EXACTO: una escritura de BOOT con xnu-boot-v2-s7-min34-20261115.img (SHA-256 8809bae538a77098f84e4888d69505970d4167f5d69a86d3f12792c82038a1ce). Autoriza además leer el log persistente desde TWRP, solo lectura. Riesgo declarado: SWRESET con INFORM2/3 de recovery al apagar; no toca EFS ni particiones. NO autoriza otras imágenes, otros paquetes, USERDATA, EFS, RECOVERY ni bootloaders.
+- **Cómo se revierte:** Restaurar BOOT con min33 (E-0241); cada escritura exige firma.
 
