@@ -2709,3 +2709,18 @@ sha256 = "e3950c9962333e3f8aa85fc519fa26eb721a44efa138a544f356474c2390b944"
 size = 1629
 immutable = true
 note = "Hito: primera vez que XNU monta la raíz iOS en este S7 y ejecuta /sbin/launchd (PID 1). El proceso muere por CS_KILLED: la firma de código de launchd/dyld/caché no pasa la comprobación de este kernel. El upstream, en su primer arranque de iOS (HEROLTE_PROGRESS.md), añadía unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 (y la caché de dyld 'de 16 KiB' era rechazada por las páginas VM de 4 KiB, docs/a5xelte-bringup.md). Transcripción por IA de fotos no archivadas."
+
+[[evidence]]
+id = "E-0185"
+title = "Imagen preparada (kernel 0351): xnu-boot-v2-s7-min18-20261115 = min17 + unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 (los argumentos del primer arranque de iOS del upstream); 39 PASS constructor y 49 PASS independiente, 0 FAIL (NO escrita; requiere decisión del Director)"
+kind = "image"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run2-min18/xnu-boot-v2-s7-min18-20261115.img"
+location = "host"
+created = "2026-11-15"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "cd8be9c5aa91a29debeab847ebed7063923d0b8ce1737b194df6892ea45bd85e"
+size = 18620432
+immutable = true
+note = "Mismo kernel bb042852b3a7e25587ddffe2dabee7f0a54aabda1d3ed50aa7712369b6ea8cf7 (E-0174), ADT y cargador que min17; la línea difiere SOLO en los tres argumentos añadidos (diff). Objetivo: evitar el CS_KILLED de launchd (E-0184) con los argumentos que usó el upstream en HEROLTE_PROGRESS.md; no se sabe si basta (la caché de dyld y las firmas son el siguiente obstáculo posible)."
