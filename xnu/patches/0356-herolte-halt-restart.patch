@@ -30,7 +30,7 @@ min33b (E-0244): the shutdown from SpringBoard goes through launchd teardown, sy
 +	if (!pmu) {
 +		return;
 +	}
-+	boolean_t recovery = mode >= 2 || type != kPERestartCPU;
++	boolean_t recovery = mode >= 2 || type != 1;     /* 1 = kPERestartCPU (IOKit/IOPlatformExpert.h; not visible from C here) */
 +	printf("HEROLTE: herohalt=%u: %s in 12 s (PS_HOLD_CONTROL %#x)\n", mode, recovery ? "restart into recovery" : "restart",
 +	    *(volatile uint32_t *)(pmu + 0x330c));
 +	hg_msleep(12000);
