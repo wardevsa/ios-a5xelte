@@ -522,3 +522,15 @@ actions = ["privileged-or-mount", "heavy-compile", "local-commit"]
 evidence = ["E-0179"]
 acceptance = "Imagen con tamaño ≤ 23 431 790 592 B, firma HX en 1024, fsck -n limpio, SHA-256 registrado como evidencia; el tuning ejecutado sobre el montaje real sin errores."
 resume = "docs/S7GE_IOS_ROOT_PLAN.md F0-F1. sudo lo teclea el Director (sudo pide contraseña en este PC)."
+
+[[task]]
+id = "T-0046"
+title = "Compilar en el CI el kernel con 0352 (heroring=0): push de herolte-drop-v2 a mio y workflow xnu (D-0053)"
+status = "ready"
+priority = 8
+owner = "ingeniero"
+depends_on = []
+actions = ["publish", "local-commit"]
+authorization_ref = "D-0053"
+acceptance = "Run xnu en verde sobre el commit publicado; parche 0352 aplicado (no 'Skipping'); kernel descargado con su SHA-256 registrado como evidencia."
+resume = "Lanzar `gh workflow run xnu -R darkcloud9998/ios-a5xelte --ref herolte-drop-v2`; comprobar con ci_check.py por nombre completo; después construir min21 (min20 + heroring=0 sweetfb_noconsole=1) y pedir firma de BOOT."
