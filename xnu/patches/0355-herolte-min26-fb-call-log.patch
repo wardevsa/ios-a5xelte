@@ -14,7 +14,7 @@ min25 (E-0212, E-0213): backboardd and SpringBoard are idle in their run loops, 
 +    io_user_reference_t refCon)
  {
  	mach_port_t old;
-+	IOLog("FBCALL registerNotificationPort type %u refcon 0x%llx port 0x%x\n", (unsigned)type, (unsigned long long)refCon, (unsigned)port);
++	IOLog("FBCALL registerNotificationPort type %u refcon 0x%llx port 0x%llx\n", (unsigned)type, (unsigned long long)refCon, (unsigned long long)(uintptr_t)port);
  	IOLockLock(fFB->fLock);
  	old = fPort;
  	fPort = port;
