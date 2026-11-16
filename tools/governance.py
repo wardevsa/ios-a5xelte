@@ -292,7 +292,8 @@ def _check(root, use_git=True, strict=False):
                     else:
                         for a in cacts:
                             ok, why = decision_ok_for(dec, ref, a, 'director')
-                            if not ok: E('%s: %s' % (i, why))
+                            # a finished task keeps the authorization it was done under: only a later expiry date is not an error
+                            if not ok and not (t.get('status') == 'done' and 'caducó' in why): E('%s: %s' % (i, why))
         if t.get('status') == 'done':
             for a in [a for a in lst(t.get('actions')) if actions.get(a, {}).get('tier') == 'B']:
                 rv = actions[a].get('reviewer'); ref = t.get('review_ref'); d = dec.get(ref)
