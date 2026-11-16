@@ -1,0 +1,107 @@
+9170: HEROLTE writes the persistent log from the panic path (kPEPanicDiagnosticsDone / restart), so an early kernel panic still leaves its log.
+
+diff --git a/bsd/dev/herolte_ufs.c b/bsd/dev/herolte_ufs.c
+index c80d443..8991aab 100644
+--- a/bsd/dev/herolte_ufs.c
++++ b/bsd/dev/herolte_ufs.c
+@@ -635,6 +635,55 @@ struct herolte_log_header {
+ };
+ 
+ static int herolte_log_chan;
++static uint64_t herolte_log_first;      /* block 0 of the log area once the thread runs, else 0 */
++static uint64_t herolte_log_seq;
++
++/*
++ * 9170: write the whole console ring and its header from the panic path (SweetPlatformExpert::haltRestart,
++ * kPEPanicDiagnosticsDone), so a kernel panic in the first 10 s after the root mounts still leaves its log. iOS 18
++ * BOOT 18k11 stopped before the first flush and left nothing. Interrupts are off here: ufs_scsi() polls. If the log
++ * thread held the lock (another CPU stopped mid-command), nothing is written.
++ */
++void herolte_log_flush_panic(void);
++
++void
++herolte_log_flush_panic(void)
++{
++	static int done;
++	if (herolte_log_first == 0 || done) {
++		return;
++	}
++	done = 1;
++	if (!lck_mtx_try_lock(&herolte_ufs_lock)) {
++		return;
++	}
++	const char *ring;
++	uint32_t rsize;
++	uint64_t total;
++	a5xelte_log_snapshot(&ring, &rsize, &total);
++	uint8_t *bounce = (uint8_t *)(su.dma + DMA_BOUNCE);
++	uint32_t nblk = rsize / UFS_BLOCK;
++	int error = 0;
++	for (uint32_t blk = 0; blk < nblk && !error;) {
++		uint32_t n = MIN((uint32_t)(BOUNCE_SIZE / UFS_BLOCK), nblk - blk);
++		memcpy(bounce, ring + (size_t)blk * UFS_BLOCK, (size_t)n * UFS_BLOCK);
++		error = ufs_write_blocks(herolte_log_first + 1 + blk, n);
++		blk += n;
++	}
++	if (!error) {
++		struct herolte_log_header h = {
++			.magic = { 'H', 'E', 'R', 'O', 'L', 'O', 'G', '1' },
++			.version = 1, .size = rsize, .total = total, .seq = herolte_log_seq + 1,
++		};
++		bzero(bounce, UFS_BLOCK);
++		memcpy(bounce, &h, sizeof(h));
++		error = ufs_write_blocks(herolte_log_first, 1);
++	}
++	if (!error) {
++		(void)ufs_sync_cache();
++	}
++	/* the lock stays held: the system is going down, and unlocking could wake threads */
++}
+ 
+ static void
+ herolte_log_thread(__unused void *arg, __unused wait_result_t wr)
+@@ -646,6 +695,7 @@ herolte_log_thread(__unused void *arg, __unused wait_result_t wr)
+ 	a5xelte_log_snapshot(&ring, &rsize, &total);
+ 	uint64_t first = su.first_block + su.nblocks - (1 + rsize / UFS_BLOCK);
+ 	uint8_t *bounce = (uint8_t *)(su.dma + DMA_BOUNCE);
++	herolte_log_first = first;
+ 	printf("HEROLTE LOG: %u KiB ring at partition block %llu\n",
+ 	    rsize >> 10, first - su.first_block);
+ 	for (;;) {
+@@ -687,6 +737,9 @@ herolte_log_thread(__unused void *arg, __unused wait_result_t wr)
+ 		if (!error) {
+ 			error = ufs_sync_cache();
+ 		}
++		if (!error) {
++			herolte_log_seq = seq;
++		}
+ 		lck_mtx_unlock(&herolte_ufs_lock);
+ 		if (error) {
+ 			printf("HEROLTE LOG: write failed (%d), stopping\n", error);
+diff --git a/iokit/Kernel/arm/SweetPlatformExpert.cpp b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+index 4f54549..4556eca 100644
+--- a/iokit/Kernel/arm/SweetPlatformExpert.cpp
++++ b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+@@ -12,6 +12,9 @@
+ 
+ extern "C" int sweet_reboot_restart(int panic_restart);
+ extern "C" void sweet_reboot_note_panic(void);
++#if defined(HEROLTE)
++extern "C" void herolte_log_flush_panic(void);         /* bsd/dev/herolte_ufs.c (9170) */
++#endif
+ #include "../../../bsd/dev/sweet_board.h"
+ #include "../../../bsd/dev/sweet_spmi.h"
+ 
+@@ -62,6 +65,12 @@ int
+ SweetPlatformExpert::haltRestart(unsigned int type)
+ {
+ 	/* bsd/dev/sweet_reboot.c (PM8998 PS_HOLD) is the Poco F1's: A5XELTE/HEROLTE keep the stock path. */
++#if defined(HEROLTE)
++	/* 9170: the persistent log (bsd/dev/herolte_ufs.c) once the panic text is printed, or before the final restart */
++	if (type == kPEPanicDiagnosticsDone || type == kPEPanicRestartCPU || type == kPEPanicRestartCPUNoCallouts) {
++		herolte_log_flush_panic();
++	}
++#endif
+ #if !defined(A5XELTE)
+ 	switch (type) {
+ 	case kPEPanicBegin:
