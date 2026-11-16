@@ -4014,3 +4014,33 @@ sha256 = "24e2244935987513dcaac96008a2324a6de97c91f486ca6c6b1f2b9398b8bb50"
 size = 724
 immutable = true
 note = "D-0082; hash registrado antes en E-0269. Primer intento, tras la escritura de la zona (E-0271)."
+
+[[evidence]]
+id = "E-0273"
+title = "Log del segundo arranque de min37 (actualización grande n.º 1; 240819 B, 360 s): TOPMEM funciona; el kernel acepta COUNTRY_CODE y el selector 383; a5fb_hz=30 efectivo; los 4 procesos bloqueados fallan al lanzarse (con bucles de relanzamiento de launchd); wallpaper.off borrado y wallpaper.png instalado (comprobado en el volumen) pero el fondo sigue negro; la app HeroReddit aparece en el 2.º arranque; memoria libre mínima 366 MB (antes 59)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min37b-herolog.txt"
+location = "host"
+created = "2026-11-15"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "741251b41c35cf5f1b7080fa7e6c6244497c598ef50340587ab6e63eb0e9d27e"
+size = 240819
+immutable = true
+note = "El log del 1.er arranque se perdió: el Director hizo los dos arranques seguidos y el 2.º sobrescribió el anillo (a partir de ahora: sacar el log tras CADA arranque). Medido: 'sets 51 … (accepted, nothing to do)' x4 y 'sets 383 … accepted' x12; 'requested 30 Hz, effective 30 Hz'; SPAWN FAILED identityservicesd x38, parsecd x27, driverkitd x16; launchd 82 salidas y xpcproxy 81 con 0x4e00 (relanzamientos de launchd sobre procesos bloqueados); TOPMEM: SpringBoard 46 MB, backboardd 21, kbd 14, Spotlight 14, PosterBoard 14, locationd 13, chronod 12, HeroReddit 11; SoC máx. 53 C (el Director nota el teléfono caliente al tacto y 65-75 C en TWRP tras uso intenso); fps medio 7,4 (arranque con reconstrucción de LaunchServices: no representativo); ls del volumen: sin wallpaper.off ni files.remove, con wallpaper.png (272735 B) y apps/. Sin líneas 'herosb:' (SpringBoard no puede escribir en el canal de log de HeroGPU: 'SpringBoard privilege 1007 denied'): no se sabe si herosb actuó. Observación del Director: 'no hay fondo de pantalla, sigue siendo negro; la app apareció; Reddit respondió 403; el 2.º arranque tardó 3-4 minutos'. El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0274"
+title = "Paquete DROP 5 preparado (generación 5, 20 entradas, 16801792 B): los 16 fondos de pantalla oficiales de iOS de la clase 375w-812h convertidos de HEIC a PNG (walls/1..16 + walls/list, 14,5 MiB), wallpaper.png con el fondo Clownfish original en 750x1334, y disabled.list con 5 etiquetas más; el empaquetador lo acepta (dry-run); NO escrito en el teléfono"
+kind = "document"
+path = "/home/pioxi/HackiOS/builds/device-day/drop-mega-2/manifest.txt"
+location = "host"
+created = "2026-11-16"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "12d410a349c3911b8d4b15c63c226a83d2a4519f2f39ce2a0c68ba452aef4028"
+size = 1581
+immutable = true
+note = "Orden exacta en /home/pioxi/HackiOS/builds/device-day/drop-mega-2/command.txt (SHA-256 11ba1cbfc657d8838a823708045d516859968fe0a3f94c5b59f5c1a70da0865b). Mecanismo de upstream (hero-run install_wallpaper_pictures): 'los fondos de serie son HEIC y sin decodificador HEVC ImageIO los dibuja vacíos; walls/list con líneas N /Library/Wallpaper/... y walls/N pone el PNG sobre ese fichero con su nombre'. Origen: os.dmg del IPSW (7z) y conversión con pillow-heif en un venv privado; imágenes de Apple en el disco de trabajo, NUNCA en git. Solo userland: no requiere kernel, CI ni BOOT nuevos (BOOT sigue siendo min37). disabled.list pasa de 20 a 25 etiquetas (identityservicesd, parsecd, photoanalysisd, wifip2pd, driverkitd) para que launchd no relance los procesos que heronoexec rechaza."
