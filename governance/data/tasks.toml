@@ -729,6 +729,6 @@ priority = 8
 owner = "ingeniero"
 depends_on = []
 actions = ["publish", "device-write-boot", "device-write-userdata", "device-read", "read-analysis", "docs-write", "pc-implementation", "local-commit"]
-authorization_ref = "D-0085"
+authorization_ref = "D-0086"
 acceptance = "Cambio de serie firmado por el Director, CI en verde, imagen min40 verificada, paquete 6 verificado y firmas de BOOT y zona DROP con hash; prueba con log por arranque."
 resume = "Esperar la firma del cambio de serie (mover 0339-0341 y 0343 a patches-pending) y del CI; luego construir min40 y el paquete 6."
