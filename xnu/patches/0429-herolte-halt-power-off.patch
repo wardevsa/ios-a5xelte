@@ -1,0 +1,30 @@
+herolte: herohalt=3, a halt really powers the phone off (0429)
+
+E-0248: PS_HOLD_CONTROL (PMU+0x330c) reads 0x5300 here, bit 8 high. herohalt=3 clears it 12 s after halt (as Linux's exynos power-off) and, if the phone is still running 3 s later (a charger can start it again), falls through to the restart into recovery, so it is never left spinning. herohalt=1 (the default) is unchanged.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3783,10 +3783,20 @@
+ 	if (!pmu) {
+ 		return;
+ 	}
+-	boolean_t recovery = mode >= 2 || type != 1;     /* 1 = kPERestartCPU (IOKit/IOPlatformExpert.h; not visible from C here) */
+-	printf("HEROLTE: herohalt=%u: %s in 12 s (PS_HOLD_CONTROL %#x)\n", mode, recovery ? "restart into recovery" : "restart",
+-	    *(volatile uint32_t *)(pmu + 0x330c));
++	boolean_t off = mode == 3 && type != 1;          /* 0429: herohalt=3, a halt really powers off */
++	boolean_t recovery = (mode >= 2 && !off) || (type != 1 && !off);     /* 1 = kPERestartCPU (IOKit/IOPlatformExpert.h; not visible from C here) */
++	printf("HEROLTE: herohalt=%u: %s in 12 s (PS_HOLD_CONTROL %#x)\n", mode,
++	    off ? "power off" : (recovery ? "restart into recovery" : "restart"), *(volatile uint32_t *)(pmu + 0x330c));
+ 	hg_msleep(12000);
++	if (off) {
++		/* 0429: PS_HOLD_CONTROL read 0x5300 here (E-0248): bit 8 is the data bit S-Boot leaves high; clearing it is what
++		 * Linux's exynos power-off does. With a charger the PMIC may start the phone again: after 3 s fall through to
++		 * the restart (into recovery) so that the phone is never left spinning. */
++		hg_wr(pmu, 0x330c, *(volatile uint32_t *)(pmu + 0x330c) & ~0x100u);
++		hg_msleep(3000);
++		printf("HEROLTE: herohalt=3: still running 3 s after PS_HOLD went low: restart into recovery\n");
++		recovery = TRUE;
++	}
+ 	if (recovery) {
+ 		hg_wr(pmu, 0x808, 0x12345678);          /* INFORM2 */
+ 		hg_wr(pmu, 0x80c, 0x12345674);          /* INFORM3: REBOOT_MODE_PREFIX | REBOOT_MODE_RECOVERY */
