@@ -184,7 +184,19 @@ def find_pads(cache, info):
         if hi - lo >= 64 and not any(s <= lo < e or s < hi <= e for s, e in pads):
             pads.append([lo, hi])
             print(f'  mapping tail {lo:#x}..{hi:#x} ({(hi - lo) >> 10} KiB) in {os.path.basename(p)}')
-    return sorted(pads)
+    # Several images can compute the same zero tail (the loop above does not check overlaps). Two list entries for one
+    # range handed the same bytes to two sites, and the second routine overwrote the first: in the 2026-11-16 root,
+    # libobjc's _selLock lock in map_images_nolock jumped into another site's unlock routine, and launchd died in
+    # os_unfair_lock_unowned_abort. Merge every overlap into one range before anything is placed.
+    merged = []
+    for s, e in sorted(pads):
+        if merged and s < merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], e)
+        else:
+            merged.append([s, e])
+    if len(merged) != len(pads):
+        print(f'  {len(pads) - len(merged)} overlapping pad entries merged')
+    return merged
 
 
 def fix_signature(buf, pages4k):
@@ -269,6 +281,7 @@ def main():
     print(f'sites needing a routine: {len(sites)} ' + str(dict(Counter(s[0] for s in sites))))
 
     starts = [p[0] for p in pads]
+    placed = []                                      # (site, routine address, routine words), checked after the loop
     for t, n, at, word, path in sites:
         gen = v.rcpc_routine if (v.is_ldapr(word) or v.is_rcpc_imm(word)) else v.lse_routine
         words, why = gen(word, at, at)               # size and feasibility only
@@ -305,6 +318,7 @@ def main():
             continue
         dst = pads[best][0]
         words, why = gen(word, at, dst)
+        placed.append((at, dst, words))
         pads[best][0] += need
         starts[best] = pads[best][0]
         if pads[best][1] - pads[best][0] < 48:       # full: out of the search
@@ -322,6 +336,24 @@ def main():
             changed.setdefault(ws[0], set()).add(ws[1] >> 12)
     print('placement:', dict(sorted(per_tier.items())))
     print('counts:', dict(sorted(counts.items())))
+    # every routine must still hold the words generated for its own site, and no two routines may overlap
+    spans = sorted((dst, dst + 4 * len(words), at) for at, dst, words in placed)
+    clash = [(a[2], b[2]) for a, b in zip(spans, spans[1:]) if b[0] < a[1]]
+    if clash:
+        sys.exit(f'v80strip_cache: {len(clash)} routines overlap, first sites {clash[0][0]:#x} / {clash[0][1]:#x}')
+    if not a.scan:
+        bad = 0
+        for at, dst, words in placed:
+            wd, ws = cache.where(dst, 4 * len(words)), cache.where(at, 4)
+            got = list(struct.unpack_from(f'<{len(words)}I', cache.bufs[wd[0]], wd[1]))
+            branch = struct.unpack_from('<I', cache.bufs[ws[0]], ws[1])[0]
+            if got != list(words) or branch != v.b(at, dst):
+                bad += 1
+                if bad <= 5:
+                    print(f'  site {at:#x} -> routine {dst:#x}: routine or branch changed after placement')
+        if bad:
+            sys.exit(f'v80strip_cache: {bad} of {len(placed)} placed routines do not match their site')
+        print(f'verified: {len(placed)} routines intact, each site branches to its own')
     if left_hot:
         print('tier 0 sites left to the kernel:', dict(left_hot.most_common(30)))
     if not a.scan:
