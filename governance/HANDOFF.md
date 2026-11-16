@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0123 — paquete DROP 5 ESCRITO (E-0275); el BOOT del teléfono es min38d (hecha fuera de esta sesión): lenta; propongo volver a min37 (2026-11-16)
+## Relevo vigente: H-0124 — min37 de nuevo en BOOT (D-0084, E-0277) con el paquete DROP 5 ya escrito; teléfono en TWRP, sin reiniciar (2026-11-16)
+- **Tarea en curso: T-0012.** BOOT = min37 (`7db96c99…520d`); zona DROP = paquete 5. El Director dice que lo hecho en otra sesión (min38*, min39*) "salió muy mal" y vuelve al método de trabajo por bloques con firma.
+- **Director:** UN arranque (`adb reboot`), mirar el fondo del pez payaso en bloqueo e inicio, la fluidez, y apagar desde iOS. **Ingeniero:** pull del log al volver (`min37c-herolog.txt`): `herolte-log-report.py`; 'hero-run:' (walls, install_wallpaper_pictures: 'put'), `SPAWN FAILED` (debería bajar con el disabled.list de 25), fps, TOPMEM.
+- **Siguiente ciclo grande (propuesto):** una compilación de kernel + un paquete DROP con varias cosas a la vez (audio, apagado real, medidas), más S7GE T-0037 y el plan de D-0015 en el PC.
+- Vuelta atrás: min36 / min34 guardadas.
+
+## Relevo anterior: H-0123 — paquete DROP 5 ESCRITO (E-0275); el BOOT del teléfono es min38d (hecha fuera de esta sesión): lenta; propongo volver a min37 (2026-11-16)
 - **Tarea en curso: T-0012.** Zona DROP: paquete 5 (fondos oficiales, disabled.list de 25 etiquetas). BOOT real = min38d (E-0276): línea de min37 + `herovgr=1` y kernel con VGR0 de upstream; el Director la nota MUY lenta y algo menos caliente. Hubo trabajo de otra sesión en el repo (fusión con upstream, renumeración 0335-0362 -> 0400-0427, min38*, min39 con paradas por haptics/MFC): no está registrado en gobierno.
 - **Siguiente (rojo, con hash):** BOOT min37 (`7db96c99…520d`, E-0269) para volver a la base buena medida; luego 1 arranque, log, fondo. Después revisar si los parches nuevos de upstream (0339-0343) y VGR0 merecen otra imagen.
 - Pendiente de gobierno: registrar/aclarar la fusión y renumeración (T-0054 pedía revisión de Jefatura antes de consolidar) y la procedencia de min38*/min39*.

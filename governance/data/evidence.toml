@@ -4074,3 +4074,18 @@ sha256 = "a81f7e2e1cce38b246cf1c2230e51d04b7c12d879dab8f454a7daedc8844fce3"
 size = 608
 immutable = true
 note = "Medido: el prefijo de 18653200 bytes de BOOT en el teléfono tiene el SHA-256 de min38d (coincide con la imagen). Variantes min38, min38a, min38b, min38c, min38d en ese directorio: 38 y 38a/b son líneas de otra familia (herodrop=0 heropower=0 y sin herocpu/herowifi…), min38c y min38d traen herovgr=1 (VGR0: escalado por hardware en vez de la Mali, parche 0338) y min38d = línea de min37 + herovgr=1 (607 caracteres). Observación del Director: 'min38d ralentiza bastante el teléfono, casi como los primeros arranques de iOS, y se calienta un poco menos extremo; tú decides si mantener o quitar como si nunca hubiera pasado'. Además, en el repositorio hay commits de otra sesión: fusión con los parches nuevos de upstream (VGR0 0335-0338, motor de vibración 0339, sonda MFC 0340, PWM 0341, suelo de brillo 0343), renumeración de mis parches 0335-0362 a 0400-0427 (commits e29a493 y 6fb22e7) y reconstrucciones de CI; el informe del Director menciona paradas del kernel con haptics/MFC (min39, min39b) y 'iOS 16.5' (no verificado: la raíz es 16.7.16). No he podido comprobar el contenido del kernel de min38d ni el motivo de la lentitud."
+
+[[evidence]]
+id = "E-0277"
+title = "BOOT del S7 escrito de nuevo con xnu-boot-v2-s7-min37-20261115.img (sustituye a min38d) y leído de vuelta (sha256 7db96c99…520d); EFS idéntico antes y después de esta escritura"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/flash-min37b-out.txt"
+location = "host"
+created = "2026-11-16"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "e6d12e1cc08c44b33f7b16867249b7a3c6420d5544cf43062a8fabce9399b9b4"
+size = 724
+immutable = true
+note = "D-0084; hash registrado antes en E-0269. Primer intento. Con esto el BOOT vuelve a la base medida (min37) y el paquete DROP 5 (E-0275) se prueba con ella."
