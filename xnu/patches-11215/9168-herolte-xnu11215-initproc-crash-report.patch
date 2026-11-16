@@ -1,0 +1,23 @@
+9168: HEROLTE prints a dying launchd's crash report (sweet_crash_log, 0043) before the initproc panic path.
+
+diff --git a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
+index b081c36..f2c6a36 100644
+--- a/bsd/kern/kern_exit.c
++++ b/bsd/kern/kern_exit.c
+@@ -1863,6 +1863,16 @@ proc_handle_critical_exit(proc_t p, int rv)
+ 	 */
+ 	if (p == initproc) {
+ 		static int herolte_initproc_wait;
++		/*
++		 * 9168: proc_prepareexit() calls this before its own sweet_crash_log() (0043), so a dying launchd never
++		 * got its registers and backtrace printed (BOOT 18k8). Print them here, on the crashing thread.
++		 */
++		struct uthread *hut = get_bsdthread_info(current_thread());
++		if (p == current_proc() && hut != NULL) {
++			extern void sweet_crash_log(const char *, int, int, uint64_t, uint64_t);
++			sweet_crash_log(p->p_comm, proc_getpid(p), WTERMSIG(rv),
++			    ((uint64_t)hut->uu_exception << 32) | (uint32_t)hut->uu_code, hut->uu_subcode);
++		}
+ 		printf("HEROLTE: %s died; panicking in 25 s, after the persistent log is written\n", p->p_name);
+ 		(void)tsleep(&herolte_initproc_wait, PZERO, "herodie", 25 * hz);
+ 	}
