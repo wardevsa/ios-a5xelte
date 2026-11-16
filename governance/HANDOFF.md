@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0121 — actualización grande n.º 1 ESCRITA: paquete DROP 4 (E-0271) y min37 (E-0272); teléfono en TWRP, sin reiniciar (2026-11-15)
+## Relevo vigente: H-0122 — actualización grande n.º 1 medida (E-0273); paquete DROP 5 de userland (fondos oficiales + disabled.list) preparado, sin CI ni BOOT nuevos (2026-11-16)
+- **Tarea en curso: T-0012 / T-0056.** Funcionó: 0362, a5fb_hz=30, bloqueos, TOPMEM, wallpaper.off borrado, app instalada, memoria libre mín. 366 MB. No funcionó: el fondo sigue negro (herosb sin logs: sandbox); Reddit 403 (de la app). El 2.º arranque tardó 3-4 min por la reconstrucción de LaunchServices que provoca instalar una app.
+- **Siguiente (rojo, solo DROP, sin compilar):** paquete 5 (`drop-mega-2/command.txt`, SHA-256 `11ba1cbf…a0865b`; manifiesto `12d410a3…ef4028`): 16 fondos oficiales PNG por el mecanismo de upstream (walls/), wallpaper.png Clownfish, disabled.list +5. BOOT sigue siendo min37. Pull del log tras CADA arranque.
+- Pendiente de decisión del Director: sacar HeroReddit (apps.remove) o dejarla; medir fps estables en un 3.er arranque sin escribir nada.
+- Vuelta atrás: min36 por BOOT; fondos oficiales: no hace falta (son PNG con el mismo nombre; el original está en el IPSW).
+
+## Relevo anterior: H-0121 — actualización grande n.º 1 ESCRITA: paquete DROP 4 (E-0271) y min37 (E-0272); teléfono en TWRP, sin reiniciar (2026-11-15)
 - **Tarea en curso: T-0012 / T-0056.** BOOT = `xnu-boot-v2-s7-min37-20261115.img` (sha256 `7db96c99…520d`). Zona DROP con el paquete 4.
 - **Director:** DOS arranques: (1) `adb reboot`, 3-5 min con Wi-Fi, probar la app HeroReddit y mirar el fondo; apagar desde iOS (-> TWRP); (2) volver a arrancar (el fondo propio entra en el 2.º arranque), mirar fondo/fluidez, apagar. **Ingeniero:** pull del log tras CADA arranque (`min37a-herolog.txt`, `min37b-herolog.txt`): `herolte-log-report.py`; `grep -a 'TOPMEM\|files.remove\|herosb: picture\|accepted\|app HeroReddit\|SPAWN FAILED'`.
 - Vuelta atrás: min36 (E-0264); app: `apps.remove`; fondo: `wallpaper.off`.
