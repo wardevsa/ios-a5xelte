@@ -4044,3 +4044,33 @@ sha256 = "12d410a349c3911b8d4b15c63c226a83d2a4519f2f39ce2a0c68ba452aef4028"
 size = 1581
 immutable = true
 note = "Orden exacta en /home/pioxi/HackiOS/builds/device-day/drop-mega-2/command.txt (SHA-256 11ba1cbfc657d8838a823708045d516859968fe0a3f94c5b59f5c1a70da0865b). Mecanismo de upstream (hero-run install_wallpaper_pictures): 'los fondos de serie son HEIC y sin decodificador HEVC ImageIO los dibuja vacíos; walls/list con líneas N /Library/Wallpaper/... y walls/N pone el PNG sobre ese fichero con su nombre'. Origen: os.dmg del IPSW (7z) y conversión con pillow-heif en un venv privado; imágenes de Apple en el disco de trabajo, NUNCA en git. Solo userland: no requiere kernel, CI ni BOOT nuevos (BOOT sigue siendo min37). disabled.list pasa de 20 a 25 etiquetas (identityservicesd, parsecd, photoanalysisd, wifip2pd, driverkitd) para que launchd no relance los procesos que heronoexec rechaza."
+
+[[evidence]]
+id = "E-0275"
+title = "Zona DROP de USERDATA escrita con el paquete 5 (generación 5: 16 fondos oficiales PNG por walls/, fondo Clownfish y disabled.list de 25 etiquetas; 16801792 B) en el bloque 5686859 (byte 23293374464), verificado ('-> verified'); USERDATA no estaba montado"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/drop-mega-2-out.txt"
+location = "host"
+created = "2026-11-16"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "55ea166fa2e494c5a72b9fbdc5c63b72d65732393f3b2a1800b868887d621da6"
+size = 1089
+immutable = true
+note = "D-0083; orden de E-0274 (command.txt, SHA-256 11ba1cbf…5e). Identificador de paquete 13428352814740569452. Solo la zona DROP; el volumen de iOS no se tocó."
+
+[[evidence]]
+id = "E-0276"
+title = "Estado real del BOOT del S7 al 16-nov por lectura de solo lectura: contiene min38d (SHA-256 7ebb18e3…7b43; 18653200 B), imagen hecha FUERA de esta sesión (carpeta ~/HackiOS/builds/device-day/min38/) con la línea de min37 más herovgr=1 y un kernel con los parches VGR0 de upstream (0335-0338); sin decisiones ni evidencias de gobierno de sus escrituras"
+kind = "result"
+path = "/home/pioxi/HackiOS/builds/device-day/min38/xnu-boot-v2-s7-min38d-20261115.cmdline.txt"
+location = "host"
+created = "2026-11-16"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "a81f7e2e1cce38b246cf1c2230e51d04b7c12d879dab8f454a7daedc8844fce3"
+size = 608
+immutable = true
+note = "Medido: el prefijo de 18653200 bytes de BOOT en el teléfono tiene el SHA-256 de min38d (coincide con la imagen). Variantes min38, min38a, min38b, min38c, min38d en ese directorio: 38 y 38a/b son líneas de otra familia (herodrop=0 heropower=0 y sin herocpu/herowifi…), min38c y min38d traen herovgr=1 (VGR0: escalado por hardware en vez de la Mali, parche 0338) y min38d = línea de min37 + herovgr=1 (607 caracteres). Observación del Director: 'min38d ralentiza bastante el teléfono, casi como los primeros arranques de iOS, y se calienta un poco menos extremo; tú decides si mantener o quitar como si nunca hubiera pasado'. Además, en el repositorio hay commits de otra sesión: fusión con los parches nuevos de upstream (VGR0 0335-0338, motor de vibración 0339, sonda MFC 0340, PWM 0341, suelo de brillo 0343), renumeración de mis parches 0335-0362 a 0400-0427 (commits e29a493 y 6fb22e7) y reconstrucciones de CI; el informe del Director menciona paradas del kernel con haptics/MFC (min39, min39b) y 'iOS 16.5' (no verificado: la raíz es 16.7.16). No he podido comprobar el contenido del kernel de min38d ni el motivo de la lentitud."

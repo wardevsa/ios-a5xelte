@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0122 — actualización grande n.º 1 medida (E-0273); paquete DROP 5 de userland (fondos oficiales + disabled.list) preparado, sin CI ni BOOT nuevos (2026-11-16)
+## Relevo vigente: H-0123 — paquete DROP 5 ESCRITO (E-0275); el BOOT del teléfono es min38d (hecha fuera de esta sesión): lenta; propongo volver a min37 (2026-11-16)
+- **Tarea en curso: T-0012.** Zona DROP: paquete 5 (fondos oficiales, disabled.list de 25 etiquetas). BOOT real = min38d (E-0276): línea de min37 + `herovgr=1` y kernel con VGR0 de upstream; el Director la nota MUY lenta y algo menos caliente. Hubo trabajo de otra sesión en el repo (fusión con upstream, renumeración 0335-0362 -> 0400-0427, min38*, min39 con paradas por haptics/MFC): no está registrado en gobierno.
+- **Siguiente (rojo, con hash):** BOOT min37 (`7db96c99…520d`, E-0269) para volver a la base buena medida; luego 1 arranque, log, fondo. Después revisar si los parches nuevos de upstream (0339-0343) y VGR0 merecen otra imagen.
+- Pendiente de gobierno: registrar/aclarar la fusión y renumeración (T-0054 pedía revisión de Jefatura antes de consolidar) y la procedencia de min38*/min39*.
+
+## Relevo anterior: H-0122 — actualización grande n.º 1 medida (E-0273); paquete DROP 5 de userland (fondos oficiales + disabled.list) preparado, sin CI ni BOOT nuevos (2026-11-16)
 - **Tarea en curso: T-0012 / T-0056.** Funcionó: 0362, a5fb_hz=30, bloqueos, TOPMEM, wallpaper.off borrado, app instalada, memoria libre mín. 366 MB. No funcionó: el fondo sigue negro (herosb sin logs: sandbox); Reddit 403 (de la app). El 2.º arranque tardó 3-4 min por la reconstrucción de LaunchServices que provoca instalar una app.
 - **Siguiente (rojo, solo DROP, sin compilar):** paquete 5 (`drop-mega-2/command.txt`, SHA-256 `11ba1cbf…a0865b`; manifiesto `12d410a3…ef4028`): 16 fondos oficiales PNG por el mecanismo de upstream (walls/), wallpaper.png Clownfish, disabled.list +5. BOOT sigue siendo min37. Pull del log tras CADA arranque.
 - Pendiente de decisión del Director: sacar HeroReddit (apps.remove) o dejarla; medir fps estables en un 3.er arranque sin escribir nada.
