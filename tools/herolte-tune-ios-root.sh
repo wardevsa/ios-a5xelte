@@ -25,14 +25,37 @@ prefs="$root/private/var/mobile/Library/Preferences"
 install -d -o 501 -g 501 -m 0755 "$root/private/var/mobile" \
     "$root/private/var/mobile/Library" "$prefs"
 
-plist() {  # plist FILE KEY TYPE VALUE ...  (creates or updates entries)
+plutil_py() {  # plutil_py XML(0|1) FILE KEY TYPE VALUE ...: plutil -replace for Linux (Renegade's Linux backend)
+    /usr/bin/env python3 - "$@" <<'EOF'
+import json, os, plistlib, sys
+xml, path, args = sys.argv[1] == '1', sys.argv[2], sys.argv[3:]
+data, fmt = {}, plistlib.FMT_XML
+if os.path.exists(path) and os.path.getsize(path):
+    raw = open(path, 'rb').read()
+    fmt = plistlib.FMT_BINARY if raw.startswith(b'bplist') else plistlib.FMT_XML
+    data = plistlib.loads(raw)
+conv = {'string': str, 'integer': int, 'json': json.loads,
+        'bool': lambda v: v.strip().upper() in ('YES', 'TRUE', '1')}
+for i in range(0, len(args), 3):
+    key, typ, val = args[i:i + 3]
+    data[key] = conv[typ](val)
+with open(path, 'wb') as f:
+    plistlib.dump(data, f, fmt=plistlib.FMT_XML if xml else fmt)
+EOF
+}
+
+plist() {  # plist FILE KEY TYPE VALUE ...  (creates or updates entries, XML)
     local file=$1; shift
-    [[ -f $file ]] || /usr/bin/plutil -create xml1 "$file"
-    while (($#)); do
-        /usr/bin/plutil -replace "$1" "-$2" "$3" "$file"
-        shift 3
-    done
-    /usr/bin/plutil -convert xml1 "$file"
+    if [[ -x /usr/bin/plutil ]]; then
+        [[ -f $file ]] || /usr/bin/plutil -create xml1 "$file"
+        while (($#)); do
+            /usr/bin/plutil -replace "$1" "-$2" "$3" "$file"
+            shift 3
+        done
+        /usr/bin/plutil -convert xml1 "$file"
+    else
+        plutil_py 1 "$file" "$@"
+    fi
     chown 501:501 "$file"
     chmod 0600 "$file"
 }
@@ -41,7 +64,11 @@ plist() {  # plist FILE KEY TYPE VALUE ...  (creates or updates entries)
 # (1440x2560 at @3x); the IPSW has none. The 375w-812h ones are given it.
 find "$root/Library/Wallpaper/Collections" -path '*375w-812h*' -name Wallpaper.plist -print0 |
 while IFS= read -r -d '' wallpaper; do
-    /usr/bin/plutil -replace logicalScreenClass -string '480w-853h@3x~iphone' "$wallpaper"
+    if [[ -x /usr/bin/plutil ]]; then
+        /usr/bin/plutil -replace logicalScreenClass -string '480w-853h@3x~iphone' "$wallpaper"
+    else
+        plutil_py 0 "$wallpaper" logicalScreenClass string '480w-853h@3x~iphone'
+    fi
 done
 
 plist "$prefs/com.apple.migration.plist" LastSystemVersion string "$build"
@@ -62,7 +89,7 @@ plist "$prefs/com.apple.managedconfiguration.notbackedup.plist" \
     LockdownActivationIndicatesCloudConfigurationAvailable bool NO
 
 launchd="$root/System/Library/xpc/launchd.plist"
-/usr/bin/python3 - "$launchd" <<'EOF'
+/usr/bin/env python3 - "$launchd" <<'EOF'
 import plistlib, sys
 path = sys.argv[1]
 with open(path, 'rb') as f:
