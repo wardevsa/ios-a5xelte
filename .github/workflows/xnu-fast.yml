@@ -108,12 +108,14 @@ jobs:
           ccache -z
           # build.sh and xnu call the absolute path from `xcrun -find clang`,
           # so replace that binary by a shim instead of touching CC.
-          for tool in clang clang++; do
-            p=$(xcrun -find $tool)
-            sudo mv "$p" "$p.real"
-            printf '#!/bin/sh\nexec %s "%s.real" "$@"\n' "$(command -v ccache)" "$p" | sudo tee "$p" >/dev/null
-            sudo chmod +x "$p"
-          done
+          # clang++ is a symlink to clang: keep a single real binary and give
+          # the C++ shim the g++ driver mode explicitly.
+          c=$(xcrun -find clang); cxx=$(xcrun -find clang++)
+          sudo mv "$c" "$c.real"
+          sudo rm -f "$cxx"
+          printf '#!/bin/sh\nexec %s "%s.real" "$@"\n' "$(command -v ccache)" "$c" | sudo tee "$c" >/dev/null
+          printf '#!/bin/sh\nexec %s "%s.real" --driver-mode=g++ "$@"\n' "$(command -v ccache)" "$c" | sudo tee "$cxx" >/dev/null
+          sudo chmod +x "$c" "$cxx"
           xcrun -find clang
 
       - name: Build
