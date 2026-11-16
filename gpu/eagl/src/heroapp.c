@@ -240,6 +240,35 @@ heic_census_thread(void *unused)
    return NULL;
 }
 
+/*
+ * mediaserverd crashed 55-69 times a boot (SM-G930W8, sig 11, pc 0): at its start CMCapture warms up the Portrait filter,
+ * +[BWCoreImageFilterRenderer _prewarmCoreImagePortraitFilterV1] -> prepareForRenderingWithParameters: -> context:err: ->
+ * +[CIContext contextWithOptions:] -> internalContextWithEAGLContext:options:, which builds CI::GLContext over an
+ * EAGLContext that cannot exist here (see no_context) and jumps to address 0, even with the software renderer asked for
+ * above; launchd starts it again, over and over. In mediaserverd that call is refused (nil), as CoreImage does when it
+ * cannot make a context: context:err: has its error path. The drop zone's mediaci.on leaves CoreImage as it was.
+ */
+static id
+no_eagl_ci_context(id self, SEL command, id eagl, id options)
+{
+   (void)self;
+   (void)command;
+   herodrm_log("mediaserverd: CIContext over EAGLContext %p refused (options %s)", (void *)eagl, text_of(options));
+   return nil;
+}
+
+static void
+refuse_eagl_ci_context(void)
+{
+   if (access("/private/var/herolte/mediaci.on", F_OK) == 0)
+      return;
+   Method eagl_ci = class_getClassMethod(objc_getClass("CIContext"),
+                                         sel_registerName("internalContextWithEAGLContext:options:"));
+   if (eagl_ci != NULL)
+      method_setImplementation(eagl_ci, (IMP)no_eagl_ci_context);
+   herodrm_log("mediaserverd: CIContext over EAGLContext %s", eagl_ci != NULL ? "refused" : "not found");
+}
+
 __attribute__((constructor)) static void
 install(void)
 {
@@ -292,6 +321,8 @@ install(void)
       ci_init_original = (id (*)(id, SEL, id))method_setImplementation(init, (IMP)ci_init);
    }
    herodrm_log("%s: libheroapp: CoreImage %s", getprogname(), ci_init_original ? "in software" : "as it was");
+   if (strcmp(getprogname(), "mediaserverd") == 0)
+      refuse_eagl_ci_context();         /* after CoreImage is loaded: CIContext is there */
    Method assertion = class_getInstanceMethod(objc_getClass("NSAssertionHandler"),
       sel_registerName("handleFailureInMethod:object:file:lineNumber:description:"));
    if (assertion != NULL) {
