@@ -4134,3 +4134,18 @@ sha256 = "ce77764c4e7cbe0f24332bb7624ad336b57b658a2908735bafce921acf865c80"
 size = 724
 immutable = true
 note = "Amparo: D-0085 (escrituras 1 de 10 BOOT y 1 de 10 DROP). Vuelta atrás: min37 (7db96c99…520d). Además se subió .github/workflows/xnu-fast.yml (variante con ccache, a18292a y 45bb29e) sin tocar xnu.yml."
+
+[[evidence]]
+id = "E-0281"
+title = "Panics de min40 a min44 (kernel del CI 43959616603 y 43969438696): texto «turnstile promotion for type 1 not yet implemented @:2412» en min42/min43; descartados audio, 0428, 0429, VGR0 por defecto y deriva del compilador; min37 arranca con el mismo userland; siguiente prueba sin 0335-0338 (CI 43972623049)"
+kind = "document"
+path = "/home/pioxi/HackiOS/repos/wardevsa-ios-a5xelte-v2/docs/S7GE_PANIC_TURNSTILE_20261116.md"
+location = "repo"
+created = "2026-11-16"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "3118deb3803bb6d143aff66973463ef8824c179a6c8c120be21c32796b2e5913"
+size = 1863
+immutable = true
+note = "Escrituras de BOOT bajo D-0085: min40, min37 (vuelta), min41, min42, min43, min44 = 6 de 10; paquete DROP 6 = 1 de 10. SHA de las imágenes en el documento y en boot-candidates-n3-run22..26."
