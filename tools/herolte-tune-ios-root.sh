@@ -127,5 +127,5 @@ install -d -o 0 -g 0 -m 0755 "$containers" "$containers/Bundle" "$containers/Dat
     "$containers/Data/System" "$containers/Shared" "$containers/Shared/SystemGroup" \
     "$containers/Temp"
 
-sync
+sync -f "$root" 2>/dev/null || sync     # only this filesystem (a global sync can hang on WSL2, see mkroot-s7.py)
 echo "HEROLTE root tuning complete for build $build"

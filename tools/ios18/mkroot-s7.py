@@ -122,6 +122,26 @@ def stage_cache(a, root):
     mk.run([sys.executable, '-I', os.path.join(RTOOLS, 'fips_rehmac.py'), d, '--patch'])
 
 
+class _Subprocess:
+    """mkroot-full.py's `subprocess` with a plain `sync` narrowed to the root image's filesystem (`sync -f`).
+    WSL2 (kernel 6.18, HFS+ build 2026-11-16): a global sync blocked forever in super_lock() on a superblock
+    an apfs-fuse mount left behind; syncfs of the one filesystem we wrote does not walk the others."""
+
+    def __init__(self, real):
+        self._real = real
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def run(self, cmd, *args, **kw):
+        if list(cmd) == ['sync'] and mk.rplat.is_linux():
+            target = next((p for p in (os.path.join(os.getcwd(), 'research', os.environ.get('RENEGADE_TARGET', 'ios18'),
+                                                    'full', 'root'), os.getcwd()) if os.path.ismount(p)), os.getcwd())
+            cmd = ['sync', '-f', target]
+        return self._real.run(cmd, *args, **kw)
+
+
+mk.subprocess = _Subprocess(subprocess)
 mk.macho_worker = macho_worker
 mk.stage_cache = stage_cache
 
