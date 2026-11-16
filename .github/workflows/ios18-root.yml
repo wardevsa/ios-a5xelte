@@ -30,6 +30,8 @@ jobs:
       - name: Free disk space (Xcode and simulators are not needed; codesign is part of macOS)
         run: |
           df -h /
+          # no Spotlight on the image: it indexes the 196k files we rewrite and kept the volume busy at detach
+          sudo mdutil -a -i off || true
           sudo rm -rf /Applications/Xcode*.app /Library/Developer/CoreSimulator ~/Library/Developer/CoreSimulator \
             /Users/runner/Library/Android /usr/local/share/dotnet /usr/local/lib/android || true
           df -h /
@@ -70,6 +72,26 @@ jobs:
           root="$PWD/berg/research/ios18/full/root"
           mount | grep -F "$root"
           sudo bash tools/herolte-tune-ios-root.sh "$root" "$BUILD"
+
+      - name: Unmount the root (retries, then -force)
+        run: |
+          set -uo pipefail
+          # mkroot-full.py's seal detaches once, without retry: run 43773910122 lost 4 h of work to
+          # "hdiutil: detach: timeout for DiskArbitration expired". Seal skips the detach when it is unmounted.
+          root="$PWD/berg/research/ios18/full/root"
+          sync
+          for i in 1 2 3 4 5 6; do
+            mount | grep -qF " $root " || break
+            hdiutil detach "$root" && break
+            sleep $((10 * i))
+          done
+          if mount | grep -qF " $root "; then
+            hdiutil detach -force "$root"
+          fi
+          if mount | grep -qF " $root "; then
+            echo "still mounted"; exit 1
+          fi
+          hdiutil info | tail -n 20
 
       - name: Seal and verify
         working-directory: berg
