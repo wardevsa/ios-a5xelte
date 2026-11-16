@@ -4119,3 +4119,18 @@ sha256 = "e29e5dc4b3cbb8dff9da318cd6628244e1b0d9c96207827174b228da0487e4a6"
 size = 1951
 immutable = true
 note = "Paquete de audio: /home/pioxi/HackiOS/builds/device-day/drop-audio-1/command.txt (SHA-256 8000850a92b382207ae355f71d017c2664bbf9286521c5012a784359e6bd36ad), manifiesto SHA-256 8599b6db699f1a83a0d16e5c757035153c80d623d80ccaecb62d79a9ad842536; los ficheros salen del artefacto mesa-ios c833e11 (run 43734697684). La serie de parches de HEAD lleva 0339-0343 de upstream (CI de HEAD fallido; atribuidas paradas): se propone moverlos a patches-pending (cambio de serie, amarillo, firma del Director). En la comprobación local 0339-0341 aplican y 0343 no (falta 0342); 0401 no aplica en el árbol base (ya lo contiene), igual que en el CI correcto."
+
+[[evidence]]
+id = "E-0280"
+title = "min40 escrito en BOOT (SHA-256 518afd1e431130e5211c942698e477956b680a8303f8a6a1a49e9e4ce5827a37) con el kernel del CI 43959616603 (bb2bad0, parches 0428/0429; cadenas herohalt=3 y TOPMEM presentes; el primer intento falló solo en upload-artifact y se relanzó), tras el paquete DROP 6 de audio (bloque 5686859, verified); 38 PASS en herolte-verify-boot.py, 0 FAIL; lectura de vuelta OK y EFS intacto (4d0d84b2…ca87b); línea de 569 car. sin herohalt/herogl/herosb/sweettop (valores por defecto del kernel) y con heroaudio=3; sin arrancar todavía"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/boot-candidates-n3-run22-min40/flash.out"
+location = "scratch"
+created = "2026-11-16"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ce77764c4e7cbe0f24332bb7624ad336b57b658a2908735bafce921acf865c80"
+size = 724
+immutable = true
+note = "Amparo: D-0085 (escrituras 1 de 10 BOOT y 1 de 10 DROP). Vuelta atrás: min37 (7db96c99…520d). Además se subió .github/workflows/xnu-fast.yml (variante con ccache, a18292a y 45bb29e) sin tocar xnu.yml."
