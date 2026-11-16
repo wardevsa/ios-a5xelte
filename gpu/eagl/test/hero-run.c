@@ -665,6 +665,16 @@ install_audio_plugin(void)
    struct stat from, to;
    const char *driver = "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/HakiosAudio";
    int have = stat(DROP_DIR "audio/HakiosAudio", &from) == 0, there = stat(driver, &to) == 0;
+   if (access(DROP_DIR "audio.off", F_OK) == 0) {
+      /* switch file (package with audio.off): the plug-in is taken out of the HAL folder and not put back */
+      if (there) {
+         unlink(driver);
+         unlink("/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/Info.plist");
+         rmdir("/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver");
+      }
+      herodrm_log("hero-run: audio plug-in: audio.off, %s", there ? "taken out of the HAL folder" : "not installed");
+      return;
+   }
    herodrm_log("hero-run: audio plug-in: drop zone %lld bytes, HAL %lld bytes", have ? (long long)from.st_size : -1, there ? (long long)to.st_size : -1);
    if (!have || (there && to.st_size == from.st_size && to.st_mtime >= from.st_mtime))
       return;
@@ -916,7 +926,7 @@ remove_listed_apps(void)
 static void
 remove_listed_files(void)
 {
-   static const char *const allowed[] = { "wallpaper.off", "gestures.off", "fps.off" };
+   static const char *const allowed[] = { "wallpaper.off", "gestures.off", "fps.off", "audio.off" };
    FILE *f = fopen(DROP_DIR "files.remove", "r");
    char name[128];
    while (f && fgets(name, sizeof(name), f)) {
