@@ -1,0 +1,25 @@
+9167: HEROLTE waits 25 s before the initproc panic so the persistent log keeps launchd's crash report.
+
+diff --git a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
+index 0ec73f2..b081c36 100644
+--- a/bsd/kern/kern_exit.c
++++ b/bsd/kern/kern_exit.c
+@@ -1855,6 +1855,18 @@ proc_handle_critical_exit(proc_t p, int rv)
+ 
+ 	proc_crash_coredump(p);
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/*
++	 * 9167: launchd's crash report (0043) only reaches the persistent log (0206, end of USERDATA) when the
++	 * log thread runs, at most every 10 s. iOS 18's launchd died before the first flush (BOOT 18k7: "initproc
++	 * failed to start ... namespace 2 subcode 0x5") and left nothing. Give the log 25 s before panicking.
++	 */
++	if (p == initproc) {
++		static int herolte_initproc_wait;
++		printf("HEROLTE: %s died; panicking in 25 s, after the persistent log is written\n", p->p_name);
++		(void)tsleep(&herolte_initproc_wait, PZERO, "herodie", 25 * hz);
++	}
++#endif
+ 	sync(p, (void *)NULL, (int *)NULL);
+ 	const uint64_t panic_options_mask = DEBUGGER_OPTION_INITPROC_PANIC | DEBUGGER_OPTION_USERSPACE_INITIATED_PANIC;
+ 
