@@ -108,12 +108,21 @@ jobs:
             dxb/Libsystem
             dxb/libplatform
             dxb/libdispatch
-          key: xnu-tools-${{ matrix.runner }}-${{ env.DXB_SHA }}-${{ env.MACHINE_CONFIG }}-v1
+            dxb/xnu
+          key: xnu-tools-${{ matrix.runner }}-${{ env.DXB_SHA }}-${{ env.MACHINE_CONFIG }}-v2
 
       - name: Drop kernel objects from the restored tree
         run: |
           # never reuse the previous kernel: only tools and installed headers come from the cache
           rm -rf dxb/build/xnu.obj dxb/build/xnu.sym dxb/build/xnu-hdrs.obj 2>/dev/null || true
+          # the cached xnu clone goes back to the pristine tag (patches are applied again by build.sh): same sources
+          # as a fresh clone, without the 2 minutes of cloning
+          if [ -d dxb/xnu/.git ]; then
+            git -C dxb/xnu reset -q --hard HEAD
+            git -C dxb/xnu clean -fdxq
+            git -C dxb/xnu status --short | head -3
+            git -C dxb/xnu describe --tags --always
+          fi
           ls dxb/fakeroot 2>/dev/null | head -3 || true
 
       - name: Build
