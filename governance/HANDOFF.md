@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0125 — min37c medida (E-0278: paquete 5 instalado, fondos PNG, fps 13,1); ciclo grande n.º 2 preparado en el PC (E-0279); falta firma del cambio de serie y del CI (2026-11-16)
+## Relevo vigente: H-0126 — kernel nuevo con panic de turnstile en min40..min45 (E-0280, E-0281); min37 arranca; bisección por CI en curso (2026-11-17)
+- **Estado del teléfono:** BOOT = min45 (`555cea74…ad09`, kernel 43972623049 sin 0428/0429/0335-0338, línea de min37) que **cae** con `A5 XNU PANIC`; el último BOOT que arranca es min37 (`7db96c99…520d`, vuelta atrás). Teléfono en TWRP. Escrituras bajo D-0085: BOOT 7 de 10 (min40, min37, min41, min42, min43, min44, min45), DROP 1 de 10 (paquete 6, audio, instalado; con min37 no estorba).
+- **Panic:** `turnstile promotion for type 1 not yet implemented @:2412` (min42, min43). Descartados: audio, 0428, 0429, VGR0 (0335-0338), compilador (misma imagen de runner). La serie de min45 = la de min37 salvo el renombrado; el control **43976101378** (commit 0c97ad4) recompila el commit exacto c833e11. Si el control arranca: el fallo es el orden/renumeración de parches; si cae: carrera o entorno. Ver `docs/S7GE_PANIC_TURNSTILE_20261116.md`.
+- **Herramientas nuevas:** `tools/herolte-build-min.sh` (construye+verifica+opcional `--flash`; reproduce el SHA de min45), parche propuesto `xnu/patches-pending/0363-herolte-panic-to-log.patch` (texto del panic al log; **sin compilar**), `audio.off` en hero-run (sin compilar), `.github/workflows/xnu-fast.yml` (ccache medido: 2,95 % de aciertos, peor que el normal; ahora cachea herramientas/headers, ejecución 43976468232).
+- **Siguiente:** si el control arranca, escribirlo con `herolte-build-min.sh --flash` (min46) y reponer la numeración correcta; si cae, meter 0363 en la serie y CI. Hoja de ruta: `docs/S7GE_HOJA_DE_RUTA_20261116.md`. El Director quiere un CI de ~5 min: medir el de xnu-fast.
+
+## Relevo anterior: H-0125 — min37c medida (E-0278: paquete 5 instalado, fondos PNG, fps 13,1); ciclo grande n.º 2 preparado en el PC (E-0279); falta firma del cambio de serie y del CI (2026-11-16)
 - **Tarea en curso: T-0012 / T-0062.** El fondo oficial por defecto no se fija solo (el Director eligió otro desde Ajustes y se ve); Safari/Messages/Fotos caen por CoreImage sin Metal. Parches 0428 y 0429 y paquete DROP 6 de audio listos (commit 4716630, `drop-audio-1`). Plan: `docs/S7GE_CICLO_2.md`.
 - **Hallazgo de la serie:** HEAD lleva 0339-0343 de upstream; los CI de HEAD fallan; el último CI correcto es 43748654722 (6fb22e7). Propuesta: mover 0339, 0340, 0341 y 0343 a `xnu/patches-pending/` (amarillo; firma del Director).
 - **Siguiente (rojo):** firma del cambio de serie + push + CI xnu (y luego imagen min40 y paquete 6 con hash). Verde en curso: plan D-0015 (T-0055), Mesa 26 (T-0037).
