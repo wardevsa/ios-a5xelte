@@ -92,31 +92,29 @@ jobs:
           xcodebuild -version
           xcrun --find iig
 
-      - name: Restore ccache
+      # build.sh skips every tool/header stage whose output already exists (mig, ctfmerge, availability.pl,
+      # headers flag, Libsystem, libplatform, libfirehose_kernel), so the outputs of those stages are cached;
+      # the patched xnu tree and its objects are always rebuilt. ccache measured 2.95 % hits here: dropped.
+      - name: Restore build tools and headers
+        id: tools
         uses: actions/cache@v4
         with:
-          path: ~/.ccache
-          key: ccache-${{ matrix.runner }}-${{ github.sha }}
-          restore-keys: ccache-${{ matrix.runner }}-
+          path: |
+            dxb/fakeroot
+            dxb/build
+            dxb/bootstrap_cmds
+            dxb/dtrace
+            dxb/AvailabilityVersions
+            dxb/Libsystem
+            dxb/libplatform
+            dxb/libdispatch
+          key: xnu-tools-${{ matrix.runner }}-${{ env.DXB_SHA }}-${{ env.MACHINE_CONFIG }}-v1
 
-      - name: Wrap Xcode clang with ccache
+      - name: Drop kernel objects from the restored tree
         run: |
-          brew install ccache
-          ccache --set-config=max_size=2G
-          ccache --set-config=sloppiness=time_macros,include_file_mtime,include_file_ctime
-          ccache --set-config=compiler_check=content
-          ccache -z
-          # build.sh and xnu call the absolute path from `xcrun -find clang`,
-          # so replace that binary by a shim instead of touching CC.
-          # clang++ is a symlink to clang: keep a single real binary and give
-          # the C++ shim the g++ driver mode explicitly.
-          c=$(xcrun -find clang); cxx=$(xcrun -find clang++)
-          sudo mv "$c" "$c.real"
-          sudo rm -f "$cxx"
-          printf '#!/bin/sh\nexec %s "%s.real" "$@"\n' "$(command -v ccache)" "$c" | sudo tee "$c" >/dev/null
-          printf '#!/bin/sh\nexec %s "%s.real" --driver-mode=g++ "$@"\n' "$(command -v ccache)" "$c" | sudo tee "$cxx" >/dev/null
-          sudo chmod +x "$c" "$cxx"
-          xcrun -find clang
+          # never reuse the previous kernel: only tools and installed headers come from the cache
+          rm -rf dxb/build/xnu.obj dxb/build/xnu.sym dxb/build/xnu-hdrs.obj 2>/dev/null || true
+          ls dxb/fakeroot 2>/dev/null | head -3 || true
 
       - name: Build
         working-directory: dxb
@@ -128,7 +126,6 @@ jobs:
           SECONDS=0
           bash build.sh 2>&1 | tee ../build.log
           echo "build.sh seconds: $SECONDS"
-          ccache -s
 
       # darwin-xnu-build skips, with only a warning, a patch that does not apply, and the build goes on with the
       # older kernel. For this repository's own NNNN-*.patch that is a silent failure: make it fail the job.
