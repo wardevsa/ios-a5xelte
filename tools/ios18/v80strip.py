@@ -386,6 +386,33 @@ def layout(buf, base):
     return ranges, free
 
 
+NEIGHBOURS = 8
+_md = None
+_decodes = {}
+
+
+def decodable(w):
+    """capstone >= 5 decodes w (LSE and PAC included); cached per word value."""
+    global _md
+    r = _decodes.get(w)
+    if r is None:
+        if _md is None:
+            import capstone
+            if int(capstone.__version__.split('.')[0]) < 5:
+                raise SystemExit('v80strip needs capstone >= 5 (4.x does not decode LSE or PAC, every site would look like data)')
+            _md = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
+        r = _decodes[w] = next(_md.disasm_lite(struct.pack('<I', w), 0), None) is not None
+    return r
+
+
+def data_like(words, i):
+    """True when a word within NEIGHBOURS of words[i] does not decode: a constant table inside __text, not code.
+    corecrypto's SHA-256 K table sits in __text and K[57] = 0x78a5636f encodes LDUMAXAH; rewriting it broke every
+    SHA-256 (2026-11-16, cc_fips_test). Such words stay as they are (the kernel's v80emu traps the rare real one)."""
+    lo, hi = max(0, i - NEIGHBOURS), min(len(words), i + NEIGHBOURS + 1)
+    return any(not decodable(int(words[j])) for j in range(lo, hi) if j != i)
+
+
 def candidates(buf, s, e):
     """Offsets in [s, e) (step 4) whose word may be CAS/CASP/LD<op>/SWP/LDAPR/LDAPUR/STLUR, in order. A superset:
     process() still applies the exact tests. numpy keeps the whole-root macho stage from walking every word in
@@ -406,8 +433,12 @@ def process(buf, base, write, do_rcpc, do_lse, counts):
     room = sum(hi - lo for lo, hi, _ in free)
     counts['room bytes'] += room
     for s, e, bias in ranges:
+        rw = memoryview(buf)[s:s + 4 * ((e - s) // 4)].cast('I')
         for p in candidates(buf, s, e):
             w = struct.unpack_from('<I', buf, p)[0]
+            if data_like(rw, (p - s) // 4):
+                counts['left (data-like)'] += 1
+                continue
             if do_rcpc and (is_ldapr(w) or is_rcpc_imm(w)):
                 nw = rcpc_rewrite(w)
                 if nw is not None:

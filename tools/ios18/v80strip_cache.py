@@ -264,6 +264,9 @@ def main():
             for i in np.nonzero(rcpc | cas | casp | ldop)[0]:
                 word = int(words[i])
                 at = sa + 4 * int(i)
+                if v.data_like(words, int(i)):          # a constant table in __text (SHA-256 K, libm), not code
+                    counts['left (data-like)'] += 1
+                    continue
                 if v.is_ldapr(word) or v.is_rcpc_imm(word):
                     nw = v.rcpc_rewrite(word)
                     if nw is not None:

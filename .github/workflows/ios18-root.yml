@@ -48,7 +48,8 @@ jobs:
           brew install blacktop/tap/ipsw zstd pigz >/dev/null
           ipsw version
           python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/python" -m pip install --quiet numpy
+          # capstone >= 5: v80strip leaves constant tables in __text alone (4.x cannot decode LSE/PAC)
+          "$RUNNER_TEMP/venv/bin/python" -m pip install --quiet numpy 'capstone==5.0.6'
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
       - name: Fetch and decrypt the root, SystemOS and AppOS images (~8.3 GB)
