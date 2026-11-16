@@ -24,3 +24,9 @@ Messages, el blur y buena parte de las apps necesitan una ruta Metal/GPU: es el 
 2. Paquete DROP mínimo: `autorun` (hero-run) con `herosb`, sin cambiar nada más; imagen `min32` = min31 + `herodrop=1`.
 3. Después MobileGestalt (iPad -> iPhone) y About.
 4. S7GE: primer hito pequeño.
+
+
+## Actualización 16-nov (min37c, E-0278)
+- **MobileSafari cae 4 veces con la MISMA pila que Messages** (`pc 0x0`, `CoreImage+19c924 <- +45884 <- +7114 <- +6f10 <- +42738`): llamada a un puntero de función nulo dentro de CoreImage. Al tocar una foto de Google Safari pide a CoreImage un contexto y no hay Metal. **Causa común de Messages, Safari (foto) y probablemente Fotos: falta de Metal (S7GE).** `com.apple.WebKit.WebContent` muere 5 veces con SIGKILL (xstat 9; sin mensaje de jetsam: no se sabe si es memoria).
+- Las cadenas de `CoreImage` no ofrecen un interruptor de software (`CI_*` solo trae variables de depuración); no hay arreglo de userland.
+- **Fondos de pantalla:** `hero-run: wallpaper pictures as PNG: 16 put`: los fondos oficiales de serie ya son PNG con su nombre y el Director pudo elegir uno desde Ajustes y verlo. El fondo por defecto (Clownfish) no se fija solo: hay que elegirlo en Ajustes. `herosb` (imagen de la zona DROP) no se puede verificar: SpringBoard no escribe en el log.
