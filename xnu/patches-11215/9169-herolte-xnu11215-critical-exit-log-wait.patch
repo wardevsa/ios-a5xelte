@@ -1,0 +1,22 @@
+9169: HEROLTE waits 25 s before the panic of any critical process exit (not only launchd), so its console output reaches the persistent log.
+
+diff --git a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
+index f2c6a36..d332f4c 100644
+--- a/bsd/kern/kern_exit.c
++++ b/bsd/kern/kern_exit.c
+@@ -1875,6 +1875,15 @@ proc_handle_critical_exit(proc_t p, int rv)
+ 		}
+ 		printf("HEROLTE: %s died; panicking in 25 s, after the persistent log is written\n", p->p_name);
+ 		(void)tsleep(&herolte_initproc_wait, PZERO, "herodie", 25 * hz);
++	} else {
++		/*
++		 * 9169: other critical processes too (launchd's RequireSuccess boot tasks: cc_fips_test exited -1875 on
++		 * BOOT 18k9 and its POST output never reached the log).
++		 */
++		static int herolte_critical_wait;
++		printf("HEROLTE: critical %s[%d] exited; panicking in 25 s, after the persistent log is written\n",
++		    p->p_name, proc_getpid(p));
++		(void)tsleep(&herolte_critical_wait, PZERO, "herodie", 25 * hz);
+ 	}
+ #endif
+ 	sync(p, (void *)NULL, (int *)NULL);
