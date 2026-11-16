@@ -8,7 +8,12 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0124 — min37 de nuevo en BOOT (D-0084, E-0277) con el paquete DROP 5 ya escrito; teléfono en TWRP, sin reiniciar (2026-11-16)
+## Relevo vigente: H-0125 — min37c medida (E-0278: paquete 5 instalado, fondos PNG, fps 13,1); ciclo grande n.º 2 preparado en el PC (E-0279); falta firma del cambio de serie y del CI (2026-11-16)
+- **Tarea en curso: T-0012 / T-0062.** El fondo oficial por defecto no se fija solo (el Director eligió otro desde Ajustes y se ve); Safari/Messages/Fotos caen por CoreImage sin Metal. Parches 0428 y 0429 y paquete DROP 6 de audio listos (commit 4716630, `drop-audio-1`). Plan: `docs/S7GE_CICLO_2.md`.
+- **Hallazgo de la serie:** HEAD lleva 0339-0343 de upstream; los CI de HEAD fallan; el último CI correcto es 43748654722 (6fb22e7). Propuesta: mover 0339, 0340, 0341 y 0343 a `xnu/patches-pending/` (amarillo; firma del Director).
+- **Siguiente (rojo):** firma del cambio de serie + push + CI xnu (y luego imagen min40 y paquete 6 con hash). Verde en curso: plan D-0015 (T-0055), Mesa 26 (T-0037).
+
+## Relevo anterior: H-0124 — min37 de nuevo en BOOT (D-0084, E-0277) con el paquete DROP 5 ya escrito; teléfono en TWRP, sin reiniciar (2026-11-16)
 - **Tarea en curso: T-0012.** BOOT = min37 (`7db96c99…520d`); zona DROP = paquete 5. El Director dice que lo hecho en otra sesión (min38*, min39*) "salió muy mal" y vuelve al método de trabajo por bloques con firma.
 - **Director:** UN arranque (`adb reboot`), mirar el fondo del pez payaso en bloqueo e inicio, la fluidez, y apagar desde iOS. **Ingeniero:** pull del log al volver (`min37c-herolog.txt`): `herolte-log-report.py`; 'hero-run:' (walls, install_wallpaper_pictures: 'put'), `SPAWN FAILED` (debería bajar con el disabled.list de 25), fps, TOPMEM.
 - **Siguiente ciclo grande (propuesto):** una compilación de kernel + un paquete DROP con varias cosas a la vez (audio, apagado real, medidas), más S7GE T-0037 y el plan de D-0015 en el PC.

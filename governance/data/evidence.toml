@@ -4089,3 +4089,33 @@ sha256 = "e6d12e1cc08c44b33f7b16867249b7a3c6420d5544cf43062a8fabce9399b9b4"
 size = 724
 immutable = true
 note = "D-0084; hash registrado antes en E-0269. Primer intento. Con esto el BOOT vuelve a la base medida (min37) y el paquete DROP 5 (E-0275) se prueba con ella."
+
+[[evidence]]
+id = "E-0278"
+title = "Log de min37 con el paquete DROP 5 (min37c; 258160 B, 240 s): 'package 5 ready for userland', 'wallpaper pictures as PNG: 16 put', fps medio 13,1 (máx. 33,9), memoria libre mínima 314 MB, SoC máx. 46 C, SPAWN FAILED 86 (antes 164), 33 trabajos en la lista de desactivados; MobileSafari cae 4 veces con pc nulo en CoreImage (misma pila que Messages) y WebContent muere 5 veces (SIGKILL)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min37c-herolog.txt"
+location = "host"
+created = "2026-11-16"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "515d009ef4a6617d82f55374776101e2fdff07f8b3d9c9c87536e21ae20be4b1"
+size = 258160
+immutable = true
+note = "Observación del Director: 'el fondo del pez payaso no se puso, pero puse uno de los que hay en iOS (no el típico) y sí se ve; voy a probar a descargar un fondo de iPhone X; Fotos crashea; Safari crashea a veces, sobre todo al tocar una foto de Google'. Lectura: los fondos oficiales ya son PNG y se ven si se eligen en Ajustes; el fondo por defecto no se fija solo. Pila de MobileSafari: CoreImage+19c924, +45884, +7114, +6f10, +42738 (pc 0x0). assetsd aborta 3 veces (Fotos). wifip2pd sale 22 veces con 0x100 aunque está en disabled.list y heronoexec. El log contiene identificadores: NO va a git."
+
+[[evidence]]
+id = "E-0279"
+title = "Ciclo grande n.º 2 preparado en el PC: parches 0428 (herohalt, herogl, herosb y sweettop por defecto) y 0429 (herohalt=3: apagado real por PS_HOLD), aplicados en orden sobre la serie segura (sin 0339-0343) en un árbol limpio; paquete DROP 6 de audio (HakiosAudio + Info.plist, 94208 B); plan en docs/S7GE_CICLO_2.md; sin CI ni escritura"
+kind = "document"
+path = "/home/pioxi/HackiOS/repos/wardevsa-ios-a5xelte-v2/docs/S7GE_CICLO_2.md"
+location = "repo"
+created = "2026-11-16"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = "e29e5dc4b3cbb8dff9da318cd6628244e1b0d9c96207827174b228da0487e4a6"
+size = 1951
+immutable = true
+note = "Paquete de audio: /home/pioxi/HackiOS/builds/device-day/drop-audio-1/command.txt (SHA-256 8000850a92b382207ae355f71d017c2664bbf9286521c5012a784359e6bd36ad), manifiesto SHA-256 8599b6db699f1a83a0d16e5c757035153c80d623d80ccaecb62d79a9ad842536; los ficheros salen del artefacto mesa-ios c833e11 (run 43734697684). La serie de parches de HEAD lleva 0339-0343 de upstream (CI de HEAD fallido; atribuidas paradas): se propone moverlos a patches-pending (cambio de serie, amarillo, firma del Director). En la comprobación local 0339-0341 aplican y 0343 no (falta 0342); 0401 no aplica en el árbol base (ya lo contiene), igual que en el CI correcto."
