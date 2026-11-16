@@ -24,3 +24,4 @@ index 427ccc6..4852d27 100644
  	}
  	if (level != notefe_bright_level && (++logged <= 60 || logged % 50 == 0)) {
  		printf("NOTEFE BRIGHT: %u -> %u (%s)\n", notefe_bright_level, level, why);
+

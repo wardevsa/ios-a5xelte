@@ -24,3 +24,4 @@ index f128751..bc47112 100644
  		}
  		vm_offset_t dsim = ml_io_map(0x13900000u, 0x1000);
  		for (unsigned o = 0; dsim && o < 0x80; o += 0x20) {
+

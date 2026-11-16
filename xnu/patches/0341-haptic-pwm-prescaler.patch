@@ -17,3 +17,4 @@ index 0a80048..6262a6a 100644
  	fg_wr(hap_pwm, PWM_TCFG1, fg_rd(hap_pwm, PWM_TCFG1) & ~(0xfu << 4));
  	uint32_t tcfg0 = fg_rd(hap_pwm, PWM_TCFG0), tcfg1 = fg_rd(hap_pwm, PWM_TCFG1);
  	uint32_t tick_hz = HAP_OSC_HZ / ((tcfg0 & 0xffu) + 1) / (1u << ((tcfg1 >> 4) & 7u));
+
