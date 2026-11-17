@@ -4254,3 +4254,18 @@ sha256 = "416b327cc7615864cd53e7cabde63aa13256552a789ddc66692ac077691c2d0d"
 size = 5878
 immutable = true
 note = "El registrador fue un bucle de shell en TWRP que solo lee /sys/class/power_supply, backlight y regulator y escribe en /tmp (RAM): una orden de dispositivo no enumerada en D-0087, anotada aquí por transparencia. Los parámetros PSCI (CPU_SUSPEND 0xc4000001, parámetro 0x10000, latencias de 35-90 us) salen del DTB de Samsung dentro de BOOT.img (copia de seguridad). Las frecuencias y el estado de los raíles son los de TWRP en reposo, no los de iOS."
+
+[[evidence]]
+id = "E-0289"
+title = "Sonda PSCI de solo lectura (min66, parche 0437): PSCI_VERSION, PSCI_FEATURES de CPU_SUSPEND, CPU_OFF, SYSTEM_SUSPEND y SYSTEM_OFF, y AFFINITY_INFO de los ocho núcleos devuelven todos -1 (NOT_SUPPORTED) mientras CPU_ON funciona: el monitor es PSCI 0.1 (solo cpu_suspend 0xc4000001, cpu_off 0x84000002 y cpu_on 0xc4000003, los identificadores que da el DTB de Samsung), así que no se puede preguntar por características; que CPU_SUSPEND existe lo prueba el uso real de Linux (cpu-sleep, parámetro 0x10000, 560 s en TWRP)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min66-herolog.txt"
+location = "scratch"
+created = "2026-11-17"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "b2d6f5e1a8c2496bae94b37d6fde3149245ba856a55f8371b6285ad85213ea61"
+size = 149460
+immutable = true
+note = "Amparo D-0087 (BOOT 8 de 15: min60-min66). Parche 0438 preparado (reposo profundo de núcleos elegidos, apagado por defecto); NO escrito en ninguna imagen: pide la decisión D-0089."

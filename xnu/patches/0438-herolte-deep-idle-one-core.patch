@@ -1,0 +1,186 @@
+herolte: deep idle for chosen cores through PSCI CPU_SUSPEND, off by default (0438)
+
+E-0288: Linux idles this phone's cores with CPU_SUSPEND 0xc4000001, parameter 0x10000 (cpu-sleep, 560 s against 5 s of WFI), 25-35 mA with the screen off against iOS 540 mA. E-0289: the monitor is PSCI 0.1 (VERSION, FEATURES and AFFINITY_INFO return -1; CPU_ON works): the DTB names cpu_suspend/cpu_off/cpu_on. heroidle=<mask> (e.g. 128 = cpu 7; never cpu 0): 20 s after the power thread starts the cores of the mask may power down in cpu_idle (CleanPoC_Dcache, SMC CPU_SUSPEND, entry = the CPU_ON trampoline at 0x8fffe000, checked not written) and wake through sweet_secondary_entry -> reset_vector -> resume_idle_cpu -> arm_init_idle_cpu -> cpu_idle_exit(TRUE); SweetCPU::initCPU(false) calls pe_init_fiq() instead of panicking. A watchdog in the power thread sends a wake-up SGI to a core asleep for more than 150 ms (in case its timer does not survive) and switches deep idle off if one has not come back after 3 s. HEROLTE IDLE lines once a minute with the entry and resume counts. Needs the Director's written approval (D-0089) before an image with heroidle is written.
+
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -481,6 +481,41 @@
+  *	Routine:	cpu_idle
+  *	Function:
+  */
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++/*
++ * 0438: deep idle, one core at a time (boot-arg heroidle=<logical-CPU mask>, enabled by the power thread in
++ * bsd/dev/herolte_gpu.c; off by default). TWRP's Linux idles this phone's cores with PSCI CPU_SUSPEND, parameter 0x10000
++ * (state "cpu-sleep": 560 s against 5 s of WFI, E-0288); the monitor is PSCI 0.1 (E-0289). The core wakes through the
++ * trampoline of the CPU_ON path (sweet_secondary_entry -> reset_vector -> resume_idle_cpu -> arm_init_idle_cpu ->
++ * cpu_idle_exit(TRUE)), which XNU arms for every core in cpu_machine_idle_init.
++ */
++volatile uint32_t herolte_idle_mask;
++volatile uint64_t herolte_idle_entry_pa;
++volatile uint64_t herolte_idle_enter[MAX_CPUS], herolte_idle_resume[MAX_CPUS], herolte_idle_since[MAX_CPUS];
++
++static bool
++herolte_idle_suspend(cpu_data_t *cdp)
++{
++	unsigned c = (unsigned)cdp->cpu_number;
++	if (c == 0 || c >= MAX_CPUS || !(herolte_idle_mask & (1u << c)) || herolte_idle_entry_pa == 0) {
++		return false;
++	}
++	herolte_idle_enter[c]++;
++	herolte_idle_since[c] = mach_absolute_time();
++	CleanPoC_Dcache();
++	__builtin_arm_dsb(DSB_SY);
++	register uint64_t x0 __asm__("x0") = 0xC4000001ULL;     /* CPU_SUSPEND (the DTB's cpu_suspend) */
++	register uint64_t x1 __asm__("x1") = 0x10000ULL;        /* power state: power down (cpu-sleep) */
++	register uint64_t x2 __asm__("x2") = herolte_idle_entry_pa;
++	register uint64_t x3 __asm__("x3") = c;
++	__asm__ volatile ("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : :
++	    "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
++	/* Only reached when the call returns: an error, or the core did not power down. */
++	herolte_idle_since[c] = 0;
++	return true;
++}
++#endif /* ARM64_BOARD_CONFIG_HEROLTE */
++
+ void __attribute__((noreturn))
+ cpu_idle(void)
+ {
+@@ -587,6 +622,10 @@
+ 		__builtin_arm_dsb(DSB_SY);
+ #if HAS_RETENTION_STATE
+ 		arm64_retention_wfi();
++#elif defined(ARM64_BOARD_CONFIG_HEROLTE)
++		if (!herolte_idle_suspend(cpu_data_ptr)) {
++			__builtin_arm_wfi();
++		}
+ #else
+ 		__builtin_arm_wfi();
+ #endif
+@@ -640,6 +679,12 @@
+ 
+ 	/* Back from WFI, unlock OSLAR and EDLAR. */
+ 	if (from_reset) {
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		if ((unsigned)cpu_data_ptr->cpu_number < MAX_CPUS) {
++			herolte_idle_since[cpu_data_ptr->cpu_number] = 0;
++			herolte_idle_resume[cpu_data_ptr->cpu_number]++;
++		}
++#endif
+ 		configure_coresight_registers(cpu_data_ptr);
+ 	}
+ 
+--- a/iokit/Kernel/arm/SweetCPU.cpp
++++ b/iokit/Kernel/arm/SweetCPU.cpp
+@@ -35,6 +35,10 @@
+ #define CPU_PORT_NAME "SWEET"
+ #endif
+ 
++#if defined(HEROLTE)
++extern "C" void pe_init_fiq(void);     /* pexpert/arm/pe_fiq.c: runs on every CPU (0438: also when one is back from deep idle) */
++#endif
++
+ class SweetCPU;
+ static SweetCPU *sweet_cpus[MAX_CPUS];
+ static uint32_t sweet_cpus_registered;
+@@ -269,7 +273,16 @@
+ SweetCPU::initCPU(bool boot)
+ {
+ 	if (!boot) {
++#if defined(HEROLTE)
++		/*
++		 * 0438: a core back from PSCI CPU_SUSPEND (deep idle, heroidle=): its GIC banked registers and CPU interface are
++		 * set again as for a secondary at boot (pe_init_fiq runs on every CPU); the rest of the bring-up is not repeated.
++		 */
++		pe_init_fiq();
++		return;
++#else
+ 		panic(CPU_PORT_NAME " CPU: cpu=%u resume is not implemented", getCPUNumber());
++#endif
+ 	}
+ 	assert(cpu_number() == (int)getCPUNumber());
+ 
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2700,6 +2700,17 @@
+ 	 * is there for us. SMC reads only: nothing is turned off.
+ 	 */
+ 	bool psci_done = false;
++	/*
++	 * 0438: boot-arg heroidle=<mask of logical CPUs> (e.g. 128 = cpu 7): 20 s after the thread starts the cores of the mask may
++	 * power down when idle (osfmk/arm64/cpu.c). Needs the CPU_ON trampoline at 0x8fffe000 in place (SweetCPU writes it when it
++	 * starts the secondaries); checked, not written. From here a watchdog: a core that went to sleep more than 150 ms ago gets
++	 * a wake-up SGI (if its timer is lost with the power, E-0289 asks that), and one that has not come back after 3 s switches
++	 * the whole thing off and says so.
++	 */
++	uint32_t idle_mask_want = 0;
++	bool idle_armed = false;
++	uint64_t idle_t0 = 0, idle_ipis = 0;
++	PE_parse_boot_argn("heroidle", &idle_mask_want, sizeof(idle_mask_want));
+ 	int gov_on = 0;
+ 	PE_parse_boot_argn("herogov", &gov_on, sizeof(gov_on));
+ 	uint64_t gov_prev_busy = 0, gov_prev_t = 0, gov_flips = 0;
+@@ -2734,6 +2745,45 @@
+ 				hot_now = false;
+ 			}
+ 		}
++		if (idle_mask_want) {
++			extern volatile uint32_t herolte_idle_mask;
++			extern volatile uint64_t herolte_idle_entry_pa, herolte_idle_enter[], herolte_idle_resume[], herolte_idle_since[];
++			extern void a5xelte_send_ipi(unsigned int logical);
++			if (idle_t0 == 0) {
++				idle_t0 = now;
++			}
++			uint64_t el = 0;
++			absolutetime_to_nanoseconds(now - idle_t0, &el);
++			if (!idle_armed && el > 20ull * NSEC_PER_SEC) {
++				idle_armed = true;
++				vm_offset_t tr = ml_io_map(0x8fffe000u, 0x1000);
++				if (tr && ((volatile uint32_t *)tr)[0] == 0x58000050u && ((volatile uint32_t *)tr)[1] == 0xd61f0200u) {
++					herolte_idle_entry_pa = 0x8fffe000ull;
++					__builtin_arm_dsb(DSB_SY);
++					herolte_idle_mask = idle_mask_want & ~1u;
++					printf("HEROLTE IDLE: deep idle on for CPUs %#x through the trampoline at 0x8fffe000\n", herolte_idle_mask);
++				} else {
++					printf("HEROLTE IDLE: no CPU_ON trampoline at 0x8fffe000 (%#x %#x): deep idle stays off\n",
++					    tr ? ((volatile uint32_t *)tr)[0] : 0, tr ? ((volatile uint32_t *)tr)[1] : 0);
++				}
++			}
++			for (unsigned c = 1; c < 8 && herolte_idle_mask; c++) {
++				uint64_t since = herolte_idle_since[c];
++				if (!(herolte_idle_mask & (1u << c)) || since == 0 || now <= since) {
++					continue;
++				}
++				uint64_t age = 0;
++				absolutetime_to_nanoseconds(now - since, &age);
++				if (age > 3000ull * NSEC_PER_MSEC) {
++					printf("HEROLTE IDLE: cpu%u has not come back after %llu ms (enter %llu, resume %llu): deep idle off\n", c,
++					    age / NSEC_PER_MSEC, herolte_idle_enter[c], herolte_idle_resume[c]);
++					herolte_idle_mask = 0;
++				} else if (age > 150ull * NSEC_PER_MSEC) {
++					a5xelte_send_ipi(c);
++					idle_ipis++;
++				}
++			}
++		}
+ 		if (!psci_done && mach_absolute_time() > 0) {
+ 			static uint64_t psci_t0;
+ 			if (psci_t0 == 0) {
+@@ -2851,6 +2901,17 @@
+ 		if (last_log == 0 || since > 60ull * NSEC_PER_SEC) {
+ 			last_log = now;
+ 			int b = herolte_fg_temp_dc;
++			if (idle_mask_want) {
++				extern volatile uint32_t herolte_idle_mask;
++				extern volatile uint64_t herolte_idle_enter[], herolte_idle_resume[];
++				printf("HEROLTE IDLE: mask %#x", herolte_idle_mask);
++				for (unsigned c = 1; c < 8; c++) {
++					if (idle_mask_want & (1u << c)) {
++						printf(" cpu%u enter %llu resume %llu", c, herolte_idle_enter[c], herolte_idle_resume[c]);
++					}
++				}
++				printf(" wake SGIs %llu\n", idle_ipis);
++			}
+ 			printf("HEROLTE POWER: SoC %d C (big %d, little %d, GPU %d, ISP %d; most %d), battery reg %d.%u C, Mongoose %s, screen %s\n",
+ 			    top, c[0], c[1], c[2], c[3], seen_max, b / 10, (unsigned)(b < 0 ? -b : b) % 10, hc.high ? "up" : "down", off ? "off" : "on");
+ 			seen_max = -1000;

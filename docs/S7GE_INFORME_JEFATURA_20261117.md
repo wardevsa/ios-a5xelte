@@ -95,3 +95,13 @@ CI: `xnu` normal 16-19 min; variante `xnu-fast` (caché de herramientas, clon li
 | Gobernador de CPU en reposo | ~150 mA |
 | fps | 13-20 (máx. 50) |
 | SoC | 36-52 C |
+
+## 9. Impacto esperado del reposo profundo (estimación)
+Si se implementa PSCI `CPU_SUSPEND` como en Linux:
+- **Reducción esperada:** 400-500 mA (de 540 mA a ~50-100 mA con pantalla apagada)
+- **Autonomía estimada:** de ~6 horas (hoy) a ~30-40 horas en standby
+- **Base:** Linux en el mismo hardware logra 25-35 mA con PSCI activo vs 540 mA de iOS con WFI
+
+## 10. Solución para carga por PC
+- **Problema:** USB de PC entrega ~500 mA, iOS gasta más con pantalla encendida
+- **Solución:** usar cargador de pared (2A+) o limitar consumo a ~400 mA con throttling de CPU/GPU cuando la batería <20%
