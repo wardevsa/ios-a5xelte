@@ -949,6 +949,106 @@ remove_listed_files(void)
    }
 }
 
+/*
+ * assetsd aborts on an uncaught exception (min50 log: abort <- libc++abi <- libobjc <- libdispatch) and launchd sends its
+ * stderr to /dev/null, so the exception's text never reaches the log. If the job's plist is found, StandardErrorPath is
+ * pointed at DROP_DIR assetsd.err (the first time the original is kept as assetsd.plist.orig); the file is read back
+ * into the log by assetsd_err_watch (from the boot after this one). Switch: a file DROP_DIR assetsd.err.off.
+ */
+#define ASSETSD_ERR DROP_DIR "assetsd.err"
+static void
+assetsd_stderr_to_file(void)
+{
+   static const char *const plists[] = {
+      "/System/Library/LaunchDaemons/com.apple.assetsd.plist",
+      "/System/Library/LaunchAgents/com.apple.assetsd.plist",
+   };
+   if (access(DROP_DIR "assetsd.err.off", F_OK) == 0)
+      return;
+   for (size_t i = 0; i < sizeof(plists) / sizeof(plists[0]); i++) {
+      CFURLRef url = CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8 *)plists[i], (CFIndex)strlen(plists[i]), false);
+      CFReadStreamRef rs = url ? CFReadStreamCreateWithFile(NULL, url) : NULL;
+      if (url)
+         CFRelease(url);
+      if (!rs)
+         continue;
+      CFPropertyListRef pl = NULL;
+      if (CFReadStreamOpen(rs)) {
+         pl = CFPropertyListCreateWithStream(NULL, rs, 0, kCFPropertyListMutableContainers, NULL, NULL);
+         CFReadStreamClose(rs);
+      }
+      CFRelease(rs);
+      if (!pl || CFGetTypeID(pl) != CFDictionaryGetTypeID()) {
+         herodrm_log("hero-run: assetsd stderr: %s: not readable as a dictionary", plists[i]);
+         if (pl)
+            CFRelease(pl);
+         continue;
+      }
+      CFMutableDictionaryRef d = (CFMutableDictionaryRef)pl;
+      CFStringRef want = CFSTR(ASSETSD_ERR);
+      CFTypeRef have = CFDictionaryGetValue(d, CFSTR("StandardErrorPath"));
+      if (have && CFGetTypeID(have) == CFStringGetTypeID() && CFStringCompare((CFStringRef)have, want, 0) == kCFCompareEqualTo) {
+         herodrm_log("hero-run: assetsd stderr: %s already points at assetsd.err", plists[i]);
+         CFRelease(pl);
+         return;
+      }
+      struct stat st;
+      if (stat(DROP_DIR "assetsd.plist.orig", &st) != 0) {
+         int in = open(plists[i], O_RDONLY), out = open(DROP_DIR "assetsd.plist.orig", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+         char buf[4096];
+         ssize_t n;
+         while (in >= 0 && out >= 0 && (n = read(in, buf, sizeof(buf))) > 0)
+            (void)!write(out, buf, (size_t)n);
+         if (in >= 0)
+            close(in);
+         if (out >= 0)
+            close(out);
+      }
+      CFDictionarySetValue(d, CFSTR("StandardErrorPath"), want);
+      CFDataRef data = CFPropertyListCreateData(NULL, d, kCFPropertyListBinaryFormat_v1_0, 0, NULL);
+      CFRelease(pl);
+      if (!data)
+         continue;
+      int fd = open(plists[i], O_WRONLY | O_TRUNC);
+      ssize_t w = fd >= 0 ? write(fd, CFDataGetBytePtr(data), (size_t)CFDataGetLength(data)) : -1;
+      if (fd >= 0)
+         close(fd);
+      herodrm_log("hero-run: assetsd stderr: %s rewritten (%ld of %ld bytes)", plists[i], (long)w, (long)CFDataGetLength(data));
+      CFRelease(data);
+      return;
+   }
+   herodrm_log("hero-run: assetsd stderr: no plist for assetsd found");
+}
+
+static void *
+assetsd_err_watch(void *arg)
+{
+   (void)arg;
+   off_t seen = 0;
+   for (int i = 0; i < 12; i++) {
+      struct stat st;
+      if (stat(ASSETSD_ERR, &st) == 0 && st.st_size > seen) {
+         int fd = open(ASSETSD_ERR, O_RDONLY);
+         char buf[1024];
+         ssize_t n;
+         if (fd >= 0 && lseek(fd, seen, SEEK_SET) == seen) {
+            while ((n = read(fd, buf, sizeof(buf) - 1)) > 0 && seen < 8192) {
+               buf[n] = 0;
+               for (char *c = buf; *c; c++)
+                  if (*c == '\n' || *c == '\r')
+                     *c = ' ';
+               herodrm_log("hero-run: assetsd.err: %s", buf);
+               seen += n;
+            }
+         }
+         if (fd >= 0)
+            close(fd);
+      }
+      sleep(20);
+   }
+   return NULL;
+}
+
 int
 main(int main_argc, char **main_argv)
 {
@@ -957,6 +1057,7 @@ main(int main_argc, char **main_argv)
    remove_listed_files();
    disable_bluetooth_audio();
    install_audio_plugin();
+   assetsd_stderr_to_file();
    reduce_transparency();
    remove_listed_apps();
    remove_ls_db_once();
@@ -975,6 +1076,9 @@ main(int main_argc, char **main_argv)
     * A thread (a forked child has no mach ports for herodrm_log), and only after the fork: with a second thread alive
     * the census child aborted in +[LSRecord initialize] (objc's fork safety, boot-0320).
     */
+   pthread_t errwatch;
+   if (pthread_create(&errwatch, NULL, assetsd_err_watch, NULL) == 0)
+      pthread_detach(errwatch);
    pthread_t widgets;
    int widgets_on = pthread_create(&widgets, NULL, widgets_to_background, NULL) == 0;
    pthread_t apps;
