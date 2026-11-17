@@ -1,0 +1,19 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+index 3cb1dc2..d470f51 100644
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -170,6 +170,14 @@ herolte_gl_env(const char *path, int pid, const char **extra, int max)
+ 		}
+ 		in_applications = appex && poster;
+ 	}
++	/*
++	 * (9191, iOS 18) and iconservicesagent: iOS 18 draws the icons of Settings there, with CoreImage over Metal, which
++	 * this phone has not (boot-18k21: libheroapp in Preferences, icons still empty). libheroapp gives it the software one.
++	 */
++	if (!in_applications && path != NULL) {
++		size_t len = strlen(path);
++		in_applications = len >= 18 && strcmp(path + len - 18, "/iconservicesagent") == 0;
++	}
+ 	if (in_applications && max >= 1) {
+ 		vnode_t appvp = NULLVP;
+ 		if (vnode_lookup(HGL_APP_LIB, 0, &appvp, vfs_context_kernel()) == 0) {
