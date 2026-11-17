@@ -1,0 +1,19 @@
+diff --git a/bsd/dev/herolte_battery.c b/bsd/dev/herolte_battery.c
+index 0a80048..6262a6a 100644
+--- a/bsd/dev/herolte_battery.c
++++ b/bsd/dev/herolte_battery.c
+@@ -458,7 +458,13 @@ hap_setup(void)
+ 	fg_wr(fg_pins, HAP_GPD0 + 8, (fg_rd(fg_pins, HAP_GPD0 + 8) & ~(3u << (HAP_PIN * 2))) | (1u << (HAP_PIN * 2)));
+ 	fg_wr(fg_pins, HAP_GPD0, (fg_rd(fg_pins, HAP_GPD0) & ~(0xfu << (HAP_PIN * 4))) | (2u << (HAP_PIN * 4)));
+ 
+-	/* channel 1's clock as it is set (timers 0 and 1 share prescaler 0: left alone), its own divider 1 */
++	/*
++	 * Channel 1's divider 1. Timers 0 and 1 share prescaler 0, which S-Boot leaves at 0x41 (boot-0339: 393939 Hz, 15 ticks
++	 * a period): set to 0 (26 MHz, 987 ticks) when timer 0 is not running (TCON bit 0); else left, and no motor.
++	 */
++	if (!(fg_rd(hap_pwm, PWM_TCON) & 1u)) {
++		fg_wr(hap_pwm, PWM_TCFG0, fg_rd(hap_pwm, PWM_TCFG0) & ~0xffu);
++	}
+ 	fg_wr(hap_pwm, PWM_TCFG1, fg_rd(hap_pwm, PWM_TCFG1) & ~(0xfu << 4));
+ 	uint32_t tcfg0 = fg_rd(hap_pwm, PWM_TCFG0), tcfg1 = fg_rd(hap_pwm, PWM_TCFG1);
+ 	uint32_t tick_hz = HAP_OSC_HZ / ((tcfg0 & 0xffu) + 1) / (1u << ((tcfg1 >> 4) & 7u));

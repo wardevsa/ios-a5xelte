@@ -1,0 +1,286 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 5117ab9..48c174c 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -1701,13 +1701,20 @@ hgp_map_locked(uint32_t id, const uint64_t *pages, unsigned n)
+ #define HGP_FB2_L3_OFF  0x120000u       /* 8 L3 tables in the scratch block, after the user L2 */
+ #define HG_IDMA_G1_PA   0x13952000u
+ #define HG_DECON_F_PA   0x13960000u
+-static vm_offset_t hfb_idma;
++static vm_offset_t hfb_idma;            /* the channel window 0 reads: G1, or VGR0 (0338) */
++static vm_offset_t hfb_g1;
+ static int hfb_state;                   /* 0 not tried, 1 two buffers, -1 one */
+ static uint64_t hfb_flips;
++static int hvg_state;                   /* (0338) 0 window 0 on G1, 1 on VGR0, -1 never again */
++static void hvg_leave(const char *why);
+ 
+ static void
+ hfb_give_up(const char *why)
+ {
++	if (hvg_state == 1) {
++		hvg_leave(why);
++		hvg_state = -1;
++	}
+ 	hfb_state = -1;
+ 	/*
+ 	 * Always: the shadow (0xb74) can already say FB while a flip to FB2 waits in 0x74 (boot-0336: G1 off the window
+@@ -1757,7 +1764,7 @@ hfb_setup_locked(void)
+ 		printf("HEROLTE FB2: window 0 control %#x is not on channel G1; one buffer\n", wc);
+ 		return;
+ 	}
+-	hfb_idma = ml_io_map(HG_IDMA_G1_PA, 0x1000);
++	hfb_idma = hfb_g1 = ml_io_map(HG_IDMA_G1_PA, 0x1000);
+ 	if (!hfb_idma || hg_rd(hfb_idma, 0xb74) != (uint32_t)HG_FB_PA || hg_rd(hfb_idma, 0x10) != ((HG_PANEL_H << 16) | HG_PANEL_W)) {
+ 		printf("HEROLTE FB2: G1 reads %#x, size %#x: not the panel as S-Boot left it; one buffer\n",
+ 		    hfb_idma ? hg_rd(hfb_idma, 0xb74) : 0, hfb_idma ? hg_rd(hfb_idma, 0x10) : 0);
+@@ -1789,6 +1796,9 @@ void
+ herolte_fb_primary(void)
+ {
+ 	lck_mtx_lock(hg_mtx);
++	if (hvg_state == 1) {
++		hvg_leave("the CPU writes the panel");     /* G1 again, at FB; the next GPU frame comes back to VGR0 */
++	}
+ 	if (hfb_state == 1 && hfb_settled() && hg_rd(hfb_idma, 0xb74) != (uint32_t)HG_FB_PA) {
+ 		hg_wr(hfb_idma, 0x74, (uint32_t)HG_FB_PA);
+ 		hg_wr(hfb_idma, 0x1c, 1);
+@@ -1803,6 +1813,147 @@ herolte_fb_two_buffers(void)
+ 	return hfb_state == 1;
+ }
+ 
++/*
++ * (0338) Scaling by the display, not the Mali (boot-0337: VGR0 showed the test picture full screen). With window 0 on
++ * VGR0 the Mali draws the iOS frame 1:1 (750x1334, 768 pixels a row) into FB or FB2 and VGR0 scales it to the panel
++ * as the panel reads it: a quarter of the pixels written per frame and no bilinear pass over 3.7 Mpixels. The two
++ * buffers and their flips stay as they were (VGR0's BASE_ADDR_Y/PINGPONG/shadow are G1's). Entered on a GPU frame,
++ * after it is drawn; left (window 0 back on G1 at FB) whenever the CPU writes the panel (fallback copy, power-off fade),
++ * and entered again on a later GPU frame, at most once a second. An IDMA read error or a flip not taken: G1 for good.
++ * Boot-arg herovgr=0: never.
++ */
++#define HVG_STRIDE_PX   768u
++#define HVG_VGR0_PA     0x13e03000u
++#define HVG_MMU1_PA     0x13e30000u
++static void hg_vgr0_program(vm_offset_t vg, uint32_t pa, uint32_t sw, uint32_t sh, uint32_t stride_px, uint32_t dw, uint32_t dh);
++static uint32_t hg_decon_measure(vm_offset_t decon, const char *when);
++static vm_offset_t hvg_decon, hvg_vgr, hvg_mmu;
++static uint32_t hvg_w, hvg_h;
++static uint64_t hvg_left_at, hvg_entries;
++
++/* Can window 0 go to VGR0 for a w x h frame now? */
++static bool
++hvg_wanted(uint32_t w, uint32_t h)
++{
++	if (hvg_state != 0 || hfb_state != 1 || w > HVG_STRIDE_PX || h > HG_PANEL_H || w < 64 || h < 64) {
++		return false;
++	}
++	if (hvg_left_at && mach_absolute_time() - hvg_left_at < 26000000u) {      /* 1 s at 26 MHz */
++		return false;
++	}
++	if (!hvg_decon) {
++		uint32_t on = 1;
++		PE_parse_boot_argn("herovgr", &on, sizeof(on));
++		vm_offset_t pmu1 = ml_io_map(0x105c4000u, 0x1000);
++		if (!on || !pmu1 || (hg_rd(pmu1, 0x1a4) & 0xfu) != 0xfu) {
++			printf("HEROLTE VGR0 PRESENT: %s; scaling stays on the GPU\n", on ? "DISP1 off" : "herovgr=0");
++			hvg_state = -1;
++			return false;
++		}
++		hvg_vgr = ml_io_map(HVG_VGR0_PA, 0x1000);
++		hvg_mmu = ml_io_map(HVG_MMU1_PA, 0x1000);
++		hvg_decon = ml_io_map(HG_DECON_F_PA, 0x1000);
++		vm_offset_t cmu1 = ml_io_map(0x13f00000u, 0x1000), top = ml_io_map(0x10570000u, 0x1000);
++		if (!hvg_vgr || !hvg_mmu || !hvg_decon || !cmu1 || !top) {
++			hvg_state = -1;
++			return false;
++		}
++		/*
++		 * boot-0337: with window 0 on VGR0 the panel got a frame every 83.7 ms (75.5 ms reading it): VGR0 ran on the
++		 * 26 MHz oscillator, as DECON's vclk did. CMU_DISP1 (0x13F00000; clk-exynos8890.c, Linux): the user muxes
++		 * ACLK_DISP1_0_400_USER (0x200) and ACLK_DISP1_1_400_USER (0x204), bit 12, oscclk or CMU_TOP's
++		 * gout_top_aclk_disp1_{0,1}_400 (TOP mux 0x274/0x278 with its gate in bit 21, divider 0x3d4/0x3d8, enable
++		 * 0x834/0x838 bit 0). Boot-arg herovgrclk=0 leaves them.
++		 */
++		printf("HEROLTE VGR0 PRESENT: disp1 user mux %#x %#x %#x | top mux %#x %#x div %#x %#x enable %#x %#x\n",
++		    hg_rd(cmu1, 0x200), hg_rd(cmu1, 0x204), hg_rd(cmu1, 0x224), hg_rd(top, 0x274), hg_rd(top, 0x278),
++		    hg_rd(top, 0x3d4), hg_rd(top, 0x3d8), hg_rd(top, 0x834), hg_rd(top, 0x838));
++		uint32_t clk = 1;
++		PE_parse_boot_argn("herovgrclk", &clk, sizeof(clk));
++		for (unsigned i = 0; clk && i < 2; i++) {
++			uint32_t user = 0x200 + i * 4, tmux = 0x274 + i * 4, ten = 0x834 + i * 4;
++			if (hg_rd(cmu1, user) & (1u << 12)) {
++				continue;
++			}
++			hg_wr(top, tmux, hg_rd(top, tmux) | (1u << 21));
++			hg_wr(top, ten, hg_rd(top, ten) | 1u);
++			delay(10);
++			hg_wr(cmu1, user, hg_rd(cmu1, user) | (1u << 12));
++			delay(100);
++		}
++		printf("HEROLTE VGR0 PRESENT: disp1 user mux now %#x %#x\n", hg_rd(cmu1, 0x200), hg_rd(cmu1, 0x204));
++	}
++	return true;
++}
++
++static bool
++hvg_window_update(void)
++{
++	hg_wr(hvg_decon, 0x60, hg_rd(hvg_decon, 0x60) | 1u);          /* SHADOW_REG_UPDATE_REQ_WIN(0) */
++	for (unsigned us = 0; us < 50000; us += 20) {
++		if (!(hg_rd(hvg_decon, 0x60) & 1u)) {
++			return true;
++		}
++		delay(20);
++	}
++	return false;
++}
++
++/* The frame just drawn at pa (w x h, HVG_STRIDE_PX a row) goes on screen through VGR0. */
++static void
++hvg_enter(uint64_t pa, uint32_t w, uint32_t h)
++{
++	uint32_t wc = hg_rd(hvg_decon, 0x130);
++	if (!(wc & 1u) || ((wc >> 12) & 7u) != 0) {
++		printf("HEROLTE VGR0 PRESENT: window 0 control %#x is not on G1; scaling stays on the GPU\n", wc);
++		hvg_state = -1;
++		return;
++	}
++	if (hg_rd(hvg_mmu, 0x0) != 0) {
++		hg_wr(hvg_mmu, 0x0, 0);                                 /* SysMMU bypass: VGR0 reads physical addresses */
++	}
++	hg_vgr0_program(hvg_vgr, (uint32_t)pa, w, h, HVG_STRIDE_PX, HG_PANEL_W, HG_PANEL_H);
++	hg_wr(hvg_vgr, 0x04, hg_rd(hvg_vgr, 0x04) | (1u << 19));       /* no stale read error */
++	hg_wr(hvg_decon, 0x130, (wc & ~(7u << 12)) | (5u << 12));
++	bool updated = hvg_window_update();
++	hvg_w = w;
++	hvg_h = h;
++	hfb_idma = hvg_vgr;
++	hvg_state = 1;
++	if (++hvg_entries <= 3 || hvg_entries % 100 == 0 || !updated) {
++		printf("HEROLTE VGR0 PRESENT: window 0 on VGR0 (%u), %ux%u at %#llx scaled to the panel%s\n", (unsigned)hvg_entries,
++		    w, h, pa, updated ? "" : "; the window update was not taken in 50 ms");
++	}
++	/* The first time: does the panel still get 60 frames a second (12 in 200 ms)? Under 10: back to G1 for good. */
++	if (hvg_entries == 1) {
++		uint32_t frames = hg_decon_measure(hvg_decon, "window 0 on VGR0");
++		if (frames < 10) {
++			hvg_leave("VGR0 too slow for the panel's 60 Hz");
++			hvg_state = -1;
++		}
++	}
++}
++
++static void
++hvg_leave(const char *why)
++{
++	if (hvg_state != 1) {
++		return;
++	}
++	/* G1 to FB first (it takes it when it reads again), then window 0 to G1 */
++	hg_wr(hfb_g1, 0x74, (uint32_t)HG_FB_PA);
++	hg_wr(hfb_g1, 0x1c, 1);
++	uint32_t wc = hg_rd(hvg_decon, 0x130);
++	hg_wr(hvg_decon, 0x130, wc & ~(7u << 12));
++	bool updated = hvg_window_update();
++	hfb_idma = hfb_g1;
++	hvg_state = 0;
++	hvg_left_at = mach_absolute_time();
++	if (hvg_entries <= 3 || hvg_entries % 100 == 0 || !updated) {
++		printf("HEROLTE VGR0 PRESENT: window 0 back on G1: %s%s\n", why, updated ? "" : "; the window update was not taken in 50 ms");
++	}
++}
++
+ /*
+  * Draw the w x h rect at byte offset off (row stride bytes) of the surface
+  * in slot s to the whole panel, scaled, bilinear. The caller has cleaned
+@@ -1821,8 +1972,27 @@ hgp_draw_locked(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h)
+ 	/* Keep the aspect: a frame taller than the panel's 16:9 (the iPhone
+ 	 * XR's 828x1792) is drawn full height, centered between black bars;
+ 	 * a wider one full width. The bars are the render target's clear. */
++	if (hfb_state == 0) {
++		hfb_setup_locked();
++	}
++	if (hvg_state == 1 && (w != hvg_w || h != hvg_h)) {
++		hvg_leave("the frame size changed");
++	}
++	/* (0338) 1:1 into a buffer VGR0 scales, or scaled by the Mali into the panel's buffer */
++	bool small = hvg_state == 1 || hvg_wanted(w, h);
++	uint32_t rw = small ? w : HG_PANEL_W, rh = small ? h : HG_PANEL_H;
++	hg_wr32(scr, S_VIEWPORT + 8, hgp_f32(rw));
++	hg_wr32(scr, S_VIEWPORT + 12, hgp_f32(rh));
++	hg_wr32(scr, S_VIEWPORT + 28, ((rh - 1) << 16) | (rw - 1));
++	hg_wr32(scr, S_FBD + 32, ((rh - 1) << 16) | (rw - 1));
++	hg_wr32(scr, S_FBD + 40, ((rh - 1) << 16) | (rw - 1));
++	hg_wr32(scr, S_FBD + 128 + 40, small ? HVG_STRIDE_PX * 4 : HG_FB_STRIDE);
++	hg_wr32(scr, S_FRAG_JOB + 36, (((rh + 15) / 16 - 1) << 16) | ((rw + 15) / 16 - 1));
+ 	uint32_t x0 = 0, x1 = HG_PANEL_W, y0 = 0, y1 = HG_PANEL_H;
+-	if ((uint64_t)w * HG_PANEL_H < (uint64_t)h * HG_PANEL_W) {
++	if (small) {
++		x1 = w;
++		y1 = h;
++	} else if ((uint64_t)w * HG_PANEL_H < (uint64_t)h * HG_PANEL_W) {
+ 		uint32_t dw = (uint32_t)((uint64_t)w * HG_PANEL_H / h);
+ 		x0 = (HG_PANEL_W - dw) / 2;
+ 		x1 = x0 + dw;
+@@ -1849,14 +2019,14 @@ hgp_draw_locked(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h)
+ 		hg_wr32(scr, S_FRAG_JOB + i * 4, 0);
+ 	}
+ 	/* Into the buffer that is not shown (herofb2), once the last flip has been taken. */
+-	if (hfb_state == 0) {
+-		hfb_setup_locked();
+-	}
+ 	uint64_t target_pa = HG_FB_PA, target_va = HG_PANEL_VA;
+ 	if (hfb_state == 1 && hfb_settled() && hg_rd(hfb_idma, 0xb74) == (uint32_t)HG_FB_PA) {
+ 		target_pa = HG_FB2_PA;
+ 		target_va = HG_PANEL2_VA;
+ 	}
++	if (small && hvg_state < 0) {
++		return false;   /* hfb_settled() gave up (and left VGR0) after the 1:1 layout was chosen: the CPU copies */
++	}
+ 	hg_wr64(scr, S_FBD + 128 + 32, target_va);
+ 	__asm__ volatile ("dsb sy" ::: "memory");
+ 
+@@ -1881,7 +2051,16 @@ hgp_draw_locked(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h)
+ 	hg_affinity = 1;
+ 	hg_run_nap = false;
+ 	hg_run_quiet = false;
+-	if (ok && hfb_state == 1 && hg_rd(hfb_idma, 0xb74) != (uint32_t)target_pa) {
++	if (ok && small && hvg_state == 0) {
++		/* the first frame for VGR0: into the buffer G1 does not show, then window 0 to VGR0 reading it */
++		if (hfb_state == 1) {
++			hvg_enter(target_pa, w, h);
++		}
++		if (hvg_state != 1) {
++			hvg_left_at = mach_absolute_time();
++			ok = false;     /* a 1:1 frame G1 would show garbled: the caller copies this one */
++		}
++	} else if (ok && hfb_state == 1 && hg_rd(hfb_idma, 0xb74) != (uint32_t)target_pa) {
+ 		hg_wr(hfb_idma, 0x74, (uint32_t)target_pa);
+ 		hg_wr(hfb_idma, 0x1c, 1);
+ 		if (++hfb_flips <= 3 || hfb_flips % 3000 == 0) {
+@@ -3073,7 +3252,7 @@ hg_audio_thread(void *arg, __unused wait_result_t wr)
+  * What the memory and the buses run at, as the bootloader left them: nothing here sets them (no DVFS). Read only. A PLL's
+  * CON0: M in bits 25:16, P in 13:8, S in 2:0, rate = 26 MHz * M / (P * 2^S).
+  */
+-static void
++static uint32_t
+ hg_decon_measure(vm_offset_t decon, const char *when)
+ {
+ 	uint64_t start = mach_absolute_time(), now = start, rise = 0, first = 0, period = 0, active = 0, began = 0;
+@@ -3098,6 +3277,7 @@ hg_decon_measure(vm_offset_t decon, const char *when)
+ 	}
+ 	printf("HEROLTE DECON: %s: %u frames in 200 ms, period %llu us, reading %llu us, top line %u, span %llu us\n", when, frames,
+ 	    period / 26, active / 26, top, (rise - first) / 26);
++	return frames;
+ }
+ /*
+  * (0336) Scaling in hardware, a test: VGR0 (DISP1, the only channels of the 8890 that scale) shows a 750x1334 test
+@@ -3221,8 +3401,8 @@ hg_vgr0_test(vm_offset_t decon, vm_offset_t vg, vm_offset_t mmu)
+ static void
+ hg_vgr0_early(void)
+ {
+-	uint32_t vgr_test = 1;
+-	PE_parse_boot_argn("herovgr", &vgr_test, sizeof(vgr_test));
++	uint32_t vgr_test = 0;          /* (0338) only with boot-arg herovgrtest=1: it worked (boot-0337) */
++	PE_parse_boot_argn("herovgrtest", &vgr_test, sizeof(vgr_test));
+ 	vm_offset_t pmu1 = ml_io_map(0x105c4000u, 0x1000);
+ 	if (!vgr_test || !pmu1) {
+ 		return;
