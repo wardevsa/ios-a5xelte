@@ -138,7 +138,7 @@ E-0288: Linux idles this phone's cores with CPU_SUSPEND 0xc4000001, parameter 0x
 +				vm_offset_t tr = ml_io_map(0x8fffe000u, 0x1000);
 +				if (tr && ((volatile uint32_t *)tr)[0] == 0x58000050u && ((volatile uint32_t *)tr)[1] == 0xd61f0200u) {
 +					herolte_idle_entry_pa = 0x8fffe000ull;
-+					__builtin_arm_dsb(DSB_SY);
++					__builtin_arm_dsb(0xf);      /* DSB SY */
 +					herolte_idle_mask = idle_mask_want & ~1u;
 +					printf("HEROLTE IDLE: deep idle on for CPUs %#x through the trampoline at 0x8fffe000\n", herolte_idle_mask);
 +				} else {
