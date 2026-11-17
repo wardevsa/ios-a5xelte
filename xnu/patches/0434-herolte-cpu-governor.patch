@@ -1,6 +1,6 @@
 herolte: a first CPU governor for the Mongoose cluster, herogov=1 (0434)
 
-E-0286 (min58-min60): with the screen on and the CPU all but idle (all 13-31 % of 800 %) the phone draws ~850 mA at 1976-2288 MHz and ~480 mA at the bootloader's 728 MHz / 675 mV; under load (Safari) 1.9-2.6 A. The idle cores leak at the raised voltage. herogov=1: the power thread measures the busy fraction of cores 4-7 every 200 ms (recount idle time; herolte_cluster_busy_mach in osfmk/kern/processor.c) and keeps the cluster at herocpu_mhz only while it is above 15 %; after 1 s below 6 % it goes to the bootloader numbers (hc_go_low), the same transition the screen-off and heat logic already use. Off unless herogov=1.
+E-0286 (min58-min60): with the screen on and the CPU all but idle (all 13-31 % of 800 %) the phone draws ~850 mA at 1976-2288 MHz and ~480 mA at the bootloader's 728 MHz / 675 mV; under load (Safari) 1.9-2.6 A. The idle cores leak at the raised voltage. herogov=1: the power thread measures the busy fraction of cores 4-7 every 200 ms (recount idle time; herolte_cluster_busy_mach in osfmk/kern/processor.c) and keeps the cluster at herocpu_mhz only while it is above 15 %; after 1 s below 6 % it goes to the bootloader numbers (hc_go_low), the same transition the screen-off and heat logic already use. Off unless herogov=1, which also sets the 5 s battery poll (the boot line has no room for another argument).
 
 --- a/bsd/dev/herolte_gpu.c
 +++ b/bsd/dev/herolte_gpu.c
@@ -83,3 +83,14 @@ E-0286 (min58-min60): with the screen on and the CPU all but idle (all 13-31 % o
 +	}
 +	return busy;
 +}
+--- a/iokit/Kernel/arm/SweetBattery.cpp
++++ b/iokit/Kernel/arm/SweetBattery.cpp
+@@ -225,7 +225,7 @@
+ pollMs(void)
+ {
+ 	unsigned ms = 30000, meas = 0;
+-	if (PE_parse_boot_argn("heromeas", &meas, sizeof(meas)) && meas) {
++	if ((PE_parse_boot_argn("heromeas", &meas, sizeof(meas)) && meas) || (PE_parse_boot_argn("herogov", &meas, sizeof(meas)) && meas)) {
+ 		ms = 5000;      /* a measurement run (herocycle in herolte_gpu.c) polls every 5 s */
+ 	}
+ 	PE_parse_boot_argn("herobatms", &ms, sizeof(ms));
