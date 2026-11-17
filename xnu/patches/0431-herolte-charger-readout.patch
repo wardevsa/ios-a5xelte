@@ -1,18 +1,20 @@
 herolte: read-only dump of the MAX77854 charger registers to the log (0431)
 
-The Director: charging stops after the lock screen (min51). HEROLTE CHG lines, once a minute with the battery poll: 0x00-0x03 and 0xb0-0xc3 of the MFD at 0x66 on the fuel gauge's bus. Nothing is written; the first measurement decides what, if anything, may be changed.
+The Director: charging stops after the lock screen (min51-min53). HEROLTE CHG lines once a minute: PMIC 0x00-0x03 at 0x66 (min53: 54 02 87 ff), the charger 0xb0-0xc3 at 0x69 (at 0x66 they read 0xff) and the MUIC 0x00-0x12 at 0x25, on the fuel gauge's bus. Nothing is written.
 
 --- a/bsd/dev/herolte_battery.c
 +++ b/bsd/dev/herolte_battery.c
-@@ -24,6 +24,7 @@
+@@ -24,6 +24,9 @@
  /* GPD1 pins 0/1 (HSI2C_0, speaker amp) are left as found. */
  #define FG_GPD1         0x40
  #define FG_ADDR         0x36u
-+#define CHG_ADDR        0x66u           /* 0431: the MAX77854 MFD on the same bus: PMIC ID, charger registers (read only) */
++#define PMIC_ADDR       0x66u           /* 0431: the MAX77854 MFD on the same bus (read only): 0x66 PMIC (ID reads 0x54 here), */
++#define CHG_ADDR        0x69u           /* 0x69 the charger (0xb0-0xc3 read 0xff at 0x66, min53), 0x25 the MUIC */
++#define MUIC_ADDR       0x25u
  #define FG_REPCAP       0x05
  #define FG_REPSOC       0x06
  #define FG_VCELL        0x09
-@@ -51,6 +52,7 @@
+@@ -51,6 +54,7 @@
  #define HSI2C_ADDR      0x70
  
  static vm_offset_t fg_i2c, fg_pins;
@@ -20,7 +22,7 @@ The Director: charging stops after the lock screen (min51). HEROLTE CHG lines, o
  
  static uint32_t
  fg_rd(vm_offset_t base, uint32_t off)
-@@ -97,7 +99,7 @@
+@@ -97,7 +101,7 @@
  
  	fg_wr(fg_i2c, HSI2C_INT_STAT, fg_rd(fg_i2c, HSI2C_INT_STAT));
  	fg_wr(fg_i2c, HSI2C_FIFO_CTL, 3u | (receive ? (1u << 4) : (1u << 16)));
@@ -29,7 +31,7 @@ The Director: charging stops after the lock screen (min51). HEROLTE CHG lines, o
  	fg_wr(fg_i2c, HSI2C_CTL, 9u | (receive ? 0x40u : 0x80u));
  	fg_wr(fg_i2c, HSI2C_INT_EN, 0xf80u | (receive ? 0x42u : 1u));
  	/* Bit 16 read, bit 17 STOP_AFTER_TRANS, bit 31 MASTER_RUN. */
-@@ -164,6 +166,55 @@
+@@ -164,6 +168,64 @@
  	return false;
  }
  
@@ -64,7 +66,7 @@ The Director: charging stops after the lock screen (min51). HEROLTE CHG lines, o
 +	printf("HEROLTE CHG: id");
 +	for (unsigned i = 0; i < sizeof(first); i++) {
 +		printf(" %02x=", first[i]);
-+		if (fg_byte_at(CHG_ADDR, first[i], &v)) {
++		if (fg_byte_at(PMIC_ADDR, first[i], &v)) {
 +			printf("%02x", v);
 +		} else {
 +			printf("--");
@@ -80,12 +82,21 @@ The Director: charging stops after the lock screen (min51). HEROLTE CHG lines, o
 +		}
 +	}
 +	printf("\n");
++	printf("HEROLTE CHG: muic");
++	for (uint8_t r = 0x00; r <= 0x12; r++) {
++		if (fg_byte_at(MUIC_ADDR, r, &v)) {
++			printf(" %02x=%02x", r, v);
++		} else {
++			printf(" %02x=--", r);
++		}
++	}
++	printf("\n");
 +}
 +
  int
  herolte_fg_init(void)
  {
-@@ -210,6 +261,7 @@
+@@ -210,6 +272,7 @@
  	if (fg_word(0x08, &temp)) {
  		herolte_fg_temp_dc = (int)(int16_t)temp * 10 / 256;
  	}
