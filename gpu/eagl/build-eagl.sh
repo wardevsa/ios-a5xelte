@@ -39,7 +39,10 @@ python3 "$HG/mkeagl.py" "$HG/src/eagl_slots.txt" "$MESA_INC/../src/mapi/glapi/re
 $CC -O2 -g -w -I"$OBJ" -I"$HG/src" -I"$HG/include" -c "$HG/src/eagl.c" -o "$OBJ/hg_eagl.o"
 $CC -O2 -g -Wall -I"$HG/src" -c "$HG/src/gl_hero.c" -o "$OBJ/hg_gl_hero.o"
 $CC -O2 -g -Wall -c "$HG/src/ca_hooks.c" -o "$OBJ/hg_ca_hooks.o"
-$CC -dynamiclib -o "$OUT/lib/libhakiosgl.dylib" "$OBJ"/{hg_eagl,hg_gl_hero,hg_ca_hooks,hero_log,hero_backboardd,hero_prof}.o \
+# iOS 18: the render server's GLES renderer (ca_server_hook.c, after Bergamota's); it does nothing on iOS 16's QuartzCore.
+$CC -O2 -g -Wall -c "$HG/src/ca_server_hook.c" -o "$OBJ/hg_ca_server_hook.o"
+# hero_log first: its constructor sends stderr to the kernel log before eagl.c and the hooks write to it.
+$CC -dynamiclib -o "$OUT/lib/libhakiosgl.dylib" "$OBJ"/{hero_log,hg_eagl,hg_gl_hero,hg_ca_hooks,hg_ca_server_hook,hero_backboardd,hero_prof}.o \
   -install_name @rpath/libhakiosgl.dylib \
   -framework CoreFoundation -framework IOKit -framework IOSurface -lobjc \
   -L "$OUT/lib" -lOSMesa.8 -Wl,-rpath,/private/var/herolte/lib -Wl,-undefined,error
