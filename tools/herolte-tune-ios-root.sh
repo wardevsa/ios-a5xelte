@@ -5,7 +5,8 @@
 #   - com.apple.migration.plist LastSystemVersion = this build: backboardd
 #     holds SpringBoard's system-shell check-in until DataMigration finishes,
 #     and the migration plugin wrapper aborts on every boot.
-#   - CommCenter jobs removed from launchd.plist (no modem: crash loop).
+#   - CommCenter jobs removed from launchd.plist (no modem: crash loop); on
+#     iOS 18 also herolte-disabled.list and the jobs heronoexec refuses.
 #   - com.herolte.autorun added: runs /private/var/herolte/autorun at boot
 #     (test programs from the kernel's USERDATA drop zone).
 #   - SpringBoard watchdogs off; Setup (purplebuddy) exempt from the scene
@@ -89,22 +90,38 @@ plist "$prefs/com.apple.managedconfiguration.notbackedup.plist" \
     LockdownActivationIndicatesCloudConfigurationAvailable bool NO
 
 launchd="$root/System/Library/xpc/launchd.plist"
-/usr/bin/env python3 - "$launchd" <<'EOF'
-import plistlib, sys
-path = sys.argv[1]
+/usr/bin/env python3 - "$launchd" "$build" "$(dirname "$0")/herolte-disabled.list" <<'EOF'
+import os, plistlib, sys
+path, build, listed = sys.argv[1], sys.argv[2], sys.argv[3]
 with open(path, 'rb') as f:
     data = plistlib.load(f)
 fmt = plistlib.FMT_BINARY
+# iOS 18 (builds 22*) has no hero-run to put tools/herolte-disabled.list into launchd's disabled jobs, and launchd
+# relaunched every job the kernel's heronoexec refuses every 10 s for ever: in boot-18k15, 40 tries each of
+# analyticsd, homed, cloudd, ReportCrash, searchd in 7 minutes (950 xpcproxy exits), with spaceattributiond, wifip2pd
+# and fairplayd exiting as often. Those jobs leave launchd.plist here: the phone ran hot to the touch.
+off_labels, off_programs = set(), set()
+if build[:2].isdigit() and int(build[:2]) >= 22:
+    off_labels = {l.strip() for l in open(listed) if l.strip() and not l.startswith('#')}
+    off_labels |= {'com.apple.spaceattributiond', 'com.apple.wifip2pd'}
+    # the boot-arg heronoexec list of xnu/patches 0253 (docs/herolte-howto.md), by program name
+    off_programs = {'vmd', 'searchd', 'ReportCrash', 'aggregated', 'analyticsd', 'cloudd', 'homed', 'driverkitd'}
 removed = []
 for section in ('LaunchDaemons', 'Agents', 'LaunchAgents'):
     jobs = data.get(section, {})
     for key in list(jobs):
-        label = jobs[key].get('Label', '') if isinstance(jobs[key], dict) else ''
-        if 'CommCenter' in key or 'CommCenter' in label:
+        job = jobs[key] if isinstance(jobs[key], dict) else {}
+        label = job.get('Label', '')
+        prog = job.get('Program') or (job.get('ProgramArguments') or [''])[0]
+        if 'CommCenter' in key or 'CommCenter' in label or label in off_labels \
+                or os.path.basename(prog) in off_programs:
             removed.append(label or key)
             del jobs[key]
-if not removed:
+if not any('CommCenter' in r for r in removed):
     sys.exit('no CommCenter job found in launchd.plist')
+if off_labels:
+    print(f'launchd.plist: {len(removed)} jobs out (iOS 18), not found:',
+          ', '.join(sorted(off_labels - set(removed))) or 'none')
 # Developer hook: /private/var/herolte/autorun once per boot, as root, if the
 # kernel's USERDATA drop zone put it there (bsd/dev/herolte_drop.c,
 # tools/herolte-drop.py). Without the file launchd just logs an error.
