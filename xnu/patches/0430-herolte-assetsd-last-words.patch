@@ -1,0 +1,21 @@
+herolte: libheroapp (the uncaught exception text) also goes into assetsd (0430)
+
+assetsd aborts on an uncaught Objective-C exception (Photos, Safari photo picker) and launchd drops its stderr; the plist redirection of hero-run left the file empty (min51b), so the insertion that already puts libheroapp into applications now covers the daemon whose path ends in /assetsd. Needs the library in the drop zone, as for the applications.
+
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -169,6 +169,14 @@
+ 			poster = poster || strncmp(p, "Poster", 6) == 0;
+ 		}
+ 		in_applications = appex && poster;
++		/*
++		 * 0430: assetsd (the photo library's daemon) aborts on an uncaught exception whose text never reached the log
++		 * (launchd keeps its stderr; min50-min51); libheroapp's last words say it. Same insertion as for the applications.
++		 */
++		size_t pl = strlen(path);
++		if (pl >= 8 && strcmp(path + pl - 8, "/assetsd") == 0) {
++			in_applications = true;
++		}
+ 	}
+ 	if (in_applications && max >= 1) {
+ 		vnode_t appvp = NULLVP;
