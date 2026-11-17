@@ -1,0 +1,52 @@
+herolte: deep idle wakes on the virtual timer; a core that does not come back is diagnosed with CPU_ON (0439)
+
+min68 (heroidle=128): cpu 7 entered once (enter 1, resume 0); 15 wake-up SGIs and 3.2 s later the watchdog switched deep idle off; the system itself went on for 240 s. 0439: (1) the architected virtual timer is armed 2 ms ahead before CPU_SUSPEND, since an SGI may not wake a powered-down core, and the timer resynchronized if the call returns; (2) when the watchdog gives up, PSCI CPU_ON on that core: 0 means it was OFF (and it should come back through resume_idle_cpu), -4 ALREADY_ON or -5 ON_PENDING that it is still ON somewhere: HEROLTE IDLE line with the result. Still heroidle only (D-0089).
+
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -503,6 +503,14 @@
+ 	herolte_idle_enter[c]++;
+ 	herolte_idle_since[c] = mach_absolute_time();
+ 	CleanPoC_Dcache();
++	/*
++	 * 0439: min68 (cpu 7 only): the core entered, never came back, 15 wake-up SGIs did nothing. An SGI may not be a wake source
++	 * of a powered-down core; the architected virtual timer (PPI 27, the one XNU uses) is what Linux's idle wakes on. Armed for
++	 * 2 ms ahead (52 000 ticks at 26 MHz) before the call; the timer is re-synchronized if the call returns.
++	 */
++	__builtin_arm_wsr64("CNTV_CVAL_EL0", __builtin_arm_rsr64("CNTVCT_EL0") + 52000ULL);
++	__builtin_arm_wsr64("CNTV_CTL_EL0", 1ULL);
++	__builtin_arm_isb(ISB_SY);
+ 	__builtin_arm_dsb(DSB_SY);
+ 	register uint64_t x0 __asm__("x0") = 0xC4000001ULL;     /* CPU_SUSPEND (the DTB's cpu_suspend) */
+ 	register uint64_t x1 __asm__("x1") = 0x10000ULL;        /* power state: power down (cpu-sleep) */
+@@ -512,6 +520,7 @@
+ 	    "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
+ 	/* Only reached when the call returns: an error, or the core did not power down. */
+ 	herolte_idle_since[c] = 0;
++	timer_resync_deadlines();
+ 	return true;
+ }
+ #endif /* ARM64_BOARD_CONFIG_HEROLTE */
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2778,6 +2778,20 @@
+ 					printf("HEROLTE IDLE: cpu%u has not come back after %llu ms (enter %llu, resume %llu): deep idle off\n", c,
+ 					    age / NSEC_PER_MSEC, herolte_idle_enter[c], herolte_idle_resume[c]);
+ 					herolte_idle_mask = 0;
++					/*
++					 * 0439: which kind of failure? PSCI CPU_ON on a core that is OFF returns 0 and brings it up through the
++					 * reset vector (handler resume_idle_cpu: it should come back as from idle); on one that is ON (stuck
++					 * inside the monitor or in our entry) it returns ALREADY_ON (-4) or ON_PENDING (-5).
++					 */
++					{
++						register uint64_t x0 __asm__("x0") = 0xC4000003ULL;
++						register uint64_t x1 __asm__("x1") = c >= 4 ? (uint64_t)(c - 4) : (0x100ull + c);
++						register uint64_t x2 __asm__("x2") = herolte_idle_entry_pa;
++						register uint64_t x3 __asm__("x3") = c;
++						__asm__ volatile ("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : :
++						    "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
++						printf("HEROLTE IDLE: cpu%u CPU_ON recovery -> %d (0 = it was OFF; -4 ALREADY_ON; -5 ON_PENDING)\n", c, (int)(int32_t)x0);
++					}
+ 				} else if (age > 150ull * NSEC_PER_MSEC) {
+ 					a5xelte_send_ipi(c);
+ 					idle_ipis++;
