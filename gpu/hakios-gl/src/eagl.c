@@ -2093,6 +2093,16 @@ number_text(const float *values, size_t from, size_t count)
 }
 
 static void *ca_context;                /* CoreAnimation's GLContext */
+
+/* (Galaxy S7 port, iOS 18) ca_server_hook.c hands the context over as soon as it makes it: iOS 18's renderer does not call
+ * function_uniform() for every function the way 16's did, and without the context no draw says which function it is. */
+void hakios_gl_set_ca_context(void *context);
+
+void
+hakios_gl_set_ca_context(void *context)
+{
+	ca_context = context;
+}
 static GLfloat function_values[90][20];
 static uint8_t function_given[90];
 

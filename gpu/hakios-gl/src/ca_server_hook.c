@@ -53,6 +53,8 @@ static const struct {
 #define FN_ZONE_INIT  0x1847f84c8ull
 #define G_ZONE        0x1ed836630ull   /* CoreAnimation's malloc zone */
 
+void hakios_gl_set_ca_context(void *context);   /* eagl.c */
+
 static uintptr_t qc_base;
 static void *(*orig_a)(char *), *(*orig_b)(char *);
 static id g_ctx;
@@ -138,6 +140,7 @@ make_gl_renderer(char *srv, int off_ctx, int off_ren, uint32_t flags_or, int use
 		return NULL;
 	}
 	((void *(*)(void *, id))A(FN_GLES_CTOR))(ctx, ec);
+	hakios_gl_set_ca_context(ctx);          /* eagl.c reads the function of each draw from it */
 	wrap = zone_calloc(104);
 	scratch = malloc(0x40000);
 	if (wrap == NULL || scratch == NULL) {
