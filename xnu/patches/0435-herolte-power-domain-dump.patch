@@ -1,0 +1,45 @@
+herolte: read-only dump of the power domains and the PMIC registers once a minute (0435)
+
+The screen-on, CPU-idle floor is ~700 mA (E-0286). HEROLTE PD lines: STATUS/CONFIG of every power domain of the BOOT DTB (cam0, mscl, g3d, disp0, cam1, aud, isp0, isp1, mfc at PMU 0x105c4000+) and HEROLTE PMIC lines: the S2MPS16 registers 0x08-0x47 through the APM mailbox (rails and their enables). Nothing is written. Printed with the minute POWER line, so also with the screen off.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2762,6 +2762,38 @@
+ 			printf("HEROLTE POWER: SoC %d C (big %d, little %d, GPU %d, ISP %d; most %d), battery reg %d.%u C, Mongoose %s, screen %s\n",
+ 			    top, c[0], c[1], c[2], c[3], seen_max, b / 10, (unsigned)(b < 0 ? -b : b) % 10, hc.high ? "up" : "down", off ? "off" : "on");
+ 			seen_max = -1000;
++			/*
++			 * 0435: which power domains the bootloader left on, and the PMIC's registers (read only), once a minute: the
++			 * search for the ~700 mA the phone draws with the screen on and the CPU idle (E-0286). Domain registers of the
++			 * BOOT DTB (pd-*@105c4xxx: CONFIG +0, STATUS +4, OPTION +8; on when STATUS & 0xf == 0xf).
++			 */
++			static vm_offset_t pd_base;
++			if (!pd_base) {
++				pd_base = ml_io_map(0x105c4000u, 0x200);
++			}
++			if (pd_base) {
++				static const struct { const char *name; uint16_t off; } pds[] = {
++					{ "cam0", 0x20 }, { "mscl", 0x40 }, { "g3d", 0x60 }, { "disp0", 0x80 }, { "cam1", 0xa0 }, { "aud", 0xc0 },
++					{ "isp0", 0x140 }, { "isp1", 0x160 }, { "mfc", 0x180 },
++				};
++				printf("HEROLTE PD:");
++				for (unsigned i = 0; i < sizeof(pds) / sizeof(pds[0]); i++) {
++					printf(" %s=%x/%x", pds[i].name, hg_rd(pd_base, pds[i].off + 4u), hg_rd(pd_base, pds[i].off));
++				}
++				printf("\n");
++			}
++			{
++				printf("HEROLTE PMIC:");
++				for (uint8_t r = 0x08; r < 0x48; r++) {
++					uint8_t v = 0;
++					if (herolte_apm_pmic_read(r, &v)) {
++						printf(" %02x=%02x", r, v);
++					} else {
++						printf(" %02x=--", r);
++					}
++				}
++				printf("\n");
++			}
+ 		}
+ 	}
+ }
