@@ -4164,3 +4164,18 @@ sha256 = "5a6cd3996e58c79d83676b18e30a8082d3c50dae7a09d959c35dbabdaa016d59"
 size = 2638
 immutable = true
 note = "Amparo D-0086 (escrituras de BOOT 2 de 15 nuevas: min47, min48). Logs: phase1-20261114/min46..min48-herolog.txt. El panic hook de 0363 no dejó texto en min47 (os_refcnt overflow en pantalla): hay que revisarlo."
+
+[[evidence]]
+id = "E-0283"
+title = "min50 (964e51a6…2fa1: kernel del CI 43959616603 con 0428/0429, ADT herolte-3g, línea de min40 + herovgr=0 herohalt=3) medida: arranca; audio (min49: mediaserverd abre /dev/hakios-audio, el Director oyó sonido y botones); fps medio 12,9 (máx 28,3), copia 6,8 ms; SoC máx 47 C (sensor más alto 51); memoria libre mín 767 MB; herohalt=3 anunció «power off in 12 s» y el log no muestra el retroceso a recuperación; min49 con VGR0 por defecto: 4,2 fps y copia 55-84 ms"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min50-herolog.txt"
+location = "scratch"
+created = "2026-11-17"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "38e62be57941da53cfa1a112a645f8550e80087bff36a2f026aa1311debd02c7"
+size = 196742
+immutable = true
+note = "Amparo D-0086 (escrituras de BOOT 4 de 15 nuevas: min47, min48, min49, min50). Observación del Director: el teléfono se calienta bastante. Logs de min46..min49 en el mismo directorio. Pendiente de confirmar por el Director: si el teléfono se apagó de verdad o volvió a TWRP."

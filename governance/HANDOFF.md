@@ -8,7 +8,13 @@ Los informes para el jefe técnico (ChatGPT) usan el mismo formato: se le entreg
 
 ---
 
-## Relevo vigente: H-0126 — kernel nuevo con panic de turnstile en min40..min45 (E-0280, E-0281); min37 arranca; bisección por CI en curso (2026-11-17)
+## Relevo vigente: H-0127 — causa de los paneles hallada (ADT), min50 arranca con audio, fps 12,9 y herohalt=3 (E-0282, E-0283) (2026-11-17)
+- **Causa:** las imágenes min40-min47 se empaquetaron con `boot-candidates-n2/embedded.adt` (modificado el 16-nov por la otra sesión); min37 usaba `boot-candidates/herolte-3g.adt`. `tools/herolte-build-min.sh` usa ya ese por defecto y reproduce el SHA de min37 con su kernel. Regla nueva: antes de construir variantes, reproducir el SHA de la imagen buena.
+- **BOOT actual: min50** (`964e51a6…2fa1`): CI 43959616603 (0335-0338 sin efecto con herovgr=0, 0428, 0429), ADT herolte-3g, línea de min40 + `herovgr=0 herohalt=3`. Audio con sonido (E-0283), 12,9 fps, SoC máx 47 C. VGR0 por defecto es MÁS LENTO (min49: 4,2 fps): dejar herovgr=0. Escrituras: D-0086 4 de 15 (min47, 48, 49, 50); DROP 0 nuevas.
+- **Abiertos:** el panic hook 0363 no escribió texto en min47 (revisar; hoy es parche de la serie de control c833e11, no está en el kernel de min50); Director confirma si herohalt=3 apagó de verdad; calor alto (sin DVFS, CPU fija a 2600 MHz); assetsd/Preferences caen (CoreImage sin Metal); CI: xnu-fast con caché, medir (14,4 min vs 19).
+- **Siguiente:** serie definitiva = bb2bad0 + 0363 si se arregla el hook; DVFS térmico; probar apagado real; Metal mínima.
+
+## Relevo anterior: H-0126 — kernel nuevo con panic de turnstile en min40..min45 (E-0280, E-0281); min37 arranca; bisección por CI en curso (2026-11-17)
 - **Estado del teléfono:** BOOT = min45 (`555cea74…ad09`, kernel 43972623049 sin 0428/0429/0335-0338, línea de min37) que **cae** con `A5 XNU PANIC`; el último BOOT que arranca es min37 (`7db96c99…520d`, vuelta atrás). Teléfono en TWRP. Escrituras bajo D-0085: BOOT 7 de 10 (min40, min37, min41, min42, min43, min44, min45), DROP 1 de 10 (paquete 6, audio, instalado; con min37 no estorba).
 - **Panic:** `turnstile promotion for type 1 not yet implemented @:2412` (min42, min43). Descartados: audio, 0428, 0429, VGR0 (0335-0338), compilador (misma imagen de runner). La serie de min45 = la de min37 salvo el renombrado; el control **43976101378** (commit 0c97ad4) recompila el commit exacto c833e11. Si el control arranca: el fallo es el orden/renumeración de parches; si cae: carrera o entorno. Ver `docs/S7GE_PANIC_TURNSTILE_20261116.md`.
 - **Herramientas nuevas:** `tools/herolte-build-min.sh` (construye+verifica+opcional `--flash`; reproduce el SHA de min45), parche propuesto `xnu/patches-pending/0363-herolte-panic-to-log.patch` (texto del panic al log; **sin compilar**), `audio.off` en hero-run (sin compilar), `.github/workflows/xnu-fast.yml` (ccache medido: 2,95 % de aciertos, peor que el normal; ahora cachea herramientas/headers, ejecución 43976468232).
