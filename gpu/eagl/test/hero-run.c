@@ -952,10 +952,10 @@ remove_listed_files(void)
 /*
  * assetsd aborts on an uncaught exception (min50 log: abort <- libc++abi <- libobjc <- libdispatch) and launchd sends its
  * stderr to /dev/null, so the exception's text never reaches the log. If the job's plist is found, StandardErrorPath is
- * pointed at DROP_DIR assetsd.err (the first time the original is kept as assetsd.plist.orig); the file is read back
+ * pointed at /private/var/tmp/assetsd.err (the first time the original is kept as assetsd.plist.orig); the file is read back
  * into the log by assetsd_err_watch (from the boot after this one). Switch: a file DROP_DIR assetsd.err.off.
  */
-#define ASSETSD_ERR DROP_DIR "assetsd.err"
+#define ASSETSD_ERR "/private/var/tmp/assetsd.err"   /* assetsd runs as mobile: the root-owned drop zone is not writable for it (min50c: nothing written) */
 static void
 assetsd_stderr_to_file(void)
 {
