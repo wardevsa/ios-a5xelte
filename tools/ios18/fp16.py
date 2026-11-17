@@ -136,15 +136,52 @@ class _Frame:
         self.size = FRAME_RED + ((save + 15) & ~15)
 
     def prologue(self):
+        if not self.v and not self.g:                  # nothing to save: no frame at all
+            return []
         w = [_sub_sp(self.size)]
         w += [_str_q(r, 16 * i) for i, r in enumerate(self.v)]
         w += [_str_x(r, 16 * len(self.v) + 8 * i) for i, r in enumerate(self.g)]
         return w
 
     def epilogue(self):
+        if not self.v and not self.g:
+            return []
         w = [_ldr_x(r, 16 * len(self.v) + 8 * i) for i, r in enumerate(self.g)]
         w += [_ldr_q(r, 16 * i) for i, r in enumerate(self.v)]
         return w + [_add_sp(self.size)]
+
+
+def fmov_s_imm(sd, imm8):       # FMOV Sd, #imm8: the same 8-bit immediates (and values) as FMOV Hd, #imm8
+    return 0x1E201000 | imm8 << 13 | sd
+
+
+def ins_h1_wzr(vd):             # INS Vd.H[1], WZR: clears bits 31:16 (an FMOV Sd, Wn leaves them from Wn)
+    return 0x4E061C00 | 31 << 5 | vd
+
+
+def _sources(rd, srcs):
+    """Single-precision working registers for the half sources of a scalar op whose result goes to Hd.
+    A source that is Hd itself is converted in place; when Hd is not a source, the first source is converted into Sd
+    (its old value is not needed); the rest get scratch registers. Returns (frame, {src: working}, conversions);
+    the conversion of a source that is Hd comes first, so no other conversion overwrites it before it is read."""
+    work, scratch_for = {}, []
+    if rd in srcs:
+        work[rd] = rd
+    for s in srcs:
+        if s in work:
+            continue
+        if rd not in srcs and rd not in work.values():
+            work[s] = rd
+        else:
+            scratch_for.append(s)
+    fr = _Frame(set(srcs) | {rd}, len(scratch_for))
+    for s, r in zip(scratch_for, fr.v):
+        work[s] = r
+    order = ([rd] if rd in srcs else []) + [s for s in dict.fromkeys(srcs) if s != rd]
+    # sources converted into scratch first, then the one converted into Sd (it may be read by nobody else)
+    order.sort(key=lambda s: 0 if work[s] != rd else 1)
+    conv = [fcvt_s_h(work[s], s) for s in order]
+    return fr, work, conv
 
 
 def _wrap(fr, body, site, base):
@@ -155,8 +192,8 @@ def _wrap(fr, body, site, base):
 # --- classification --------------------------------------------------------------------------------------------
 def candidate_masks(np, words):
     """numpy prefilter: every word that may be a FP16 data-processing instruction (fp16_routine decides)."""
-    return (((words & 0xFF200000) == 0x1EE00000) |                 # scalar ftype=11 (sf=0 conversions included)
-            ((words & 0xFF200000) == 0x9EE00000) |                 # scalar conversions, sf=1
+    return (((words & 0xFFE00000) == 0x1EE00000) |                 # scalar ftype=11 (sf=0 conversions included)
+            ((words & 0xFFE00000) == 0x9EE00000) |                 # scalar conversions, sf=1
             ((words & 0x7FE00000) == 0x1EC00000) |                 # fixed-point conversions
             ((words & 0xFFC00000) == 0x1FC00000) |                 # FMADD/FMSUB/FNMADD/FNMSUB half
             ((words & 0x9F60C400) == 0x0E400400) |                 # vector three-same FP16
@@ -169,7 +206,7 @@ def candidate_masks(np, words):
             ((words & 0xDF60C400) == 0x5E400400))                  # scalar three-same, half
 
 
-_SCALAR_FORMS = ((0xFF200000, 0x1EE00000), (0xFF200000, 0x9EE00000), (0x7FE00000, 0x1EC00000), (0xFFC00000, 0x1FC00000),
+_SCALAR_FORMS = ((0xFFE00000, 0x1EE00000), (0xFFE00000, 0x9EE00000), (0x7FE00000, 0x1EC00000), (0xFFC00000, 0x1FC00000),
                  (0x9F60C400, 0x0E400400), (0x9F7E0C00, 0x0E780800), (0x9FF8FC00, 0x0F00FC00), (0x9FC00400, 0x0F000000),
                  (0xDFC00400, 0x5F000000), (0xFFBE0C00, 0x5E300800), (0xDF7E0C00, 0x5E780800), (0xDF60C400, 0x5E400400))
 
@@ -185,22 +222,19 @@ def fp16_routine(w, site, base):
 
     # --- scalar, ftype = 11 ---
     if (w & 0xFFE00C00) == 0x1EE00800 and (w >> 12) & 0xF <= 8:        # FMUL FDIV FADD FSUB FMAX FMIN FMAXNM FMINNM FNMUL
-        fr = _Frame({rd, rn, rm}, 2)
-        a, c = fr.v
-        op = 0x1E200800 | ((w >> 12) & 0xF) << 12 | c << 16 | a << 5 | a
-        return _wrap(fr, [fcvt_s_h(a, rn), fcvt_s_h(c, rm), op, fcvt_h_s(rd, a)], site, base), 'fp16 2src'
+        fr, work, conv = _sources(rd, [rn, rm])
+        op = 0x1E200800 | ((w >> 12) & 0xF) << 12 | work[rm] << 16 | work[rn] << 5 | rd
+        return _wrap(fr, conv + [op, fcvt_h_s(rd, rd)], site, base), 'fp16 2src'
     if (w & 0xFFE07C00) == 0x1EE04000:                                  # one source
         opc = (w >> 15) & 0x3F
         if opc in (4, 5, 7):                                            # FCVT H->S/D: ARMv8.0, not ours
             return None, 'fcvt'
         if opc not in (0, 1, 2, 3) and not 8 <= opc <= 15:
             return None, 'fp16 1src opc'
-        fr = _Frame({rd, rn}, 1)
-        a, = fr.v
-        body = [fcvt_s_h(a, rn)]
+        body = [fcvt_s_h(rd, rn)]                                       # Sd is free: no scratch
         if opc != 0:                                                    # FMOV Hd, Hn: the conversions alone
-            body.append(0x1E204000 | opc << 15 | a << 5 | a)
-        return _wrap(fr, body + [fcvt_h_s(rd, a)], site, base), 'fp16 1src'
+            body.append(0x1E204000 | opc << 15 | rd << 5 | rd)
+        return _wrap(_Frame(set(), 0), body + [fcvt_h_s(rd, rd)], site, base), 'fp16 1src'
     if (w & 0xFFE0FC07) == 0x1EE02000:                                  # FCMP{E} Hn, Hm|#0
         zero = (w >> 3) & 1
         fr = _Frame({rn, rm}, 2)
@@ -216,33 +250,26 @@ def fp16_routine(w, site, base):
         op = 0x1E200400 | c << 16 | (w & 0xF000) | a << 5 | (w & 0x1F)
         return _wrap(fr, [fcvt_s_h(a, rn), fcvt_s_h(c, rm), op], site, base), 'fp16 fccmp'
     if (w & 0xFFE00C00) == 0x1EE00C00:                                  # FCSEL
-        fr = _Frame({rd, rn, rm}, 2)
-        a, c = fr.v
-        op = 0x1E200C00 | c << 16 | (w & 0xF000) | a << 5 | a
-        return _wrap(fr, [fcvt_s_h(a, rn), fcvt_s_h(c, rm), op, fcvt_h_s(rd, a)], site, base), 'fp16 fcsel'
-    if (w & 0xFFE01FE0) == 0x1EE01000:                                  # FMOV Hd, #imm
-        fr = _Frame(set(), 0, (), 1)
-        g, = fr.g
-        body = [movz_w(g, half_imm((w >> 13) & 0xFF)), fmov_s_w(rd, g)]
-        return _wrap(fr, body, site, base), 'fp16 fmov imm'
+        fr, work, conv = _sources(rd, [rn, rm])
+        op = 0x1E200C00 | work[rm] << 16 | (w & 0xF000) | work[rn] << 5 | rd
+        return _wrap(fr, conv + [op, fcvt_h_s(rd, rd)], site, base), 'fp16 fcsel'
+    if (w & 0xFFE01FE0) == 0x1EE01000:                                  # FMOV Hd, #imm: same imm8 and value in single
+        body = [fmov_s_imm(rd, (w >> 13) & 0xFF), fcvt_h_s(rd, rd)]
+        return _wrap(_Frame(set(), 0), body, site, base), 'fp16 fmov imm'
     if (w & 0x7FE0FC00) == 0x1EE00000:                                  # conversions to/from general registers
         sf, rmode, opc = w >> 31, (w >> 19) & 3, (w >> 16) & 7
         if opc == 6 and rmode == 0:                                     # FMOV Wd/Xd, Hn
             return _wrap(_Frame(set(), 0), [fmov_w_s(rd, rn), and_ffff(rd, rd)], site, base), 'fp16 fmov to gpr'
-        if opc == 7 and rmode == 0:                                     # FMOV Hd, Wn/Xn
-            fr = _Frame(set(), 0, {rn}, 1)
-            g, = fr.g
-            return _wrap(fr, [and_ffff(g, rn), fmov_s_w(rd, g)], site, base), 'fp16 fmov from gpr'
+        if opc == 7 and rmode == 0:                                     # FMOV Hd, Wn/Xn: low 16 bits, the rest 0
+            body = [fmov_s_w(rd, rn), ins_h1_wzr(rd)]
+            return _wrap(_Frame(set(), 0), body, site, base), 'fp16 fmov from gpr'
         if opc in (0, 1, 4, 5):                                         # FCVT{N,P,M,Z,A}{S,U} Rd, Hn
             fr = _Frame({rn}, 1)
             a, = fr.v
             op = (w & ~0x00C003E0) | a << 5
             return _wrap(fr, [fcvt_s_h(a, rn), op], site, base), 'fp16 to int'
-        if opc in (2, 3) and rmode == 0:                                # SCVTF/UCVTF Hd, Rn
-            fr = _Frame({rd}, 1)
-            a, = fr.v
-            op = (w & ~0x00C0001F) | a
-            return _wrap(fr, [op, fcvt_h_s(rd, a)], site, base), 'fp16 from int'
+        if opc in (2, 3) and rmode == 0:                                # SCVTF/UCVTF Hd, Rn (Sd is free)
+            return _wrap(_Frame(set(), 0), [w & ~0x00C00000, fcvt_h_s(rd, rd)], site, base), 'fp16 from int'
         return None, 'fp16 conv'
     if (w & 0x7FE00000) == 0x1EC00000:                                  # fixed-point conversions
         rmode_opc = (w >> 16) & 0x1F
@@ -250,18 +277,14 @@ def fp16_routine(w, site, base):
             fr = _Frame({rn}, 1)
             a, = fr.v
             return _wrap(fr, [fcvt_s_h(a, rn), (w & ~0x00C003E0) | a << 5], site, base), 'fp16 to fixed'
-        if rmode_opc in (0x02, 0x03):                                   # SCVTF/UCVTF Hd, Rn, #fbits
-            fr = _Frame({rd}, 1)
-            a, = fr.v
-            return _wrap(fr, [(w & ~0x00C0001F) | a, fcvt_h_s(rd, a)], site, base), 'fp16 from fixed'
+        if rmode_opc in (0x02, 0x03):                                   # SCVTF/UCVTF Hd, Rn, #fbits (Sd is free)
+            return _wrap(_Frame(set(), 0), [w & ~0x00C00000, fcvt_h_s(rd, rd)], site, base), 'fp16 from fixed'
         return None, 'fp16 fixed'
     if (w & 0xFFC00000) == 0x1FC00000:                                  # FMADD/FMSUB/FNMADD/FNMSUB Hd, Hn, Hm, Ha
         ra = (w >> 10) & 31
-        fr = _Frame({rd, rn, rm, ra}, 3)
-        a, c, e = fr.v
-        op = (w & ~0x00C07FFF & ~(31 << 16)) | c << 16 | e << 10 | a << 5 | a
-        body = [fcvt_s_h(a, rn), fcvt_s_h(c, rm), fcvt_s_h(e, ra), op, fcvt_h_s(rd, a)]
-        return _wrap(fr, body, site, base), 'fp16 fmadd'
+        fr, work, conv = _sources(rd, [rn, rm, ra])
+        op = (w & ~0x00C07FFF & ~(31 << 16)) | work[rm] << 16 | work[ra] << 10 | work[rn] << 5 | rd
+        return _wrap(fr, conv + [op, fcvt_h_s(rd, rd)], site, base), 'fp16 fmadd'
 
     # --- AdvSIMD scalar (H registers) ---
     if (w & 0xDFC00400) == 0x5F000000 and (w >> 12) & 0xF in (1, 5, 9):  # FMLA/FMLS/FMUL/FMULX Hd, Hn, Vm.H[i]

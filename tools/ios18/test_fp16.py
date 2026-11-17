@@ -23,7 +23,7 @@ from unicorn import arm64_const as A                # noqa: E402
 import fp16                                         # noqa: E402
 
 SITE, ROUT, STACK = 0x100000, 0x200000, 0x300000
-FORMS = [(0xFF200000, 0x1EE00000), (0xFF200000, 0x9EE00000), (0x7FE00000, 0x1EC00000), (0xFFC00000, 0x1FC00000),
+FORMS = [(0xFFE00000, 0x1EE00000), (0xFFE00000, 0x9EE00000), (0x7FE00000, 0x1EC00000), (0xFFC00000, 0x1FC00000),
          (0x9F60C400, 0x0E400400), (0x9F7E0C00, 0x0E780800), (0x9FF8FC00, 0x0F00FC00), (0x9FC00400, 0x0F000000),
          (0xDFC00400, 0x5F000000), (0xFFBE0C00, 0x5E300800), (0xDF7E0C00, 0x5E780800), (0xDF60C400, 0x5E400400)]
 SPECIAL = [0x0000, 0x8000, 0x7C00, 0xFC00, 0x7E00, 0x7D00, 0x0001, 0x03FF, 0x3C00, 0xBC00, 0x7BFF, 0x0400, 0x3555]
@@ -87,6 +87,9 @@ def main():
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 400
     random.seed(18)
     stats, bad = Counter(), []
+    import numpy as np
+    for mask, value in FORMS + list(fp16._SCALAR_FORMS):           # a value bit outside its mask never matches
+        assert value & ~mask == 0, f'form {mask:08x}/{value:08x}: value outside the mask'
     for mask, value in FORMS:
         tried = 0
         while stats[f'{value:08x} ok'] + stats[f'{value:08x} bad'] < n and tried < 200 * n:
@@ -94,6 +97,12 @@ def main():
             w = (random.getrandbits(32) & ~mask) | value
             words, kind = fp16.fp16_routine(w, SITE, ROUT)
             if words is None or next(md.disasm_lite(struct.pack('<I', w), 0), None) is None:
+                continue
+            # the prefilters v80strip and v80strip_cache use must let every handled word through (2026-11-17: the
+            # scalar masks did not, and no scalar FP16 word was rewritten)
+            if not fp16.is_candidate(w) or not fp16.candidate_masks(np, np.array([w], dtype=np.uint32))[0]:
+                stats['PREFILTER MISS'] += 1
+                bad.append(f'{w:08x} {kind}: handled by fp16_routine but rejected by the prefilter')
                 continue
             state = {'x': [random.getrandbits(64) for _ in range(31)], 'v': [vreg() for _ in range(32)],
                      'nzcv': random.getrandbits(4) << 28}

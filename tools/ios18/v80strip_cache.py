@@ -58,6 +58,11 @@ TIER0 = ('libobjc.A.dylib', 'libswiftCore.dylib', 'libsystem_platform.dylib', 'l
          'AudioToolbox', 'CoreAudio', 'AVFAudio', 'MediaToolbox', 'libboringssl.dylib', 'libsystem_asl.dylib',
          'ManagedConfiguration', 'AppleAccount', 'Accounts', 'PersistentConnection', 'ProtocolBuffer',
          'LaunchServices', 'CoreDuet', 'BiomeStreams')
+# Images whose __text is used as room for routines. WebGPU only runs in WebKit's GPU process on a Metal device, which
+# the S7 does not have; it has no initializers (__init_offsets/__mod_init_func) and no +load classes (__objc_nlclslist),
+# so loading it runs none of its code. Its 2 MiB lie within branch range of CoreGraphics, whose FP16 words (886 on the
+# 22H352 cache) found no room otherwise, and of libobjc. Checked in find_pads' caller: no initializer section.
+SACRIFICE = ('WebGPU',)
 TIER0_RANK = {}
 for _n in TIER0:
     TIER0_RANK.setdefault(_n, len(TIER0_RANK))
@@ -139,6 +144,29 @@ class Cache:
         return segs, sects
 
 
+def sacrifice_ok(cache, addr):
+    """True when loading the image at addr runs none of its code: no initializers, no +load classes or categories."""
+    head = cache.read(addr, 32)
+    ncmds, sizeofcmds = struct.unpack_from('<II', head, 16)
+    cmds = cache.read(addr + 32, sizeofcmds)
+    off = 0
+    for _ in range(ncmds):
+        cmd, size = struct.unpack_from('<II', cmds, off)
+        if cmd in (0x1A, 0x11):                       # LC_ROUTINES_64 / LC_ROUTINES
+            return False
+        if cmd == 0x19:
+            for s in range(struct.unpack_from('<I', cmds, off + 64)[0]):
+                so = off + 72 + 80 * s
+                sect = bytes(cmds[so:so + 16]).split(b'\0')[0]
+                flags = struct.unpack_from('<I', cmds, so + 64)[0]
+                if struct.unpack_from('<Q', cmds, so + 40)[0] and (
+                        sect in (b'__init_offsets', b'__mod_init_func', b'__objc_nlclslist', b'__objc_nlcatlist')
+                        or flags & 0xFF in (0x09, 0x16)):   # S_MOD_INIT_FUNC_POINTERS, S_INIT_FUNC_OFFSETS
+                    return False
+        off += size
+    return True
+
+
 def find_pads(cache, info):
     """Zero ranges after each image's last __TEXT section, up to the next thing in its r-x mapping."""
     taken = sorted((va, va + size) for segs, sects, _ in info for name, va, size in segs if size)
@@ -185,6 +213,14 @@ def find_pads(cache, info):
         if hi - lo >= 64 and not any(s <= lo < e or s < hi <= e for s, e in pads):
             pads.append([lo, hi])
             print(f'  mapping tail {lo:#x}..{hi:#x} ({(hi - lo) >> 10} KiB) in {os.path.basename(p)}')
+    # Images whose code cannot run on the S7, given up whole as room (see SACRIFICE); their own sites are not rewritten
+    for segs, sects, path in info:
+        if path.rsplit('/', 1)[-1] in SACRIFICE:
+            for sa, ss, ex in sects:
+                lo, hi = (sa + 15) & ~15, (sa + ss) & ~15
+                if ex and hi - lo >= 64:
+                    pads.append([lo, hi])
+                    print(f'  sacrificed {lo:#x}..{hi:#x} ({(hi - lo) >> 10} KiB) of {path}')
     # Several images can compute the same zero tail (the loop above does not check overlaps). Two list entries for one
     # range handed the same bytes to two sites, and the second routine overwrote the first: in the 2026-11-16 root,
     # libobjc's _selLock lock in map_images_nolock jumped into another site's unlock routine, and launchd died in
@@ -239,6 +275,8 @@ def main():
     for addr, path in cache.images:
         segs, sects = cache.macho(addr)
         info.append((segs, sects, path))
+        if path.rsplit('/', 1)[-1] in SACRIFICE and not sacrifice_ok(cache, addr):
+            sys.exit(f'v80strip_cache: {path} has initializers or +load classes, it cannot be given up as room')
     pads = find_pads(cache, info)
     print(f'{len(cache.bufs)} files, {len(cache.images)} images, {len(pads)} pads, '
           f'{sum(e - s for s, e in pads) >> 10} KiB of room')
@@ -247,6 +285,8 @@ def main():
     sites = []                                       # (tier, image site count, addr, word, image)
     changed = {}
     for (segs, sects, path) in info:
+        if path.rsplit('/', 1)[-1] in SACRIFICE:      # its text is room now: a branch written there breaks a routine
+            continue
         mine = []
         fp16_sites = []
         for sa, ss, ex in sects:
