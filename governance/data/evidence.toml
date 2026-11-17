@@ -4179,3 +4179,18 @@ sha256 = "38e62be57941da53cfa1a112a645f8550e80087bff36a2f026aa1311debd02c7"
 size = 196742
 immutable = true
 note = "Amparo D-0086 (escrituras de BOOT 4 de 15 nuevas: min47, min48, min49, min50). Observación del Director: el teléfono se calienta bastante. Logs de min46..min49 en el mismo directorio. Pendiente de confirmar por el Director: si el teléfono se apagó de verdad o volvió a TWRP."
+
+[[evidence]]
+id = "E-0284"
+title = "Carga por cable bajo iOS (min54, min55): el MAX77854 (cargador en 0x69, MUIC en 0x25, PMIC en 0x66 con ID 0x54) muestra entrada válida y fase de carga rápida de corriente constante (0xb3=0x60, 0xb4=0x31) durante toda la pantalla de bloqueo, con límite de entrada de unos 500 mA (0xc0=0x0f); TWRP ve el cable como USB (no AC) y entran unos 400-800 mA; con iOS a 2600/650 MHz y pantalla encendida el consumo (-1466 mA medido) supera esa entrada, por lo que la batería baja aunque el cargador funcione; con 0432 (icono según el cargador) el Director confirma que iOS muestra «cargando»"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min54-herolog.txt"
+location = "scratch"
+created = "2026-11-17"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "d285d57d1c63f69f871b23f68a46575dff914db973e115ca76673740a25702e1"
+size = 201643
+immutable = true
+note = "Amparo D-0086 (BOOT 9 de 15: min47-min55). El Director usa un puerto USB de PC. Documentos: docs/S7GE_APPS_Y_CARGA_20261117.md y docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md. Interpretación de los registros (mapa de la familia MAX77843/54), no confirmada con la hoja de datos."
