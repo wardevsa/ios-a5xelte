@@ -1060,6 +1060,27 @@ assetsd_err_watch(void *arg)
    return NULL;
 }
 
+/* What is in the drop zone's lib/ (min52: libheroapp never spoke; is it there, and how big?). */
+static void
+log_lib_dir(void)
+{
+   DIR *d = opendir(DROP_DIR "lib");
+   if (!d) {
+      herodrm_log("hero-run: lib/: not there");
+      return;
+   }
+   struct dirent *e;
+   while ((e = readdir(d))) {
+      char path[256];
+      struct stat st;
+      if (e->d_name[0] == '.')
+         continue;
+      snprintf(path, sizeof(path), DROP_DIR "lib/%s", e->d_name);
+      herodrm_log("hero-run: lib/%s: %lld bytes", e->d_name, stat(path, &st) == 0 ? (long long)st.st_size : -1LL);
+   }
+   closedir(d);
+}
+
 int
 main(int main_argc, char **main_argv)
 {
@@ -1069,6 +1090,7 @@ main(int main_argc, char **main_argv)
    disable_bluetooth_audio();
    install_audio_plugin();
    assetsd_stderr_to_file();
+   log_lib_dir();
    reduce_transparency();
    remove_listed_apps();
    remove_ls_db_once();
