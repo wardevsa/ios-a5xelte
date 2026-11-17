@@ -33,6 +33,8 @@ try:
 except ImportError:                                  # fall back to a plain word-by-word scan
     np = None
 
+import fp16                                          # noqa: E402  FP16 arithmetic -> FP32 routines (tools/ios18/fp16.py)
+
 MH_MAGIC_64 = 0xFEEDFACF
 FAT_MAGIC, FAT_MAGIC_64 = 0xCAFEBABE, 0xCAFEBABF
 CPU_TYPE_ARM64 = 0x0100000C
@@ -424,7 +426,7 @@ def candidates(buf, s, e):
         return range(s, s + 4 * n, 4)
     w = np.frombuffer(buf, dtype='<u4', count=n, offset=s)
     m = (((w & 0x3FA07C00) == 0x08A07C00) | ((w & 0xBFA07C00) == 0x08207C00) |
-         ((w & 0x3F200C00) == 0x38200000) | ((w & 0x3F200C00) == 0x19000000))
+         ((w & 0x3F200C00) == 0x38200000) | ((w & 0x3F200C00) == 0x19000000) | fp16.candidate_masks(np, w))
     return (s + 4 * np.nonzero(m)[0]).tolist()
 
 
@@ -432,6 +434,7 @@ def process(buf, base, write, do_rcpc, do_lse, counts):
     ranges, free = layout(buf, base)
     room = sum(hi - lo for lo, hi, _ in free)
     counts['room bytes'] += room
+    pending = []
     for s, e, bias in ranges:
         rw = memoryview(buf)[s:s + 4 * ((e - s) // 4)].cast('I')
         for p in candidates(buf, s, e):
@@ -449,8 +452,18 @@ def process(buf, base, write, do_rcpc, do_lse, counts):
                 kind, gen = 'rcpc routine', rcpc_routine
             elif do_lse and is_lse(w):
                 kind, gen = 'lse', lse_routine
+            elif do_lse and fp16.is_candidate(w):
+                r, why = fp16.fp16_routine(w, 0, 0)
+                if r is None:                                 # FCVT and friends match the masks too: ARMv8.0
+                    if why not in ('not fp16', 'fcvt'):
+                        counts[f'fp16 left ({why})'] += 1
+                    continue
+                kind, gen = 'fp16', fp16.fp16_routine
             else:
                 continue
+            pending.append((0 if kind == 'fp16' else 1, p, w, bias, kind, gen))
+    # FP16 first: a FP16 word left behind is SIGILL, an atomic left behind is only a v80emu trap
+    for _, p, w, bias, kind, gen in sorted(pending, key=lambda x: (x[0], x[1])):
             site = p - base + bias                       # VM address of the site
             placed = False
             for fr in free:

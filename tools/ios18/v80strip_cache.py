@@ -28,6 +28,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import v80strip as v  # noqa: E402
+import fp16  # noqa: E402
 
 RANGE = (128 << 20) - (1 << 20)
 PROT_EXEC = 4
@@ -247,6 +248,7 @@ def main():
     changed = {}
     for (segs, sects, path) in info:
         mine = []
+        fp16_sites = []
         for sa, ss, ex in sects:
             if not ex or not ss:
                 continue
@@ -261,11 +263,20 @@ def main():
             cas = (words & 0x3FA07C00) == 0x08A07C00
             casp = (words & 0xBFA07C00) == 0x08207C00
             ldop = ((words & 0x3F200C00) == 0x38200000) & ~ldapr & ((((words >> 15) & 1) == 0) | (((words >> 12) & 7) == 0))
-            for i in np.nonzero(rcpc | cas | casp | ldop)[0]:
+            half = fp16.candidate_masks(np, words)
+            for i in np.nonzero(rcpc | cas | casp | ldop | half)[0]:
                 word = int(words[i])
                 at = sa + 4 * int(i)
                 if v.data_like(words, int(i)):          # a constant table in __text (SHA-256 K, libm), not code
                     counts['left (data-like)'] += 1
+                    continue
+                if half[i] and not (rcpc[i] or cas[i] or casp[i] or ldop[i]):
+                    r, why = fp16.fp16_routine(word, 0, 0)
+                    if r is None:                       # FCVT H<->S and friends are ARMv8.0: not a site
+                        if why not in ('not fp16', 'fcvt'):
+                            counts[f'fp16 left ({why})'] += 1
+                        continue
+                    fp16_sites.append((at, word))
                     continue
                 if v.is_ldapr(word) or v.is_rcpc_imm(word):
                     nw = v.rcpc_rewrite(word)
@@ -278,15 +289,25 @@ def main():
                 mine.append((at, word))
         t = tier(path)
         rank = TIER0_RANK.get(path.rsplit('/', 1)[-1], 0) if t == 0 else len(mine)
+        # Order (odd keys are FP16): FP16 of tier 0, atomics of tier 0, FP16 of tier 1, atomics of tier 1, ...
+        # A FP16 word left in place is SIGILL while an atomic left in place is only a v80emu trap; and libBNNS's and
+        # VideoToolbox's tens of thousands of FP16 words must not take the room of CoreGraphics' FP16. (Tried on the
+        # 22H352 cache: every tier-0 FP16 word placed; 510 libobjc atomics go to v80emu. Placing the six hottest
+        # libraries' atomics first instead left 1243 of CoreGraphics' FP16 words, i.e. crashes.)
         for at, word in mine:
-            sites.append((t, rank, at, word, path))
+            sites.append((2 * t, rank, at, word, path))
+        for at, word in fp16_sites:
+            sites.append((2 * t - 1, rank, at, word, path))
     sites.sort()
-    print(f'sites needing a routine: {len(sites)} ' + str(dict(Counter(s[0] for s in sites))))
+    print(f'sites needing a routine: {len(sites)}, FP16 {sum(1 for s in sites if s[0] % 2)}')
 
     starts = [p[0] for p in pads]
     placed = []                                      # (site, routine address, routine words), checked after the loop
     for t, n, at, word, path in sites:
-        gen = v.rcpc_routine if (v.is_ldapr(word) or v.is_rcpc_imm(word)) else v.lse_routine
+        if t % 2:                                    # odd keys are FP16 sites
+            gen = fp16.fp16_routine
+        else:
+            gen = v.rcpc_routine if (v.is_ldapr(word) or v.is_rcpc_imm(word)) else v.lse_routine
         words, why = gen(word, at, at)               # size and feasibility only
         if words is None:
             counts[f'left ({why})'] += 1
@@ -314,10 +335,11 @@ def main():
                 break
             lo -= 1
             hi += 1
+        label = f'tier {(t + 1) // 2} ' + ('fp16' if t % 2 else 'atomic')
         if best is None:
-            per_tier[f'tier {t} left'] += 1
-            if t == 0:
-                left_hot[path.rsplit('/', 1)[-1]] += 1
+            per_tier[label + ' left'] += 1
+            if t % 2 or t == 0:                       # FP16 left in place crashes (SIGILL): the kernel has no FP16
+                left_hot[('FP16 ' if t % 2 else '') + path.rsplit('/', 1)[-1]] += 1
             continue
         dst = pads[best][0]
         words, why = gen(word, at, dst)
@@ -327,7 +349,7 @@ def main():
         if pads[best][1] - pads[best][0] < 48:       # full: out of the search
             del pads[best]
             del starts[best]
-        per_tier[f'tier {t} placed'] += 1
+        per_tier[label + ' placed'] += 1
         counts[f'routine {why}'] += 1
         counts['routine bytes'] += need
         if not a.scan:
