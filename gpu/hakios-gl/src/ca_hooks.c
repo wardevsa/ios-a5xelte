@@ -33,7 +33,7 @@ void hakios_gl_function_refused(unsigned function);
 
 /*
  * The caches these hooks know. iOS 18 (22H352, Galaxy S7 port): the vtable is the one CA::OGL::GLESContext's constructor
- * (0x1848f968c) stores, the two functions are GLContext's (cache .symbols: __ZNK2CA3OGL9GLContext18function_supportedEv,
+ * (0x1848f968c) stores last, the two functions are GLContext's (cache .symbols: __ZNK2CA3OGL9GLContext18function_supportedEv,
  * __ZN2CA3OGL9GLContext16function_uniformEjmmPKf), and the function's number is still at context+0x10 -> +0x10.
  * Its function numbers differ from 16's (eagl.c, hakios_gl_ios18_functions()); its shader table is not known here (no sb3).
  */
@@ -43,7 +43,9 @@ static const struct cache_build {
 	int ios18;
 } builds[] = {
 	{ "iOS 16.7", 0x1d5b2f6e8UL, 0x378, 0x1884b2164UL, 0x388, 0x1884b21acUL, 0x1d5b48a10UL, 0 },
-	{ "iOS 18.7.8 (22H352)", 0x1ef986be0UL, 0x3d8, 0x18497fa10UL, 0x3e8, 0x18497b978UL, 0, 1 },
+	/* __ZTVN2CA3OGL11GLESContextE; 0x1ef986be0 next to it is GLContext's, which the constructor stores first and then
+	 * replaces (boot-18k19: hooks on that one were never called) */
+	{ "iOS 18.7.8 (22H352)", 0x1ef984ea8UL, 0x3d8, 0x18497fa10UL, 0x3e8, 0x18497b978UL, 0, 1 },
 };
 void hakios_gl_ios18_functions(void);
 

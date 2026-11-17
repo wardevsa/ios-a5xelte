@@ -33,4 +33,12 @@ void hakios_gl_surface_written(struct hakios_gl *gl, uint32_t surface);
 	"srl ega sdr alt p3c edr hrm lut ovr ovl lub aup alm stl pc0 pc1 prc psl ps0 ps1 psm psr pcr pbl peo bib asg a75 " \
 	"a50 atc ipc apl 3dl cst "
 
+/* (Galaxy S7 port) iOS 18 (22H352)'s names, from QuartzCore's own table (0x1e7311c58, "clr" first): eagl.c's census uses
+ * them once ca_hooks.c has found that QuartzCore (hakios_gl_ios18_functions()). */
+#define HAKIOS_CA_FUNCTIONS_18 \
+	"clr img ida cim cid mua m1a lrp lrc lra add spl s1a cma pnc bds bco bim c33 c3b c3s c4b c4p c3a c3x c4x bia ds4 " \
+	"ds6 ds8 ups db2 db4 nb7 n11 n15 n19 n23 n27 vrd vrb cab sb3 rbw axl rad rac con vcm vdk vlt map mpc crv hue clm " \
+	"hom rim srm bri brj bro rio opa met srl ega egm sdr ast alt p3c edc ced edr hrm s2l l2s lut ovr ovl lub aup alm " \
+	"stl sta pc0 pc1 prc psl ps0 psm psr pcr "
+
 #endif

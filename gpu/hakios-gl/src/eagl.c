@@ -2524,10 +2524,10 @@ static uint64_t census_told;
 static const char *
 census_name(unsigned function)
 {
-	static const char names[] = HAKIOS_CA_FUNCTIONS;
+	static const char names[] = HAKIOS_CA_FUNCTIONS, names18[] = HAKIOS_CA_FUNCTIONS_18;
 	static char name[4];
 
-	memcpy(name, function < 90 ? names + 4 * function : "?  ", 3);
+	memcpy(name, function < 90 ? (FUNCTION_VIBRANT_MATRIX == 48 ? names18 : names) + 4 * function : "?  ", 3);
 	return name;
 }
 
