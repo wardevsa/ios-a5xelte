@@ -104,6 +104,9 @@ off_labels, off_programs = set(), set()
 if build[:2].isdigit() and int(build[:2]) >= 22:
     off_labels = {l.strip() for l in open(listed) if l.strip() and not l.startswith('#')}
     off_labels |= {'com.apple.spaceattributiond', 'com.apple.wifip2pd'}
+    # boot-18k18g: cryptexd died 14 times in libimage4 (it needs the SEP; KeepAlive until its init file exists, which never
+    # comes), passd 7 times in FinanceKit (Wallet), and findmylocated (~100 %) and nehelper (~100 %) spun the whole session.
+    off_labels |= {'com.apple.security.cryptexd', 'com.apple.passd', 'com.apple.findmy.findmylocated', 'com.apple.nehelper'}
     # the boot-arg heronoexec list of xnu/patches 0253 (docs/herolte-howto.md), by program name
     off_programs = {'vmd', 'searchd', 'ReportCrash', 'aggregated', 'analyticsd', 'cloudd', 'homed', 'driverkitd'}
 removed = []
