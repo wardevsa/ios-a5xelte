@@ -1,0 +1,95 @@
+herolte: read-only dump of the MAX77854 charger registers to the log (0431)
+
+The Director: charging stops after the lock screen (min51). HEROLTE CHG lines, once a minute with the battery poll: 0x00-0x03 and 0xb0-0xc3 of the MFD at 0x66 on the fuel gauge's bus. Nothing is written; the first measurement decides what, if anything, may be changed.
+
+--- a/bsd/dev/herolte_battery.c
++++ b/bsd/dev/herolte_battery.c
+@@ -24,6 +24,7 @@
+ /* GPD1 pins 0/1 (HSI2C_0, speaker amp) are left as found. */
+ #define FG_GPD1         0x40
+ #define FG_ADDR         0x36u
++#define CHG_ADDR        0x66u           /* 0431: the MAX77854 MFD on the same bus: PMIC ID, charger registers (read only) */
+ #define FG_REPCAP       0x05
+ #define FG_REPSOC       0x06
+ #define FG_VCELL        0x09
+@@ -51,6 +52,7 @@
+ #define HSI2C_ADDR      0x70
+ 
+ static vm_offset_t fg_i2c, fg_pins;
++static uint32_t fg_dev = FG_ADDR;      /* 7-bit address of the device the next message goes to */
+ 
+ static uint32_t
+ fg_rd(vm_offset_t base, uint32_t off)
+@@ -97,7 +99,7 @@
+ 
+ 	fg_wr(fg_i2c, HSI2C_INT_STAT, fg_rd(fg_i2c, HSI2C_INT_STAT));
+ 	fg_wr(fg_i2c, HSI2C_FIFO_CTL, 3u | (receive ? (1u << 4) : (1u << 16)));
+-	fg_wr(fg_i2c, HSI2C_ADDR, FG_ADDR << 10);
++	fg_wr(fg_i2c, HSI2C_ADDR, fg_dev << 10);
+ 	fg_wr(fg_i2c, HSI2C_CTL, 9u | (receive ? 0x40u : 0x80u));
+ 	fg_wr(fg_i2c, HSI2C_INT_EN, 0xf80u | (receive ? 0x42u : 1u));
+ 	/* Bit 16 read, bit 17 STOP_AFTER_TRANS, bit 31 MASTER_RUN. */
+@@ -164,6 +166,55 @@
+ 	return false;
+ }
+ 
++/* 0431: one register of device `dev` (read only). */
++static bool
++fg_byte_at(uint32_t dev, uint8_t reg, uint8_t *value)
++{
++	bool ok = false;
++	fg_dev = dev;
++	for (unsigned attempt = 0; attempt < 2 && !ok; attempt++) {
++		ok = fg_message(false, &reg, 1, false) && fg_message(true, value, 1, true);
++	}
++	fg_dev = FG_ADDR;
++	return ok;
++}
++
++/*
++ * 0431: the charger's state, read only, once a minute with the battery poll (HEROLTE CHG lines): the registers 0xB0-0xC3 of
++ * the MAX77854 at 0x66 (CHG_INT .. CHG_CNFG_12 in the family's map: interrupt flags, OK bits, details, CNFG_00 mode, CNFG_09
++ * input current limit) and 0x00-0x03. With the cable on, and with the phone on a wireless base, to see which input is
++ * live and what limit it has (the Director: charging stops after the lock screen, min51). Nothing is written.
++ */
++static void
++fg_charger_dump(void)
++{
++	static unsigned calls;
++	if (calls++ % 2 != 0) {
++		return;
++	}
++	uint8_t v;
++	static const uint8_t first[] = { 0x00, 0x01, 0x02, 0x03 };
++	printf("HEROLTE CHG: id");
++	for (unsigned i = 0; i < sizeof(first); i++) {
++		printf(" %02x=", first[i]);
++		if (fg_byte_at(CHG_ADDR, first[i], &v)) {
++			printf("%02x", v);
++		} else {
++			printf("--");
++		}
++	}
++	printf("\n");
++	printf("HEROLTE CHG: regs");
++	for (uint8_t r = 0xb0; r <= 0xc3; r++) {
++		if (fg_byte_at(CHG_ADDR, r, &v)) {
++			printf(" %02x=%02x", r, v);
++		} else {
++			printf(" %02x=--", r);
++		}
++	}
++	printf("\n");
++}
++
+ int
+ herolte_fg_init(void)
+ {
+@@ -210,6 +261,7 @@
+ 	if (fg_word(0x08, &temp)) {
+ 		herolte_fg_temp_dc = (int)(int16_t)temp * 10 / 256;
+ 	}
++	fg_charger_dump();
+ 	unsigned permille = ((unsigned)soc * 10u) >> 8;
+ 	unsigned p = (permille * 1000u / FG_CAPACITY_MAX + 5u) / 10u;
+ 	*percent = p > 100 ? 100 : p;
