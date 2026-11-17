@@ -4194,3 +4194,18 @@ sha256 = "d285d57d1c63f69f871b23f68a46575dff914db973e115ca76673740a25702e1"
 size = 201643
 immutable = true
 note = "Amparo D-0086 (BOOT 9 de 15: min47-min55). El Director usa un puerto USB de PC. Documentos: docs/S7GE_APPS_Y_CARGA_20261117.md y docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md. Interpretación de los registros (mapa de la familia MAX77843/54), no confirmada con la hoja de datos."
+
+[[evidence]]
+id = "E-0285"
+title = "Primera medición de consumo por frecuencia de CPU (min58, b6fe49ec…8d2f, heromeas=90, sin cable, el Director jugando al 2048 en Safari: carga NO controlada): ciclo 2288 -> 1976 -> 2600 MHz sin fallos; corriente media de descarga a 0 MHz (arranque) 479 mA, a 1976 MHz 844 mA (n=18), a 2288 MHz 896 mA (n=30), a 2600 MHz 1234 mA (n=35, picos de 2661 mA); SoC 36-44 C; batería 93 a 88 %"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min58-herolog.txt"
+location = "scratch"
+created = "2026-11-17"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "57f0359d79b529bdf07c95c3ec0c57f269d04ea761c1eb1af7558605c9375c46"
+size = 242717
+immutable = true
+note = "Amparo D-0086 (BOOT 12 de 15). Los 90 s por escalón y la carga variable (juego) limitan la conclusión: 1976 MHz gasta ~30 % menos corriente que 2600 en esta prueba, 2288 casi lo mismo que 1976; la fluidez por escalón no quedó medida (pocas líneas de cuadros). Primera vez que hc_rate cambia la frecuencia en marcha: 4 cambios sin problema. Falta una carga repetible. Hoja: docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md."
