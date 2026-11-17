@@ -4209,3 +4209,18 @@ sha256 = "57f0359d79b529bdf07c95c3ec0c57f269d04ea761c1eb1af7558605c9375c46"
 size = 242717
 immutable = true
 note = "Amparo D-0086 (BOOT 12 de 15). Los 90 s por escalón y que el arranque sigue trabajando en los primeros minutos (el primer escalón, 2288, es el más afectado) limitan la conclusión: 1976 MHz gasta ~30 % menos corriente que 2600 en esta prueba, 2288 casi lo mismo que 1976; la fluidez por escalón no quedó medida (pocas líneas de cuadros). Primera vez que hc_rate cambia la frecuencia en marcha: 4 cambios sin problema. Falta una carga repetible. Hoja: docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md."
+
+[[evidence]]
+id = "E-0286"
+title = "min60/min61 (energía): GPU a 419 MHz no ahorra corriente (1857 mA frente a 1728 mA a 650, fps 18,0 frente a 20,1); con la pantalla encendida y la CPU casi parada el consumo es de unos 850 mA a 1976-2288 MHz y de unos 480 mA a 728 MHz (arranque); min61 con herogov=1 (0434): el gobernador del clúster Mongoose hizo 41 cambios 728 <-> 2288 MHz en ~8 minutos sin ningún fallo, pero la medición de corriente quedó falseada porque el cable USB estaba conectado casi toda la prueba (external=1, entrada válida en 0xb3=0x60; el cargador aporta ~500 mA): inactivo a 728 MHz la descarga neta fue de 30-130 mA, bajo carga a 2288 MHz de 1413 mA de media"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min61-herolog.txt"
+location = "scratch"
+created = "2026-11-17"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "d4ac6912b6c4d68d0578baf3e53894f54762a10d1c1fcd6f4d189aae60967985"
+size = 271176
+immutable = true
+note = "Amparo D-0087 (BOOT 2 de 15: min60, min61). Hay que repetir la prueba SIN cable (desenchufar antes de arrancar). Contenido (min60b): Ajustes oscuro ~850 mA con todo el sistema al 13-31 % de 800 %; Safari con página blanca ~1950 mA con WebKit ~260 % y backboardd ~130 %."
