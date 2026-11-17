@@ -33,7 +33,7 @@ index 993c625..6c391eb 100644
 +		if (slow != PROCESSOR_NULL && slow_ipi != SCHED_IPI_NONE) {
 +			sched_ipi_perform(slow, slow_ipi);
 +		}
-+		return;
++		return false;      /* 9175: xnu-11215's sched_SMT_balance returns bool (always false) */
 +	}
 +#endif
  	if (cprocessor->is_SMT == FALSE) {
