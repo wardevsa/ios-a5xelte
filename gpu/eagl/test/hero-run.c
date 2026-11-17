@@ -965,6 +965,14 @@ assetsd_stderr_to_file(void)
    };
    if (access(DROP_DIR "assetsd.err.off", F_OK) == 0)
       return;
+   {
+      /* created here, writable by everyone, so that assetsd (user mobile) can append even if launchd cannot create it */
+      int ef = open(ASSETSD_ERR, O_WRONLY | O_CREAT | O_APPEND, 0666);
+      if (ef >= 0) {
+         fchmod(ef, 0666);
+         close(ef);
+      }
+   }
    for (size_t i = 0; i < sizeof(plists) / sizeof(plists[0]); i++) {
       CFURLRef url = CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8 *)plists[i], (CFIndex)strlen(plists[i]), false);
       CFReadStreamRef rs = url ? CFReadStreamCreateWithFile(NULL, url) : NULL;
@@ -1027,6 +1035,9 @@ assetsd_err_watch(void *arg)
    off_t seen = 0;
    for (int i = 0; i < 12; i++) {
       struct stat st;
+      if (i == 0 || i == 5 || i == 11)
+         herodrm_log("hero-run: assetsd.err: %s, %lld bytes", stat(ASSETSD_ERR, &st) == 0 ? "present" : "absent",
+                     stat(ASSETSD_ERR, &st) == 0 ? (long long)st.st_size : -1LL);
       if (stat(ASSETSD_ERR, &st) == 0 && st.st_size > seen) {
          int fd = open(ASSETSD_ERR, O_RDONLY);
          char buf[1024];
