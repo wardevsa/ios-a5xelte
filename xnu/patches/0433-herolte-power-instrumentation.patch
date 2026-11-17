@@ -1,6 +1,6 @@
 herolte: power instrumentation and a CPU-rate measurement run (0433)
 
-First step of docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md: measure before optimizing. herobatms=<ms> sets the battery poll (30 s by default; 2-60 s); each poll logs "HEROLTE PWR: mA mV % battery-C cpu-MHz". herocycle=<s> (>=20) makes the power thread step the Mongoose cluster 2288 -> 1976 -> 2600 MHz every that many seconds while the screen is on and the SoC is not hot (hc_rate: the table of hg_cpu_up, voltage up first / down after), so one boot compares the rates. The charger dump slows to every 6th poll. Both off by default: nothing changes without the arguments.
+First step of docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md: measure before optimizing. herobatms=<ms> sets the battery poll (30 s by default; 2-60 s); each poll logs "HEROLTE PWR: mA mV % battery-C cpu-MHz". herocycle=<s> (>=20) makes the power thread step the Mongoose cluster 2288 -> 1976 -> 2600 MHz every that many seconds while the screen is on and the SoC is not hot (hc_rate: the table of hg_cpu_up, voltage up first / down after), so one boot compares the rates. heromeas=<s> is both at once (cycle every <s> s, 5 s poll) in one short argument: the boot line is at its 606-character limit. The charger dump slows to every 6th poll. All off by default.
 
 --- a/bsd/dev/herolte_gpu.c
 +++ b/bsd/dev/herolte_gpu.c
@@ -91,7 +91,7 @@ First step of docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md: measure before
  static void
  hg_cpu_up(void)
  {
-@@ -2609,6 +2668,12 @@
+@@ -2609,6 +2668,13 @@
  	printf("HEROLTE POWER: Mongoose to %u MHz with the screen off or the SoC at %u C (back under %u C)\n", hp_boot_mhz(), hot, cool);
  	bool hot_now = false;
  	uint64_t last_log = 0;
@@ -101,10 +101,11 @@ First step of docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md: measure before
 +	uint64_t cycle_at = 0;
 +	unsigned cycle_i = 0;
 +	PE_parse_boot_argn("herocycle", &cycle_s, sizeof(cycle_s));
++	PE_parse_boot_argn("heromeas", &cycle_s, sizeof(cycle_s));      /* heromeas=<s>: the same, and a 5 s battery poll (SweetBattery.cpp) */
  	int top = -1000, seen_max = -1000;
  	for (;;) {
  		hg_msleep(200);
-@@ -2644,6 +2709,20 @@
+@@ -2644,6 +2710,20 @@
  			printf("HEROLTE POWER: Mongoose %s %u MHz (screen %s%s, SoC %d C)\n", ok ? "to" : "NOT to",
  			    want_low ? hp_boot_mhz() : hc.mhz, screen_off ? "off" : "on", hot_now ? ", hot" : "", top);
  		}
@@ -154,7 +155,7 @@ First step of docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md: measure before
  	*percent = p > 100 ? 100 : p;
 --- a/iokit/Kernel/arm/SweetBattery.cpp
 +++ b/iokit/Kernel/arm/SweetBattery.cpp
-@@ -220,6 +220,23 @@
+@@ -220,6 +220,26 @@
  #endif
  
  #if defined(ARM64_BOARD_CONFIG_HEROLTE)
@@ -162,7 +163,10 @@ First step of docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md: measure before
 +static unsigned
 +pollMs(void)
 +{
-+	unsigned ms = 30000;
++	unsigned ms = 30000, meas = 0;
++	if (PE_parse_boot_argn("heromeas", &meas, sizeof(meas)) && meas) {
++		ms = 5000;      /* a measurement run (herocycle in herolte_gpu.c) polls every 5 s */
++	}
 +	PE_parse_boot_argn("herobatms", &ms, sizeof(ms));
 +	return ms < 2000 ? 2000 : (ms > 60000 ? 60000 : ms);
 +}
@@ -178,7 +182,7 @@ First step of docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md: measure before
  void
  SweetBattery::poll(void)
  {
-@@ -298,7 +315,7 @@
+@@ -298,7 +318,7 @@
  	SweetBattery *self = OSDynamicCast(SweetBattery, owner);
  	if (self && self->fRunning) {
  		self->poll();
@@ -187,7 +191,7 @@ First step of docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md: measure before
  	}
  }
  
-@@ -324,7 +341,7 @@
+@@ -324,7 +344,7 @@
  		if (fLoop && fTimer && fLoop->addEventSource(fTimer) == kIOReturnSuccess) {
  			fTimerAdded = true;
  			fRunning = true;
