@@ -4224,3 +4224,18 @@ sha256 = "d4ac6912b6c4d68d0578baf3e53894f54762a10d1c1fcd6f4d189aae60967985"
 size = 271176
 immutable = true
 note = "Amparo D-0087 (BOOT 2 de 15: min60, min61). Hay que repetir la prueba SIN cable (desenchufar antes de arrancar). Contenido (min60b): Ajustes oscuro ~850 mA con todo el sistema al 13-31 % de 800 %; Safari con página blanca ~1950 mA con WebKit ~260 % y backboardd ~130 %."
+
+[[evidence]]
+id = "E-0287"
+title = "Búsqueda del consumo de reposo (E-0286): sin cable, el teléfono gasta ~700 mA con la pantalla encendida y la CPU a 728 MHz (min62c), ~570 mA con la pantalla apagada; los seis dominios de energía sin uso (mfc, isp1, isp0, cam1, cam0, mscl) se apagan sin fallo con heropd=60 (config 0xf -> 0, status 0x170000, min63) pero ahorran solo 20-40 mA; sin la radio Wi-Fi (herowifi quitado, min64) la mediana es de ~580 mA con pantalla encendida (~120 mA menos) y ~536 mA con pantalla apagada (~30 mA menos): el suelo de ~540 mA con pantalla apagada sigue sin explicación (la pantalla pesa unos 45 mA)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min64-herolog.txt"
+location = "scratch"
+created = "2026-11-17"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "c80ff5f15ec0b62cda88d7ca1dc2b8d6d0062bea6122593d7fa1b80bf1767325"
+size = 182600
+immutable = true
+note = "Amparo D-0087 y D-0088 (BOOT 5 de 15: min60-min64). Logs relacionados: min62c y min63 en el mismo directorio. Siguiente prueba: cpus=4 (min65) para ver cuánto cuesta cada clúster en reposo. Hipótesis sin comprobar: núcleos en reposo sin apagado de clúster, memoria (DRAM/MIF) a frecuencia máxima, módem Shannon y otros raíles que S-Boot dejó encendidos (volcado HEROLTE PMIC de min62)."
