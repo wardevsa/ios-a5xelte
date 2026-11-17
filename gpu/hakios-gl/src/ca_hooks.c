@@ -29,10 +29,23 @@ void hakios_gl_function_values(void *context, unsigned function, unsigned index,
 void hakios_gl_function_refused(unsigned function);
 
 #define CACHE_BASE              0x180000000UL
-#define VT_GLES_CONTEXT         0x1d5b2f6e8UL   /* vtable for CA::OGL::GLESContext (16.5: 0x1d5b3b540) */
 #define VSLOT(vtable, offset)   ((vtable) + 0x10 + (offset))
-#define FUNCTION_SUPPORTED      0x1884b2164UL   /* slot 0x378 (16.5: 0x1884a9308) */
-#define FUNCTION_UNIFORM        0x1884b21acUL   /* slot 0x388 (16.5: 0x1884a9350) */
+
+/*
+ * The caches these hooks know. iOS 18 (22H352, Galaxy S7 port): the vtable is the one CA::OGL::GLESContext's constructor
+ * (0x1848f968c) stores, the two functions are GLContext's (cache .symbols: __ZNK2CA3OGL9GLContext18function_supportedEv,
+ * __ZN2CA3OGL9GLContext16function_uniformEjmmPKf), and the function's number is still at context+0x10 -> +0x10.
+ * Its function numbers differ from 16's (eagl.c, hakios_gl_ios18_functions()); its shader table is not known here (no sb3).
+ */
+static const struct cache_build {
+	const char *name;
+	uintptr_t vtable, supported_slot, supported, uniform_slot, uniform, shader_table;
+	int ios18;
+} builds[] = {
+	{ "iOS 16.7", 0x1d5b2f6e8UL, 0x378, 0x1884b2164UL, 0x388, 0x1884b21acUL, 0x1d5b48a10UL, 0 },
+	{ "iOS 18.7.8 (22H352)", 0x1ef986be0UL, 0x3d8, 0x18497fa10UL, 0x3e8, 0x18497b978UL, 0, 1 },
+};
+void hakios_gl_ios18_functions(void);
 
 static uintptr_t slide;
 
@@ -63,7 +76,7 @@ replace_virtual(const char *what, uintptr_t slot, uintptr_t expected, void *repl
 	kern_return_t kr;
 	void *original;
 
-	if (*entry != expected + slide) {
+	if ((*entry & 0x7fffffffffUL) != expected + slide) {
 		say("hakios-ca: %s: found %#lx, expected %#lx; left alone\n", what, *entry - slide, expected);
 		return NULL;
 	}
@@ -73,7 +86,7 @@ replace_virtual(const char *what, uintptr_t slot, uintptr_t expected, void *repl
 		say("hakios-ca: %s: cannot make the table writable (%d)\n", what, kr);
 		return NULL;
 	}
-	original = (void *)*entry;
+	original = (void *)(expected + slide);
 	*entry = (uintptr_t)replacement;
 	vm_protect(mach_task_self(), page, vm_page_size, FALSE, VM_PROT_READ);
 	return original;
@@ -85,8 +98,8 @@ replace_virtual(const char *what, uintptr_t slot, uintptr_t expected, void *repl
  * ds4's shader without the weights) and function_supported() says yes for it. Without it, what needs the
  * function is not drawn.
  */
-#define CA_SHADER_TABLE         0x1d5b48a10UL   /* indexed by function (16.5: 0x1d5b54790) */
-#define FUNCTION_SHADOW_BLUR    40
+static uintptr_t CA_SHADER_TABLE;       /* indexed by function (16.7: 0x1d5b48a10; 16.5: 0x1d5b54790) */
+static unsigned FUNCTION_SHADOW_BLUR = 40;
 
 static const char shadow_blur_source[] =
     "uniform lowp sampler2DRect texture0;\n"
@@ -165,18 +178,39 @@ hakios_ca_hooks(void)
 		return;
 	}
 	slide = (uintptr_t)cache - CACHE_BASE;
+	const struct cache_build *b = NULL;
+
+	/* the build whose vtable holds its two functions where it says (only a pointer's low bits: no PAC on this CPU) */
+	for (unsigned i = 0; i < sizeof(builds) / sizeof(builds[0]) && b == NULL; i++) {
+		uintptr_t s = *(uintptr_t *)(VSLOT(builds[i].vtable, builds[i].supported_slot) + slide) & 0x7fffffffffUL;
+		uintptr_t u = *(uintptr_t *)(VSLOT(builds[i].vtable, builds[i].uniform_slot) + slide) & 0x7fffffffffUL;
+
+		if (s == builds[i].supported + slide && u == builds[i].uniform + slide) {
+			b = &builds[i];
+		}
+	}
+	if (b == NULL) {
+		say("hakios-ca: QuartzCore is none of the builds known here: no CoreAnimation hooks (slide %#lx)\n", slide);
+		return;
+	}
+	if (b->ios18) {
+		hakios_gl_ios18_functions();
+		FUNCTION_SHADOW_BLUR = 42;
+	}
+	CA_SHADER_TABLE = b->shader_table;
 	{
 		char arguments[1024] = "";
 		size_t size = sizeof(arguments) - 1;
 
-		if (sysctlbyname("kern.bootargs", arguments, &size, NULL, 0) == 0 && strstr(arguments, "glsb3=1") != NULL) {
+		if (CA_SHADER_TABLE != 0 && sysctlbyname("kern.bootargs", arguments, &size, NULL, 0) == 0 &&
+		    strstr(arguments, "glsb3=1") != NULL) {
 			give_shadow_blur();
 		}
 	}
-	orig_function_supported = replace_virtual("function_supported", VSLOT(VT_GLES_CONTEXT, 0x378), FUNCTION_SUPPORTED,
+	orig_function_supported = replace_virtual("function_supported", VSLOT(b->vtable, b->supported_slot), b->supported,
 	    my_function_supported);
-	orig_function_uniform = replace_virtual("function_uniform", VSLOT(VT_GLES_CONTEXT, 0x388), FUNCTION_UNIFORM,
+	orig_function_uniform = replace_virtual("function_uniform", VSLOT(b->vtable, b->uniform_slot), b->uniform,
 	    my_function_uniform);
-	say("hakios-ca: CoreAnimation hooks: function_supported %s, function_uniform %s (slide %#lx)\n",
+	say("hakios-ca: %s: function_supported %s, function_uniform %s (slide %#lx)\n", b->name,
 	    orig_function_supported ? "watched" : "NOT watched", orig_function_uniform ? "watched" : "NOT watched", slide);
 }

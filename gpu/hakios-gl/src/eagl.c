@@ -1940,12 +1940,28 @@ static const char table_fragment[] =
  *   digits pass through one that keeps nothing but red as alpha ("colorToAlphaMask") before they
  *   are that mask; drawn as they were, they stayed white.
  */
-#define FUNCTION_MATRIX_PREMULTIPLIED   20
-#define FUNCTION_DOWNSAMPLE_8           28
-#define FUNCTION_VARIABLE_DOWNSAMPLE    38
-#define FUNCTION_VARIABLE_BLUR          39
-#define FUNCTION_SHADOW_BLUR            40
-#define FUNCTION_VIBRANT_MATRIX         45
+/*
+ * (Galaxy S7 port) The numbers are iOS 16's; iOS 18 (22H352) put functions in between (by the table of their names in
+ * QuartzCore, 0x1e7311c60: c4p 22, ds8 29, vrd 39, vrb 40, sb3 42, vcm 48), and ca_hooks.c switches these to them when it
+ * finds that QuartzCore (hakios_gl_ios18_functions()).
+ */
+static unsigned hakios_functions[6] = { 20, 28, 38, 39, 40, 45 };
+#define FUNCTION_MATRIX_PREMULTIPLIED   hakios_functions[0]
+#define FUNCTION_DOWNSAMPLE_8           hakios_functions[1]
+#define FUNCTION_VARIABLE_DOWNSAMPLE    hakios_functions[2]
+#define FUNCTION_VARIABLE_BLUR          hakios_functions[3]
+#define FUNCTION_SHADOW_BLUR            hakios_functions[4]
+#define FUNCTION_VIBRANT_MATRIX         hakios_functions[5]
+
+void hakios_gl_ios18_functions(void);
+
+void
+hakios_gl_ios18_functions(void)
+{
+	static const unsigned ios18[6] = { 22, 29, 39, 40, 42, 48 };
+
+	memcpy(hakios_functions, ios18, sizeof(hakios_functions));
+}
 
 static const char vibrant_fragment[] =
     "#version 300 es\n"
