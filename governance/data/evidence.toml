@@ -4149,3 +4149,18 @@ sha256 = "3118deb3803bb6d143aff66973463ef8824c179a6c8c120be21c32796b2e5913"
 size = 1863
 immutable = true
 note = "Escrituras de BOOT bajo D-0085: min40, min37 (vuelta), min41, min42, min43, min44 = 6 de 10; paquete DROP 6 = 1 de 10. SHA de las imágenes en el documento y en boot-candidates-n3-run22..26."
+
+[[evidence]]
+id = "E-0282"
+title = "Causa de los paneles de min40-min47: ADT distinto (embedded.adt modificado el 16-nov frente a herolte-3g.adt de min37); reconstrucción de min37 con herolte-3g.adt reproduce su SHA; min48 (kernel con 0363, ADT correcto, 6da972b0…4596) arranca a la pantalla de inicio"
+kind = "document"
+path = "/home/pioxi/HackiOS/repos/wardevsa-ios-a5xelte-v2/docs/S7GE_PANIC_TURNSTILE_20261116.md"
+location = "repo"
+created = "2026-11-17"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "5a6cd3996e58c79d83676b18e30a8082d3c50dae7a09d959c35dbabdaa016d59"
+size = 2638
+immutable = true
+note = "Amparo D-0086 (escrituras de BOOT 2 de 15 nuevas: min47, min48). Logs: phase1-20261114/min46..min48-herolog.txt. El panic hook de 0363 no dejó texto en min47 (os_refcnt overflow en pantalla): hay que revisarlo."

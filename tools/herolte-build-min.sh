@@ -9,7 +9,7 @@ set -euo pipefail
 K=$1 C=$2 O=$3 N=$4 FLASH=${5:-}
 T=$(cd "$(dirname "$0")" && pwd)
 B=${HEROLTE_DEVICE_DAY:-$HOME/HackiOS/builds/device-day}
-A=${HEROLTE_ADT:-$B/boot-candidates-n2/embedded.adt}
+A=${HEROLTE_ADT:-$B/boot-candidates/herolte-3g.adt}   # min37 was built with this one (SHA reproduced); boot-candidates-n2/embedded.adt was modified on 16-nov
 L=${HEROLTE_LOADER:-$B/loader-clang/xnu_boot.Image}
 S=${HEROLTE_STOCK_BOOT:-$HOME/HackiOS/backups/device-herolte/2026-11-12/BOOT.img}
 for f in "$K" "$C" "$A" "$L" "$S"; do [[ -f $f ]] || { echo "missing $f" >&2; exit 2; }; done
