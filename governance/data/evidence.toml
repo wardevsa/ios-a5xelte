@@ -4239,3 +4239,18 @@ sha256 = "c80ff5f15ec0b62cda88d7ca1dc2b8d6d0062bea6122593d7fa1b80bf1767325"
 size = 182600
 immutable = true
 note = "Amparo D-0087 y D-0088 (BOOT 5 de 15: min60-min64). Logs relacionados: min62c y min63 en el mismo directorio. Siguiente prueba: cpus=4 (min65) para ver cuánto cuesta cada clúster en reposo. Hipótesis sin comprobar: núcleos en reposo sin apagado de clúster, memoria (DRAM/MIF) a frecuencia máxima, módem Shannon y otros raíles que S-Boot dejó encendidos (volcado HEROLTE PMIC de min62)."
+
+[[evidence]]
+id = "E-0288"
+title = "Referencia de Linux (TWRP) en este mismo teléfono, sin cable (solo lectura de sysfs, registrador en la RAM de TWRP): con la pantalla apagada gasta 25-35 mA y con la pantalla encendida a brillo 249 unos 100-130 mA, frente a ~536 mA y ~580 mA de iOS (min64): el hardware llega a ese reposo y la diferencia es software; Linux idling: cpuidle cpu-sleep (PSCI CPU_SUSPEND, parámetro 0x10000) 560 s frente a 5 s de WFI, núcleos 6 y 7 offline, A53 a 130-962 MHz, Mongoose a 624-1040 MHz, memoria (MIF) a 421 MHz de un máximo de 1794 MHz, INT a 255 MHz, vdd_g3d y los raíles de cámara desactivados, vdd_apollo a 600 mV"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/twrp-linux-idle-current.log"
+location = "scratch"
+created = "2026-11-17"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "416b327cc7615864cd53e7cabde63aa13256552a789ddc66692ac077691c2d0d"
+size = 5878
+immutable = true
+note = "El registrador fue un bucle de shell en TWRP que solo lee /sys/class/power_supply, backlight y regulator y escribe en /tmp (RAM): una orden de dispositivo no enumerada en D-0087, anotada aquí por transparencia. Los parámetros PSCI (CPU_SUSPEND 0xc4000001, parámetro 0x10000, latencias de 35-90 us) salen del DTB de Samsung dentro de BOOT.img (copia de seguridad). Las frecuencias y el estado de los raíles son los de TWRP en reposo, no los de iOS."

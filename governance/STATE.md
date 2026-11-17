@@ -1,10 +1,10 @@
 # Estado actual de IOS S7
 
-<!-- state-commit: 7a75c71 -->
-**Verificado el 2026-11-15 sobre el commit `7a75c71`** (el estado se refresca en cada relevo; `check` avisa de la distancia).
+<!-- state-commit: b8d84ef -->
+**Verificado el 2026-11-17 sobre el commit `b8d84ef`** (el estado se refresca en cada relevo; `check` avisa de la distancia).
 
 ## 1. En una frase
-**iOS 16.7.16 arranca en el Galaxy S7 (SM-G930F) hasta la pantalla de inicio con táctil, CPU a 2600 MHz y GPU a 650 MHz** (BOOT `min31`, observación del Director y logs L2, E-0232); se ha instalado además el mecanismo DROP v2 (probado en el teléfono, E-0237) y, en el último paso escrito, `min33` con `herogl=1` más el paquete real 1 de userland (hero-run, Mesa/GL, `herosb`), **aún sin probar** (E-0241, E-0242).
+**iOS 16.7.16 arranca en el Galaxy S7 (SM-G930F) con táctil, audio, Wi-Fi, GPU (EAGL sobre Mesa) y 14-20 fps; BOOT actual `min64` (kernel del CI con parches hasta 0436, ADT `herolte-3g`, línea de 589 caracteres con gobernador de CPU).** El trabajo vivo es la energía: con la pantalla apagada gasta ~540 mA frente a 25-35 mA de Linux en el mismo teléfono (E-0288); los 9 dominios de energía estaban encendidos, la memoria y los núcleos no entran en reposo profundo. Apps de la App Store, Fotos, Mensajes y vídeo siguen sin funcionar (sin Metal ni decodificador).
 
 ## 2. Hechos medidos (con evidencia)
 | Hecho | Evidencia | Nivel |
