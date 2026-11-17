@@ -107,6 +107,10 @@ if build[:2].isdigit() and int(build[:2]) >= 22:
     # boot-18k18g: cryptexd died 14 times in libimage4 (it needs the SEP; KeepAlive until its init file exists, which never
     # comes), passd 7 times in FinanceKit (Wallet), and findmylocated (~100 %) and nehelper (~100 %) spun the whole session.
     off_labels |= {'com.apple.security.cryptexd', 'com.apple.passd', 'com.apple.findmy.findmylocated', 'com.apple.nehelper'}
+    # boot-18k20 (system UI on the Mali): searchpartyd (Find My network) ~70 %, mobileassetd ~33 %, osanalyticshelper ~19 %
+    # (writing crash reports) and PerfPowerServices ~16 % on average, nothing of it of use here.
+    off_labels |= {'com.apple.icloud.searchpartyd', 'com.apple.mobileassetd', 'com.apple.osanalytics.osanalyticshelper',
+                   'com.apple.PerfPowerServices', 'com.apple.PerfPowerServicesExtended'}
     # the boot-arg heronoexec list of xnu/patches 0253 (docs/herolte-howto.md), by program name
     off_programs = {'vmd', 'searchd', 'ReportCrash', 'aggregated', 'analyticsd', 'cloudd', 'homed', 'driverkitd'}
 removed = []
