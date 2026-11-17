@@ -29,10 +29,26 @@ jobs:
           "$RUNNER_TEMP/venv/bin/pip" install -q mako pyyaml packaging setuptools meson
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
           echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
+      # Mesa (the long part, ~6 min) depends only on gpu/mesa/**: its work tree and outputs are cached under that hash.
+      # patch-mesa.py is not idempotent, so on a hit build-mesa.sh is skipped altogether; gpu/eagl (hero-run, the EAGL
+      # shim) is always rebuilt. A change in gpu/mesa/** misses the cache and rebuilds Mesa from scratch as before.
+      - name: Restore Mesa build
+        id: mesa
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/mesa-work
+            out
+          key: mesa-build-${{ hashFiles('gpu/mesa/**') }}-v1
       - name: Build
         run: |
           set -o pipefail
-          bash gpu/mesa/build-mesa.sh "$RUNNER_TEMP/mesa-work" out 2>&1 | tee build.log
+          : > build.log
+          if [ "${{ steps.mesa.outputs.cache-hit }}" = "true" ]; then
+            echo "Mesa build restored from cache; build-mesa.sh skipped" | tee -a build.log
+          else
+            bash gpu/mesa/build-mesa.sh "$RUNNER_TEMP/mesa-work" out 2>&1 | tee -a build.log
+          fi
           MESA_INC="$RUNNER_TEMP/mesa-work/mesa/include" bash gpu/eagl/build-eagl.sh out 2>&1 | tee -a build.log
           shasum -a 256 out/osmesa-test out/eagl_ca_test out/hero-run out/lib/* | tee out/SHA256SUMS
       # Logs need a GitHub sign-in to read; check-run annotations are public.
