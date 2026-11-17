@@ -30,7 +30,7 @@ index 026217a..ba42c35 100644
 +	}
 +	bool widget = false;
 +	for (const char *c = name; *c != '\0' && !widget; c++) {
-+		widget = strncmp(c, "Widge", 5) == 0;
++		widget = strncmp(c, "Wid", 3) == 0;     /* 9178: "HealthBalanceWid", names cut at 16 */
 +	}
 +	if (percent <= 0 || percent > 100 || !widget) {
 +		return;
