@@ -4389,3 +4389,18 @@ sha256 = "ac653ca983c9edb90dac75c91ed99a5e63666a094d19ec758fc3c50cb894a68f"
 size = 98213
 immutable = true
 note = "Amparo D-0090 (BOOT 9 de 10: min73-min81). Imagen min81 b9a55c4b. La inferencia sobre el momento del cuelgue es mía (por el volcado de 1 s), no una medida directa. Siguiente prueba, un solo cambio: la misma imagen con heroidle=25840 (máscara 0xf0, tope 100 ms, SIN el bit de CPD)."
+
+[[evidence]]
+id = "E-0298"
+title = "min82 (0451, heroidle=25840: núcleos 4-7 en reposo profundo, tope 100 ms, SIN el bit de CPD): arranca, vive 240 s y los cuatro Mongoose entran y despiertan (cpu4 enter 17379 / resume 6250, cpu5 15059/5502, cpu6 13458/5027, cpu7 12270/4857, 184 SGIs del vigilante, 0 avisos 'has not come back'); la corriente con la pantalla apagada es de 514 mA de mediana (36 muestras, 529 con la pantalla encendida) y 6,5 fps medios: dormir los cuatro Mongoose sin apagar el clúster tampoco baja el consumo (misma cifra que min78-min80); queda establecido que dormir el núcleo 4 funciona y que lo que colgó min81 fue el bit de CPD"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min82-herolog.txt"
+location = "scratch"
+created = "2026-11-18"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "1aae807163bf8d1032e54d130a895b2cb06efc68b552f5c0006ff2ad0e52f17a"
+size = 214782
+immutable = true
+note = "Amparo D-0090/D-0092 (BOOT 10 de 10 de D-0090: min73-min82). Imagen min82 f6bf6387. Hipótesis para min81 (no medida): se puso el bit del PMU pero se llamó al monitor con el estado de núcleo (0x10000) y no el de clúster (0x01000000, de psci.c de Samsung); parche 0452."
