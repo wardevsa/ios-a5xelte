@@ -1,0 +1,68 @@
+herolte: step response of the screen-off current: power domains off one group at a time, herostep=<s> (0455, D-0093)
+
+E-0301 (min85): cores 97-99.9% idle, cluster power-down saves nothing measurable (+11 mA, 95% interval [-10, +32] inside one boot): the ~465-505 mA screen-off floor (Linux 25-35) is not the cores. herostep=<s> (>= 10): once the screen has been off 30 s, every <s> seconds one more group of power domains is switched off, one way: the six small ones of heropd, then aud, g3d, disp0. Each step logs HEROLTE STEP n and PD lines; the PWR samples between two steps are the current with that group off, in the same boot. A domain that does not report off within 10 ms is put back on. g3d, aud and disp0 are not covered by D-0088: this is D-0093. herostep only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2726,9 +2726,12 @@
+ 	 * restores them (S-Boot sets them up again). One boot thus gives the current with each domain on and then off.
+ 	 */
+ 	uint32_t pd_s = 0;
++	uint32_t step_s = 0;        /* 0455: herostep=<s> */
++	unsigned step_i = 0;
+ 	uint64_t pd_at = 0;
+ 	unsigned pd_i = 0;
+ 	PE_parse_boot_argn("heropd", &pd_s, sizeof(pd_s));
++	PE_parse_boot_argn("herostep", &step_s, sizeof(step_s));
+ 	/*
+ 	 * 0437: read-only PSCI probe, once, 30 s after the thread starts: PSCI_VERSION (0x84000000), PSCI_FEATURES of CPU_SUSPEND
+ 	 * (0xc4000001), CPU_OFF and SYSTEM_SUSPEND, and AFFINITY_INFO (0xc4000004: 0 ON, 1 OFF, 2 ON_PENDING) of each core. Linux in
+@@ -3009,6 +3012,48 @@
+ 				pd_at = now;
+ 			}
+ 		}
++		/*
++		 * 0455 (D-0093): the step response of the screen-off current. herostep=<s> (>= 10): once the screen has been off for 30 s,
++		 * every <s> seconds one more group of power domains is switched off, one way (a reboot restores them): step 0 the six
++		 * small ones heropd handles (mfc, isp1, isp0, cam1, cam0, mscl), then aud, then g3d, then disp0 (the riskiest, last).
++		 * Each step logs "HEROLTE STEP n" and the PD lines; the PWR lines between two steps are the current with that group
++		 * off, in the same boot and the same minutes. Same gating as heropd: CONFIG's low nibble to 0, STATUS read back, a domain
++		 * that does not report off within 10 ms is put back on. Do not combine with heropd (it would gate the small six itself).
++		 * min85 (E-0301): the cores are 97-99.9 % idle and cluster power-down saves nothing measurable, so the screen-off floor
++		 * (~465-505 mA against Linux's 25-35) is elsewhere.
++		 */
++		if (step_s >= 10 && step_i < 4 && screen_off && ns >= (30ull + (uint64_t)step_i * step_s) * NSEC_PER_SEC) {
++			static const struct { const char *name; uint16_t off[6]; } steps[] = {
++				{ "mfc+isp1+isp0+cam1+cam0+mscl", { 0x180, 0x160, 0x140, 0xa0, 0x20, 0x40 } },
++				{ "aud", { 0xc0 } }, { "g3d", { 0x60 } }, { "disp0", { 0x80 } },
++			};
++			static vm_offset_t pdb2;
++			if (!pdb2) {
++				pdb2 = ml_io_map(0x105c4000u, 0x200);
++			}
++			if (pdb2) {
++				printf("HEROLTE STEP %u: gating %s (screen off %llu s)\n", step_i, steps[step_i].name, ns / NSEC_PER_SEC);
++				for (unsigned k = 0; k < 6; k++) {
++					uint16_t off = steps[step_i].off[k];
++					if (!off) {
++						break;
++					}
++					uint32_t before = hg_rd(pdb2, off);
++					bool down = false;
++					hg_wr(pdb2, off, before & ~0xfu);
++					for (unsigned w = 0; w < 2000 && !down; w++) {
++						delay(5);
++						down = (hg_rd(pdb2, off + 4u) & 0xfu) == 0;
++					}
++					if (!down) {
++						hg_wr(pdb2, off, before);
++					}
++					printf("HEROLTE PD: step %u domain at %#x %s (config %#x -> %#x, status %#x)\n", step_i, off, down ? "OFF" : "did not go off, put back on",
++					    before, hg_rd(pdb2, off), hg_rd(pdb2, off + 4u));
++				}
++			}
++			step_i++;
++		}
+ 		if (gov_on && !hc.broken) {
+ 			extern uint64_t herolte_cluster_busy_mach(int first, int last);      /* osfmk/kern/processor.c */
+ 			uint64_t busy = herolte_cluster_busy_mach(4, 7);
