@@ -1,0 +1,90 @@
+herolte: a broadcast tick on cpu 0 wakes the cores that sleep deeply when their timer is due (0445)
+
+min74 (0444): the UI at normal speed, but the buttons and the screen-off key did not answer and the log thread stopped after 25 s (flush #2 only), as in min68-min70 when cpu 7 was dead. The core's own timer does not wake a powered-down core: the 2 ms CNTV of 0439 only appeared to, the min71/min72 wake-ups were IPIs (the watchdog's SGIs and XNU's own cross-CPU signals); Samsung's Linux wakes on the always-on MCT. With long sleeps (0443) every callout, timed sleep and key debounce of a sleeping core waited for the next IPI. Now: the pop of the core is published before CPU_SUSPEND (herolte_idle_pop; a pop already due, or under 3 ms away, is no deep idle) and a thread on cpu 0 looks every millisecond and sends the SGI when a sleeper's pop is due (1 ms ahead). heroidle only (D-0089).
+
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -493,6 +493,7 @@
+ volatile uint64_t herolte_idle_entry_pa;
+ volatile uint64_t herolte_idle_enter[MAX_CPUS], herolte_idle_resume[MAX_CPUS], herolte_idle_since[MAX_CPUS];
+ volatile uint64_t herolte_idle_arm[MAX_CPUS];        /* 0440: arm_init_idle_cpu reached (MMU on) */
++volatile uint64_t herolte_idle_pop[MAX_CPUS];        /* 0445: the next timer pop of a core when it went to sleep (what the broadcast tick of herolte_gpu.c wakes it for) */
+ volatile uint64_t herolte_idle_pmu_cfg[MAX_CPUS];   /* 0441: VA of each core's PMU CONFIGURATION register (PMU+0x2000+0x80*(Aff1<<2|Aff0)); 0 = not mapped: no deep idle */
+ 
+ static bool
+@@ -523,9 +524,16 @@
+ 	 */
+ 	{
+ 		uint64_t now_t = mach_absolute_time(), pop = cdp->rtcPop;
+-		if (pop > now_t && pop - now_t < 78000ULL) {      /* 3 ms at 26 MHz */
++		if (pop <= now_t || pop - now_t < 78000ULL) {      /* a timer already due, or less than 3 ms away (26 MHz) */
+ 			return false;
+ 		}
++		/*
++		 * 0445: min74 (0444): the UI ran at normal speed but the buttons did not answer and the log thread stopped after 25 s. The
++		 * core's own timer (CNTV, what XNU arms for rtcPop) is not a wake source of a powered-down core (Samsung's Linux wakes on the
++		 * always-on MCT; the 2 ms CNTV of 0439 only looked as if it worked, the wake-ups came from IPIs), so every callout, timed
++		 * sleep and debounce of a sleeping core waited for the next IPI. The pop is published here; a tick on cpu 0 sends the SGI.
++		 */
++		herolte_idle_pop[c] = pop;
+ 	}
+ 	herolte_idle_enter[c]++;
+ 	herolte_idle_since[c] = mach_absolute_time();
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2623,6 +2623,42 @@
+ 	return p ? 26 * m / (p << s) : 0;
+ }
+ 
++/*
++ * 0445: the broadcast tick for deep idle. A powered-down core does not wake on its own timer (see herolte_idle_suspend), so a
++ * thread bound to cpu 0, which never sleeps deeply, looks every millisecond at the cores that sleep and sends the wake-up SGI
++ * when the next timer pop they published is due (1 ms ahead). A core woken by anything else drops its entry (since = 0).
++ */
++static void
++hg_idle_tick(__unused void *arg, __unused wait_result_t wr)
++{
++	extern volatile uint32_t herolte_idle_mask;
++	extern volatile uint64_t herolte_idle_since[], herolte_idle_pop[];
++	extern void a5xelte_send_ipi(unsigned int logical);
++	extern struct processor *cpu_to_processor(int cpu);
++	extern struct processor *thread_bind(struct processor *processor);
++	uint64_t sent[8] = { 0 };
++	thread_bind(cpu_to_processor(0));
++	hg_msleep(1);
++	for (;;) {
++		hg_msleep(1);
++		if (!herolte_idle_mask) {
++			hg_msleep(100);
++			continue;
++		}
++		uint64_t now = mach_absolute_time();
++		for (unsigned c = 1; c < 8; c++) {
++			uint64_t since = herolte_idle_since[c], pop = herolte_idle_pop[c];
++			if (!(herolte_idle_mask & (1u << c)) || since == 0 || sent[c] == since) {
++				continue;
++			}
++			if (pop != 0 && pop <= now + 26000ull) {
++				sent[c] = since;
++				a5xelte_send_ipi(c);
++			}
++		}
++	}
++}
++
+ static void
+ hg_power_thread(__unused void *arg, __unused wait_result_t wr)
+ {
+@@ -2793,6 +2829,12 @@
+ 					__builtin_arm_dsb(0xf);      /* DSB SY */
+ 					herolte_idle_mask = idle_mask_want & ~1u;
+ 					printf("HEROLTE IDLE: deep idle on for CPUs %#x through the trampoline at 0x8fffe000\n", herolte_idle_mask);
++					{
++						thread_t tick;
++						if (kernel_thread_start(hg_idle_tick, NULL, &tick) == KERN_SUCCESS) {
++							thread_deallocate(tick);
++						}
++					}
+ 				} else {
+ 					printf("HEROLTE IDLE: no CPU_ON trampoline at 0x8fffe000 (%#x %#x): deep idle stays off\n",
+ 					    tr ? ((volatile uint32_t *)tr)[0] : 0, tr ? ((volatile uint32_t *)tr)[1] : 0);
