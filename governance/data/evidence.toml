@@ -4404,3 +4404,18 @@ sha256 = "1aae807163bf8d1032e54d130a895b2cb06efc68b552f5c0006ff2ad0e52f17a"
 size = 214782
 immutable = true
 note = "Amparo D-0090/D-0092 (BOOT 10 de 10 de D-0090: min73-min82). Imagen min82 f6bf6387. Hipótesis para min81 (no medida): se puso el bit del PMU pero se llamó al monitor con el estado de núcleo (0x10000) y no el de clúster (0x01000000, de psci.c de Samsung); parche 0452."
+
+[[evidence]]
+id = "E-0299"
+title = "min83 (0452, heroidle=91376: cpu4-7 + apagado de clúster CPD con el estado PSCI de clúster 0x01000000): arranca, vive 300 s sin cuelgue ni avisos 'has not come back'; el bit de CPD se activó 11925 veces y se quitó 11307; en la lectura de estado del PMU el clúster Mongoose estaba realmente apagado (NONCPU status 0x5e0000 en vez de 0xf, L2 status 0x10050000 en vez de 0x7); la corriente con la pantalla apagada baja a 460 mA de mediana (35 muestras) frente a 514 de min82 (mismos núcleos sin CPD) y 505 de min80: primera reducción medida del suelo de reposo, unos 50 mA (~10 %); coste observado: 2,5 fps medios (7 muestras) frente a 6,5 de min82, y 489 mA con la pantalla encendida; confirma la hipótesis de E-0297/E-0298 (faltaba el estado PSCI de clúster)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min83-herolog.txt"
+location = "scratch"
+created = "2026-11-18"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "7840100deaeaf6a188b9af7ab46f529a43e6716c887c0ec8b8fcd8ea8d9ae32a"
+size = 177620
+immutable = true
+note = "Amparo D-0092 (BOOT 1 de 20: min83). Imagen min83 51bb025c, kernel CI 44405206107 (parche 0452). Reserva: que la pérdida de fps se deba a la latencia de despertar del clúster no está medido; hace falta repetir con el CPD solo con la pantalla apagada (propuesta 0453). Muestras pequeñas (35 y 7), una sola prueba."
