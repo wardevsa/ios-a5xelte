@@ -4419,3 +4419,18 @@ sha256 = "7840100deaeaf6a188b9af7ab46f529a43e6716c887c0ec8b8fcd8ea8d9ae32a"
 size = 177620
 immutable = true
 note = "Amparo D-0092 (BOOT 1 de 20: min83). Imagen min83 51bb025c, kernel CI 44405206107 (parche 0452). Reserva: que la pérdida de fps se deba a la latencia de despertar del clúster no está medido; hace falta repetir con el CPD solo con la pantalla apagada (propuesta 0453). Muestras pequeñas (35 y 7), una sola prueba."
+
+[[evidence]]
+id = "E-0300"
+title = "min84 (0453, heroidle=222448: CPD solo con la pantalla apagada): arranca y vive 240 s sin cuelgue ni avisos; la fluidez media sube a 10,9 fps (máx 21,1; 12 muestras) frente a 2,5 de min83 (CPD siempre) y 6,5 de min82 (sin CPD): el coste en fps de min83 desaparece al limitar el CPD a la pantalla apagada; el ahorro con la pantalla apagada NO se reproduce de forma clara: con el mismo criterio de limpieza (300-800 mA, fuera el despertar de la pantalla y el cable) las medianas son min80 505 (n=41, error típico 4), min82 502 (n=30, 9), min83 460 (n=35, 5) y min84 491 (n=18, 16); el CPD se activó al ritmo de min83 (~38 por segundo), así que la diferencia no es que no actuara"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min84-herolog.txt"
+location = "scratch"
+created = "2026-11-18"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "bea2891e6b288df199175875118d31d084cc4ab72db4581c15ad304f36d12817"
+size = 201324
+immutable = true
+note = "Amparo D-0092 (BOOT 2 de 20: min83, min84). Imagen min84 24abb279, kernel CI 44410185862 (parche 0453; la etiqueta 'CPD on/off' del log no entró por un reemplazo que no se aplicó). Factor de confusión: en min84 la pantalla se apagó a los ~100 s del arranque, con tareas de arranque aún activas, y las últimas 5 muestras 'apagada' son el despertar y el cable. Una sola prueba por configuración. Siguiente: parche 0454, A/B dentro del mismo arranque (CPD alterna cada 30 s con la pantalla apagada)."
