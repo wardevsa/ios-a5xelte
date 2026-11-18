@@ -4329,3 +4329,18 @@ sha256 = "e6849e07b0b335c27feb80db4376f043c2b9dc0b32db5cac04ad66ab002ab5f7"
 size = 107405
 immutable = true
 note = "Amparo D-0090 (BOOT 5 de 10: min73-min77). El parche 0448 repone el paso. Fue un error mío de edición, no del hardware: se gastaron cuatro escrituras de BOOT (min73-min77, con min73-min76 sin la causa) y varias explicaciones equivocadas (0445 y 0447) hasta darme cuenta. Lección: tras quitar un bloque de código, comprobar con grep que sigue lo que debía seguir y reconstruir una imagen conocida buena (min71) antes de sumar cambios."
+
+[[evidence]]
+id = "E-0294"
+title = "min78 (0448: el paso del PMU repuesto y comprobado en el binario): los seis núcleos en reposo profundo vuelven a entrar y despertar sin colgar el sistema (240 s de vida, cpu1 enter 18717 / resume 15763, cpu5 11370/4211, cpu7 9201/3621 en unos 4 minutos, solo 227 SGIs del vigilante), la fluidez media baja a 7,3 fps y la corriente con la pantalla apagada es de 497 mA de mediana (la misma que con un núcleo, 492, y la de min72, 491): con el tope de 5 ms cada núcleo hace unos 80 ciclos por segundo y el coste de cada ciclo se come lo que ahorra el sueño; confirma E-0293"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min78-herolog.txt"
+location = "scratch"
+created = "2026-11-18"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ced8ba83fc5d3c1b56ed0600eb1e51227114f20bda54323772817dd8ef69e55b"
+size = 186963
+immutable = true
+note = "Amparo D-0090 (BOOT 6 de 10: min73-min78). Siguiente prueba: el tope de sueño como argumento (parche 0449: heroidle bits 8-15, en ms)."
