@@ -4344,3 +4344,18 @@ sha256 = "ced8ba83fc5d3c1b56ed0600eb1e51227114f20bda54323772817dd8ef69e55b"
 size = 186963
 immutable = true
 note = "Amparo D-0090 (BOOT 6 de 10: min73-min78). Siguiente prueba: el tope de sueño como argumento (parche 0449: heroidle bits 8-15, en ms)."
+
+[[evidence]]
+id = "E-0295"
+title = "min79 (0449: tope de sueño de 100 ms, seis núcleos): el sistema vivió 360 s, el log siguió, los botones registraron 10 eventos; los núcleos siguen haciendo unos 65 ciclos por segundo (cpu1 enter 19774 / resume 17272 en ~5 min) porque se despiertan por sus vencimientos y señales, no por el tope; la corriente con la pantalla apagada es de 495 mA de mediana: IGUAL que con un núcleo (492), con seis y tope 5 ms (497) y con ninguno salvo 536 de min64; conclusión: el reposo profundo por núcleo funciona pero NO baja el consumo con la pantalla apagada: el suelo de ~495 mA está en otra parte (reposo de clúster y de sistema, memoria, raíles)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min79-herolog.txt"
+location = "scratch"
+created = "2026-11-18"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "4de481a40ab64b33a1d175d6a3068670c0bb40222f9335e4a6b96cd4be6bf0dc"
+size = 241321
+immutable = true
+note = "Amparo D-0090 (BOOT 7 de 10: min73-min79). Decodificado el volcado del PMIC de min62 con el mapa de Samsung (s2mps16.h): los raíles BUCK/LDO tienen modos 0-3 (3 = siempre encendido, 1 = sigue a PWREN) y no hay comparación con el estado de Linux a nivel de registro. Las vías de ahorro que usa Linux (exynos-powermode.c) son reposo de clúster (CPD), SICD (reposo de sistema) y paradas de reloj por IP ociosa (idle-ip)."
