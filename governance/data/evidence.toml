@@ -4374,3 +4374,18 @@ sha256 = "f36886f19c1821f0f5387537c18efc8121ad36570d84a142a5c9aff498c76ccd"
 size = 170111
 immutable = true
 note = "Amparo D-0090 (BOOT 8 de 10: min73-min80). Imagen min80 cda3237f. Que el estado sea 0 por falta de aviso de los drivers es una HIPÓTESIS (no medido). Informe de aprendizaje en docs/aprendizaje/20261118-reposo-de-sistema-y-idle-ip.md (D-0091)."
+
+[[evidence]]
+id = "E-0297"
+title = "min81 (0451, heroidle=91376: núcleos 4-7 y apagado de clúster CPD): el sistema se colgó en los primeros segundos tras armar el reposo profundo; el log termina a los ~25 s (2071 líneas, 98 KB), sin la línea 'deep idle on' ni ningún latido 'alive', y la línea HEROLTE IDLE de las primeras lecturas muestra mask 0 (todavía no armado): como el hilo de energía vuelca el log una vez por segundo, el cuelgue ocurrió menos de un segundo después de armar la máscara 0xf0, cuando cpu4-7 empezaron a ir a CPU_SUSPEND; no se puede separar aún si la causa es suspender cpu4 (min67 con la máscara 254, que incluía cpu4, también se colgó, aunque entonces sin el paso del PMU) o el bit CPD; el contador 'CPD set' no llegó a imprimirse"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min81-herolog.txt"
+location = "scratch"
+created = "2026-11-18"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ac653ca983c9edb90dac75c91ed99a5e63666a094d19ec758fc3c50cb894a68f"
+size = 98213
+immutable = true
+note = "Amparo D-0090 (BOOT 9 de 10: min73-min81). Imagen min81 b9a55c4b. La inferencia sobre el momento del cuelgue es mía (por el volcado de 1 s), no una medida directa. Siguiente prueba, un solo cambio: la misma imagen con heroidle=25840 (máscara 0xf0, tope 100 ms, SIN el bit de CPD)."
