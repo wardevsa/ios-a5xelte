@@ -4269,3 +4269,18 @@ sha256 = "b2d6f5e1a8c2496bae94b37d6fde3149245ba856a55f8371b6285ad85213ea61"
 size = 149460
 immutable = true
 note = "Amparo D-0087 (BOOT 8 de 15: min60-min66). Parche 0438 preparado (reposo profundo de núcleos elegidos, apagado por defecto); NO escrito en ninguna imagen: pide la decisión D-0089."
+
+[[evidence]]
+id = "E-0290"
+title = "REPOSO PROFUNDO FUNCIONA en un núcleo (min71, heroidle=128, parches 0438-0441): con el paso del PMU que hace el kernel de Samsung antes de CPU_SUSPEND (CONFIGURATION del núcleo a 0, exynos-powermode.c y exynos-pmu.c), el cpu 7 entró 13534 veces y volvió 6677 (el resto de las llamadas volvieron sin apagarse) en 13 minutos, el sistema vivió 780 s con la pantalla de inicio, el audio y los botones normales, y la corriente con la pantalla apagada bajó de ~536 mA (min64) a ~492 mA de mediana (544 mínimo 439): unos 44 mA con un solo núcleo; el vigilante mandó 2679 SGIs de despertar; efecto visible: los bloques de color y el texto XNU MMU ON del arranque se dibujan en cada reanudación y quedan sobre iOS (parche 0442); PMU CONFIG/STATUS de los ocho núcleos como los dejó el bootloader: 0x8000000f / 0x6000f (cpu2 y cpu3: 0x1006000f)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min71-herolog.txt"
+location = "scratch"
+created = "2026-11-18"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "e410d4acba1bf7739e8009ae9ec8059f903174fb0bb28e722c23b2ff1ecddcc0"
+size = 274044
+immutable = true
+note = "Amparo D-0087 y D-0089 (BOOT 13 de 15: min60-min71). Fallos anteriores: min67 (máscara 254) colgó en el logo; min68-min70 (sin el paso del PMU) el núcleo no volvía. Fuente de referencia (GPL, pública): github.com/LineageOS/android_kernel_samsung_universal8890, drivers/soc/samsung/exynos-powermode.c y exynos-pmu.c. Siguiente: ampliar la máscara sin tocar los núcleos 0 y 4 (para que ningún clúster entre en reposo de clúster)."
