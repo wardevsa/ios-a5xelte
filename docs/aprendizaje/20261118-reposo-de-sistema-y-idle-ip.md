@@ -27,6 +27,15 @@ Lectura:
 **Pregunta posible:** «¿Por qué apagar los núcleos no redujo el consumo?»
 **Respuesta modelo:** «Porque medimos que ya pasaban el 97-99 % del tiempo ociosos, y un núcleo ocioso en WFI consume muy poco. El consumo con pantalla apagada está en lo que rodea a los núcleos (memoria, relojes, interconexión), que solo se para con un reposo de sistema; para eso hace falta que el PMU vea los bloques como ociosos, y en nuestro iOS nadie se lo comunica.»
 
+**Pregunta posible:** ¿Qué es idle-IP y quién escribe esos bits?
+**Respuesta modelo:** Son cuatro palabras del PMU con un bit por bloque de hardware; un 1 significa que ese bloque está ocioso. El PMU solo deja entrar en reposo de sistema si todos los bits no enmascarados están a 1. En el Linux de Samsung los escriben por software los controladores de cada bloque; en nuestro iOS nadie lo hace.
+
+**Pregunta posible:** ¿Por qué un núcleo en reposo profundo no basta para ahorrar energía?
+**Respuesta modelo:** Porque la caché L2 y la lógica compartida del clúster siguen alimentadas mientras el clúster no se apague entero (CPD), y porque el consumo grande está fuera de los núcleos: memoria, relojes e interconexión, que solo se paran con el reposo de sistema (SICD).
+
+**Pregunta posible:** ¿Cómo sabes que la causa no eran los núcleos?
+**Respuesta modelo:** Lo medimos: con la pantalla apagada los ocho núcleos pasaban el 97-99,9 % del tiempo ociosos y, aun así, la corriente era de unos 500 mA; y con 0, 1 o 6 núcleos en reposo profundo la corriente era casi la misma. Una conclusión basada en medidas, no en suposiciones.
+
 **Error mío, para que conste:** el parche 0443 borró por error el paso del PMU de 0441, y durante cinco pruebas (min73-min77) di explicaciones equivocadas (el temporizador y las señales «no despiertan») cuando lo que faltaba era una escritura. Lección: tras quitar código, comprobar con grep y reconstruir una imagen conocida buena antes de sumar cambios (E-0293).
 
 ## 5. Para profundizar
