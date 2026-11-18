@@ -4359,3 +4359,18 @@ sha256 = "4de481a40ab64b33a1d175d6a3068670c0bb40222f9335e4a6b96cd4be6bf0dc"
 size = 241321
 immutable = true
 note = "Amparo D-0090 (BOOT 7 de 10: min73-min79). Decodificado el volcado del PMIC de min62 con el mapa de Samsung (s2mps16.h): los raíles BUCK/LDO tienen modos 0-3 (3 = siempre encendido, 1 = sigue a PWREN) y no hay comparación con el estado de Linux a nivel de registro. Las vías de ahorro que usa Linux (exynos-powermode.c) son reposo de clúster (CPD), SICD (reposo de sistema) y paradas de reloj por IP ociosa (idle-ip)."
+
+[[evidence]]
+id = "E-0296"
+title = "min80 (0450, solo lectura, sin reposo profundo): con la pantalla apagada los ocho núcleos pasan el 97-99,9 % del último minuto ociosos y la corriente es de 505 mA de mediana (42 muestras), así que los núcleos no son el consumidor; las palabras idle-IP del PMU (0x3e0-0x3ec) valen 0 y las máscaras (0x3f0-0x3fc) valen 0xffffffff en las 5 lecturas: iOS no programa el PMU para el reposo de sistema (en Linux los drivers escriben esos bits, exynos_update_ip_idle_status)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min80-herolog.txt"
+location = "scratch"
+created = "2026-11-18"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "f36886f19c1821f0f5387537c18efc8121ad36570d84a142a5c9aff498c76ccd"
+size = 170111
+immutable = true
+note = "Amparo D-0090 (BOOT 8 de 10: min73-min80). Imagen min80 cda3237f. Que el estado sea 0 por falta de aviso de los drivers es una HIPÓTESIS (no medido). Informe de aprendizaje en docs/aprendizaje/20261118-reposo-de-sistema-y-idle-ip.md (D-0091)."
