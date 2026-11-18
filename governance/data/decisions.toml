@@ -1388,3 +1388,19 @@ authorizes = []
 rationale = "El Director estudia montaje de equipos y quiere dedicarse al bajo nivel; el proyecto le sirve de formación y quiere poder defenderlo si le preguntan (petición del 2026-11-18)."
 consequences = "Tras cada hito (prueba en el teléfono, parche o hallazgo) el ingeniero escribe un informe corto en docs/aprendizaje/AAAAMMDD-tema.md con: (1) qué se hizo y por qué, en dos frases; (2) el concepto explicado desde cero; (3) la evidencia con números; (4) cómo defenderlo: una pregunta posible y una respuesta modelo; (5) para profundizar. Marca siempre lo medido, lo que es hipótesis y los errores propios. Sin datos privados (números de serie, volcados) ni binarios de Apple en el informe. No sustituye al relevo ni a las evidencias de gobierno."
 reversal = "El Director puede revocarla o cambiar el formato con un mensaje."
+
+[[decision]]
+id = "D-0092"
+title = "Amplía D-0090: 20 escrituras de BOOT y 20 de la zona DROP más, hasta 2026-11-25"
+date = "2026-11-18"
+scope = "operation"
+status = "APPROVED"
+proposer = "ingeniero"
+approved_by = "director"
+approval_date = "2026-11-18"
+approval_ref = "Mensaje del Director (PioXI), 2026-11-18: 'Si trabajando, te autorizo 20 mas de ambos, Firmado a nombre de Pioxi'. El ingeniero lo lee, igual que la ampliación de D-0090 ('10 de cada'), como 20 escrituras MÁS de BOOT y 20 MÁS de la zona DROP, contadas desde esta firma y sumadas a las que queden de D-0090; la fecha de vencimiento la fija el ingeniero."
+authorizes = ["publish", "device-write-boot", "device-write-userdata", "device-read"]
+valid_until = "2026-11-25"
+rationale = "D-0090 lleva 8 de 10 escrituras de BOOT (min73-min80) y 0 de DROP; el trabajo de energía de sistema (idle-IP, reposo de clúster y de sistema, parar relojes y dominios) exige varias imágenes más."
+consequences = "LÍMITES: 20 escrituras MÁS de BOOT y 20 MÁS de la zona DROP desde la firma de D-0092, hasta 2026-11-25; un cambio por prueba; todo lo demás de D-0085, D-0086, D-0087, D-0088, D-0089 y D-0090 sigue igual (solo BOOT y la zona DROP; nunca EFS, RECOVERY ni los cargadores; ningún pago de alcance nuevo). NO cubre cambiar la raíz de iOS en USERDATA (por ejemplo a iOS 18): eso exige una decisión propia con copias previas."
+reversal = "El Director puede revocarla con un mensaje; vence el 2026-11-25."
