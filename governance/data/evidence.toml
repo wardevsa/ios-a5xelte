@@ -4298,11 +4298,11 @@ device = "this-unit"
 sha256 = "a78a549186601c572fe09e1bf002e5c70f1b870f432815bf5c506df9c71beaa3"
 size = 216207
 immutable = true
-note = "Amparo D-0087/D-0089/D-0090 (BOOT: min72 la 14.ª de D-0087; min73 la 1.ª de D-0090). El log de min73 (phase1-20261114/min73-herolog.txt) solo tiene el segundo volcado (93241 B): se perdió el cuelgue. La causa es una hipótesis: se comprobará con min74."
+note = "CORRECCIÓN (2026-11-18): la causa probable que damos aquí (bits del PMU sin restaurar) no era la real; min73 se colgó porque 0443 borró el paso del PMU de 0441. Amparo D-0087/D-0089/D-0090 (BOOT: min72 la 14.ª de D-0087; min73 la 1.ª de D-0090). El log de min73 (phase1-20261114/min73-herolog.txt) solo tiene el segundo volcado (93241 B): se perdió el cuelgue. La causa es una hipótesis: se comprobará con min74."
 
 [[evidence]]
 id = "E-0292"
-title = "min76 (seis núcleos en reposo profundo con el log escrito desde el cpu 0 cada segundo): el sistema se colgó en el logo y esta vez dejó la traza: a los 20 s el vigilante vio que ningún núcleo había vuelto (cpu1 enter 1, cpu2 1, cpu3 3, cpu5 13, cpu6 19, cpu7 8, resume 0 en todos) con 562 SGIs de despertar enviadas: un núcleo apagado no despierta con una SGI ni con el temporizador que XNU había armado; los únicos despertares vistos hasta ahora (min71 y min72) fueron los del CNTV que el parche 0439 armaba a mano justo antes de CPU_SUSPEND (parche 0447 lo repone con el mínimo entre el vencimiento del núcleo y 5 ms)"
+title = "min76 (seis núcleos en reposo profundo con el log escrito desde el cpu 0 cada segundo): el sistema se colgó en el logo y esta vez dejó la traza: a los 20 s el vigilante vio que ningún núcleo había vuelto (cpu1 enter 1, cpu2 1, cpu3 3, cpu5 13, cpu6 19, cpu7 8, resume 0 en todos) con 562 SGIs de despertar enviadas; CORREGIDO el 2026-11-18 (E-0293): la causa no era el temporizador ni las SGI sino que el parche 0443 había borrado por error el paso del PMU de 0441 (poner a 0 los bits de energía local antes de CPU_SUSPEND): min73-min77 corrieron sin él, el mismo estado que min68-min70"
 kind = "log"
 path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min76-herolog.txt"
 location = "scratch"
@@ -4313,4 +4313,19 @@ device = "this-unit"
 sha256 = "70ea6bb376790ef42d3c8f6c246b49922a00e3281b803d4821112305040bc8f2"
 size = 109313
 immutable = true
-note = "Amparo D-0090 (BOOT 4 de 10: min73-min76). Corrige dos afirmaciones mías anteriores (E-0291 y el parche 0445): el temporizador por núcleo SÍ despierta (armado a mano), lo que no despierta es una SGI ni el vencimiento que arma XNU. CPU_ON sobre cpu1 devolvió 0 (estaba apagado) y no dejó migas."
+note = "Amparo D-0090 (BOOT 4 de 10: min73-min76). CORRECCIÓN POSTERIOR (parche 0448): lo que esta nota decía antes (que una SGI y el vencimiento de XNU no despiertan un núcleo apagado) era una explicación equivocada mía; la causa real fue el paso del PMU borrado por error en 0443. CPU_ON sobre cpu1 devolvió 0 (estaba apagado) y no dejó migas."
+
+[[evidence]]
+id = "E-0293"
+title = "Causa de min73-min77 (y de min67): el parche 0443, al quitar el bloque de prueba 0439 (temporizador de 2 ms), borró por error las dos líneas que ponían a 0 los bits de energía local del PMU antes de CPU_SUSPEND (el paso de 0441); sin ese paso el núcleo se apaga y no despierta: resume 0 en los seis núcleos tanto en min76 (enter 1/1/3/13/19/8, 562 SGIs) como en min77 (enter 1/1/2/4/1/2, 543 SGIs, CPU_ON 0, sin migas), igual que min68-min70; confirmado leyendo la función del idle (grep de pcfg) tras min77: solo quedaba la restauración a 0xf"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min77-herolog.txt"
+location = "scratch"
+created = "2026-11-18"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "e6849e07b0b335c27feb80db4376f043c2b9dc0b32db5cac04ad66ab002ab5f7"
+size = 107405
+immutable = true
+note = "Amparo D-0090 (BOOT 5 de 10: min73-min77). El parche 0448 repone el paso. Fue un error mío de edición, no del hardware: se gastaron cuatro escrituras de BOOT (min73-min77, con min73-min76 sin la causa) y varias explicaciones equivocadas (0445 y 0447) hasta darme cuenta. Lección: tras quitar un bloque de código, comprobar con grep que sigue lo que debía seguir y reconstruir una imagen conocida buena (min71) antes de sumar cambios."
