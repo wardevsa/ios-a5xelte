@@ -142,6 +142,19 @@ class _Subprocess:
 
 
 mk.subprocess = _Subprocess(subprocess)
+
+
+def _format_journaled(img, label='iOSRoot'):
+    """Renegade's format, but with an (empty) journal reserved: see hfs-journal.py. The attribute is cleared at once so
+    every Renegade step sees the unjournaled volume it expects; the build sets it again when the image is finished."""
+    if not mk.rplat.is_linux():
+        return _format_stock(img, label)
+    mk.run(['mkfs.hfsplus', '-s', '-J', '-v', label, img])
+    mk.run([sys.executable, '-I', os.path.join(HERE, 'hfs-journal.py'), 'off', img])
+
+
+_format_stock = mk.rplat.format_hfsx
+mk.rplat.format_hfsx = _format_journaled
 mk.macho_worker = macho_worker
 mk.stage_cache = stage_cache
 
