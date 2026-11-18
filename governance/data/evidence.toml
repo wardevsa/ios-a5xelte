@@ -4418,7 +4418,7 @@ device = "this-unit"
 sha256 = "7840100deaeaf6a188b9af7ab46f529a43e6716c887c0ec8b8fcd8ea8d9ae32a"
 size = 177620
 immutable = true
-note = "Amparo D-0092 (BOOT 1 de 20: min83). Imagen min83 51bb025c, kernel CI 44405206107 (parche 0452). Reserva: que la pérdida de fps se deba a la latencia de despertar del clúster no está medido; hace falta repetir con el CPD solo con la pantalla apagada (propuesta 0453). Muestras pequeñas (35 y 7), una sola prueba."
+note = "CORRECCIÓN POSTERIOR (E-0301): la reducción de ~42 mA entre pruebas NO se reproduce dentro de un mismo arranque (A/B de min85: +11 mA, intervalo 95 % [-10, +32]); las diferencias entre pruebas coinciden con cuánto tiempo llevaba encendido iOS al apagar la pantalla (r=-0,79 con 5 pruebas, sin demostrar causa). Amparo D-0092 (BOOT 1 de 20: min83). Imagen min83 51bb025c, kernel CI 44405206107 (parche 0452). Reserva: que la pérdida de fps se deba a la latencia de despertar del clúster no está medido; hace falta repetir con el CPD solo con la pantalla apagada (propuesta 0453). Muestras pequeñas (35 y 7), una sola prueba."
 
 [[evidence]]
 id = "E-0300"
@@ -4434,3 +4434,18 @@ sha256 = "bea2891e6b288df199175875118d31d084cc4ab72db4581c15ad304f36d12817"
 size = 201324
 immutable = true
 note = "Amparo D-0092 (BOOT 2 de 20: min83, min84). Imagen min84 24abb279, kernel CI 44410185862 (parche 0453; la etiqueta 'CPD on/off' del log no entró por un reemplazo que no se aplicó). Factor de confusión: en min84 la pantalla se apagó a los ~100 s del arranque, con tareas de arranque aún activas, y las últimas 5 muestras 'apagada' son el despertar y el cable. Una sola prueba por configuración. Siguiente: parche 0454, A/B dentro del mismo arranque (CPD alterna cada 30 s con la pantalla apagada)."
+
+[[evidence]]
+id = "E-0301"
+title = "min85 (0454, heroidle=484592: CPD alterna cada 30 s con la pantalla apagada, A/B dentro de un mismo arranque): arranca y vive 360 s sin cuelgue ni avisos; 10 cambios registrados (HEROLTE CPD: on|off, 3-6 muestras por ventana, 5 s por muestra); con el mismo criterio de limpieza (300-800 mA) la corriente mediana con la pantalla apagada es 460 mA con el CPD encendido (n=19, error típico 7) y 471 mA apagado (n=23, 10): diferencia +11 mA, intervalo 95 % bootstrap [-10, +32]; saltando la primera muestra tras cada cambio, +4 mA [-24, +28]: el apagado de clúster NO produce un ahorro medible; el 460 de min83 y el 491 de min84 se explican, al menos en parte, por el tiempo transcurrido desde el arranque cuando se apagó la pantalla: la mediana de cada prueba frente al instante medio de sus muestras da r=-0,79 con 5 pruebas (505 mA a 205 s, 502 a 178 s, 491 a 208 s, 460 a 250 s, 466 a 328 s), aunque las pendientes dentro de cada prueba no son coherentes (-5, +22, -14, -5, +13 mA/min): hipótesis, no demostrada; fluidez de esta prueba 2,3 fps (6 muestras; el usuario apagó la pantalla pronto, casi no hay muestras con pantalla encendida)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min85-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "7684258d0762bbc86ff0d9a3b7dd35db6572e64fb9fef9ec3e3452fc841ce1d4"
+size = 188812
+immutable = true
+note = "Amparo D-0092 (BOOT 3 de 20: min83, min84, min85). Imagen min85 0d43ba74, kernel CI 44414699200 (parche 0454). Corrige la lectura de E-0299. Decisión de ingeniería propuesta: dejar el CPD (0451-0454) apagado por defecto (el código se queda) y buscar el consumo en otro sitio: dominios G3D/DISP0/AUD y reloj de memoria con la pantalla apagada, y comparar con el estado de Linux en TWRP."
