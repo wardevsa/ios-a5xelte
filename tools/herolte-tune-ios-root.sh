@@ -109,8 +109,11 @@ if build[:2].isdigit() and int(build[:2]) >= 22:
     off_labels |= {'com.apple.security.cryptexd', 'com.apple.passd', 'com.apple.findmy.findmylocated', 'com.apple.nehelper'}
     # boot-18k20 (system UI on the Mali): searchpartyd (Find My network) ~70 %, mobileassetd ~33 %, osanalyticshelper ~19 %
     # (writing crash reports) and PerfPowerServices ~16 % on average, nothing of it of use here.
-    off_labels |= {'com.apple.icloud.searchpartyd', 'com.apple.mobileassetd', 'com.apple.osanalytics.osanalyticshelper',
+    off_labels |= {'com.apple.icloud.searchpartyd', 'com.apple.osanalytics.osanalyticshelper',
                    'com.apple.PerfPowerServices', 'com.apple.PerfPowerServicesExtended'}
+    # mobileassetd stays (boot-18k21 on, without it, the wallpaper gallery came up white; its thumbnails had been there).
+    # parsecd (Spotlight's suggestions) ~15 % in boot-18k24, of no use here.
+    off_labels |= {'com.apple.parsecd'}
     # the boot-arg heronoexec list of xnu/patches 0253 (docs/herolte-howto.md), by program name
     off_programs = {'vmd', 'searchd', 'ReportCrash', 'aggregated', 'analyticsd', 'cloudd', 'homed', 'driverkitd'}
 removed = []
