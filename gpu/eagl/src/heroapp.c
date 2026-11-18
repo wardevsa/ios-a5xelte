@@ -244,6 +244,15 @@ __attribute__((constructor)) static void
 install(void)
 {
    /*
+    * (Galaxy S7, iOS 18) DROP_DIR heroapp.off: nothing at all. The kernel copies the drop zone's files but never removes
+    * one, so once this library is there every application keeps getting it. On iOS 18 its PosterBoard preview and its
+    * CoreImage/EAGL changes in the poster extensions left the wallpaper gallery white (boot-18k21 on; it was fine in
+    * boot-18k20, before the library), and it did not bring Settings' icons back.
+    */
+   if (access("/private/var/herolte/heroapp.off", F_OK) == 0) {
+      return;
+   }
+   /*
     * The front camera's capture device (gpu/camera, libnotefecam.dylib; the Note FE port's 0458) in mediaserverd only,
     * with the drop zone's cam.media = 1. hero-run makes /dev/hakios-camera (kern.notefe_cam=7) and restarts mediaserverd.
     */
