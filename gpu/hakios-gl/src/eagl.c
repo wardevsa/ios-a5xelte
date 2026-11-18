@@ -249,8 +249,14 @@ struct eagl {
 	id object;                      /* the EAGLContext */
 	struct hakios_gl *gl;
 	unsigned long api;
-	struct image images[256];
+	/*
+	 * (Galaxy S7 port, iOS 18) 256 were full three minutes into boot-18k25 ("more textures with IOSurfaces than there
+	 * is room for", 50 times): every texture after that was refused and its text drawn as a solid block. iOS 18 keeps
+	 * many more surfaces alive (widgets, glyph atlases). image_index finds a texture's image without a search.
+	 */
+	struct image images[4096];
 	unsigned image_count;
+	uint16_t image_index[65536];    /* texture name -> its image + 1 (0: none), for names under 65536 */
 	GLuint framebuffer;             /* the one bound */
 	GLuint colour;                  /* ... and the texture that is its colour attachment (0: none, or no texture) */
 	GLuint reader;                  /* a framebuffer of ours, to read a texture back */
@@ -550,6 +556,11 @@ summary(struct eagl *e)
 static struct image *
 image_of(struct eagl *e, GLuint texture)
 {
+	if (texture < 65536) {
+		unsigned at = e->image_index[texture];
+
+		return at != 0 && at <= e->image_count && e->images[at - 1].texture == texture ? &e->images[at - 1] : NULL;
+	}
 	for (unsigned i = 0; i < e->image_count; i++) {
 		if (e->images[i].texture == texture) {
 			return &e->images[i];
@@ -569,6 +580,9 @@ image_new(struct eagl *e, GLuint texture, IOSurfaceRef surface)
 			return NULL;
 		}
 		image = &e->images[e->image_count++];
+		if (texture < 65536) {
+			e->image_index[texture] = (uint16_t)e->image_count;
+		}
 	} else {
 		if (image->mirror != 0) {
 			glDeleteTextures(1, &image->mirror);
@@ -591,7 +605,14 @@ image_forget(struct eagl *e, GLuint texture)
 			glDeleteTextures(1, &image->mirror);
 		}
 		CFRelease(image->surface);
+		if (texture < 65536) {
+			e->image_index[texture] = 0;
+		}
 		*image = e->images[--e->image_count];
+		/* the last one moved into this slot: its index follows it */
+		if (image != &e->images[e->image_count] && image->texture < 65536) {
+			e->image_index[image->texture] = (uint16_t)(image - e->images + 1);
+		}
 	}
 }
 
