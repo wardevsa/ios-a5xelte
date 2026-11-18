@@ -1,0 +1,112 @@
+diff --git a/bsd/dev/herolte_ufs.c b/bsd/dev/herolte_ufs.c
+index 8991aab..ea80576 100644
+--- a/bsd/dev/herolte_ufs.c
++++ b/bsd/dev/herolte_ufs.c
+@@ -705,6 +705,9 @@ herolte_log_thread(__unused void *arg, __unused wait_result_t wr)
+ 			extern unsigned int vm_page_free_count, vm_page_active_count, vm_page_inactive_count;
+ 			printf("HEROLTE LOG: alive %u s, MB free %u active %u inactive %u\n", ticks * 10, vm_page_free_count / 64,
+ 			    vm_page_active_count / 64, vm_page_inactive_count / 64);
++
++			extern void herolte_v80emu_report(unsigned seconds);
++			herolte_v80emu_report(60);          /* (9193) */
+ 		}
+ 		a5xelte_log_snapshot(&ring, &rsize, &total);
+ 		if (total == flushed) {
+diff --git a/osfmk/arm64/herolte_v80emu.c b/osfmk/arm64/herolte_v80emu.c
+index 3ee874c..557e0dc 100644
+--- a/osfmk/arm64/herolte_v80emu.c
++++ b/osfmk/arm64/herolte_v80emu.c
+@@ -31,6 +31,7 @@
+ #include <vm/vm_shared_region.h>        /* xnu-8796 */
+ #endif
+ #include <string.h>                     /* osfmk/libsa: memcpy, bzero */
++#include <pexpert/pexpert.h>             /* PE_parse_boot_argn (9193) */
+ 
+ extern int task_pid(task_t task);
+ 
+@@ -276,6 +277,63 @@ herolte_v80emu_export(void *buf, size_t buflen, bool reset)
+ 	return off;
+ }
+ 
++/*
++ * (9193) The busiest sites, into the console (the persistent log) every minute from herolte_ufs.c's log thread: iOS 18
++ * leaves ~345 000 LSE/RCpc sites to this trap (the rewriter's room is taken by the hotter libraries) and a trap costs
++ * ~1.3 us against ~19 ns for a routine. Which sites run most says what to give a routine next. The counts start again
++ * after every report; boot-arg v80emu_report=0: none.
++ */
++void
++herolte_v80emu_report(unsigned seconds)
++{
++	static int on = -1;
++	enum { TOP = 12 };
++	unsigned top[TOP];
++	uint64_t topc[TOP], total = 0;
++	unsigned n = 0, used = 0;
++
++	if (on < 0) {
++		uint32_t v = 1;
++		PE_parse_boot_argn("v80emu_report", &v, sizeof(v));
++		on = v != 0;
++	}
++	if (!on) {
++		return;
++	}
++	for (unsigned i = 0; i < V80EMU_NSITES; i++) {
++		uint64_t c = os_atomic_load(&v80emu_sites[i].count, relaxed);
++		if (os_atomic_load(&v80emu_sites[i].pc, relaxed) == 0) {
++			continue;
++		}
++		used++;
++		total += c;
++		unsigned k = n < TOP ? n++ : TOP;
++		if (k == TOP) {
++			if (c <= topc[TOP - 1]) {
++				continue;
++			}
++			k = TOP - 1;
++		}
++		while (k > 0 && topc[k - 1] < c) {
++			top[k] = top[k - 1];
++			topc[k] = topc[k - 1];
++			k--;
++		}
++		top[k] = i;
++		topc[k] = c;
++	}
++	printf("HEROLTE V80EMU: %u s: %llu traps (%llu/s), %u sites, %llu not recorded\n", seconds, total,
++	    seconds ? total / seconds : 0, used, os_atomic_load(&v80emu_dropped, relaxed));
++	for (unsigned j = 0; j < n && topc[j] != 0; j++) {
++		struct v80emu_site *s = &v80emu_sites[top[j]];
++		printf("HEROLTE V80EMU:   %llu x pc 0x%llx insn 0x%08x %s (first pid %d)\n", topc[j], s->pc, s->insn,
++		    s->cls < V80EMU_C_COUNT ? v80emu_class_names[s->cls] : "?", s->pid);
++	}
++	for (unsigned i = 0; i < V80EMU_NSITES; i++) {
++		os_atomic_store(&v80emu_sites[i].count, 0, relaxed);
++	}
++}
++
+ #else /* !HEROLTE_V80EMU */
+ 
+ size_t
+@@ -284,4 +342,9 @@ herolte_v80emu_export(void *buf __unused, size_t buflen __unused, bool reset __u
+ 	return 0;
+ }
+ 
++void
++herolte_v80emu_report(unsigned seconds __unused)
++{
++}
++
+ #endif /* HEROLTE_V80EMU */
+diff --git a/osfmk/arm64/herolte_v80emu.h b/osfmk/arm64/herolte_v80emu.h
+index 9f6aac6..4a0ea87 100644
+--- a/osfmk/arm64/herolte_v80emu.h
++++ b/osfmk/arm64/herolte_v80emu.h
+@@ -93,4 +93,7 @@ extern int herolte_v80emu_user_store(uint64_t uaddr, unsigned size, uint64_t val
+ }
+ #endif
+ 
++/* (9193) the busiest sites into the console; from herolte_ufs.c every minute */
++void herolte_v80emu_report(unsigned seconds);
++
+ #endif /* _ARM64_HEROLTE_V80EMU_H_ */
