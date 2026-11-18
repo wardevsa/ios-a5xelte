@@ -4284,3 +4284,18 @@ sha256 = "e410d4acba1bf7739e8009ae9ec8059f903174fb0bb28e722c23b2ff1ecddcc0"
 size = 274044
 immutable = true
 note = "Amparo D-0087 y D-0089 (BOOT 13 de 15: min60-min71). Fallos anteriores: min67 (máscara 254) colgó en el logo; min68-min70 (sin el paso del PMU) el núcleo no volvía. Fuente de referencia (GPL, pública): github.com/LineageOS/android_kernel_samsung_universal8890, drivers/soc/samsung/exynos-powermode.c y exynos-pmu.c. Siguiente: ampliar la máscara sin tocar los núcleos 0 y 4 (para que ningún clúster entre en reposo de clúster)."
+
+[[evidence]]
+id = "E-0291"
+title = "Reposo profundo en seis núcleos (min72, heroidle=0xee, 0438-0442): los seis núcleos entraron y volvieron decenas de miles de veces en 7 minutos (cpu1 enter 30310 / resume 26618) sin un fallo, pero el teléfono fue muy lento (3 fps de media) y la corriente con la pantalla apagada (mediana 491 mA) fue igual que con un núcleo: cada núcleo se apagaba 60-70 veces por segundo (el temporizador de 2 ms de 0439 cortaba cada sueño y toda ocio corta bajaba); min73 (0443: sin el temporizador de prueba, residencia de 3 ms) se colgó en el logo de Apple a los ~25 s del arranque, como min67; causa probable: los bits de energía local del PMU se ponían a 0 antes de cada CPU_SUSPEND y solo se restauraban si la llamada volvía, no tras despertar, y con la puerta de residencia el siguiente WFI normal apagaría el núcleo por hardware (parche 0444)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min72-herolog.txt"
+location = "scratch"
+created = "2026-11-18"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "a78a549186601c572fe09e1bf002e5c70f1b870f432815bf5c506df9c71beaa3"
+size = 216207
+immutable = true
+note = "Amparo D-0087/D-0089/D-0090 (BOOT: min72 la 14.ª de D-0087; min73 la 1.ª de D-0090). El log de min73 (phase1-20261114/min73-herolog.txt) solo tiene el segundo volcado (93241 B): se perdió el cuelgue. La causa es una hipótesis: se comprobará con min74."
