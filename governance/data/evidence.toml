@@ -4494,3 +4494,18 @@ sha256 = "aa26f3d729cf53c902493e883aff544d28c38b3f18fe33bf3c49034b5abb4f57"
 size = 284806
 immutable = true
 note = "Amparo D-0094 y D-0092 (BOOT 5 de 20: min83-min87). Imagen min87 eebf935a, kernel CI 44486820102 (parche 0456). El registro del disparo hardware (HW_SW_TRIG_CONTROL) vale 0x1010 antes de parar (HW_TRIG_EN=1, MASK=0): coherente con panel de modo comando con disparo por TE, como en el Linux de Samsung. Reservas: dos ciclos en una prueba; ventanas de 5 a 14 muestras; la ventana 'antes' incluye muestras cercanas al apagado. Siguiente: modo de un paso (nivel 1 a los pocos segundos, parche 0457), luego combinar con los dominios G3D y los seis pequeños (E-0302: -35 y -50 mA) y buscar el resto del suelo (~290-355 mA)."
+
+[[evidence]]
+id = "E-0305"
+title = "min88 (0457, herodisp=2, D-0095): el modo de un paso funciona y se reproduce en tres ciclos: el DECON se para a los ~2 s de apagar la pantalla (run OFF en menos de 20 ms) y se restaura en menos de 20 ms al encenderla, con la corriente en 372 mA (n=62, ciclo 2) y 366 mA (n=35, ciclo 3) frente a 519-535 mA con el DECON activo en min87; sistema vivo hasta 1020 s; el Director comunica que con la pantalla 'apagada' seguían viéndose las letras de 'Press home to open' en la pantalla de bloqueo: la pantalla no queda realmente en negro, causa sin determinar (hipótesis: el desvanecido a negro no llega al panel, o el panel conserva el último fotograma al parar el DECON)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min88-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "385cef14aceebe0846ca08b6c72e11571bac99a87fca39115c21674be15e2b35"
+size = 301946
+immutable = true
+note = "Imagen min88 4d5e4cf2, kernel CI 44497411191. Ciclo 1 (t=285 s) fue una pulsación espuria apagar/encender de 10 s, sin muestras útiles. Observación visual del Director = dato, la causa es hipótesis."
