@@ -149,6 +149,21 @@ with open(path, 'wb') as f:
 print('launchd.plist: removed', ', '.join(removed), '; added com.herolte.autorun')
 EOF
 
+# iOS 18: extensions that only crash here, relaunched again and again (boot-18k29/18k30): the Watch face poster
+# Kaleidoscope (SIGSEGV x12, PosterBoard relaunches it; iOS's own wallpapers are CollectionsPoster's) and the speech
+# synthesis audio units (SiriAUSP/MauiAUSP abort x23 in audiomxd, MacinTalkAUSP fails to spawn).
+if [[ ${build:0:2} =~ ^[0-9]+$ ]] && (( ${build:0:2} >= 22 )); then
+    for appex in System/Library/PrivateFrameworks/WatchFacesWallpaperSupport.framework/PlugIns/KaleidoscopePoster.appex \
+                 System/Library/PrivateFrameworks/TextToSpeech.framework/PlugIns/SiriAUSP.appex \
+                 System/Library/PrivateFrameworks/TextToSpeechMauiSupport.framework/PlugIns/MauiAUSP.appex \
+                 System/Library/PrivateFrameworks/MacinTalk.framework/PlugIns/MacinTalkAUSP.appex; do
+        if [[ -d "$root/$appex" ]]; then
+            rm -rf "${root:?}/$appex"
+            echo "removed /$appex"
+        fi
+    done
+fi
+
 containers="$root/private/var/containers"
 install -d -o 0 -g 0 -m 0755 "$containers" "$containers/Bundle" "$containers/Data" \
     "$containers/Data/System" "$containers/Shared" "$containers/Shared/SystemGroup" \
