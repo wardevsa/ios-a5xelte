@@ -1,0 +1,216 @@
+herolte: the little cluster follows the big one's governor up to 1378 or 1586 MHz (0465, herolittle)
+
+E-0318: in a touch session every core is busy and the little cluster more (620 against 392 per mille); the big cluster is already at its top rate. The little cluster runs at what the bootloader left: 1066 MHz by the ECT table and vdd_apollo 0x53. herolittle=1378|1586 raises it with the governor (voltage 0x67/0x75 = 943.75/1031.25 mV, three dividers, the switch, APOLLO_PLL M 159/183 P 3 S 0 from the ECT PLL list) and puts it back when the governor goes low or the screen is off. Nothing is written unless the cluster is exactly in the table's 1066 MHz state (PLL, eight dividers, voltage); otherwise the values are logged and nothing is touched. herolittle only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2393,6 +2393,192 @@
+ 	}
+ }
+ 
++
++/*
++ * 0465 (little cluster rate, herolittle=<MHz>): the Cortex-A53 cluster runs at what the bootloader left. Linux's ECT table (read in TWRP, E-0318)
++ * and the register S-Boot set (vdd_apollo 0x53 = 818.75 mV) say that is 1066 MHz: APOLLO_PLL M 123 P 3 S 0. During a touch session every core of both
++ * clusters is busy and the little ones more (620 against 392 per mille), so the little cluster is raised in step with the big one's governor
++ * (hc.high) to the ECT row for the rate, and back to the bootloader's numbers when the governor goes low or the screen is off.
++ * Only if the cluster is EXACTLY in the 1066 MHz state of the table (PLL, the eight dividers, the voltage) does anything get written; otherwise the
++ * values are logged and nothing is touched. Same order as the big cluster: voltage first, dividers, the switch, the PLL, back; down in reverse.
++ */
++extern bool herolte_apm_pmic_write(uint8_t reg, uint8_t value);
++#define AP_CMU_PA       0x11900000u
++static const struct {
++	uint16_t off;
++	uint8_t bits;
++	uint8_t at1066, at1378, at1586;
++} ap_divs[] = {         /* ECT dvfs_little rows 1066/1378/1586: ACLK PCLK ATCLK PCLK_DBG CNTCLK APOLLO_PLL PROMISE RUN_MONITOR */
++	{ 0x404, 3, 2, 2, 2 }, { 0x410, 4, 7, 8, 9 }, { 0x408, 4, 5, 5, 5 }, { 0x40c, 4, 7, 8, 9 },
++	{ 0x414, 4, 5, 5, 5 }, { 0x420, 3, 1, 1, 1 }, { 0x41c, 3, 3, 4, 4 }, { 0x418, 3, 5, 5, 5 },
++};
++#define AP_NDIVS (sizeof(ap_divs) / sizeof(ap_divs[0]))
++static struct {
++	bool done, high, broken;
++	vm_offset_t cmu;
++	uint32_t m, volt_sel, mhz;
++} ap;
++
++static void
++ap_mux(uint32_t off, uint32_t src)
++{
++	hg_wr(ap.cmu, off, (hg_rd(ap.cmu, off) & ~(1u << 12)) | (src << 12));
++	delay(50);
++}
++
++static void
++ap_to_switch(void)
++{
++	hg_wr(hc.top, 0x994, hg_rd(hc.top, 0x994) | 1);
++	hg_wr(hc.top, 0x4f4, (hg_rd(hc.top, 0x4f4) & ~0xfu) | 1);
++	hc_mux(hc.top, 0x384, 0);
++	ap_mux(0x204, 1);
++	ap_mux(0x208, 1);
++}
++
++static void
++ap_from_switch(void)
++{
++	ap_mux(0x208, 0);
++	ap_mux(0x204, 0);
++}
++
++static bool
++ap_relock(uint32_t m)
++{
++	uint32_t bits = (m << 16) | (3u << 8) | (1u << 5);
++	uint32_t con0 = (hg_rd(ap.cmu, 0x100) & ~HC_PLL_BITS) | (bits & HC_PLL_BITS);
++	hg_wr(ap.cmu, 0x000, 3 * 150);
++	hg_wr(ap.cmu, 0x100, con0);
++	for (unsigned i = 0; i < 10000; i++) {
++		delay(1);
++		if ((hg_rd(ap.cmu, 0x100) >> 29) & 1) {
++			return true;
++		}
++	}
++	return false;
++}
++
++static bool
++ap_volt(uint8_t sel)
++{
++	uint8_t set = 0;
++	bool wrote = herolte_apm_pmic_write(0x1f, sel);
++	delay(200);
++	return wrote && herolte_apm_pmic_read(0x1f, &set) && set == sel;
++}
++
++/* The cluster at the ECT row for 1066 MHz? (logs what it finds either way) */
++static bool
++ap_check_boot_state(void)
++{
++	uint32_t con0 = hg_rd(ap.cmu, 0x100);
++	uint8_t volt = 0;
++	bool volt_ok = herolte_apm_pmic_read(0x1f, &volt);
++	bool ok = volt_ok && volt == 0x53 && ((con0 >> 16) & 0x3ff) == 123 && ((con0 >> 8) & 0x3f) == 3 && (con0 & 7) == 0;
++	printf("HEROLTE LITTLE: APOLLO_PLL con0 %#x (M %u P %u S %u), mux %#x %#x status %#x, vdd_apollo %#x\n", con0, (con0 >> 16) & 0x3ff, (con0 >> 8) & 0x3f, con0 & 7,
++	    hg_rd(ap.cmu, 0x204), hg_rd(ap.cmu, 0x208), hg_rd(ap.cmu, 0x608), volt);
++	for (unsigned i = 0; i < AP_NDIVS; i++) {
++		uint32_t v = hg_rd(ap.cmu, ap_divs[i].off) & ((1u << ap_divs[i].bits) - 1);
++		printf("HEROLTE LITTLE: div %#x = %u (table row 1066: %u)\n", ap_divs[i].off, v, ap_divs[i].at1066);
++		ok = ok && v == ap_divs[i].at1066;
++	}
++	return ok;
++}
++
++static void
++ap_set_divs(unsigned which)
++{
++	for (unsigned i = 0; i < AP_NDIVS; i++) {
++		uint32_t want = which == 1586 ? ap_divs[i].at1586 : which == 1378 ? ap_divs[i].at1378 : ap_divs[i].at1066;
++		uint32_t mask = (1u << ap_divs[i].bits) - 1;
++		if ((hg_rd(ap.cmu, ap_divs[i].off) & mask) != want) {
++			hg_wr(ap.cmu, ap_divs[i].off, (hg_rd(ap.cmu, ap_divs[i].off) & ~mask) | want);
++			delay(20);
++		}
++	}
++}
++
++/* Up to ap.mhz: voltage, dividers, switch, PLL, back. Anything unexpected leaves the cluster on the switch (528 MHz) and gives up. */
++static bool
++ap_go_high(void)
++{
++	if (!ap.done || ap.broken || ap.high) {
++		return false;
++	}
++	if (!ap_volt((uint8_t)ap.volt_sel)) {
++		printf("HEROLTE LITTLE: vdd_apollo -> %#x failed, left alone\n", ap.volt_sel);
++		ap_volt(0x53);
++		return false;
++	}
++	ap_set_divs(ap.mhz);
++	ap_to_switch();
++	if (!ap_relock(ap.m)) {
++		printf("HEROLTE LITTLE: APOLLO_PLL did not lock (%#x): stays on the switch\n", hg_rd(ap.cmu, 0x100));
++		ap.broken = true;
++		return false;
++	}
++	ap_from_switch();
++	ap.high = true;
++	printf("HEROLTE LITTLE: raised to %u MHz (con0 %#x, vdd_apollo %#x)\n", ap.mhz, hg_rd(ap.cmu, 0x100), ap.volt_sel);
++	return true;
++}
++
++/* Back to the bootloader's numbers: the switch, the PLL at 1066, the dividers, back, then the voltage. */
++static bool
++ap_go_low(void)
++{
++	if (!ap.done || ap.broken || !ap.high) {
++		return false;
++	}
++	ap_to_switch();
++	if (!ap_relock(123)) {
++		printf("HEROLTE LITTLE: APOLLO_PLL did not lock at 1066 (%#x)\n", hg_rd(ap.cmu, 0x100));
++		ap.broken = true;
++		return false;
++	}
++	ap_set_divs(1066);
++	ap_from_switch();
++	ap.high = false;
++	bool ok = ap_volt(0x53);
++	printf("HEROLTE LITTLE: back to 1066 MHz, vdd_apollo 0x53 %s\n", ok ? "set" : "FAILED");
++	return true;
++}
++
++/* Called from the power thread with the big cluster's governor decision; the first call checks the state and may decide never to touch it. */
++static void
++ap_follow(bool want_low, unsigned mhz)
++{
++	if (!mhz || ap.broken) {
++		return;
++	}
++	if (!ap.done) {
++		if (!hc.top || !hc.saved) {
++			return;
++		}
++		ap.cmu = ml_io_map(AP_CMU_PA, 0x1000);
++		if (!ap.cmu) {
++			ap.broken = true;
++			return;
++		}
++		ap.mhz = mhz == 1378 ? 1378 : 1586;
++		ap.m = mhz == 1378 ? 159 : 183;
++		ap.volt_sel = mhz == 1378 ? 0x67 : 0x75;
++		if (!ap_check_boot_state()) {
++			printf("HEROLTE LITTLE: the cluster is not in the 1066 MHz state of the table: nothing is written\n");
++			ap.broken = true;
++			return;
++		}
++		ap.done = true;
++		printf("HEROLTE LITTLE: state confirmed (1066 MHz, 818.75 mV); will follow the governor to %u MHz\n", ap.mhz);
++	}
++	if (want_low) {
++		ap_go_low();
++	} else {
++		ap_go_high();
++	}
++}
++
+ static void
+ hc_mux(vm_offset_t base, uint32_t off, uint32_t src)
+ {
+@@ -2871,6 +3057,8 @@
+ 	uint32_t cyc_s = 0;
+ 	uint32_t pm_s = 0;          /* 0462: heropmic=1 */
+ 	uint32_t gl_s = 0;          /* 0464: herogovlog=1 */
++	uint32_t little_mhz = 0;    /* 0465: herolittle=<MHz> (1378 or 1586) */
++	PE_parse_boot_argn("herolittle", &little_mhz, sizeof(little_mhz));
+ 	uint64_t gl_prev[8] = { 0 }, gl_t = 0;
+ 	unsigned gl_n = 0;
+ 	PE_parse_boot_argn("herogovlog", &gl_s, sizeof(gl_s));
+@@ -3328,6 +3516,7 @@
+ 				    top, gov_flips);
+ 			}
+ 		}
++		ap_follow(want_low, little_mhz);
+ 		if (cycle_s >= 20 && hc.high && !hot_now && !screen_off) {
+ 			uint64_t el = 0;
+ 			if (cycle_at == 0) {
