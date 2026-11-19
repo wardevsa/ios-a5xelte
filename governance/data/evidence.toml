@@ -4464,3 +4464,18 @@ sha256 = "ae86b94ed0feb63e48409cb5f20a38ba8a6c032b6b0ccaa4a5d9d892d394dc9a"
 size = 308681
 immutable = true
 note = "Amparo D-0093 y D-0092 (BOOT 4 de 20: min83-min86). Imagen min86 024922f4, kernel CI 44421948176 (parche 0455). Reservas: una sola prueba; la ventana 'antes' tiene solo 2 muestras limpias; hasta el paso 2 la corriente baja también por la deriva con el tiempo desde el arranque (E-0301), pero el escalón de -142 mA ocurre dentro de la primera muestra tras el evento y no es una deriva. QUÉ se apagó exactamente con el intento de disp0 no se sabe: el dominio quedó a medias (0x9000e); hipótesis (no medida): el controlador de pantalla (DECON/DSIM) y el tráfico de memoria que genera con la pantalla 'apagada' son el consumo dominante. Siguiente: separar el efecto (parar DECON o sus relojes, de forma reversible) y comparar con Linux."
+
+[[evidence]]
+id = "E-0303"
+title = "Corrección de cifras por el etiquetado exacto de la pantalla (laboratorio de la biblioteca): mis análisis de E-0299..E-0302 marcaban la pantalla con la línea HEROLTE POWER, que se imprime una vez por minuto y llega con retraso, así que las primeras muestras tras el apagado (las más altas) se contaban como 'pantalla encendida'; con el evento exacto 'SWEET FB: display off' las medianas con la pantalla apagada son min80 506 mA (n=46, antes 505), min82 503 (n=33, antes 502), min83 474 (n=42, ±5; antes 460, n=35: el sesgo era de unos 14 mA a la baja), min84 492 (n=27, antes 491) y min85 467 (n=49, antes 466); la diferencia de min83 con la línea base pasa de -45 a -32 mA, y alineadas por el instante de apagado las curvas de min80, min83 y min85 se superponen dentro del ruido (comparador del laboratorio); la escalera de min86 se reproduce: ventana 'antes' 522 mA (n=6, ±47; antes n=2), seis pequeños 472 (-50 mA, IC95 [-208,-20]), audio 467 (-5 [-36,+34]), GPU 432 (-35 [-74,-4]), intento de pantalla 290 (n=135; -142 mA, IC95 [-158,-101]); el A/B de min85 (E-0301) no cambia"
+kind = "result"
+path = "~/HackiOS/biblioteca-empresarial/app/lab.py"
+location = "scratch"
+created = "2026-11-19"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = ""
+size = 0
+immutable = false
+note = "Fuente: logs persistentes minNN-herolog.txt analizados por app/lab.py (pruebas en tests/test_lab.py). Las conclusiones de E-0301 y E-0302 se mantienen; la de E-0299 (ahorro de ~42 mA con el CPD siempre activo) queda reducida a ~32 mA y sin respaldo en el A/B dentro del mismo arranque. Es un error de método mío (etiquetar con una línea de baja frecuencia), no del dispositivo."
