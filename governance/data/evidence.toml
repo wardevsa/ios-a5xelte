@@ -4449,3 +4449,18 @@ sha256 = "7684258d0762bbc86ff0d9a3b7dd35db6572e64fb9fef9ec3e3452fc841ce1d4"
 size = 188812
 immutable = true
 note = "Amparo D-0092 (BOOT 3 de 20: min83, min84, min85). Imagen min85 0d43ba74, kernel CI 44414699200 (parche 0454). Corrige la lectura de E-0299. Decisión de ingeniería propuesta: dejar el CPD (0451-0454) apagado por defecto (el código se queda) y buscar el consumo en otro sitio: dominios G3D/DISP0/AUD y reloj de memoria con la pantalla apagada, y comparar con el estado de Linux en TWRP."
+
+[[evidence]]
+id = "E-0302"
+title = "min86 (0455, herostep=45, sin heroidle ni heropd, D-0093): respuesta de la corriente con la pantalla apagada al apagar dominios de energía por pasos en el mismo arranque; el sistema sigue vivo hasta el final (latido a 1080 s, 0 pánicos); pasos: 0 (30 s con la pantalla apagada) mfc, isp1, isp0, cam1, cam0 y mscl se apagan los seis (status 0x170000); 1 (75 s) aud se apaga; 2 (120 s) g3d se apaga; 3 (165 s) disp0 NO se apaga en 10 ms (status 0x9000e, estado intermedio) y se vuelve a poner config 0xf, pero el status sigue en 0x9000e; medianas de corriente (limpieza 250-900 mA): antes 529 (n=2, muestras 533 y 525, ventana de 15 s), tras los seis pequeños 472 (n=9, ±11), tras audio 467 (n=9, ±10; -5 mA, IC95 [-36,+34]: sin efecto), tras g3d 432 (n=9, ±12; -35 mA, IC95 [-74,-4]), tras el intento de disp0 290 (n=135, ±6; -142 mA frente a la ventana anterior, IC95 [-158,-101]), la caída aparece en la primera muestra tras el evento (308, 293, 271, 266...) y se mantiene unos 11 minutos hasta el reinicio forzado; los botones y la pantalla no respondieron después (esperable: disp0 y g3d no se restauran)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min86-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ae86b94ed0feb63e48409cb5f20a38ba8a6c032b6b0ccaa4a5d9d892d394dc9a"
+size = 308681
+immutable = true
+note = "Amparo D-0093 y D-0092 (BOOT 4 de 20: min83-min86). Imagen min86 024922f4, kernel CI 44421948176 (parche 0455). Reservas: una sola prueba; la ventana 'antes' tiene solo 2 muestras limpias; hasta el paso 2 la corriente baja también por la deriva con el tiempo desde el arranque (E-0301), pero el escalón de -142 mA ocurre dentro de la primera muestra tras el evento y no es una deriva. QUÉ se apagó exactamente con el intento de disp0 no se sabe: el dominio quedó a medias (0x9000e); hipótesis (no medida): el controlador de pantalla (DECON/DSIM) y el tráfico de memoria que genera con la pantalla 'apagada' son el consumo dominante. Siguiente: separar el efecto (parar DECON o sus relojes, de forma reversible) y comparar con Linux."
