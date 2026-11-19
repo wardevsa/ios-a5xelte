@@ -162,6 +162,10 @@ if [[ ${build:0:2} =~ ^[0-9]+$ ]] && (( ${build:0:2} >= 22 )); then
             echo "removed /$appex"
         fi
     done
+    # iOS's own wallpapers are HEIC, and there is no HEVC decoder for iOS here: black (tools/ios18/heic2png.py)
+    heicpy=${HEIC_PYTHON:-python3}
+    [[ -x /root/venv/bin/python ]] && heicpy=${HEIC_PYTHON:-/root/venv/bin/python}
+    "$heicpy" -I "$(dirname "$0")/ios18/heic2png.py" "$root"
 fi
 
 containers="$root/private/var/containers"
