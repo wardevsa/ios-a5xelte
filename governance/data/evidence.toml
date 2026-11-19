@@ -4614,3 +4614,18 @@ sha256 = "8d5fc8d2a3f5b2405b60b6e30486a409bdc6c02d8e2cc9c8cb649da4864cfc77"
 size = 275834
 immutable = true
 note = "Imagen min94 4df98144, kernel CI 44526572841 (0461). Frente a la línea base de pantalla apagada con todo activo (519-535 mA, min87) el suelo baja un 46 %; frente al reposo de Linux en TWRP (25-35 mA) quedan unos 250 mA por explicar: núcleos, memoria, almacenamiento, radios y reguladores no se han tocado. Escritura de BOOT con aborto al final por corte de USB y verificación manual."
+
+[[evidence]]
+id = "E-0313"
+title = "min95 (0462, heropmic=1, D-0104): censo del PMIC S2MPS16 con la pantalla encendida y apagada (cuatro volcados de 0x00-0x7f: uno a los 90 s con la pantalla encendida y tres a los 100 s de cada apagado): los registros son idénticos con la pantalla encendida y apagada salvo 0x6c (valores 0x20, 0x14, 0x19, 0x1a: aspecto de estado, no de configuración): el PMIC no cambia nada al apagar la pantalla, por lo que ninguna tensión baja; los reguladores LDO con nombre coinciden con los de Linux (todos los LDO que Linux tiene encendidos lo están en iOS salvo L12; L26 y L29 apagados en los dos); decodificados con el mapa de s2mps16.h del kernel de herolte (bucks: sel × 6,25 mV sobre 0,6 V para B1-B5), los bucks de las alimentaciones del SoC están en iOS MUY por encima de lo que Linux fija en reposo: vdd_mif (B1) 1,181 V frente a 0,881 V; vdd_mngs (B2, núcleos grandes) 0,975 V frente a 0,7625 V; vdd_apollo (B3, núcleos pequeños) 1,119 V frente a 0,600 V; vdd_int (B4) 1,1125 V frente a 0,631 V; vdd_dispcam (B5) 0,9625 V frente a 0,600 V; tensiones más altas implican más fuga y más consumo con la misma carga: es la pista más fuerte hasta ahora de dónde van los ~250 mA que quedan; el mapa buck-regulador sale del árbol de dispositivos exynos8890-board-common.dtsi del mismo kernel; los bucks de tensión fija coinciden donde la conversión es la misma (p. ej. B8 y B9 con otra escala dan 1,3 V y 2,0 V, igual que Linux)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min95-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "5d54c20b14223528dbcffc253d152a3261665176b4d9f4a90f25ab8d721c96e4"
+size = 274241
+immutable = true
+note = "Imagen min95 191a7990, kernel CI 44534091143. Reservas: (1) el valor de Linux es el de TWRP en reposo, a su frecuencia mínima; la tensión necesaria a las frecuencias de iOS (núcleos grandes a 728 MHz en pantalla apagada) puede ser mayor; (2) la escala de B1-B5 (6,25 mV sobre 0,6 V) se dedujo de las tensiones de Linux, no de una hoja de datos; (3) la tensión de iOS es la que dejó S-Boot o iOS, aún no se sabe quién la fija; (4) nada de esto está probado: bajar tensiones puede colgar el teléfono. Siguiente: obtener las tablas ASV (tensión por frecuencia) del kernel de herolte y probar, con aprobación del Director, bajar las tensiones con la pantalla apagada con un margen."
