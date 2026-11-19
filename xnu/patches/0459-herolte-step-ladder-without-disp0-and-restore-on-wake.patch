@@ -1,0 +1,81 @@
+herolte: herostep ladder without DISP0, domains restored when the screen is on (0459, D-0098)
+
+E-0302 (min86): the six small domains -50 mA, audio -5, G3D -35; DISP0 half-powers the display. E-0304/E-0307: stopping the DECON (herodisp=2) already takes the screen-off current from ~520 to ~368 mA. herostep=<s> (s >= 10) now gates, with the screen off, only the six small domains (30 s after off), audio (+s) and G3D (+2s); the config of each is saved and, when the screen is on again, written back in reverse order waiting for the status (logged "HEROLTE PD: restore"); the ladder re-arms for the next off. herostep only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3149,37 +3149,62 @@
+ 				disp_i = 0;
+ 			}
+ 		}
+-		if (step_s >= 10 && step_i < 4 && screen_off && ns >= (30ull + (uint64_t)step_i * step_s) * NSEC_PER_SEC) {
++		/*
++		 * 0455 / 0459 (D-0098): herostep=<s> (s >= 10). With the screen off, 30 s after it went off and then every <s> s, three PMU power
++		 * domains are gated in turn (the six small ones, audio, G3D); DISP0 is left out (min86: it half-powers the display and the
++		 * wake fails to be tested) and the display is saved by herodisp. 0459: they are put back, in reverse order, as soon as the
++		 * screen is on again (the saved config is written back and the status waited for), and the ladder re-arms for the next off.
++		 */
++		if (step_s >= 10) {
+ 			static const struct { const char *name; uint16_t off[6]; } steps[] = {
+ 				{ "mfc+isp1+isp0+cam1+cam0+mscl", { 0x180, 0x160, 0x140, 0xa0, 0x20, 0x40 } },
+-				{ "aud", { 0xc0 } }, { "g3d", { 0x60 } }, { "disp0", { 0x80 } },
++				{ "aud", { 0xc0 } }, { "g3d", { 0x60 } },
+ 			};
++			static uint32_t saved[3][6];
+ 			static vm_offset_t pdb2;
+ 			if (!pdb2) {
+ 				pdb2 = ml_io_map(0x105c4000u, 0x200);
+ 			}
+-			if (pdb2) {
++			if (pdb2 && off == 0 && step_i > 0) {
++				for (int s = (int)step_i - 1; s >= 0; s--) {
++					for (int k = 5; k >= 0; k--) {
++						uint16_t o = steps[s].off[k];
++						if (!o) {
++							continue;
++						}
++						hg_wr(pdb2, o, saved[s][k]);
++						bool up = false;
++						for (unsigned w = 0; w < 2000 && !up; w++) {
++							delay(5);
++							up = (hg_rd(pdb2, o + 4u) & 0xfu) == (saved[s][k] & 0xfu);
++						}
++						printf("HEROLTE PD: restore step %d domain at %#x %s (config %#x, status %#x)\n", s, o, up ? "ON" : "did not come back", hg_rd(pdb2, o), hg_rd(pdb2, o + 4u));
++					}
++				}
++				step_i = 0;
++			} else if (pdb2 && step_i < 3 && screen_off && ns >= (30ull + (uint64_t)step_i * step_s) * NSEC_PER_SEC) {
+ 				printf("HEROLTE STEP %u: gating %s (screen off %llu s)\n", step_i, steps[step_i].name, ns / NSEC_PER_SEC);
+ 				for (unsigned k = 0; k < 6; k++) {
+-					uint16_t off = steps[step_i].off[k];
+-					if (!off) {
++					uint16_t o = steps[step_i].off[k];
++					if (!o) {
+ 						break;
+ 					}
+-					uint32_t before = hg_rd(pdb2, off);
++					uint32_t before = hg_rd(pdb2, o);
++					saved[step_i][k] = before;
+ 					bool down = false;
+-					hg_wr(pdb2, off, before & ~0xfu);
++					hg_wr(pdb2, o, before & ~0xfu);
+ 					for (unsigned w = 0; w < 2000 && !down; w++) {
+ 						delay(5);
+-						down = (hg_rd(pdb2, off + 4u) & 0xfu) == 0;
++						down = (hg_rd(pdb2, o + 4u) & 0xfu) == 0;
+ 					}
+ 					if (!down) {
+-						hg_wr(pdb2, off, before);
++						hg_wr(pdb2, o, before);
+ 					}
+-					printf("HEROLTE PD: step %u domain at %#x %s (config %#x -> %#x, status %#x)\n", step_i, off, down ? "OFF" : "did not go off, put back on",
+-					    before, hg_rd(pdb2, off), hg_rd(pdb2, off + 4u));
++					printf("HEROLTE PD: step %u domain at %#x %s (config %#x -> %#x, status %#x)\n", step_i, o, down ? "OFF" : "did not go off, put back on",
++					    before, hg_rd(pdb2, o), hg_rd(pdb2, o + 4u));
+ 				}
++				step_i++;
+ 			}
+-			step_i++;
+ 		}
+ 		if (gov_on && !hc.broken) {
+ 			extern uint64_t herolte_cluster_busy_mach(int first, int last);      /* osfmk/kern/processor.c */
