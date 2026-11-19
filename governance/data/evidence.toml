@@ -4629,3 +4629,18 @@ sha256 = "5d54c20b14223528dbcffc253d152a3261665176b4d9f4a90f25ab8d721c96e4"
 size = 274241
 immutable = true
 note = "Imagen min95 191a7990, kernel CI 44534091143. Reservas: (1) el valor de Linux es el de TWRP en reposo, a su frecuencia mínima; la tensión necesaria a las frecuencias de iOS (núcleos grandes a 728 MHz en pantalla apagada) puede ser mayor; (2) la escala de B1-B5 (6,25 mV sobre 0,6 V) se dedujo de las tensiones de Linux, no de una hoja de datos; (3) la tensión de iOS es la que dejó S-Boot o iOS, aún no se sabe quién la fija; (4) nada de esto está probado: bajar tensiones puede colgar el teléfono. Siguiente: obtener las tablas ASV (tensión por frecuencia) del kernel de herolte y probar, con aprobación del Director, bajar las tensiones con la pantalla apagada con un margen."
+
+[[evidence]]
+id = "E-0314"
+title = "CORRECCIÓN de E-0313: la escala de tensión de los bucks B1-B5 del S2MPS16 es 300 mV + sel x 6,25 mV, no 600 mV + sel x 6,25 mV (la fórmula que usa el propio kernel del proyecto, 'HEROLTE CPU: vdd_mngs reg 0x3c = 675000 uV, vdd_apollo reg 0x53 = 818750 uV', línea 2464 de este registro); con la escala correcta las tensiones de iOS son: vdd_mif 0,881 V, vdd_mngs 0,675 V, vdd_apollo 0,819 V, vdd_int 0,8125 V, vdd_dispcam 0,6625 V; las cifras de E-0313 (1,18 / 0,975 / 1,12 / 1,11 / 0,96 V, 'de 200 a 500 mV por encima de Linux') eran un error de 300 mV por mi escala deducida; lo que sigue siendo cierto de E-0313: el PMIC no cambia con la pantalla apagada y los LDO coinciden con Linux; lo corregido: contra Linux en TWRP, la diferencia es de +306 mV en vdd_mif (0,881 frente a 0,575 en reposo de Linux), +181 mV en vdd_int (0,8125 frente a 0,631), +219 mV en vdd_apollo (0,819 frente a 0,600), +62 mV en vdd_dispcam (0,6625 frente a 0,600) y 0 en vdd_mngs (0,675 en los dos con los núcleos grandes a 728 MHz o menos); esas diferencias son comparables al estado de reposo de Linux pero NO son un exceso demostrado, porque dependen de la frecuencia de cada bloque en iOS, que no se ha medido (núcleos pequeños, bus interno y memoria); tabla tensión-frecuencia de Linux medida en TWRP el 2026-11-19: núcleos grandes 2288 MHz 1,0625 V, 1976 0,975, 1664 0,894, 1352 0,8125, 1040 0,7375, 832 0,694, 728 y menos 0,675; núcleos pequeños 1586 MHz 1,031 V, 1378 0,944, 1170 0,856, 962 0,781, 754 0,7125, 546 0,650, 338 y menos 0,600"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min95-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "5d54c20b14223528dbcffc253d152a3261665176b4d9f4a90f25ab8d721c96e4"
+size = 274241
+immutable = true
+note = "Error mío: en E-0313 dije que la escala se había deducido de Linux y lo señalé como reserva, pero titulé el hallazgo como si fuera firme y lo propuse como pista principal sin cruzarlo con el código del propio proyecto, que ya traía la fórmula correcta. Lección: antes de interpretar un registro, buscar si el proyecto ya lo decodifica. El mapa buck-regulador (B1 mif, B2 mngs, B3 apollo, B4 int, B5 dispcam, B6 g3d, B7 mem, B8 lldo, B9 mldo, B11 extra) sigue valiendo. Siguiente: medir las frecuencias reales de los núcleos pequeños, el bus interno y la memoria en iOS antes de proponer bajar ninguna tensión."
