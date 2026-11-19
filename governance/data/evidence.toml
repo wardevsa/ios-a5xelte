@@ -4674,3 +4674,18 @@ sha256 = ""
 size = 0
 immutable = false
 note = "Análisis sobre los registros persistentes minNN-herolog.txt (líneas 'A5XELTE FB: frames=...' y 'HEROLTE PWR'). Error mío: saqué una conclusión de cuatro líneas de un solo registro sin mirar la distribución completa; la mediana lo desmiente. Un primer intento de este mismo análisis tuvo un índice de grupo equivocado en la expresión regular y dio datos absurdos antes de corregirlo; los datos de arriba son los del cálculo corregido."
+
+[[evidence]]
+id = "E-0317"
+title = "Matiz sobre E-0316: los 'fps' de las líneas 'A5XELTE FB: frames=...' son los fotogramas que iOS PIDIÓ presentar en la ventana (frames / elapsed_ms), no la capacidad de dibujado del teléfono; con la pantalla casi quieta salen bajos aunque el sistema vaya sobrado (min94: mediana 1,6 fps en las ventanas con 3 o más fotogramas); la mediana de 9,1 fps de E-0316 mezcla pruebas con distinta actividad; por tanto ni ese 9 ni el 1,6 miden la fluidez máxima: solo una interacción continua (por ejemplo pasar de página sin parar) lo hace, y por eso la tanda de min98 (D-0107) la pide; la conclusión de E-0316 que se mantiene es que la copia del fotograma (mediana 5 ms, 4 % del tiempo) no es el cuello de botella"
+kind = "note"
+path = "~/HackiOS/biblioteca-empresarial/app/lab.py"
+location = "scratch"
+created = "2026-11-19"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = ""
+size = 0
+immutable = false
+note = "Detectado al añadir al laboratorio la tarjeta de fotogramas en uso: mostraba 1,6 fps en min94 junto a mi cifra de 9 fps. Otro error mío de interpretación (segundo sobre este asunto en el día): una métrica de demanda no es de capacidad."
