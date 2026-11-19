@@ -1,0 +1,45 @@
+herolte: read-only dump of the little-cluster, memory and bus clocks with the PMIC census (0463)
+
+E-0314: iOS leaves vdd_apollo at 0.819 V, vdd_int at 0.8125 V and vdd_mif at 0.881 V (Linux idle 0.600, 0.631, 0.575) but the frequencies those blocks run at in iOS were never measured, so no undervolt can be proposed. With heropmic=1 the census now also dumps CMU_APOLLO (PLL, mux status, dividers), CMU_MIF0 (PLLs, mux status, dividers) and CMU_TOP (the bus PLLs and mux status). Reads only. heropmic only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2349,12 +2349,38 @@
+ static vm_offset_t ha_spi;
+ static bool ha_read(uint32_t reg, uint16_t *value);
+ 
++/* 0463: read-only dump of the clock blocks that set how fast the little cluster, the memory and the buses run (CMU_APOLLO, CMU_MIF0, CMU_TOP) */
++static void
++hg_cmu_dump(const char *name, uint32_t pa, const uint32_t *offs, unsigned n)
++{
++	vm_offset_t va = ml_io_map(pa, 0x1000);
++	if (!va) {
++		printf("HEROLTE CMU: %s not mapped\n", name);
++		return;
++	}
++	for (unsigned i = 0; i < n; i += 2) {
++		printf("HEROLTE CMU: %s +%#x: %#x  +%#x: %#x\n", name, offs[i], hg_rd(va, offs[i]), i + 1 < n ? offs[i + 1] : 0u, i + 1 < n ? hg_rd(va, offs[i + 1]) : 0u);
++	}
++}
++
++static void
++hg_cmu_census(void)
++{
++	static const uint32_t apollo[] = { 0x100, 0x104, 0x108, 0x600, 0x608, 0x400, 0x404, 0x408, 0x40c, 0x410, 0x414, 0x418, 0x41c, 0x420, 0x424, 0x428 };
++	static const uint32_t mif[] = { 0x100, 0x104, 0x108, 0x10c, 0x120, 0x124, 0x600, 0x604, 0x608, 0x400, 0x404, 0x408, 0x40c, 0x410, 0x414, 0x418 };
++	static const uint32_t top[] = { 0x100, 0x104, 0x120, 0x124, 0x140, 0x144, 0x160, 0x164, 0x180, 0x184, 0x1a0, 0x1a4, 0x600, 0x604, 0x608, 0x60c };
++	hg_cmu_dump("APOLLO", 0x11900000u, apollo, sizeof(apollo) / sizeof(apollo[0]));
++	hg_cmu_dump("MIF0", 0x10850000u, mif, sizeof(mif) / sizeof(mif[0]));
++	hg_cmu_dump("TOP", 0x10570000u, top, sizeof(top) / sizeof(top[0]));
++}
++
+ /* 0462 (D-0104): read-only census of the S2MPS16 PMIC registers, to compare with what Linux leaves enabled (heropmic=1) */
+ extern bool herolte_apm_pmic_read(uint8_t reg, uint8_t *value);
+ static void
+ hg_pmic_census(const char *when)
+ {
+ 	printf("HEROLTE PMIC: census %s\n", when);
++	hg_cmu_census();
+ 	for (unsigned base = 0; base < 0x80; base += 16) {
+ 		char line[16 * 3 + 1];
+ 		unsigned n = 0;
