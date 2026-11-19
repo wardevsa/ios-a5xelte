@@ -4569,3 +4569,18 @@ sha256 = "b653e8acaa04d3213a313c2a98e3b3afb142efdd0e1dcf9c98db8f29d6ac564e"
 size = 197202
 immutable = true
 note = "Imagen min93 e0bd752b, kernel CI 44515082830. min92 no dejó ni una línea en el registro persistente (idéntico al de min91): panic antes del logo de Apple, en la pantalla de colores. -noprogress es un no-op en este kernel (show_progress es FALSE por defecto fuera de macOS). Un solo ciclo de apagado."
+
+[[evidence]]
+id = "E-0310"
+title = "Causa del panic de min92: el panic se reprodujo al reescribir la imagen (A5 XNU PANIC: pe_init.c:314 Assertion failed: *delta >= 0, antes del logo de Apple); es la rama de progreso de pe_init.c (se compila con XNU_TARGET_OS_OSX, donde show_progress es TRUE salvo con -noprogress); quitar -noprogress de la línea (para que cupiera herocycle en 606 caracteres) activó el cálculo de la barra de progreso, que falla en esta pantalla; CORRIGE E-0309, cuya nota decía que -noprogress era un no-op: era falso, lo deduje leyendo la rama equivocada (#else) del código; min93 (con -noprogress) arrancaba por eso"
+kind = "note"
+path = "xnu-safe-tree/xnu/pexpert/arm/pe_init.c"
+location = "scratch"
+created = "2026-11-19"
+domain = "host"
+level = "L2"
+device = "this-unit"
+sha256 = ""
+size = 0
+immutable = false
+note = "Fuente: pexpert/arm/pe_init.c líneas 276-314 (rama #if defined(XNU_TARGET_OS_OSX)). Texto del panic comunicado por el Director. Error mío: afirmé que -noprogress era un no-op sin comprobar qué rama del #if se compilaba; además cambié la línea y el kernel en una misma prueba. Arreglo: conservar -noprogress y quitar a5fb_perf=1, cuyo valor por defecto es 1 (SweetFramebuffer.cpp: int perf = 1) y por tanto no cambia nada."
