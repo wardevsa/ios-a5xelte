@@ -4689,3 +4689,18 @@ sha256 = ""
 size = 0
 immutable = false
 note = "Detectado al añadir al laboratorio la tarjeta de fotogramas en uso: mostraba 1,6 fps en min94 junto a mi cifra de 9 fps. Otro error mío de interpretación (segundo sobre este asunto en el día): una métrica de demanda no es de capacidad."
+
+[[evidence]]
+id = "E-0318"
+title = "min98 (0464, herogovlog=1, D-0107): durante la tanda de uso (43 lecturas de ~2 s con el gobernador en 'alto'), los ocho núcleos trabajan casi todo el tiempo y el clúster PEQUEÑO más que el grande: ocupación mediana 620 por mil en los núcleos 0-3 frente a 392 por mil en los 4-7 (medias 587 y 441; percentil 90: 832 y 765); los pequeños están más cargados que los grandes en 42 de las 43 lecturas; solo una lectura tuvo un núcleo pequeño por encima de 900 y otra uno grande; los fotogramas presentados por ventana van de 4,5 a 16,7 por segundo (picos de 16-17 fps con ~800 por mil en ambos clústeres); el gobernador de los núcleos grandes se mantuvo en 'alto' (2288 MHz) todo el uso y bajó a 728 MHz tras terminar (lectura 45), con los grandes en ~0 por mil después; la copia de cada fotograma tarda 3-9 ms; conclusión: durante una interacción el sistema está limitado por CPU en AMBOS clústeres, el gobernador de los grandes NO es el cuello de botella (ya estaba al tope de lo que se le permite, 2288 de 2600 MHz) y el clúster pequeño, que ejecuta más trabajo, trabaja a la frecuencia que dejó el bootloader (no medida: la tensión 0,81875 V del registro de S-Boot corresponde, por interpolación de la tabla de Linux, a ~1066 MHz; Linux admite hasta 1586 MHz con 1,031 V); sin dato directo de la frecuencia actual del clúster pequeño"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min98-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "a44622c0f51d1208282b8ae20f7774f20f4a4fe00139cf0cae88ed9874d7b448"
+size = 208007
+immutable = true
+note = "Imagen min98 5d401bf8, kernel CI 44615746082 (0464). Reservas: una sola tanda de ~100 s; la frecuencia del clúster pequeño es una inferencia por interpolación (962 MHz -> 0,78125 V; 1170 MHz -> 0,85625 V; el punto medio 1066 MHz da 0,81875 V), no una medida; el gobernador alto/bajo de los grandes es un par de estados, no escalonado. Linux (TWRP) al arrancar informa vdd_apollo a 818 mV, el mismo valor que lee iOS: ambos parten del estado de S-Boot."
