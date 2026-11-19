@@ -4,12 +4,19 @@ E-0318: in a touch session every core is busy and the little cluster more (620 a
 
 --- a/bsd/dev/herolte_gpu.c
 +++ b/bsd/dev/herolte_gpu.c
-@@ -2393,6 +2393,192 @@
+@@ -2393,6 +2393,8 @@
  	}
  }
  
 +
-+/*
++
+ static void
+ hc_mux(vm_offset_t base, uint32_t off, uint32_t src)
+ {
+@@ -2532,6 +2534,191 @@
+ }
+ 
+ /*
 + * 0465 (little cluster rate, herolittle=<MHz>): the Cortex-A53 cluster runs at what the bootloader left. Linux's ECT table (read in TWRP, E-0318)
 + * and the register S-Boot set (vdd_apollo 0x53 = 818.75 mV) say that is 1066 MHz: APOLLO_PLL M 123 P 3 S 0. During a touch session every core of both
 + * clusters is busy and the little ones more (620 against 392 per mille), so the little cluster is raised in step with the big one's governor
@@ -194,10 +201,11 @@ E-0318: in a touch session every core is busy and the little cluster more (620 a
 +	}
 +}
 +
- static void
- hc_mux(vm_offset_t base, uint32_t off, uint32_t src)
- {
-@@ -2871,6 +3057,8 @@
++/*
+  * 0433: from one of the cluster's rates to another while it runs (the same table as hg_cpu_up: 1976, 2288, 2600 MHz): a
+  * lower rate is relocked first and its voltage written after, a higher rate gets its voltage first (hc_go_high). Anything
+  * unexpected puts the previous rate's numbers back. Only the power thread calls it (herocycle=<seconds>, below).
+@@ -2871,6 +3058,8 @@
  	uint32_t cyc_s = 0;
  	uint32_t pm_s = 0;          /* 0462: heropmic=1 */
  	uint32_t gl_s = 0;          /* 0464: herogovlog=1 */
@@ -206,7 +214,7 @@ E-0318: in a touch session every core is busy and the little cluster more (620 a
  	uint64_t gl_prev[8] = { 0 }, gl_t = 0;
  	unsigned gl_n = 0;
  	PE_parse_boot_argn("herogovlog", &gl_s, sizeof(gl_s));
-@@ -3328,6 +3516,7 @@
+@@ -3328,6 +3517,7 @@
  				    top, gov_flips);
  			}
  		}
