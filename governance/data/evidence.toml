@@ -4704,3 +4704,18 @@ sha256 = "a44622c0f51d1208282b8ae20f7774f20f4a4fe00139cf0cae88ed9874d7b448"
 size = 208007
 immutable = true
 note = "Imagen min98 5d401bf8, kernel CI 44615746082 (0464). Reservas: una sola tanda de ~100 s; la frecuencia del clúster pequeño es una inferencia por interpolación (962 MHz -> 0,78125 V; 1170 MHz -> 0,85625 V; el punto medio 1066 MHz da 0,81875 V), no una medida; el gobernador alto/bajo de los grandes es un par de estados, no escalonado. Linux (TWRP) al arrancar informa vdd_apollo a 818 mV, el mismo valor que lee iOS: ambos parten del estado de S-Boot."
+
+[[evidence]]
+id = "E-0319"
+title = "min99 (0465, herolittle=1586, D-0109): la comprobación exacta del estado inicial CONFIRMA mi inferencia: el clúster pequeño estaba en 1066 MHz (APOLLO_PLL con0 0xa07b0300: M 123 P 3 S 0; los ocho divisores 2, 7, 5, 7, 5, 1, 3, 5 iguales a la fila de 1066 MHz de la tabla ECT; vdd_apollo 0x53 = 818,75 mV; mux 0x200000 0x200000 estado 0x1000); el clúster pequeño subió a 1586 MHz (con0 0xa0b70300 = M 183; vdd_apollo 0x75 = 1,03125 V) y volvió a 1066 MHz con 0x53 cinco veces siguiendo al gobernador, sin colgarse y sin pánico; la lectura de CMU_APOLLO funciona, así que el cuelgue de min96 (E-0315) estuvo en CMU_MIF0 o en alguna de las lecturas de CMU_TOP que el proyecto no hacía, lo más probable CMU_MIF0 (por eliminación, sin probar); efecto medido sobre la misma tanda de uso que min98 (una sola tanda de ~100 s en cada una, 46 y 44 lecturas): fotogramas por ventana con 10 o más fotogramas mediana 10,2 fps frente a 11,6 (media 11,3 frente a 11,2; máximo 19,9 frente a 16,7): SIN mejora apreciable; ocupación mediana pequeños 560 por mil frente a 612 y grandes 454 frente a 389; corriente en uso (CPU de los grandes a 1 GHz o más) mediana 1944 mA frente a 1791 mA: +153 mA (+8,5 %); temperatura del chip en las líneas POWER: máximo 42 °C frente a 40 °C; el Director nota que 'va un poco mejor' y que el teléfono se calienta al tacto por detrás con poco uso, menos que con el 2048 y a diferencia de su S22; conclusión: subir el clúster pequeño a 1586 MHz cuesta unos 150 mA y 2 grados en uso y NO se demuestra más fluidez; lo subjetivo no se sostiene con las cifras (n=1 por condición)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min99-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "e9ad9bd269f661cfa1aef8e4c96df2475a9430fcbff302994d61425f818cd5f5"
+size = 218335
+immutable = true
+note = "Imagen min99 689f61cb, kernel CI 44627148218 (0465). Reservas: una sola tanda por condición (min98 sin cambio, min99 con herolittle); el gesto del Director no es idéntico entre tandas; la temperatura del chip solo aparece en las líneas POWER del gobernador (12 en min99); la corriente es la que mide el teléfono. La inferencia '1066 MHz' de E-0318 queda CONFIRMADA por lectura directa."
