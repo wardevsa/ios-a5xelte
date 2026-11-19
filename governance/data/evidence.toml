@@ -4554,3 +4554,18 @@ sha256 = "4becded02a4326fe02ea482afe817dbe57781860c7126ef9bdf63e32d38d0045"
 size = 253768
 immutable = true
 note = "Imagen min91 61568c27, kernel CI 44510792451. Reservas: un solo ciclo de apagado registrado; ventanas de 2 a 4 muestras en los escalones intermedios (el valor de 280 mA, n=21, es el sólido); sin comprobar si el audio funciona tras reencender su dominio, ni la GPU (ningún cliente de GPU en uso); la pantalla se dejaba en la pantalla de inicio durante la prueba. El sonido durante el logo de Apple que menciona el Director es anterior al apagado de dominios; heroaudio=3 sirve /dev/hakios-audio a iOS (mediaserverd lo abrió en el log), por lo que un sonido de arranque es plausible, sin confirmar."
+
+[[evidence]]
+id = "E-0309"
+title = "min93 (kernel 0460 con la línea exacta de min91, D-0100): arranca sin panic, el kernel de 0460 NO es la causa del panic de min92; el códec de audio contesta antes de apagar el dominio de audio y después de restaurarlo: registro 0 = 0x6364 las dos veces (el valor que lee Linux), con la escalera completa (seis dominios pequeños, audio y G3D apagados y restaurados) y la pantalla despertando; píxeles no negros 0 de 3686400; sistema vivo hasta 420 s; el registro solo demuestra que el códec responde por SPI, no que el sonido salga por el altavoz (I2S/ABOX sin comprobar); el panic de min92 (0460 + herocycle=60, sin -noprogress) queda sin explicar: queda herocycle junto a herostep, el cambio de la línea o un fallo puntual de arranque"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min93-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "b653e8acaa04d3213a313c2a98e3b3afb142efdd0e1dcf9c98db8f29d6ac564e"
+size = 197202
+immutable = true
+note = "Imagen min93 e0bd752b, kernel CI 44515082830. min92 no dejó ni una línea en el registro persistente (idéntico al de min91): panic antes del logo de Apple, en la pantalla de colores. -noprogress es un no-op en este kernel (show_progress es FALSE por defecto fuera de macOS). Un solo ciclo de apagado."
