@@ -1,0 +1,23 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 12a8c4d..df7939a 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3612,6 +3612,18 @@ herolte_power_down(int restart)
+ 	uint64_t until = mach_absolute_time() + 2ull * 26000000ull;
+ 	while (mach_absolute_time() < until) {
+ 	}
++	/*
++	 * (9196) Still on: a charger or USB keeps the PMIC up (boot-18k31: PS_HOLD low on the cable, the phone stayed
++	 * on and hot). Samsung's kernel goes to its charging screen then; so here, by the bootloader's reboot mode
++	 * REBOOT_MODE_CHARGING (INFORM3 = prefix | 3; herotwrp's recovery is prefix | 4) and SWRESET.
++	 */
++	if (!restart && pmu) {
++		hg_wr(pmu, 0x808, 0x12345678);          /* INFORM2 */
++		hg_wr(pmu, 0x80c, 0x12345673);          /* INFORM3: REBOOT_MODE_PREFIX | REBOOT_MODE_CHARGING */
++		__asm__ volatile ("dsb sy" ::: "memory");
++		hg_wr(pmu, 0x400, 1);                   /* SWRESET */
++		__asm__ volatile ("dsb sy" ::: "memory");
++	}
+ 	for (;;) {
+ 		__builtin_arm_wfi();
+ 	}
