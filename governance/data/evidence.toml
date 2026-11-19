@@ -4509,3 +4509,18 @@ sha256 = "385cef14aceebe0846ca08b6c72e11571bac99a87fca39115c21674be15e2b35"
 size = 301946
 immutable = true
 note = "Imagen min88 4d5e4cf2, kernel CI 44497411191. Ciclo 1 (t=285 s) fue una pulsación espuria apagar/encender de 10 s, sin muestras útiles. Observación visual del Director = dato, la causa es hipótesis."
+
+[[evidence]]
+id = "E-0306"
+title = "min89 (0458, herocycle=60 + herodisp=2, D-0096): al terminar el desvanecido la memoria de la pantalla está completamente negra (0 de 3686400 píxeles no negros, medido las cuatro veces que se apagó, 'HEROLTE FB: fade done'); el DECON se paró en cada apagado en cuanto el desvanecido acabó (run OFF en menos de 20 ms) y se restauró en menos de 20 ms; corriente con la pantalla apagada y el DECON parado 385, 366 y 415 mA (n=12, 12 y 10; coherente con los 366-372 mA de min88); los ciclos automáticos funcionaron (apagado a los 160, 240 y 320 s, 60 s cada uno) pero iOS no se entera de ellos, la pantalla quedó negra tras el último encendido y la prueba se interrumpió por pulsaciones del Director a los ~370 s; el Director no vio nada con la pantalla apagada; en min88 (apagado real por pulsación) vio las letras de la pantalla de bloqueo y el dock: la causa en la vía real queda SIN explicar (la memoria está negra en la vía automática; en la real no se contó)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min89-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "fca730383e4036424f5574456460667c9fd6efbda13c087cc493d4871154e65f"
+size = 232440
+immutable = true
+note = "Imagen min89 e0d5082e, kernel CI 44504489190. Los ciclos automáticos solo sirven de instrumento de medida (el apagado no pasa por iOS). El número de píxeles se cuenta en la memoria que el DECON lee, no en lo que muestra el panel. Siguiente: repetir la vía real (pulsación de encendido) con el contador de 0458 para ver si en ella también hay 0 píxeles no negros."
