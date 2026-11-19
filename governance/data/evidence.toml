@@ -4584,3 +4584,18 @@ sha256 = ""
 size = 0
 immutable = false
 note = "Fuente: pexpert/arm/pe_init.c líneas 276-314 (rama #if defined(XNU_TARGET_OS_OSX)). Texto del panic comunicado por el Director. Error mío: afirmé que -noprogress era un no-op sin comprobar qué rama del #if se compilaba; además cambié la línea y el kernel en una misma prueba. Arreglo: conservar -noprogress y quitar a5fb_perf=1, cuyo valor por defecto es 1 (SweetFramebuffer.cpp: int perf = 1) y por tanto no cambia nada."
+
+[[evidence]]
+id = "E-0311"
+title = "min92c (0460, herocycle=60 + herostep=10 + herodisp=2, línea con -noprogress, D-0102): arranca sin panic y completa los tres ciclos automáticos (pantalla apagada a los 160, 240 y 320 s, 60 s cada vez); en los tres ciclos la escalera se ejecuta entera (seis dominios pequeños a los 30 s, audio a los 40 s, G3D a los 50 s), los ocho dominios se restauran en orden inverso con config 0xf y status 0x3000f al encender, el DECON se para y se reanuda, 0 de 3686400 píxeles no negros, y el registro 0 del códec de audio lee 0x6364 antes de apagar el audio y tras restaurarlo en los tres ciclos (nueve lecturas); sistema vivo hasta 720 s; la corriente por escalón no es concluyente: con 60 s apagada las ventanas tienen 2 muestras (ciclo 1: 361, 333, 320, 316 mA; ciclo 2: 362, 274, 286, 373 mA; ciclo 3: 296, 282, 668, 456 mA), con picos de 668 y 456 mA en el ciclo 3 sin explicar; el valor de referencia sigue siendo el de min91 (280 mA, n=21, con 125 s apagada); el códec responde por SPI, lo que NO prueba que el sonido salga por el altavoz"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min92c-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "34b5ca52a528e2f997d460d93e921027798dcd2432c96a0e1180309c7cf66ffd"
+size = 280255
+immutable = true
+note = "Imagen min92c 1810ae2c, kernel CI 44515082830. Línea de min92 con -noprogress y sin a5fb_perf=1 (valor por defecto 1). La repetición de la restauración (tres ciclos, ocho dominios) y del códec es el resultado sólido; las corrientes no lo son por la corta duración de cada apagado. Registro bajado tras varios cortes de USB (error -71 en el PC: cable o puerto)."
