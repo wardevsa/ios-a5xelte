@@ -4659,3 +4659,18 @@ sha256 = "251c4609d0edecc8cd53d80362f394085c1dfcb7c4b96880b7c37c7ad5c75de3"
 size = 126238
 immutable = true
 note = "Imagen min96 9cfe7c92, kernel CI 44609238728. El censo del PMIC (0462) sí funcionó en min95: el cuelgue es de las lecturas nuevas de CMU. Riesgo anunciado en D-0105 y materializado; sin daño: se sale con apagado forzado. Estado de BOOT: min96 NO ARRANCA hasta el censo: hay que restaurar una imagen que funcione. Enseñanza: no leer registros de bloques de reloj sin saber que están alimentados; para la frecuencia de los núcleos pequeños hay una vía sin acceso a registros (contador de ciclos frente al temporizador)."
+
+[[evidence]]
+id = "E-0316"
+title = "La copia del fotograma a la pantalla NO es el cuello de botella de la fluidez (corrige mi afirmación del 2026-11-19 de que lo era): en las 1078 ventanas de 3 o más fotogramas de los registros min* del laboratorio, la copia tarda una mediana de 5 ms por fotograma (cuartiles 3 y 9 ms) y ocupa un 4 % del tiempo; solo 42 ventanas (4 %) pasan de 50 ms de copia media, y las cuatro últimas líneas de min94 que yo cité (61-155 ms) eran de esas atípicas; la fluidez medida es una mediana de 9,1 fps (cuartiles 4,5 y 14,3; máximo 58,2); por frecuencia de la CPU (frecuencia de la última línea PWR anterior a la ventana): hasta 1 GHz mediana 3,2 fps (n=65), de 1 a 2,4 GHz 8,2 fps (n=355), de 2,4 a 3 GHz 8,4 fps (n=40); la asociación con la frecuencia es observacional y está confundida (la CPU sube cuando hay animación), no demuestra causalidad; conclusión: el límite de la fluidez está en el dibujado de la interfaz por CPU (sin GPU), no en copiar el resultado"
+kind = "note"
+path = "~/HackiOS/biblioteca-empresarial/app/lab.py"
+location = "scratch"
+created = "2026-11-19"
+domain = "host"
+level = "L2"
+device = "none"
+sha256 = ""
+size = 0
+immutable = false
+note = "Análisis sobre los registros persistentes minNN-herolog.txt (líneas 'A5XELTE FB: frames=...' y 'HEROLTE PWR'). Error mío: saqué una conclusión de cuatro líneas de un solo registro sin mirar la distribución completa; la mediana lo desmiente. Un primer intento de este mismo análisis tuvo un índice de grupo equivocado en la expresión regular y dio datos absurdos antes de corregirlo; los datos de arriba son los del cálculo corregido."
