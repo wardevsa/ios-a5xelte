@@ -1,0 +1,107 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 6ed146e..12a8c4d 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2586,6 +2586,7 @@ hg_cpu_up(void)
+  * Boot-arg heropower=0: none of it. herotmu=0: the SoC's four TMUs are not read; by default they (BOOT DTB tmuctrl@1006x000, no clocks of their own)
+  * are read, nothing written, once a minute after the first two, for their calibration.
+  */
++static vm_offset_t hp_pmu;              /* mapped by the power thread at boot: nothing is mapped this late */
+ volatile uint64_t herolte_screen_off_at;        /* mach time the display went off; 0 while it is on */
+ volatile int herolte_fg_temp_dc = -10000;       /* the battery, tenths of a degree; -10000 not read */
+ 
+@@ -2641,6 +2642,7 @@ hg_power_thread(__unused void *arg, __unused wait_result_t wr)
+ 		}
+ 	}
+ 	printf("HEROLTE POWER: Mongoose to %u MHz with the screen off or the SoC at %u C (back under %u C)\n", hp_boot_mhz(), hot, cool);
++	hp_pmu = ml_io_map(0x105c0000u, 0x4000);  /* (9195) for herolte_power_down() */
+ 	/*
+ 	 * (9192, iOS 18) With the screen off the Mongoose cores are also taken out of the scheduler's recommended set, as
+ 	 * Apple's perf controller does: the A53s run what keeps running, the big cores idle. iOS 18 has no real sleep here
+@@ -3579,6 +3581,42 @@ hg_bus_thread(__unused void *arg, __unused wait_result_t wr)
+ 	}
+ }
+ 
++/*
++ * (9195) Power off and restart. Neither had a platform path on the S7: PEHaltRestart() came back and halt_all_cpus()
++ * spun in while (1) with the screen dark, one core flat out, until the battery ran out or someone held the buttons:
++ * "it burns the fingers, above all when I turn it off". Off is Samsung's exynos-reboot.c: PS_HOLD_CONTROL (PMU
++ * +0x330c) bit 8 low and the PMIC drops the rails. With a charger in, the PMIC keeps them: after 2 s the core waits
++ * in WFI instead. Restart is the SWRESET herotwrp uses, without a reboot mode. The log is written first.
++ */
++void herolte_power_down(int restart);
++
++void
++herolte_power_down(int restart)
++{
++	extern void herolte_log_flush_panic(void);
++	vm_offset_t pmu = hp_pmu;
++
++	printf("HEROLTE POWER: %s\n", restart ? "restart (SWRESET)" : "power off (PS_HOLD low)");
++	herolte_log_flush_panic();
++	if (pmu) {
++		__asm__ volatile ("dsb sy" ::: "memory");
++		if (restart) {
++			hg_wr(pmu, 0x80c, 0);                   /* INFORM3: no reboot mode, a normal boot */
++			__asm__ volatile ("dsb sy" ::: "memory");
++			hg_wr(pmu, 0x400, 1);                   /* SWRESET */
++		} else {
++			hg_wr(pmu, 0x330c, hg_rd(pmu, 0x330c) & ~(1u << 8));
++		}
++		__asm__ volatile ("dsb sy" ::: "memory");
++	}
++	uint64_t until = mach_absolute_time() + 2ull * 26000000ull;
++	while (mach_absolute_time() < until) {
++	}
++	for (;;) {
++		__builtin_arm_wfi();
++	}
++}
++
+ /*
+  * Boot-arg herotwrp=SECONDS: after that long the phone restarts into recovery by itself, as Samsung's sec_reboot does
+  * for "reboot recovery", so that a test runs with nobody at the buttons. The log has its last flush first.
+diff --git a/iokit/Kernel/arm/SweetPlatformExpert.cpp b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+index 4556eca..2141e5b 100644
+--- a/iokit/Kernel/arm/SweetPlatformExpert.cpp
++++ b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+@@ -14,6 +14,7 @@ extern "C" int sweet_reboot_restart(int panic_restart);
+ extern "C" void sweet_reboot_note_panic(void);
+ #if defined(HEROLTE)
+ extern "C" void herolte_log_flush_panic(void);         /* bsd/dev/herolte_ufs.c (9170) */
++extern "C" void herolte_power_down(int restart);       /* bsd/dev/herolte_gpu.c (9195) */
+ #endif
+ #include "../../../bsd/dev/sweet_board.h"
+ #include "../../../bsd/dev/sweet_spmi.h"
+@@ -70,6 +71,10 @@ SweetPlatformExpert::haltRestart(unsigned int type)
+ 	if (type == kPEPanicDiagnosticsDone || type == kPEPanicRestartCPU || type == kPEPanicRestartCPUNoCallouts) {
+ 		herolte_log_flush_panic();
+ 	}
++	/* 9195: a real power off / restart (PS_HOLD, SWRESET) instead of spinning in halt_all_cpus() */
++	if (type == kPEHaltCPU || type == kPERestartCPU) {
++		herolte_power_down(type == kPERestartCPU);
++	}
+ #endif
+ #if !defined(A5XELTE)
+ 	switch (type) {
+diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
+index 471a543..9a071f3 100644
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
+@@ -896,9 +896,16 @@ halt_all_cpus(boolean_t reboot)
+ 		printf("CPU halted\n");
+ 		PEHaltRestart(kPEHaltCPU);
+ 	}
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/* (9195) a core spinning here kept the phone hot for as long as the battery lasted: wait instead */
++	for (;;) {
++		__builtin_arm_wfi();
++	}
++#else
+ 	while (1) {
+ 		;
+ 	}
++#endif
+ }
+ 
+ __attribute__((noreturn))
