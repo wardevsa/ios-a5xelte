@@ -1,0 +1,39 @@
+herolte: read the audio codec before gating and after restoring the audio domain (0460)
+
+min91 (E-0308) restored all eight domains but nothing showed that audio still works afterwards. With herostep and heroaudio set, step 1 reads codec register 0 over SPI just before gating the audio domain and again right after restoring it, logging "codec register 0 reads 0x6364" (the value Linux reads). It proves the codec answers over SPI, not that I2S/ABOX plays sound. herostep only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2345,6 +2345,10 @@
+ #define HC_MNGS_PA      0x11800000u
+ #define HC_SYSREG_PA    0x11850000u
+ 
++/* 0460 (D-0099): the audio codec's SPI reader, defined further down (heroaudio): read before gating and after restoring the audio domain */
++static vm_offset_t ha_spi;
++static bool ha_read(uint32_t reg, uint16_t *value);
++
+ static void
+ hc_mux(vm_offset_t base, uint32_t off, uint32_t src)
+ {
+@@ -3179,11 +3183,21 @@
+ 							up = (hg_rd(pdb2, o + 4u) & 0xfu) == (saved[s][k] & 0xfu);
+ 						}
+ 						printf("HEROLTE PD: restore step %d domain at %#x %s (config %#x, status %#x)\n", s, o, up ? "ON" : "did not come back", hg_rd(pdb2, o), hg_rd(pdb2, o + 4u));
++						if (s == 1 && ha_spi) {
++							uint16_t v = 0;
++							bool ok = ha_read(0, &v);
++							printf("HEROLTE PD: after the audio domain came back, codec register 0 %s %#x (0x6364 expected)\n", ok ? "reads" : "did not answer:", v);
++						}
+ 					}
+ 				}
+ 				step_i = 0;
+ 			} else if (pdb2 && step_i < 3 && screen_off && ns >= (30ull + (uint64_t)step_i * step_s) * NSEC_PER_SEC) {
+ 				printf("HEROLTE STEP %u: gating %s (screen off %llu s)\n", step_i, steps[step_i].name, ns / NSEC_PER_SEC);
++				if (step_i == 1 && ha_spi) {
++					uint16_t v = 0;
++					bool ok = ha_read(0, &v);
++					printf("HEROLTE PD: before gating audio, codec register 0 %s %#x (0x6364 expected)\n", ok ? "reads" : "did not answer:", v);
++				}
+ 				for (unsigned k = 0; k < 6; k++) {
+ 					uint16_t o = steps[step_i].off[k];
+ 					if (!o) {
