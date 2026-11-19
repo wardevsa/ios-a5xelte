@@ -4479,3 +4479,18 @@ sha256 = ""
 size = 0
 immutable = false
 note = "Fuente: logs persistentes minNN-herolog.txt analizados por app/lab.py (pruebas en tests/test_lab.py). Las conclusiones de E-0301 y E-0302 se mantienen; la de E-0299 (ahorro de ~42 mA con el CPD siempre activo) queda reducida a ~32 mA y sin respaldo en el A/B dentro del mismo arranque. Es un error de método mío (etiquetar con una línea de baja frecuencia), no del dispositivo."
+
+[[evidence]]
+id = "E-0304"
+title = "min87 (0456, herodisp=45, D-0094): primer ahorro de energía demostrado y reversible: con la pantalla apagada, parar el controlador de pantalla (DECON_F) al acabar el fotograma (nivel 1) baja la corriente de 519 a 355 mA en el ciclo 1 (n=5 y 9; -164 mA, IC95 [-183,-124]) y de 535 a 358 mA en el ciclo 2 (n=5 y 9; -177 mA, IC95 [-215,-128]); la parada completa (nivel 2: disparo HW enmascarado y DECON_EN a 0) no añade nada medible (+14 y +20 mA, IC95 que incluyen el cero); el DECON se paró siempre en menos de 20 ms ('run OFF', contador de líneas a 0) y la restauración lo devolvió a 'run ON' en menos de 20 ms; la pantalla despertó correctamente al pulsar encendido las dos veces (comprobado por el Director) y el sistema siguió vivo hasta el final (latido 720 s); registro de la prueba y de la comparación en el laboratorio de la biblioteca (/lab/min87)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min87-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "aa26f3d729cf53c902493e883aff544d28c38b3f18fe33bf3c49034b5abb4f57"
+size = 284806
+immutable = true
+note = "Amparo D-0094 y D-0092 (BOOT 5 de 20: min83-min87). Imagen min87 eebf935a, kernel CI 44486820102 (parche 0456). El registro del disparo hardware (HW_SW_TRIG_CONTROL) vale 0x1010 antes de parar (HW_TRIG_EN=1, MASK=0): coherente con panel de modo comando con disparo por TE, como en el Linux de Samsung. Reservas: dos ciclos en una prueba; ventanas de 5 a 14 muestras; la ventana 'antes' incluye muestras cercanas al apagado. Siguiente: modo de un paso (nivel 1 a los pocos segundos, parche 0457), luego combinar con los dominios G3D y los seis pequeños (E-0302: -35 y -50 mA) y buscar el resto del suelo (~290-355 mA)."
