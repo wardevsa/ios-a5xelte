@@ -4539,3 +4539,18 @@ sha256 = "5180793372d216dd7d79336487624522a43b86b22879e39c75c14728e97c3cee"
 size = 189715
 immutable = true
 note = "Imagen min90 c0b2151e, kernel CI 44504489190. Con E-0306 y este resultado, la hipótesis de que el desvanecido dejara contenido en la memoria queda descartada en las dos vías; las letras vistas en min88 (que no tenía el contador ni la parada tras el desvanecido) siguen sin explicación medida y no se han vuelto a ver. El único ciclo registrado limita la repetición del resultado."
+
+[[evidence]]
+id = "E-0308"
+title = "min91 (0459, herodisp=2 + herostep=10, D-0098): con la pantalla apagada la corriente baja escalón a escalón hasta 280 mA (n=21, 70-175 s después de apagar): 394 mA entre 5 y 30 s (n=5, DECON parado), 308 mA tras apagar los seis dominios pequeños a los 30 s (n=2), 306 mA tras audio a los 40 s (n=2), 287 mA tras G3D a los 50 s (n=4) y 280 mA estable; frente a 368 mA solo con el DECON parado (min90) y 519-535 mA con todo activo (min87); los tres pasos apagaron los ocho dominios (status 0x170000, config 0) y al encender la pantalla se restauraron los ocho en orden inverso sin fallos (config 0xf, status 0x3000f en todos); el contador de píxeles dio 0 de 3686400 no negros; el Director confirma que la pantalla despertó y la imagen parecía normal, sin comprobar el sonido; sistema vivo hasta 600 s"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min91-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "4becded02a4326fe02ea482afe817dbe57781860c7126ef9bdf63e32d38d0045"
+size = 253768
+immutable = true
+note = "Imagen min91 61568c27, kernel CI 44510792451. Reservas: un solo ciclo de apagado registrado; ventanas de 2 a 4 muestras en los escalones intermedios (el valor de 280 mA, n=21, es el sólido); sin comprobar si el audio funciona tras reencender su dominio, ni la GPU (ningún cliente de GPU en uso); la pantalla se dejaba en la pantalla de inicio durante la prueba. El sonido durante el logo de Apple que menciona el Director es anterior al apagado de dominios; heroaudio=3 sirve /dev/hakios-audio a iOS (mediaserverd lo abrió en el log), por lo que un sonido de arranque es plausible, sin confirmar."
