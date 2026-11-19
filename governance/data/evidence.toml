@@ -4644,3 +4644,18 @@ sha256 = "5d54c20b14223528dbcffc253d152a3261665176b4d9f4a90f25ab8d721c96e4"
 size = 274241
 immutable = true
 note = "Error mío: en E-0313 dije que la escala se había deducido de Linux y lo señalé como reserva, pero titulé el hallazgo como si fuera firme y lo propuse como pista principal sin cruzarlo con el código del propio proyecto, que ya traía la fórmula correcta. Lección: antes de interpretar un registro, buscar si el proyecto ya lo decodifica. El mapa buck-regulador (B1 mif, B2 mngs, B3 apollo, B4 int, B5 dispcam, B6 g3d, B7 mem, B8 lldo, B9 mldo, B11 extra) sigue valiendo. Siguiente: medir las frecuencias reales de los núcleos pequeños, el bus interno y la memoria en iOS antes de proponer bajar ninguna tensión."
+
+[[evidence]]
+id = "E-0315"
+title = "min96 (0463, volcado de solo lectura de CMU_APOLLO, CMU_MIF0 y CMU_TOP con heropmic=1, D-0105): el sistema se cuelga por completo hacia los 90 s de actividad, justo cuando empieza el censo; el Director informa de que la pantalla se queda encendida, la pantalla de bloqueo no responde, los botones no funcionan y no se apaga sola (no se ejecuta el primer ciclo de herocycle, que corre en el mismo hilo); el registro persistente termina en el volcado número 9 (alive 60 s, 126238 bytes) sin ninguna línea 'HEROLTE PMIC: census' ni 'HEROLTE CMU', sin 'A5 XNU PANIC' y sin cola de volcado de hilos tras el censo; conclusión: la lectura de al menos uno de los tres bloques de reloj (CMU_APOLLO 0x11900000, CMU_MIF0 0x10850000 o CMU_TOP 0x10570000) cuelga el bus del sistema; CMU_TOP ya lo lee el código del proyecto (offsets 0x380, 0x4f0 y 0x990) y CMU_MNGS también, así que lo más probable es que sea APOLLO o MIF0, pero no se ha podido aislar; un bus colgado no deja ninguna línea porque el volcado del registro lo hace otro hilo cada ~10 s y se queda sin ejecutar"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min96-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "251c4609d0edecc8cd53d80362f394085c1dfcb7c4b96880b7c37c7ad5c75de3"
+size = 126238
+immutable = true
+note = "Imagen min96 9cfe7c92, kernel CI 44609238728. El censo del PMIC (0462) sí funcionó en min95: el cuelgue es de las lecturas nuevas de CMU. Riesgo anunciado en D-0105 y materializado; sin daño: se sale con apagado forzado. Estado de BOOT: min96 NO ARRANCA hasta el censo: hay que restaurar una imagen que funcione. Enseñanza: no leer registros de bloques de reloj sin saber que están alimentados; para la frecuencia de los núcleos pequeños hay una vía sin acceso a registros (contador de ciclos frente al temporizador)."
