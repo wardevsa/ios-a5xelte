@@ -4599,3 +4599,18 @@ sha256 = "34b5ca52a528e2f997d460d93e921027798dcd2432c96a0e1180309c7cf66ffd"
 size = 280255
 immutable = true
 note = "Imagen min92c 1810ae2c, kernel CI 44515082830. Línea de min92 con -noprogress y sin a5fb_perf=1 (valor por defecto 1). La repetición de la restauración (tres ciclos, ocho dominios) y del códec es el resultado sólido; las corrientes no lo son por la corta duración de cada apagado. Registro bajado tras varios cortes de USB (error -71 en el PC: cable o puerto)."
+
+[[evidence]]
+id = "E-0312"
+title = "min94 (kernel 0461, paro del DECON y escalera de dominios POR DEFECTO sin parámetros, herocycle=150, D-0103): las dos funciones se activan solas: tres ciclos de 150 s apagada, nueve pasos de la escalera (3 por ciclo), 24 restauraciones de dominios (8 por ciclo) y seis lecturas del códec (0x6364 antes y después del audio en cada ciclo); sin panic, sistema vivo hasta 720 s; el suelo con la pantalla apagada pasado el último escalón (más de 70 s apagada, los tres ciclos) es 284 mA (n=48, error típico 8,8, IC95 [276, 293]); por ciclo, 285, 288 y 280 mA (n=16 cada uno); con la pantalla encendida 524 mA (n=17); escalones del ciclo 1: 393 (DECON parado), 315 y 331 (pequeños y audio), 267 (G3D), 285 mA; los escalones intermedios tienen 2-4 muestras y son ruidosos, el suelo es el resultado sólido; picos aislados de hasta 666 mA en el ciclo 1 sin explicar"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min94-herolog.txt"
+location = "scratch"
+created = "2026-11-19"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "8d5fc8d2a3f5b2405b60b6e30486a409bdc6c02d8e2cc9c8cb649da4864cfc77"
+size = 275834
+immutable = true
+note = "Imagen min94 4df98144, kernel CI 44526572841 (0461). Frente a la línea base de pantalla apagada con todo activo (519-535 mA, min87) el suelo baja un 46 %; frente al reposo de Linux en TWRP (25-35 mA) quedan unos 250 mA por explicar: núcleos, memoria, almacenamiento, radios y reguladores no se han tocado. Escritura de BOOT con aborto al final por corte de USB y verificación manual."
