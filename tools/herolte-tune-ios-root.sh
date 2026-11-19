@@ -114,6 +114,11 @@ if build[:2].isdigit() and int(build[:2]) >= 22:
     # mobileassetd stays (boot-18k21 on, without it, the wallpaper gallery came up white; its thumbnails had been there).
     # parsecd (Spotlight's suggestions) ~15 % in boot-18k24, of no use here.
     off_labels |= {'com.apple.parsecd'}
+    # boot-18k34: networkserviceproxy (iCloud Private Relay) ~180 % the whole session (~73 % in 18k32), and the software
+    # update daemons kept mobileassetd at ~190 % (softwareupdateservicesd, KeepAlive; no OTA can apply here anyway);
+    # sirittsd asked for voices whose audio units are gone (below).
+    off_labels |= {'com.apple.networkserviceproxy', 'com.apple.softwareupdateservicesd', 'com.apple.mobile.softwareupdated',
+                   'com.apple.OTATaskingAgent', 'com.apple.subridged', 'com.apple.sirittsd'}
     # the boot-arg heronoexec list of xnu/patches 0253 (docs/herolte-howto.md), by program name
     off_programs = {'vmd', 'searchd', 'ReportCrash', 'aggregated', 'analyticsd', 'cloudd', 'homed', 'driverkitd'}
 removed = []
