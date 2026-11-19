@@ -106,6 +106,7 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 | D-0099 | APPROVED | operation | 2026-11-19 | Tres ciclos automáticos de la escalera completa de dominios con sondeo del códec de audio antes y después (herocycle=60, herostep=10, herodisp=2) | ingeniero | director | publish, device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-19: 'Apruebo D-0099', respuesta a mi propuesta de la misma fecha de min92: línea de min91 más herocycle=60 con el parche 0460 (lectura del registro 0 del códec antes de apagar el dominio de audio y tras restaurarlo), una escritura de BOOT (la 10.ª de D-0092). |
 | D-0100 | APPROVED | operation | 2026-11-19 | Bisección del panic de min92: kernel de 0460 con la línea exacta de min91 (sin herocycle) | ingeniero | director | publish, device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-19: 'antes de el logo de apple, donde los colores, Apruebo D-0100', respuesta a mi propuesta de la misma fecha de min93: kernel de 0460 con la línea exacta de min91, sin herocycle, una escritura de BOOT (la 11.ª de D-0092). |
 | D-0101 | APPROVED | operation | 2026-11-19 | Reescribir exactamente la imagen min92 para saber si su panic es reproducible | ingeniero | director | publish, device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-19: 'Apruebo D-0101', respuesta a mi propuesta de la misma fecha de reescribir la imagen min92 sin cambios, una escritura de BOOT (la 12.ª de D-0092). |
+| D-0102 | APPROVED | operation | 2026-11-19 | Escribir min92c: tres ciclos automáticos con la escalera y el sondeo del códec, conservando -noprogress | ingeniero | director | publish, device-write-boot, device-read | Mensaje del Director (PioXI), 2026-11-19: 'Apruebo D-0102', respuesta a mi propuesta de la misma fecha de escribir min92c (0460, línea de min92 con -noprogress y sin a5fb_perf=1), una escritura de BOOT (la 13.ª de D-0092). |
 
 ## D-0001 — Sistema de gobierno de ingeniería autónoma (carpeta governance/, herramienta tools/governance.py)
 - **Estado:** APPROVED (director, 2026-11-13)
@@ -709,5 +710,11 @@ Estados: `PROPOSED` (propuesta, **sin efecto**), `APPROVED` (aprobada por quien 
 - **Estado:** APPROVED (director, 2026-11-19)
 - **Razón:** E-0309: min93 (0460 con la línea de min91) arranca bien, así que el panic de min92 (0460 con herocycle=60 y sin -noprogress) está en herocycle junto a herostep, en la línea, o es un fallo puntual.
 - **Consecuencias:** ALCANCE: la imagen min92 ya construida y verificada (sha256 4c4ca7b76598c7da6801c1dcc3ee1627f40e844085d28381ef7cabf6775005c6), sin cambios. Si da panic otra vez es determinista; si arranca, fue puntual y se obtienen los tres ciclos. Cuenta como UNA escritura de BOOT de D-0092 (la 12.ª). RIESGOS: otro panic (vuelta a min93).
+- **Cómo se revierte:** El Director puede revocarla con un mensaje.
+
+## D-0102 — Escribir min92c: tres ciclos automáticos con la escalera y el sondeo del códec, conservando -noprogress
+- **Estado:** APPROVED (director, 2026-11-19)
+- **Razón:** E-0310: el panic de min92 lo causó quitar -noprogress; min92c recupera la prueba de herocycle (tres ciclos) con la línea que cabe en 606 caracteres quitando a5fb_perf=1, que es su valor por defecto.
+- **Consecuencias:** ALCANCE: la imagen min92c (sha256 1810ae2c01a2f7c3e237ac585c8dd044daaa361d19b226944607726bc06afc9c): kernel de 0460 y línea de min92 con -noprogress y sin a5fb_perf=1. Cuenta como UNA escritura de BOOT de D-0092 (la 13.ª). Sustituye al min92 que no arranca. RIESGOS: otro panic (vuelta a min93).
 - **Cómo se revierte:** El Director puede revocarla con un mensaje.
 
