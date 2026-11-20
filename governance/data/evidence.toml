@@ -4749,3 +4749,18 @@ sha256 = "2617acbad31042abaa4fccc7ecc51ab8dd493b53f0250007e4c5c2f4ed1d111e"
 size = 243460
 immutable = true
 note = "Imagen min101 590807bf, kernel CI 44697499882 (0466). La sesión de uso duró casi el doble que las de min98 y min100 (76 frente a 42-46 lecturas de carga de 2 s), así que ni los fps ni la ocupación son comparables en sentido estricto; la corriente en uso se filtra por 'núcleos grandes en estado alto' y es la medida más comparable. Sin una métrica de capacidad (por ejemplo el tiempo que tarda una transición), no se puede medir la lentitud percibida."
+
+[[evidence]]
+id = "E-0322"
+title = "Colisión de nombres en el parámetro herocycle, error mío del parche 0458: el parámetro herocycle=<s> que añadí para apagar y encender la pantalla de forma automática YA existía desde 0433 con otro significado (hacer pasar los núcleos grandes por 2288, 1976 y 2600 MHz cada <s> segundos mientras la pantalla está encendida y el SoC no está caliente); en las pruebas que lo usaron ese código viejo también se ejecutó: 5 líneas 'HEROLTE POWER: cycle' en min89 y en min92c (herocycle=60) y 2 en min94 y en min95 (herocycle=150), con saltos a 2288, 1976 y 2600 MHz; CONSECUENCIA: los suelos con la pantalla APAGADA (E-0306, E-0312: 284 mA) no se ven afectados porque el código viejo solo actúa con la pantalla encendida; las cifras con la pantalla ENCENDIDA de esas pruebas (por ejemplo los 524 mA de E-0312 y los 515 mA de min89) están contaminadas por el cambio de frecuencia y no deben usarse; las pruebas posteriores sin herocycle (min97 a min101) no se ven afectadas; ARREGLO: el parámetro de los ciclos de pantalla pasa a llamarse herosc"
+kind = "note"
+path = "xnu/patches/0458-herolte-test-cycles-and-black-before-decon-stop.patch"
+location = "scratch"
+created = "2026-11-20"
+domain = "host"
+level = "L2"
+device = "this-unit"
+sha256 = ""
+size = 0
+immutable = false
+note = "Detectado al leer el bucle del hilo de energía para diseñar el gobernador nuevo: 'PE_parse_boot_argn(herocycle...)' aparece dos veces en la función con dos significados. Una prueba de que hubo ejecución real son las líneas POWER: cycle de los registros min89, min92c, min94 y min95. Lección: antes de añadir un parámetro de arranque, buscar si el nombre ya se usa (grep del nombre en todo el árbol)."
