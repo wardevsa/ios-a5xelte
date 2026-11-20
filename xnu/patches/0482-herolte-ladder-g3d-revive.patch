@@ -1,0 +1,93 @@
+herolte: the screen-off ladder puts the G3D domain's CMU registers and the Mali's state back (0482)
+
+min116c (E-0340): after about 100 s with the screen off the ladder gated the G3D domain (step 2, 50 s) and put it back when the screen came on, and every frame of the GPU scaling path then failed ("GPU PRESENT: frame 6290 -> failed" from the restore on): the screen did not change and the phone had to be powered off by force. The domain's CMU registers (muxes, dividers, gates) and the Mali's cores, quirks and AS0 are lost with the domain. Like hg_power_cycle(), the step saves the CMU registers and powers the cores off before the domain goes down, and after it is on again writes them back and does what the GPU's soft reset recovery does (reset, L2, all shader cores, tiler, quirks, AS0 to be programmed again), under hg_mtx. Only the ladder's third step.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -619,6 +619,66 @@
+ }
+ 
+ /*
++ * 0482 (E-0340): the screen-off ladder's third step gates the G3D power domain (50 s after the screen went off) and puts it back when the screen is
++ * on, but the domain's CMU registers (muxes, dividers, gates) and the Mali's state (cores, quirks, AS0) are lost with it and nobody put them back:
++ * min116c, with the screen off for about 100 s, then shows "GPU PRESENT: frame 6290 ... -> failed" for every frame, the screen does not
++ * change and the phone has to be powered off by force. As hg_power_cycle() does (which saved the CMU registers and wrote them back), the registers
++ * are saved before the domain goes down, and written back after it is on, followed by what a GPU soft reset recovery does: reset, L2, all
++ * shader cores, tiler, quirks, and AS0 to be programmed again.
++ */
++static uint32_t hg_ladder_cmu_saved[18];
++static const uint16_t hg_ladder_cmu_regs[18] = {
++	0x200, 0x204, 0x20c, 0x210, 0x214, 0x400, 0x404, 0x408, 0x40c,
++	0x600, 0x604, 0x60c, 0x610, 0x614, 0x800, 0x804, 0x900, 0xa00,
++};
++static vm_offset_t hg_ladder_cmu;
++
++static void
++hg_ladder_g3d_save(void)
++{
++	if (!hg_ladder_cmu) {
++		hg_ladder_cmu = ml_io_map(HG_CMU_PA, 0x1000);
++	}
++	if (!hg_ladder_cmu || !hg_gpu) {
++		return;
++	}
++	lck_mtx_lock(hg_mtx);
++	for (unsigned i = 0; i < 18; i++) {
++		hg_ladder_cmu_saved[i] = hg_rd(hg_ladder_cmu, hg_ladder_cmu_regs[i]);
++	}
++	hg_cores_off();
++	lck_mtx_unlock(hg_mtx);
++}
++
++static void
++hg_ladder_g3d_back(void)
++{
++	if (!hg_ladder_cmu || !hg_gpu) {
++		return;
++	}
++	lck_mtx_lock(hg_mtx);
++	for (unsigned i = 0; i < 18; i++) {
++		hg_wr(hg_ladder_cmu, hg_ladder_cmu_regs[i], hg_ladder_cmu_saved[i]);
++	}
++	delay(100);
++	hg_wr(hg_gpu, 0x024, 0xffffffffu);                      /* GPU_IRQ_CLEAR */
++	hg_wr(hg_gpu, 0x030, 1);                                /* GPU_COMMAND SOFT_RESET */
++	for (unsigned i = 0; i < 10000 && !(hg_rd(hg_gpu, GPU_IRQ_RAWSTAT) & 0x100); i++) {
++		delay(10);
++	}
++	hg_wr(hg_gpu, 0x024, 0xffffffffu);
++	bool up = hg_power(L2_PWRON_LO, L2_READY_LO, hg_rd(hg_gpu, L2_PRESENT_LO), "L2") &&
++	    hg_power(SHADER_PWRON_LO, SHADER_READY_LO, hg_rd(hg_gpu, SHADER_PRESENT_LO), "all shader cores") &&
++	    hg_power(TILER_PWRON_LO, TILER_READY_LO, hg_rd(hg_gpu, TILER_PRESENT_LO), "tiler");
++	hg_quirks();
++	hg_wr(hg_gpu, JOB_IRQ_CLEAR, 0xffffffffu);
++	hg_wr(hg_gpu, MMU_IRQ_CLEAR, 0xffffffffu);
++	hg_as_ok = false;
++	printf("HEROLTE GPU: revived after the G3D domain came back: CMU registers written back, cores %s\n", up ? "back up" : "NOT up");
++	lck_mtx_unlock(hg_mtx);
++}
++
++/*
+  * What the job the GPU would not read holds, and whether a job in the kernel's own memory still runs after the
+  * reset: tells a bad chain from a GPU that has lost its way to memory.
+  */
+@@ -4065,6 +4125,9 @@
+ 							up = (hg_rd(pdb2, o + 4u) & 0xfu) == (saved[s][k] & 0xfu);
+ 						}
+ 						printf("HEROLTE PD: restore step %d domain at %#x %s (config %#x, status %#x)\n", s, o, up ? "ON" : "did not come back", hg_rd(pdb2, o), hg_rd(pdb2, o + 4u));
++						if (s == 2 && up) {
++							hg_ladder_g3d_back();      /* 0482: the G3D domain lost its CMU registers and the Mali its state */
++						}
+ 						if (s == 1 && ha_spi) {
+ 							uint16_t v = 0;
+ 							bool ok = ha_read(0, &v);
+@@ -4080,6 +4143,9 @@
+ 					bool ok = ha_read(0, &v);
+ 					printf("HEROLTE PD: before gating audio, codec register 0 %s %#x (0x6364 expected)\n", ok ? "reads" : "did not answer:", v);
+ 				}
++				if (step_i == 2) {
++					hg_ladder_g3d_save();                  /* 0482 */
++				}
+ 				for (unsigned k = 0; k < 6; k++) {
+ 					uint16_t o = steps[step_i].off[k];
+ 					if (!o) {
