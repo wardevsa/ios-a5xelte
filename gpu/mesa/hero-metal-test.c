@@ -288,6 +288,15 @@ report_pixels(unsigned att, unsigned fmt, const uint8_t *px, const float clear[4
                nans++;
          if (memcmp(f, clear, 16))
             differ++;
+      } else if (fmt == 70 || fmt == 80) {   /* RGBA8Unorm, BGRA8Unorm: the clear colour packed */
+         uint8_t c[4];
+         for (int k = 0; k < 4; k++)
+            c[k] = (uint8_t)(clear[k] * 255.0f + 0.5f);
+         if (fmt == 80) {
+            uint8_t t = c[0];
+            c[0] = c[2], c[2] = t;
+         }
+         differ += abs(p[0] - c[0]) > 1 || abs(p[1] - c[1]) > 1 || abs(p[2] - c[2]) > 1 || abs(p[3] - c[3]) > 1;
       } else {
          bool zero = true;
          for (unsigned b = 0; b < bpp; b++)
@@ -327,9 +336,11 @@ render(struct rwa_device *dev, const struct lib *l, const char *vname, const cha
    struct rwa_render_shape shape = { .color_count = colors, .sample_count = 1 };
    for (unsigned i = 0; i < colors; i++)
       shape.color_format[i] = fmt;
-   for (unsigned a = 0; a < 16; a++)
+   /* No descriptor for the library's own vertex stage: it draws its quad from its own buffer and refuses one. */
+   for (unsigned a = 0; vbc && a < 16; a++)
       shape.vertex_attribute[a] = (struct rwa_vertex_attribute){ 31, a * 16, STREAM_INDEX };
-   shape.vertex_layout[STREAM_INDEX] = (struct rwa_vertex_layout){ 256, 1, 1 };
+   if (vbc)
+      shape.vertex_layout[STREAM_INDEX] = (struct rwa_vertex_layout){ 256, 1, 1 };
 
    struct rwa_render_info info;
    struct rwa_render *r = NULL;
