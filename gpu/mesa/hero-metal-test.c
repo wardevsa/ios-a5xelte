@@ -8,7 +8,7 @@
  *
  * options: -s WxH (32x32) attachment / grid size, -f FMT (125, RGBA32Float) colour format, -c N colour attachments,
  *          -z fill buffers with small floats instead of zeros, -t SEC (60) give up after SEC seconds with a backtrace,
- *          -l X,Y,Z threads per group (8,8,1).
+ *          -l X,Y,Z threads per group (8,8,1), -p PRIM MTLPrimitiveType (4, a strip; 3, triangles), -v N vertices (4).
  *
  * Every texture slot gets a texture of the declared kind (2D, 3D, cube, array; float, int or uint elements) filled
  * with a gradient, every buffer index 64 KB, every sampler a linear clamped one. Vertex attributes are configured
@@ -322,6 +322,8 @@ report_pixels(unsigned att, unsigned fmt, const uint8_t *px, const float clear[4
 }
 
 /* ---- render ---- */
+static unsigned primitive = 4, vertices = 4;   /* -p, -v: MTLPrimitiveType (3 triangles, 4 strip) and the count */
+
 static int
 render(struct rwa_device *dev, const struct lib *l, const char *vname, const char *fname, unsigned fmt,
        unsigned colors)
@@ -385,18 +387,21 @@ render(struct rwa_device *dev, const struct lib *l, const char *vname, const cha
    for (unsigned i = 0; i < info.fragment_samplers && i < MAX_TEX; i++)
       smp[i] = make_sampler(dev);
 
-   /* The stream: four corners of the screen, every float attribute the same corner, integers 0. */
-   struct rwa_buffer *stream = rwa_buffer_create(dev, 4 * 256, why, sizeof(why));
+   /* The stream: corners of the screen in the order the primitive wants them (a strip: 0 1 2 3; a list: 0 1 2,
+    * 2 1 3), every float attribute the same corner, integers 0. */
+   struct rwa_buffer *stream = rwa_buffer_create(dev, 8 * 256, why, sizeof(why));
    if (!stream) {
       printf("hero_metal_test: stream: %s\n", why);
       return 1;
    }
    float *sv = rwa_buffer_map(stream);
    static const float corner[4][2] = { { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } };
-   for (unsigned v = 0; v < 4; v++)
+   static const unsigned strip[8] = { 0, 1, 2, 3, 0, 0, 0, 0 }, list[8] = { 0, 1, 2, 2, 1, 3, 0, 0 };
+   for (unsigned v = 0; v < 8; v++)
       for (unsigned a = 0; a < 16; a++) {
          float *e = sv + v * 64 + a * 4;
-         e[0] = corner[v][0], e[1] = corner[v][1], e[2] = 0.5f, e[3] = 1;
+         unsigned k = (primitive == 3 ? list : strip)[v];
+         e[0] = corner[k][0], e[1] = corner[k][1], e[2] = 0.5f, e[3] = 1;
          if (shape.vertex_attribute[a].format != 31)
             memset(e, 0, 16);
       }
@@ -417,7 +422,7 @@ render(struct rwa_device *dev, const struct lib *l, const char *vname, const cha
       .color = color, .color_count = colors, .clear_color = clear,
       .vertex = { vbuf, info.vertex_buffers, vtex, (unsigned)vslots, NULL, 0 },
       .fragment = { fbuf, info.fragment_buffers, ftex, (unsigned)fslots, smp, info.fragment_samplers },
-      .primitive = 4, .vertex_start = 0, .vertex_count = 4,
+      .primitive = primitive, .vertex_start = 0, .vertex_count = vertices,
       .vertex_streams = info.vertex_stream_mask ? streams : NULL,
       .vertex_stream_count = info.vertex_stream_mask ? STREAM_INDEX + 1 : 0,
    };
@@ -563,14 +568,18 @@ main(int argc, char **argv)
          timeout = atoi(argv[++i]);
       else if (!strcmp(argv[i], "-l") && i + 1 < argc)
          sscanf(argv[++i], "%u,%u,%u", &group[0], &group[1], &group[2]);
+      else if (!strcmp(argv[i], "-p") && i + 1 < argc)
+         primitive = atoi(argv[++i]);
+      else if (!strcmp(argv[i], "-v") && i + 1 < argc)
+         vertices = atoi(argv[++i]);
       else if (!strcmp(argv[i], "-z"))
          float_fill = true;
       else
          break;
    }
    int rest = argc - i;
-   if (rest < 2 || rest > 3 || W == 0 || H == 0 || W > 1024 || H > 1024 || colors < 1 || colors > 8) {
-      fprintf(stderr, "usage: hero_metal_test [-s WxH] [-f FMT] [-c N] [-z] [-t SEC] [-l X,Y,Z] LIB "
+   if (vertices > 8 || primitive > 4 || rest < 2 || rest > 3 || W == 0 || H == 0 || W > 1024 || H > 1024 || colors < 1 || colors > 8) {
+      fprintf(stderr, "usage: hero_metal_test [-s WxH] [-f FMT] [-c N] [-z] [-t SEC] [-l X,Y,Z] [-p PRIM] [-v N] LIB "
                       "(--list | VERTEX FRAGMENT | KERNEL)\n");
       return 2;
    }

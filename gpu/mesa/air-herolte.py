@@ -914,4 +914,50 @@ static void
 optimise_nir(nir_shader *nir, unsigned quirks, bool is_blend)
 {''')
 
+# 10. A fragment shader's 16-bit colour outputs (Metal's half4, f16vec4 FRAG_RESULT_DATA0) are written at 32 bits.
+# Midgard's writeout hands the tile buffer 32-bit registers: on the T880 postFragment's half4 came back as
+# (0.0007, 0.0078, nan, nan) in RGBA32Float -- the halves (x,y),(z,w=1.0 = 0x3c00) read as two floats (boot-18k44).
+change('fragment outputs at 32 bits: callback', 'air_metal.c',
+       '''/* HEROLTE: which ALU instructions nir_lower_bit_size widens''',
+       '''/* HEROLTE: a fragment shader's 16-bit store_output made a 32-bit one, of the same base type. */
+static bool
+herolte_widen_fs_output(nir_builder *b, nir_intrinsic_instr *intr, void *data)
+{
+   (void)data;
+   if (intr->intrinsic != nir_intrinsic_store_output)
+      return false;
+   nir_alu_type t = nir_intrinsic_src_type(intr);
+   if (nir_alu_type_get_type_size(t) != 16)
+      return false;
+   nir_alu_type base = nir_alu_type_get_base_type(t);
+   b->cursor = nir_before_instr(&intr->instr);
+   nir_def *v = intr->src[0].ssa;
+   v = base == nir_type_float ? nir_f2f32(b, v) : base == nir_type_int ? nir_i2i32(b, v) : nir_u2u32(b, v);
+   nir_src_rewrite(&intr->src[0], v);
+   nir_intrinsic_set_src_type(intr, base | 32);
+   return true;
+}
+
+/* HEROLTE: which ALU instructions nir_lower_bit_size widens''')
+change('fragment outputs at 32 bits: pass', 'air_metal.c',
+       '''            type_size_vec4, nir_lower_io_use_interpolated_input_intrinsics);
+   /*
+    * B2L (B1L-0058)''',
+       '''            type_size_vec4, nir_lower_io_use_interpolated_input_intrinsics);
+   if (nir->info.stage == MESA_SHADER_FRAGMENT) {   /* HEROLTE: 32-bit colour outputs */
+      NIR_PASS(_, nir, nir_shader_intrinsics_pass, herolte_widen_fs_output, nir_metadata_control_flow, NULL);
+      nir_foreach_shader_out_variable(var, nir) {
+         const struct glsl_type *t = var->type;
+         if (!glsl_type_is_vector_or_scalar(t))
+            continue;
+         enum glsl_base_type bt = glsl_get_base_type(t);
+         if (bt == GLSL_TYPE_FLOAT16 || bt == GLSL_TYPE_INT16 || bt == GLSL_TYPE_UINT16)
+            var->type = glsl_vector_type(bt == GLSL_TYPE_FLOAT16 ? GLSL_TYPE_FLOAT :
+                                         bt == GLSL_TYPE_INT16 ? GLSL_TYPE_INT : GLSL_TYPE_UINT,
+                                         glsl_get_vector_elements(t));
+      }
+   }
+   /*
+    * B2L (B1L-0058)''')
+
 print('air-herolte: ' + ', '.join(done))
