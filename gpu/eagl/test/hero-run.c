@@ -1002,7 +1002,11 @@ assetsd_stderr_to_file(void)
       bool env_ok = false;
       if (envd && CFGetTypeID(envd) == CFDictionaryGetTypeID()) {
          CFTypeRef ev = CFDictionaryGetValue((CFDictionaryRef)envd, CFSTR("OS_ACTIVITY_DT_MODE"));
-         env_ok = ev && CFGetTypeID(ev) == CFStringGetTypeID() && CFStringCompare((CFStringRef)ev, CFSTR("YES"), 0) == kCFCompareEqualTo;
+         /* min112b (E-0335): assetsd.err stayed empty even with libheroapp's dprintf, so it is not known whether the inserted
+          * library loads at all; dyld prints every image it maps, and why an inserted one failed, to stderr with DYLD_PRINT_LIBRARIES */
+         CFTypeRef pl2 = CFDictionaryGetValue((CFDictionaryRef)envd, CFSTR("DYLD_PRINT_LIBRARIES"));
+         env_ok = ev && CFGetTypeID(ev) == CFStringGetTypeID() && CFStringCompare((CFStringRef)ev, CFSTR("YES"), 0) == kCFCompareEqualTo &&
+                  pl2 && CFGetTypeID(pl2) == CFStringGetTypeID();
       }
       if (path_ok && env_ok) {
          herodrm_log("hero-run: assetsd stderr: %s already points at assetsd.err with OS_ACTIVITY_DT_MODE", plists[i]);
@@ -1028,6 +1032,7 @@ assetsd_stderr_to_file(void)
              : CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
          if (env) {
             CFDictionarySetValue(env, CFSTR("OS_ACTIVITY_DT_MODE"), CFSTR("YES"));
+            CFDictionarySetValue(env, CFSTR("DYLD_PRINT_LIBRARIES"), CFSTR("1"));
             CFDictionarySetValue(d, CFSTR("EnvironmentVariables"), env);
             CFRelease(env);
          }
