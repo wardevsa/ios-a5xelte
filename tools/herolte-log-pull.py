@@ -29,7 +29,10 @@ def adb(tool, *args, tries=6):
         last = f'{p.stdout} {p.stderr}'.strip()
         if attempt + 1 < tries:
             time.sleep(3)
-            subprocess.run([tool, 'wait-for-recovery'], capture_output=True, text=True, timeout=60, check=False)
+            try:
+                subprocess.run([tool, 'wait-for-recovery'], capture_output=True, text=True, timeout=60, check=False)
+            except subprocess.TimeoutExpired:
+                pass                     # sigue sin verse: el siguiente intento lo dirá
     raise SystemExit(f'adb {" ".join(args)} failed after {tries} tries: {last}')
 
 
