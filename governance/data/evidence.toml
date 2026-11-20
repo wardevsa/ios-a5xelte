@@ -4794,3 +4794,18 @@ sha256 = "358a314f73a5e609ce7b069e51c7dc2e572ddec647993cc909f7ffd0caf2bb14"
 size = 304289
 immutable = true
 note = "Imagen min103 f22e847e, kernel CI 44704935423. Reservas: el espaciado entre fotogramas depende del ritmo de eventos que inyecta el guion (pasos de 20 ms y pausas de 700 ms); el guion no incluye abrir aplicaciones; la corriente tiene 1-3 muestras por ejecución; una sola sesión. Siguiente: banco v2 (calentamiento previo, pulsar Home tras la búsqueda, reposo real antes de los gestos, escenarios más largos, tres rondas)."
+
+[[evidence]]
+id = "E-0325"
+title = "min104 (banco de escenarios v2, D-0114): 27 ejecuciones medidas (3 escenarios × 3 topes × 3 rondas), sin pánico, el Director informa de que terminó; el reposo ya es reposo (la espera de calma salió a 2000 ms las nueve veces; 0-2 fotogramas en 20 s) y la corriente de reposo con pantalla encendida es 620, 616 y 617 mA con los tres topes (12 muestras cada uno): la línea base de la pantalla de inicio es ~618 mA y no depende del tope; PAGINADO (20 deslizamientos, 3 ejecuciones por tope, 11-12 muestras de corriente): 1466 mA (2288 MHz), 1284 (1976) y 1275 (1664): 2288 cuesta +14 % frente a 1976, y 1664 NO ahorra respecto a 1976 (-0,7 %, dentro del ruido); muestras saturadas del gobernador 19 de 2841 (0,7 %) a 2288, 36 de 2852 (1,3 %) a 1976 y 99 de 2872 (3,4 %) a 1664, y los intervalos de 120 ms o más son el 18,5 %, 19,5 % y 25,6 %: a 1664 el paginado empieza a faltar capacidad; BÚSQUEDA (6 desplegados): 942, 835 y 988 mA, sin patrón (ruido) y espaciado igual (59-62 % bajo 40 ms); RESERVAS: la corriente de las ejecuciones individuales se mueve mucho (paginado entre 1199 y 1633 mA) y sube con la ronda (rondas 0, 1, 2: media ~1208, ~1371, ~1443 mA), así que la deriva con el tiempo no está eliminada, solo repartida por el orden equilibrado; tres repeticiones por celda; no incluye abrir aplicaciones. CONSECUENCIA: el tope de 1976 MHz (min100) es el mejor compromiso medido y el ahorro adicional atribuido a 1664 (E-0321, -22 %) NO se reproduce dentro de un mismo arranque; 1664 queda descartado como tope de producción por ahora"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min104-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "de6482839057c281f3233b404845728da572004b7a8b42cfbe8fff3cc20a877f"
+size = 403545
+immutable = true
+note = "Imagen min104 185f277c, kernel CI 44715165808. El reposo del guion no aporta información por tope (la CPU grande está parada): en el siguiente banco se elimina."
