@@ -4989,3 +4989,18 @@ sha256 = "c827fb772ef136a7f1248b144b169a56e2059b978e6030067852d72ea5b3cea3"
 size = 403655
 immutable = true
 note = "Imagen min113 7654698f con el chmod de hero-run (CI 44799485640)."
+
+[[evidence]]
+id = "E-0338"
+title = "MENSAJES YA FUNCIONA y la causa de que Fotos no, leída del REGISTRO UNIFICADO del propio teléfono (nuevo método): (1) con libheroapp negando a MobileIcons el contexto compartido de iconos (+[CIContext _MI_sharedIconCompositorContext] y _IS_ responden nil), el Director informa de que Mensajes ya funciona y el registro de min113e no trae ningún cierre de MobileSMS; el CIContext respaldado por un CGContext no servía (initWithCGContext:options: acaba en el mismo CI::GLContext: en este CoreImage todo contexto es de OpenGL); (2) EL REGISTRO UNIFICADO (logd) SÍ ESCRIBE en /private/var/db/diagnostics (Persist/*.tracev3, 5 MB cada uno, 416 ficheros y 755 MB en total) y /private/var/db/uuidtext (663 ficheros, 196 MB); herolte-hfs-read.py gana 'pullr' (copia recursiva de solo lectura) y un script propio de unas 25 líneas (lz4 + strings, scratch/tracestr.py) descomprime los bloques 'bv41' y deja leer las cadenas de los mensajes; el texto de las cadenas con formato (uuidtext) no está interpretado, pero los argumentos dinámicos sí; hallazgo: 'Error Domain=kTCCErrorDomain Code=6 server error: Failed to issue Sandbox Extension for kTCCServicePhotos from Resp:{TCCDProcess: identifier=com.apple.MobileSMS, pid=236, auid=501, euid=501, ...' y lo mismo para kTCCServiceAddressBook: tccd (que corre como user/501, no como root) CONCEDE el acceso pero falla al EMITIR LA EXTENSIÓN DE SANDBOX que acompaña a la concesión, y el cliente lo ve como error/denegado; causa: la operación 5 (emitir extensión) de la política 'Sandbox' de sustitución del kernel (bsd/kern/sweet_amfi.c, sweet_sandbox_syscall) devuelve ENOENT (las operaciones 4, 5, 6 y 0x43 devuelven ENOENT); por eso TCCAccessPreflight(kTCCServicePhotos) respondió denegado aunque assetsd tiene com.apple.private.tcc.allow y las filas de TCC.db no cambiaron nada; (3) otros mensajes sin explotar: 'Requestor lacks required entitlement' (error 144, 57 veces: launchd rechaza quitar un trabajo a quien lo pide sin derecho), 'plugin has invalid sandbox or container: error 2' (PhotosFileProvider, ScreenTimeWidgetIntentsExtension: probablemente la operación 4, ruta del contenedor, también devuelve ENOENT); SIGUIENTE: parche 0480 (herosbx=1) vuelca los argumentos de las operaciones 4, 5 y 6 para conocer su estructura antes de responderlas; BOOT = min115 (kernel CI 44809378545, línea de min112 + herosbx=1, 602 caracteres); contadores D-0123: BOOT 5 de 80, DROP 12 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min113e-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "cc4c66af28aa8df878f4e5f42d8fee038e77730e2a48dfcb55d6fd4671c5e450"
+size = 474224
+immutable = true
+note = "Imagen min113 con libheroapp de CI 44804336062 (icon compositor nil) y fondo oficial iOS 16. El registro unificado completo se copió a /tmp/herolte-work/unifiedlog (no versionado, 950 MB)."
