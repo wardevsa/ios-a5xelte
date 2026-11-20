@@ -1006,6 +1006,51 @@ tcc_allow_assetsd(void)
    }
    s_close(db);
 }
+
+/*
+ * Removable system apps (Calculator, Calendar, Maps, Music, Notes, Weather, ...): a stock iOS 16 root keeps them in /private/var/staged_system_apps
+ * and installd puts them in place at the first boot, which never happens here, so the home screen had six icons. With a file DROP_DIR staged.on
+ * (once, marked by staged.done) every bundle there is moved (renamed, the same volume, nothing copied or deleted) into /Applications, where lsd
+ * finds it when it makes its database: the database is taken this boot and made anew at the next, as for the apps of the drop zone. Bundles whose
+ * name is already in /Applications are left alone. Moving them back is a rename of the same names.
+ */
+static void
+move_staged_apps(void)
+{
+   if (access(DROP_DIR "staged.on", F_OK) != 0 || access(DROP_DIR "staged.done", F_OK) == 0)
+      return;
+   DIR *d = opendir("/private/var/staged_system_apps");
+   struct dirent *e;
+   int moved = 0, left = 0, failed = 0;
+   if (d == NULL) {
+      herodrm_log("hero-run: staged apps: no /private/var/staged_system_apps");
+      return;
+   }
+   while ((e = readdir(d)) != NULL) {
+      size_t len = strlen(e->d_name);
+      char from[400], to[400];
+      struct stat st;
+      if (len < 5 || strcmp(e->d_name + len - 4, ".app") != 0)
+         continue;
+      snprintf(from, sizeof(from), "/private/var/staged_system_apps/%s", e->d_name);
+      snprintf(to, sizeof(to), "/Applications/%s", e->d_name);
+      if (lstat(to, &st) == 0) {
+         left++;
+         continue;
+      }
+      if (rename(from, to) == 0) {
+         moved++;
+      } else {
+         failed++;
+         herodrm_log("hero-run: staged apps: %s: %s", e->d_name, strerror(errno));
+      }
+   }
+   closedir(d);
+   if (moved > 0)
+      unlink(LS_DB_GONE);      /* remove_ls_db_once takes the database now; the next boot makes it with the new apps */
+   close(open(DROP_DIR "staged.done", O_WRONLY | O_CREAT, 0644));
+   herodrm_log("hero-run: staged apps: %d moved into /Applications, %d already there, %d failed", moved, left, failed);
+}
 /*
  * assetsd aborts on an uncaught exception (min50 log: abort <- libc++abi <- libobjc <- libdispatch) and launchd sends its
  * stderr to /dev/null, so the exception's text never reaches the log. If the job's plist is found, StandardErrorPath is
@@ -1183,6 +1228,7 @@ main(int main_argc, char **main_argv)
    chmod("/private/var/herolte", 0755);
    chmod("/private/var/herolte/lib", 0755);
    tcc_allow_assetsd();
+   move_staged_apps();
    remove_listed_files();
    disable_bluetooth_audio();
    install_audio_plugin();
