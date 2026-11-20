@@ -21,6 +21,7 @@ extern void herodrm_log(const char *format, ...);
 /* min112c (E-0335): stderr of assetsd did not reach assetsd.err (launchd's redirection does not seem to apply, DYLD_PRINT_LIBRARIES printed nothing
  * either), so the library also appends its lines to a world-writable file of its own: if /private/var/tmp/heroapp.log exists, the library loads. */
 #include <fcntl.h>
+#include <sys/stat.h>
 static void
 hero_note(const char *format, ...)
 {
