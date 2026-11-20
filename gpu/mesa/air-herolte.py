@@ -1,0 +1,736 @@
+#!/usr/bin/env python3
+"""The S7's changes to Scion's AIR frontend (MIT, tools/mesa/air at a6f4bc38), after ios-b1lte's apply.py.
+
+  air-herolte.py MESA/src/compiler/air
+
+What iOS 18's shaders (the iPhone XR's 22H352, 20335 modules in 196 .metallib files) need that iOS 16.5's and 26's did
+not, found on a host build against that corpus (docs/herolte-metal.md). Each change checks the exact text it replaces
+and fails loudly if the file moved; run twice, it says so and changes nothing.
+"""
+import sys
+
+AIR = sys.argv[1]
+done = []
+
+
+def change(name, path, old, new, marker=None):
+    p = f'{AIR}/{path}'
+    s = open(p).read()
+    if new in s or (marker and marker in s):
+        done.append(f'{name} (already)')
+        return
+    if s.count(old) != 1:
+        sys.exit(f'air-herolte: {name}: {path} is not as expected ({s.count(old)} matches)')
+    open(p, 'w').write(s.replace(old, new))
+    done.append(name)
+
+
+# 1. iOS 18's sincos: air.fast_sincos.f32(float x, ptr c) returns sin(x) and writes cos(x) through c (the out-pointer
+# form of Metal's sincos(x, thread T &cosval)). MercuryPoster's fluidity and pro24Main shaders use it, and the frontend
+# took the pointer for a number ("a pointer where a number belongs", 87 modules of the corpus).
+change('sincos through a pointer', 'air_intrinsics.c',
+       '''   nir_def *a[4] = { 0 };
+   for (unsigned i = 0; i < argc && i < 4; i++)
+      if (!(a[i] = air_get_ssa(c, in->operands[1 + i])))
+         return false;
+''',
+       '''   /* HEROLTE: air.[fast_]sincos(x, ptr) -- sin(x) returned, cos(x) written through the pointer (iOS 18) */
+   if ((!strcmp(op, "fast_sincos") || !strcmp(op, "sincos")) && argc == 2) {
+      nir_def *x = air_get_ssa(c, in->operands[1]);
+      struct air_val *cp = air_get(c, in->operands[2]);
+      if (!x || !cp)
+         return false;
+      if (cp->kind != AIR_VAL_PTR)
+         return air_error(c, "intrinsic: air.%s writes its cosine through a pointer that is not "
+                             "one place", op);
+      bool exact = c->b.exact;
+      c->b.exact = false;
+      nir_def *s = nir_fsin(&c->b, x), *co = nir_fcos(&c->b, x);
+      c->b.exact = exact;
+      if (!air_store_ptr(c, cp->ptr, co, x->bit_size / 8))
+         return false;
+      air_set(c, &in->base, air_val_ssa(c, s));
+      *handled = true;
+      return true;
+   }
+
+   nir_def *a[4] = { 0 };
+   for (unsigned i = 0; i < argc && i < 4; i++)
+      if (!(a[i] = air_get_ssa(c, in->operands[1 + i])))
+         return false;
+''')
+
+# 2. Aggregates through calls of the module's own functions, flattened: every number in a struct or array (nested ones
+# too) is one NIR parameter, and the struct or array is rebuilt on the other side. Scion's frontend gave a returned
+# struct one out-parameter per NUMBER member and dropped the others, and passed no aggregate argument at all.
+# MercuryPoster's tori::*::torusVertex returns a metal::float3x3 -- { [3 x <3 x float>] } -- from
+# rotationMatrixFromEuler and passes its array to pointMapped: "an array where a number belongs" (68 modules).
+# param_glsl_type also gets the 8-bit width, which a flattened member can have (a boolean stays a 32-bit word, as\n# Scion has it: vsEdge of RoomPlan returns i1 members into int outputs).
+change('8-bit parameters', 'air_to_nir.c',
+       '''   return glsl_vector_type(bits == 16 ? GLSL_TYPE_FLOAT16 :
+                           bits == 64 ? GLSL_TYPE_UINT64 : GLSL_TYPE_UINT,''',
+       '''   return glsl_vector_type(bits == 16 ? GLSL_TYPE_FLOAT16 :
+                           bits == 64 ? GLSL_TYPE_UINT64 :
+                           bits == 8 ? GLSL_TYPE_UINT8 : bits == 1 ? GLSL_TYPE_BOOL : GLSL_TYPE_UINT,''')
+
+change('aggregate leaves', 'air_to_nir.c',
+       '''static struct air_val *air_constant_val(struct air_ctx *c, const struct air_constant *k);
+''',
+       '''/* HEROLTE: a struct or array crossing a call of the module's own functions, as its NUMBERS in order ("leaves"):
+ * one NIR parameter each, rebuilt as an AIR_VAL_AGG on the other side. A pointer inside one has no leaf (such an
+ * argument specialises the callee instead, translate_callee). */
+static bool
+agg_type(const struct air_type *t)
+{
+   return t->kind == AIR_TYPE_STRUCT || t->kind == AIR_TYPE_ARRAY;
+}
+
+static unsigned
+agg_count(const struct air_type *t)
+{
+   return t->kind == AIR_TYPE_STRUCT ? t->num_members : (unsigned)t->count;
+}
+
+static const struct air_type *
+agg_member(const struct air_type *t, unsigned k)
+{
+   return t->kind == AIR_TYPE_STRUCT ? t->members[k] : t->elem;
+}
+
+static unsigned
+agg_leaves(const struct air_type *t)
+{
+   if (agg_type(t)) {
+      unsigned n = 0;
+      for (unsigned k = 0; k < agg_count(t); k++)
+         n += agg_leaves(agg_member(t, k));
+      return n;
+   }
+   return ret_member_is_number(t) ? 1 : 0;
+}
+
+static void
+agg_leaf_types(const struct air_type *t, const struct air_type **out, unsigned *n)
+{
+   if (agg_type(t)) {
+      for (unsigned k = 0; k < agg_count(t); k++)
+         agg_leaf_types(agg_member(t, k), out, n);
+   } else if (ret_member_is_number(t)) {
+      out[(*n)++] = t;
+   }
+}
+
+/* a value's leaves, in agg_leaf_types order; NULL for one it does not have (an undef member) */
+static bool
+agg_leaf_vals(struct air_ctx *c, const struct air_type *t, struct air_val *v, struct air_val **out,
+              unsigned *n)
+{
+   if (agg_type(t)) {
+      if (v && v->kind != AIR_VAL_AGG)
+         return air_error(c, "instruction: a struct or array crossing a call that is not one here");
+      for (unsigned k = 0; k < agg_count(t); k++)
+         if (!agg_leaf_vals(c, agg_member(t, k), v && k < v->num_elems ? v->elems[k] : NULL, out, n))
+            return false;
+      return true;
+   }
+   if (!ret_member_is_number(t))
+      return true;
+   if (v && v->kind != AIR_VAL_SSA)
+      return air_error(c, "instruction: a member of a struct or array crossing a call that is not "
+                          "a number");
+   out[(*n)++] = v;
+   return true;
+}
+
+static struct air_val *
+agg_from_leaves(struct air_ctx *c, const struct air_type *t, struct air_val **leaves, unsigned *n)
+{
+   if (agg_type(t)) {
+      struct air_val *a = air_val_agg(c, agg_count(t));
+      for (unsigned k = 0; k < agg_count(t); k++)
+         a->elems[k] = agg_from_leaves(c, agg_member(t, k), leaves, n);
+      return a;
+   }
+   if (!ret_member_is_number(t))
+      return NULL;
+   return leaves[(*n)++];
+}
+
+static struct air_val *air_constant_val(struct air_ctx *c, const struct air_constant *k);
+''', marker='agg_leaf_types(const struct air_type *t, const struct air_type **out')
+
+change('flattened struct return: emit', 'air_to_nir.c',
+       '''      if (v->kind != AIR_VAL_AGG || v->num_elems != c->num_ret_fields)
+         return air_error(c, "instruction: a returned struct that was never built, "
+                             "from a function called in the module");
+      for (unsigned i = 0; i < v->num_elems; i++) {
+         if (!c->ret_fields[i] || !v->elems[i])
+            continue;
+         if (v->elems[i]->kind != AIR_VAL_SSA)
+            return air_error(c, "instruction: field %u of a returned struct is not a "
+                                "number, from a function called in the module", i);
+         nir_def *d = v->elems[i]->def;
+         nir_store_deref(&c->b, c->ret_fields[i], d,
+                         nir_component_mask(d->num_components));
+      }
+      return true;''',
+       '''      /* HEROLTE: one out-parameter per LEAF (agg_leaves), arrays and nested structs flattened */
+      const struct air_type *rt = c->fn->fn_type->elem;
+      if (v->kind != AIR_VAL_AGG)
+         return air_error(c, "instruction: a returned struct that was never built, "
+                             "from a function called in the module");
+      unsigned nl = 0;
+      struct air_val **leaves = rzalloc_array(c->mem_ctx, struct air_val *, MAX2(agg_leaves(rt), 1));
+      if (!agg_leaf_vals(c, rt, v, leaves, &nl))
+         return false;
+      for (unsigned i = 0; i < nl && i < c->num_ret_fields; i++) {
+         if (!c->ret_fields[i] || !leaves[i])
+            continue;
+         nir_def *d = leaves[i]->def;
+         nir_store_deref(&c->b, c->ret_fields[i], d,
+                         nir_component_mask(d->num_components));
+      }
+      return true;''')
+
+change('flattened parameters: count', 'air_to_nir.c',
+       '''   unsigned nret = 0;
+   if (ret_struct) {
+      for (unsigned i = 0; i < rt->num_members; i++)
+         nret += ret_member_is_number(rt->members[i]);
+   } else if (has_ret) {
+      nret = 1;
+   }
+   unsigned nparams = 3 * f->num_args + nret + b2l_extra;   /* B2L (B1L-0084): a chosen pointer takes three */''',
+       '''   unsigned nret = 0;
+   if (ret_struct) {
+      nret = agg_leaves(rt);   /* HEROLTE: every number in it */
+   } else if (has_ret) {
+      nret = 1;
+   }
+   unsigned nparams = 3 * f->num_args + nret + b2l_extra;   /* B2L (B1L-0084): a chosen pointer takes three */
+   const struct air_type **ret_leaf =
+      rzalloc_array(c->mem_ctx, const struct air_type *, MAX2(nret, 1));
+   if (ret_struct) {
+      unsigned nl = 0;
+      agg_leaf_types(rt, ret_leaf, &nl);
+   }''')
+
+change('flattened parameters: return params', 'air_to_nir.c',
+       '''   if (ret_struct) {
+      for (unsigned i = 0; i < rt->num_members; i++) {
+         if (!ret_member_is_number(rt->members[i]))
+            continue;
+         fn->params[idx++] = (nir_parameter){
+            .num_components = 1, .bit_size = 32,
+            .is_return = true,
+            .mode = nir_var_function_temp,
+            .type = param_glsl_type(c, rt->members[i]),
+         };
+      }
+   } else if (has_ret) {''',
+       '''   if (ret_struct) {
+      for (unsigned i = 0; i < nret; i++) {
+         fn->params[idx++] = (nir_parameter){
+            .num_components = 1, .bit_size = 32,
+            .is_return = true,
+            .mode = nir_var_function_temp,
+            .type = param_glsl_type(c, ret_leaf[i]),
+         };
+      }
+   } else if (has_ret) {''')
+
+change('flattened parameters: callee return fields', 'air_to_nir.c',
+       '''      c->ret_fields = rzalloc_array(c->mem_ctx, nir_deref_instr *,
+                                    MAX2(rt->num_members, 1));
+      c->num_ret_fields = rt->num_members;
+      unsigned p = 0;
+      for (unsigned i = 0; i < rt->num_members; i++) {
+         if (!ret_member_is_number(rt->members[i]))
+            continue;
+         c->ret_fields[i] =
+            nir_build_deref_cast(&c->b, nir_load_param(&c->b, p++),
+                                 nir_var_function_temp,
+                                 param_glsl_type(c, rt->members[i]), 0);
+      }''',
+       '''      /* HEROLTE: one per leaf; at least one entry, so that emit_return knows it is in a struct-returning callee */
+      c->ret_fields = rzalloc_array(c->mem_ctx, nir_deref_instr *, MAX2(nret, 1));
+      c->num_ret_fields = MAX2(nret, 1);
+      for (unsigned p = 0; p < nret; p++)
+         c->ret_fields[p] =
+            nir_build_deref_cast(&c->b, nir_load_param(&c->b, p),
+                                 nir_var_function_temp,
+                                 param_glsl_type(c, ret_leaf[p]), 0);''')
+
+change('flattened parameters: call site return', 'air_to_nir.c',
+       '''   nir_variable **fields = ret_struct ?
+      rzalloc_array(c->mem_ctx, nir_variable *, MAX2(rt->num_members, 1)) : NULL;
+   nir_call_instr *call = nir_call_instr_create(c->nir, fn);
+   unsigned idx = 0;
+   if (ret_struct) {
+      for (unsigned i = 0; i < rt->num_members; i++) {
+         if (!ret_member_is_number(rt->members[i]))
+            continue;
+         fields[i] = nir_local_variable_create(c->b.impl,
+                                               param_glsl_type(c, rt->members[i]),
+                                               "callret");
+         call->params[idx++] =
+            nir_src_for_ssa(&nir_build_deref_var(&c->b, fields[i])->def);
+      }
+   } else if (has_ret) {''',
+       '''   /* HEROLTE: one local per leaf of a returned struct (agg_leaves) */
+   unsigned nret_leaves = ret_struct ? agg_leaves(rt) : 0;
+   const struct air_type **ret_leaf =
+      rzalloc_array(c->mem_ctx, const struct air_type *, MAX2(nret_leaves, 1));
+   nir_variable **fields = ret_struct ?
+      rzalloc_array(c->mem_ctx, nir_variable *, MAX2(nret_leaves, 1)) : NULL;
+   nir_call_instr *call = nir_call_instr_create(c->nir, fn);
+   unsigned idx = 0;
+   if (ret_struct) {
+      unsigned nl = 0;
+      agg_leaf_types(rt, ret_leaf, &nl);
+      for (unsigned i = 0; i < nret_leaves; i++) {
+         fields[i] = nir_local_variable_create(c->b.impl, param_glsl_type(c, ret_leaf[i]),
+                                               "callret");
+         call->params[idx++] =
+            nir_src_for_ssa(&nir_build_deref_var(&c->b, fields[i])->def);
+      }
+   } else if (has_ret) {''')
+
+change('flattened parameters: call site rebuild', 'air_to_nir.c',
+       '''   if (ret_struct) {
+      struct air_val *agg = air_val_agg(c, rt->num_members);
+      for (unsigned i = 0; i < rt->num_members; i++)
+         if (fields[i])
+            agg->elems[i] = air_val_ssa(c, nir_load_var(&c->b, fields[i]));
+      air_set(c, &in->base, agg);''',
+       '''   if (ret_struct) {
+      struct air_val **leaves = rzalloc_array(c->mem_ctx, struct air_val *, MAX2(nret_leaves, 1));
+      for (unsigned i = 0; i < nret_leaves; i++)
+         leaves[i] = air_val_ssa(c, nir_load_var(&c->b, fields[i]));
+      unsigned n = 0;
+      air_set(c, &in->base, agg_from_leaves(c, rt, leaves, &n));''')
+
+# 3. A table of functions: a function's address is its number in the module plus one, stored and loaded as a 32-bit
+# integer in the shader's own memory, and a call through it calls every function of the call's type whose address the
+# module takes and keeps the one whose number it is (bcsel). Only for candidates that write no memory but their own:
+# all of them run. MercuryPoster's shippou::*::compute keep materialTop/Center/Bottom/World in an `alloca [4 x ptr]`
+# and computeColor calls one by index ("a function value used before it is defined").
+change('function numbers', 'air_to_nir.c',
+       '''   air_error(c, "instruction: a %s value used before it is defined%s%s",''',
+       '''   /* HEROLTE: a function's address is its number in the module plus one (herolte_indirect_call) */
+   if (v->kind == AIR_VALUE_FUNCTION) {
+      for (unsigned i = 0; i < c->m->num_functions; i++) {
+         if (&c->m->functions[i]->base != v)
+            continue;
+         nir_cursor use = c->b.cursor;
+         c->b.cursor = c->const_cursor;
+         struct air_val *val = air_val_ssa(c, nir_imm_int(&c->b, (int)i + 1));
+         c->const_cursor = c->b.cursor;
+         c->b.cursor = use;
+         air_set(c, v, val);
+         return val;
+      }
+   }
+   air_error(c, "instruction: a %s value used before it is defined%s%s",''')
+
+change('function numbers loaded back', 'air_to_nir.c',
+       '''      nir_def *res = air_load_ptr(c, p->ptr, in->base.type, in->align);
+      if (!res)
+         return false;
+      air_set(c, &in->base, air_val_ssa(c, res));
+      return true;
+   }
+   case AIR_OP_STORE: {''',
+       '''      /* HEROLTE: a pointer loaded from the shader's own memory is a function number stored there */
+      if (in->base.type->kind == AIR_TYPE_POINTER && p->ptr.class == AIR_PTR_SCRATCH) {
+         static const struct air_type herolte_i32 = { .kind = AIR_TYPE_INT, .bits = 32 };
+         nir_def *fnum = air_load_ptr(c, p->ptr, &herolte_i32, in->align);
+         if (!fnum)
+            return false;
+         air_set(c, &in->base, air_val_ssa(c, fnum));
+         return true;
+      }
+      nir_def *res = air_load_ptr(c, p->ptr, in->base.type, in->align);
+      if (!res)
+         return false;
+      air_set(c, &in->base, air_val_ssa(c, res));
+      return true;
+   }
+   case AIR_OP_STORE: {''')
+
+change('calls through a function number', 'air_to_nir.c',
+       '''      if (callee->kind != AIR_VALUE_FUNCTION || !callee->name)
+         return air_error(c, "instruction: a call through a pointer");''',
+       '''      if (callee->kind != AIR_VALUE_FUNCTION || !callee->name)
+         return herolte_indirect_call(c, in);   /* HEROLTE */''')
+
+change('indirect call declaration', 'air_to_nir.c',
+       '''static struct air_val *air_constant_val(struct air_ctx *c, const struct air_constant *k);
+''',
+       '''static struct air_val *air_constant_val(struct air_ctx *c, const struct air_constant *k);
+static bool herolte_indirect_call(struct air_ctx *c, const struct air_inst *in);
+''', marker='static bool herolte_indirect_call(struct air_ctx *c, const struct air_inst *in);')
+
+INDIRECT = r'''
+/* -- HEROLTE: calls through a function number (air_get: a function's address is its number plus one) -- */
+
+/* whether a function writes nothing but its own memory: no stores through a pointer outside address space 0, no
+ * atomics, no texture writes or barriers, and the same for the module functions it calls */
+static bool
+herolte_pure(const struct air_module *m, const struct air_function *f, unsigned depth)
+{
+   if (depth > 8)
+      return false;
+   for (unsigned b = 0; b < f->num_blocks; b++) {
+      for (unsigned i = 0; i < f->blocks[b].num_insts; i++) {
+         const struct air_inst *in = f->blocks[b].insts[i];
+         if (in->op == AIR_OP_ATOMICRMW || in->op == AIR_OP_CMPXCHG)
+            return false;
+         if (in->op == AIR_OP_STORE) {
+            const struct air_type *pt = in->operands[1]->type;
+            if (!pt || pt->kind != AIR_TYPE_POINTER || pt->addrspace != 0)
+               return false;
+         }
+         if (in->op == AIR_OP_CALL) {
+            const struct air_value *ce = in->operands[0];
+            if (ce->kind != AIR_VALUE_FUNCTION || !ce->name)
+               return false;
+            if (strstr(ce->name, "write") || strstr(ce->name, "atomic") || strstr(ce->name, "barrier") ||
+                strstr(ce->name, "memcpy") || strstr(ce->name, "memset"))
+               return false;
+            for (unsigned k = 0; k < m->num_functions; k++)
+               if (&m->functions[k]->base == ce && !m->functions[k]->is_declaration &&
+                   !herolte_pure(m, m->functions[k], depth + 1))
+                  return false;
+         }
+      }
+   }
+   return true;
+}
+
+/* whether the module uses a function's address anywhere but as the callee of a call */
+static bool
+herolte_address_taken(const struct air_module *m, const struct air_value *fv)
+{
+   for (unsigned g = 0; g < m->num_functions; g++) {
+      const struct air_function *f = m->functions[g];
+      for (unsigned b = 0; b < f->num_blocks; b++)
+         for (unsigned i = 0; i < f->blocks[b].num_insts; i++) {
+            const struct air_inst *in = f->blocks[b].insts[i];
+            for (unsigned o = 0; o < in->num_operands; o++)
+               if (in->operands[o] == fv && !(in->op == AIR_OP_CALL && o == 0))
+                  return true;
+         }
+   }
+   return false;
+}
+
+/* cond ? a : b, member by member; NULL when their shapes differ */
+static struct air_val *
+herolte_select(struct air_ctx *c, nir_def *cond, struct air_val *a, struct air_val *b)
+{
+   if (!a)
+      return b;
+   if (!b)
+      return a;
+   if (a->kind == AIR_VAL_SSA && b->kind == AIR_VAL_SSA && a->def->bit_size == b->def->bit_size &&
+       a->def->num_components == b->def->num_components)
+      return air_val_ssa(c, nir_bcsel(&c->b, cond, a->def, b->def));
+   if (a->kind == AIR_VAL_AGG && b->kind == AIR_VAL_AGG && a->num_elems == b->num_elems) {
+      struct air_val *r = air_val_agg(c, a->num_elems);
+      for (unsigned k = 0; k < a->num_elems; k++) {
+         r->elems[k] = herolte_select(c, cond, a->elems[k], b->elems[k]);
+         if (a->elems[k] && b->elems[k] && !r->elems[k])
+            return NULL;
+      }
+      return r;
+   }
+   return NULL;
+}
+
+static bool
+herolte_indirect_call(struct air_ctx *c, const struct air_inst *in)
+{
+   nir_def *id = air_get_ssa(c, in->operands[0]);
+   if (!id)
+      return air_error(c, "instruction: a call through a pointer that is not a function's number");
+   bool has_ret = in->base.type && in->base.type->kind != AIR_TYPE_VOID;
+   struct air_val *acc = NULL;
+   unsigned n = 0;
+   for (unsigned i = 0; i < c->m->num_functions; i++) {
+      const struct air_function *f = c->m->functions[i];
+      if (f->is_declaration || !f->num_blocks || !f->base.name || f->fn_type != in->aux_type ||
+          !herolte_address_taken(c->m, &f->base))
+         continue;
+      if (!herolte_pure(c->m, f, 0))
+         return air_error(c, "instruction: a call through a pointer to %s, which writes memory, so "
+                             "calling every candidate is not an option", f->base.name);
+      if (!air_call_in_module(c, in, f->base.name))
+         return false;
+      n++;
+      if (has_ret) {
+         struct air_val *r = air_get(c, &in->base);
+         if (!r)
+            return false;
+         acc = acc ? herolte_select(c, nir_ieq_imm(&c->b, id, (int)i + 1), r, acc) : r;
+         if (!acc)
+            return air_error(c, "instruction: a call through a pointer whose candidates return "
+                                "values of different shapes");
+      }
+   }
+   if (!n)
+      return air_error(c, "instruction: a call through a pointer, and no function of its type "
+                          "has its address taken");
+   if (has_ret)
+      air_set(c, &in->base, acc);
+   return true;
+}
+'''
+p = f'{AIR}/air_to_nir.c'
+s = open(p).read()
+if 'herolte_indirect_call(struct air_ctx *c, const struct air_inst *in)\n{' not in s:
+    open(p, 'w').write(s.rstrip('\n') + '\n' + INDIRECT)
+    done.append('indirect calls')
+else:
+    done.append('indirect calls (already)')
+
+# 4. A phi of a struct or array: one register per leaf (agg_leaves), stored on every incoming edge and rebuilt as an
+# aggregate where the phi stands. A struct holding a pointer stays refused (a pointer has no register here).
+# MercuryPoster's shippou computeColor carries its ray-hit struct around a loop that way (236 modules of the corpus).
+change('aggregate phis: context', 'air_private.h',
+       '''   /* phi -> nir register decl */
+   struct hash_table *phi_regs;''',
+       '''   /* phi -> nir register decl */
+   struct hash_table *phi_regs;
+   /* HEROLTE: phi of a struct or array -> nir_def *[agg_leaves], one register per leaf (air_to_nir.c) */
+   struct hash_table *herolte_agg_phis;''')
+
+change('aggregate phis: registers', 'air_to_nir.c',
+       '''         if (in->base.type->kind == AIR_TYPE_STRUCT ||
+             in->base.type->kind == AIR_TYPE_ARRAY)
+            return air_error(c, "instruction: a phi of %s, which NIR has no register for",''',
+       '''         if (agg_type(in->base.type) && !herolte_agg_has_ptr(in->base.type)) {
+            /* HEROLTE: one register per leaf */
+            unsigned nl = agg_leaves(in->base.type), nt = 0;
+            const struct air_type **lt =
+               rzalloc_array(c->mem_ctx, const struct air_type *, MAX2(nl, 1));
+            agg_leaf_types(in->base.type, lt, &nt);
+            nir_def **regs = rzalloc_array(c->mem_ctx, nir_def *, MAX2(nl, 1));
+            for (unsigned k = 0; k < nl; k++)
+               regs[k] = nir_decl_reg(&entry, air_nir_components(lt[k]), air_nir_bit_size(c, lt[k]), 0);
+            if (!c->herolte_agg_phis)
+               c->herolte_agg_phis = _mesa_pointer_hash_table_create(c->mem_ctx);
+            _mesa_hash_table_insert(c->herolte_agg_phis, in, regs);
+            continue;
+         }
+         if (in->base.type->kind == AIR_TYPE_STRUCT ||
+             in->base.type->kind == AIR_TYPE_ARRAY)
+            return air_error(c, "instruction: a phi of %s, which NIR has no register for",''')
+
+change('aggregate phis: has a pointer', 'air_to_nir.c',
+       '''static struct air_val *air_constant_val(struct air_ctx *c, const struct air_constant *k);
+static bool herolte_indirect_call(''',
+       '''static bool
+herolte_agg_has_ptr(const struct air_type *t)
+{
+   if (agg_type(t)) {
+      for (unsigned k = 0; k < agg_count(t); k++)
+         if (herolte_agg_has_ptr(agg_member(t, k)))
+            return true;
+      return false;
+   }
+   return t->kind == AIR_TYPE_POINTER;
+}
+
+static struct air_val *air_constant_val(struct air_ctx *c, const struct air_constant *k);
+static bool herolte_indirect_call(''', marker='herolte_agg_has_ptr(const struct air_type *t)\n{')
+
+change('aggregate phis: loads', 'air_to_nir.c',
+       '''         struct hash_entry *e = _mesa_hash_table_search(c->phi_regs, in);
+         air_set(c, &in->base,
+                 air_val_ssa(c, nir_load_reg(&c->b, e->data)));''',
+       '''         struct hash_entry *ae = c->herolte_agg_phis && agg_type(in->base.type) ?
+            _mesa_hash_table_search(c->herolte_agg_phis, in) : NULL;
+         if (ae) {   /* HEROLTE: the aggregate from its leaves' registers */
+            nir_def **regs = ae->data;
+            unsigned nl = agg_leaves(in->base.type), n = 0;
+            struct air_val **leaves = rzalloc_array(c->mem_ctx, struct air_val *, MAX2(nl, 1));
+            for (unsigned k = 0; k < nl; k++)
+               leaves[k] = air_val_ssa(c, nir_load_reg(&c->b, regs[k]));
+            air_set(c, &in->base, agg_from_leaves(c, in->base.type, leaves, &n));
+            continue;
+         }
+         struct hash_entry *e = _mesa_hash_table_search(c->phi_regs, in);
+         air_set(c, &in->base,
+                 air_val_ssa(c, nir_load_reg(&c->b, e->data)));''')
+
+change('aggregate phis: stores', 'air_to_nir.c',
+       '''         struct hash_entry *re = _mesa_hash_table_search(c->phi_regs, in);
+         if (!re)
+            continue; /* a phi in an unreachable block, or one of pointers */''',
+       '''         struct hash_entry *ae = c->herolte_agg_phis && agg_type(in->base.type) ?
+            _mesa_hash_table_search(c->herolte_agg_phis, in) : NULL;
+         if (ae) {   /* HEROLTE: each leaf into its register, on every edge */
+            nir_def **regs = ae->data;
+            unsigned nl = agg_leaves(in->base.type);
+            for (unsigned k = 0; k < in->num_operands; k++) {
+               struct hash_entry *ce = _mesa_hash_table_search(c->phi_cursors, in->targets[k]);
+               if (!ce)
+                  continue;
+               c->b.cursor = *(nir_cursor *)ce->data;
+               struct air_val *v = air_get(c, in->operands[k]);
+               if (!v)
+                  return false;
+               struct air_val **leaves = rzalloc_array(c->mem_ctx, struct air_val *, MAX2(nl, 1));
+               unsigned n = 0;
+               if (!agg_leaf_vals(c, in->base.type, v, leaves, &n))
+                  return false;
+               for (unsigned q = 0; q < n; q++)
+                  if (leaves[q])
+                     nir_store_reg(&c->b, leaves[q]->def, regs[q]);
+               *(nir_cursor *)ce->data = c->b.cursor;
+            }
+            continue;
+         }
+         struct hash_entry *re = _mesa_hash_table_search(c->phi_regs, in);
+         if (!re)
+            continue; /* a phi in an unreachable block, or one of pointers */''')
+
+# 6. Varyings packed: 32-bit float varyings of fewer than four components share slots, in the order they appear (the
+# order both stages take them in, add_varying), at a component offset (location_frac) and with the driver location
+# of the first variable in the slot. Everything else keeps a slot of its own. One slot per varying ran past VAR31 into
+# the per-patch slots: MercuryPoster's torusVertex has 40 to 55 varyings (36 to 51 of them scalars), 48 to 63
+# components, which is 12 to 16 vec4 packed -- what the Mali-T880 has -- and 40 to 55 slots not.
+change('packed varyings: helper', 'air_to_nir.c',
+       '''/* fragment inputs and vertex outputs take the slots in the order they appear;''',
+       '''/* HEROLTE: the slot and component of the next varying, first fit: a 32-bit float varying of fewer than four
+ * components goes after the components of the first slot that has room for it and holds only such varyings; anything
+ * else, and a varying that fits nowhere, takes the next empty slot. Read off the variables made so far, so both
+ * stages, taking the same varyings in the same order, place them alike. (*next: Scion's counter, unused.) */
+static bool
+herolte_packable(const struct glsl_type *gt)
+{
+   return glsl_get_base_type(gt) == GLSL_TYPE_FLOAT && glsl_get_vector_elements(gt) < 4;
+}
+
+static unsigned
+herolte_varying_slot(struct air_ctx *c, const struct air_type *t, nir_variable_mode mode, unsigned *next,
+                     unsigned *frac)
+{
+   (void)next;
+   unsigned comps = air_nir_components(t);
+   bool packable = comps < 4 && air_type_is_float(air_type_scalar(t)) && air_nir_bit_size(c, t) == 32;
+   uint8_t used[64] = { 0 };
+   unsigned top = 0;
+   nir_foreach_variable_with_modes(v, c->nir, mode) {
+      if (v->data.location < VARYING_SLOT_VAR0 || v->data.location >= VARYING_SLOT_VAR0 + 64)
+         continue;
+      unsigned s = v->data.location - VARYING_SLOT_VAR0;
+      unsigned end = herolte_packable(v->type) ? v->data.location_frac + glsl_get_vector_elements(v->type) : 4;
+      used[s] = MAX2(used[s], end);
+      top = MAX2(top, s + 1);
+   }
+   for (unsigned s = 0; packable && s < top; s++) {
+      if (used[s] + comps <= 4) {
+         *frac = used[s];
+         return VARYING_SLOT_VAR0 + s;
+      }
+   }
+   *frac = 0;
+   return VARYING_SLOT_VAR0 + top;
+}
+
+/* the driver location of a varying: its slot's, when another variable is there already */
+static unsigned
+herolte_varying_driver_location(struct air_ctx *c, nir_variable_mode mode, unsigned slot, unsigned frac,
+                                unsigned *count)
+{
+   if (frac) {
+      nir_foreach_variable_with_modes(v, c->nir, mode)
+         if (v->data.location == (int)slot)
+            return v->data.driver_location;
+   }
+   return (*count)++;
+}
+
+/* fragment inputs and vertex outputs take the slots in the order they appear;''')
+
+change('packed varyings: fragment inputs', 'air_to_nir.c',
+       '''      unsigned slot = VARYING_SLOT_VAR0 + (*next_varying)++;
+      const char *name = md_key_str(node, "air.arg_name");
+      nir_variable *var = make_io_var(c, nir_var_shader_in, t, slot, name);
+      var->data.driver_location = c->nir->num_inputs++;''',
+       '''      unsigned frac = 0;   /* HEROLTE: packed (herolte_varying_slot) */
+      unsigned slot = herolte_varying_slot(c, t, nir_var_shader_in, next_varying, &frac);
+      const char *name = md_key_str(node, "air.arg_name");
+      nir_variable *var = make_io_var(c, nir_var_shader_in, t, slot, name);
+      var->data.location_frac = frac;
+      var->data.driver_location =
+         herolte_varying_driver_location(c, nir_var_shader_in, slot, frac, &c->nir->num_inputs);''')
+
+change('packed varyings: vertex outputs', 'air_to_nir.c',
+       '''      location = VARYING_SLOT_VAR0 + (*next_varying)++;
+      add_varying(c, md_str(node, md_key(node, "air.vertex_output") + 1), location,
+                  air_nir_components(t), node);''',
+       '''      location = herolte_varying_slot(c, t, nir_var_shader_out, next_varying, &herolte_frac);   /* HEROLTE: packed */
+      add_varying(c, md_str(node, md_key(node, "air.vertex_output") + 1), location,
+                  air_nir_components(t), node);''')
+
+change('packed varyings: output variable', 'air_to_nir.c',
+       '''   nir_variable *var = make_io_var(c, nir_var_shader_out, t, location, name);
+   var->data.index = index;
+   var->data.driver_location = c->nir->num_outputs++;''',
+       '''   nir_variable *var = make_io_var(c, nir_var_shader_out, t, location, name);
+   var->data.index = index;
+   var->data.location_frac = herolte_frac;   /* HEROLTE: packed varyings */
+   var->data.driver_location = location >= VARYING_SLOT_VAR0 && location < VARYING_SLOT_PATCH0 ?
+      herolte_varying_driver_location(c, nir_var_shader_out, location, herolte_frac, &c->nir->num_outputs) :
+      c->nir->num_outputs++;''')
+
+change('packed varyings: output component', 'air_to_nir.c',
+       '''   unsigned location = ~0u, index = 0;
+   const char *name = md_key_str(node, "air.arg_name");
+
+   int rt = md_key(node, "air.render_target");''',
+       '''   unsigned location = ~0u, index = 0, herolte_frac = 0;
+   const char *name = md_key_str(node, "air.arg_name");
+
+   int rt = md_key(node, "air.render_target");''')
+
+# 7. A boolean member of an entry point's result, stored as the 32-bit integer its output is (make_io_var makes an i1
+# output an int). With booleans one bit wide through calls (8-bit parameters, above), RoomPlan's vsEdge returned
+# computeVertexOut's i1 members into int outputs and NIR refused the store.
+change('boolean outputs as words', 'air_to_nir.c',
+       '''         nir_store_var(&c->b, c->outputs[i].var, v->elems[i]->def,
+                       BITFIELD_MASK(v->elems[i]->def->num_components));''',
+       '''         nir_def *hd = v->elems[i]->def;   /* HEROLTE: a boolean into its 32-bit output */
+         if (hd->bit_size == 1 && glsl_get_bit_size(glsl_without_array(c->outputs[i].var->type)) == 32)
+            hd = nir_b2i32(&c->b, hd);
+         nir_store_var(&c->b, c->outputs[i].var, hd,
+                       BITFIELD_MASK(v->elems[i]->def->num_components));''')
+
+change('boolean inputs from words', 'air_to_nir.c',
+       '''      if (c->nir->info.stage == MESA_SHADER_FRAGMENT)
+         add_varying(c, name, slot, air_nir_components(t), node);
+      c->params[param] = air_val_ssa(c, nir_load_var(&c->b, var));''',
+       '''      if (c->nir->info.stage == MESA_SHADER_FRAGMENT)
+         add_varying(c, name, slot, air_nir_components(t), node);
+      nir_def *hl = nir_load_var(&c->b, var);   /* HEROLTE: an i1 varying arrives as an int (RoomPlan's fsEdge) */
+      if (air_nir_bit_size(c, t) == 1 && hl->bit_size != 1)
+         hl = nir_ine_imm(&c->b, hl, 0);
+      c->params[param] = air_val_ssa(c, hl);''')
+
+# 5. air_metal_test only (not the library): --draw-attrib also configures attribute 2 with the texture coordinate.
+# MercuryPoster's torusVertex reads position, normal and uv as attributes 0, 1 and 2; the harness configured 0, 1 and 3.
+change('air_metal_test: attribute 2', 'air_metal_test.c',
+       '''   shape->vertex_attribute[3] = (struct rwa_vertex_attribute){
+      .format = l->uv.format, .offset = l->uv.offset, .buffer_index = l->uv.buffer };
+
+   shape->vertex_layout[l->pos.buffer]''',
+       '''   shape->vertex_attribute[3] = (struct rwa_vertex_attribute){
+      .format = l->uv.format, .offset = l->uv.offset, .buffer_index = l->uv.buffer };
+   shape->vertex_attribute[2] = shape->vertex_attribute[3];   /* HEROLTE: torusVertex's uv */
+
+   shape->vertex_layout[l->pos.buffer]''')
+
+print('air-herolte: ' + ', '.join(done))

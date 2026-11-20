@@ -48,6 +48,9 @@ if [ "$AIR" = 1 ] && [ ! -f mesa/.herolte-air ]; then
   patch -s -d mesa -p1 < scion/tools/mesa/air-frontend.patch
   patch -s -d mesa -p1 < scion/tools/mesa/air-metal.patch
   python3 b2l/userspace/mesa/air-b2l/apply.py mesa/src/compiler/air
+  # ours, on top: what iOS 18's shaders need (sincos, aggregates through calls and phis, function tables, packed
+  # varyings), found against the root's own .metallib corpus on a host build
+  python3 "$HERE/air-herolte.py" mesa/src/compiler/air
   m=mesa/src/gallium/targets/hakiosair/meson.build
   # driconf, which the target leaves out (b1lte B1L-0051); our install name, the drop zone's lib directory
   sed -i '' 's/dependencies : \[dep_m, idep_air, idep_mesautil,/dependencies : [dep_m, idep_air, idep_mesautil, idep_xmlconfig,/' "$m"
