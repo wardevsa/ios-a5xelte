@@ -949,6 +949,63 @@ remove_listed_files(void)
    }
 }
 
+
+/*
+ * min113d (E-0337): assetsd has com.apple.private.tcc.allow = kTCCServicePhotos in its entitlements (read from inside the process) and still
+ * TCCAccessPreflight(kTCCServicePhotos) answers 1, denied, and it then dies with "assetsd requires TCCPhotosService access". Until the reason
+ * tccd does not honour the entitlement is known, the answer is written where tccd also looks: a row in TCC.db for assetsd (and for the add
+ * service). The database is first copied to the drop zone (TCC.db.orig, once). No sqlite header is needed: the library is opened by hand.
+ * Switch: a file DROP_DIR tcc.off.
+ */
+#define TCC_DB "/private/var/mobile/Library/TCC/TCC.db"
+static void
+tcc_allow_assetsd(void)
+{
+   if (access(DROP_DIR "tcc.off", F_OK) == 0 || access(TCC_DB, F_OK) != 0)
+      return;
+   struct stat st;
+   if (stat(DROP_DIR "TCC.db.orig", &st) != 0) {
+      int in = open(TCC_DB, O_RDONLY), out = open(DROP_DIR "TCC.db.orig", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+      char buf[8192];
+      ssize_t n;
+      while (in >= 0 && out >= 0 && (n = read(in, buf, sizeof buf)) > 0)
+         (void)!write(out, buf, (size_t)n);
+      if (in >= 0)
+         close(in);
+      if (out >= 0)
+         close(out);
+   }
+   void *lib = dlopen("/usr/lib/libsqlite3.dylib", RTLD_LAZY);
+   int (*s_open)(const char *, void **) = lib ? (int (*)(const char *, void **))dlsym(lib, "sqlite3_open") : NULL;
+   int (*s_exec)(void *, const char *, void *, void *, char **) = lib ? (int (*)(void *, const char *, void *, void *, char **))dlsym(lib, "sqlite3_exec") : NULL;
+   int (*s_close)(void *) = lib ? (int (*)(void *))dlsym(lib, "sqlite3_close") : NULL;
+   int (*s_busy)(void *, int) = lib ? (int (*)(void *, int))dlsym(lib, "sqlite3_busy_timeout") : NULL;
+   if (!s_open || !s_exec || !s_close) {
+      herodrm_log("hero-run: TCC: libsqlite3 not usable");
+      return;
+   }
+   void *db = NULL;
+   if (s_open(TCC_DB, &db) != 0 || !db) {
+      herodrm_log("hero-run: TCC: cannot open TCC.db");
+      if (db)
+         s_close(db);
+      return;
+   }
+   if (s_busy)
+      s_busy(db, 5000);
+   static const char *const services[] = { "kTCCServicePhotos", "kTCCServicePhotosAdd" };
+   for (int i = 0; i < 2; i++) {
+      char sql[512];
+      snprintf(sql, sizeof sql,
+         "INSERT INTO access (service, client, client_type, auth_value, auth_reason, auth_version, indirect_object_identifier, flags, last_modified) "
+         "SELECT '%s', 'com.apple.assetsd', 0, 2, 4, 1, 'UNUSED', 0, strftime('%%s','now') "
+         "WHERE NOT EXISTS (SELECT 1 FROM access WHERE service='%s' AND client='com.apple.assetsd');", services[i], services[i]);
+      char *err = NULL;
+      int rc = s_exec(db, sql, NULL, NULL, &err);
+      herodrm_log("hero-run: TCC: %s for assetsd: rc %d%s%s", services[i], rc, err ? " " : "", err ? err : "");
+   }
+   s_close(db);
+}
 /*
  * assetsd aborts on an uncaught exception (min50 log: abort <- libc++abi <- libobjc <- libdispatch) and launchd sends its
  * stderr to /dev/null, so the exception's text never reaches the log. If the job's plist is found, StandardErrorPath is
@@ -1125,6 +1182,7 @@ main(int main_argc, char **main_argv)
     */
    chmod("/private/var/herolte", 0755);
    chmod("/private/var/herolte/lib", 0755);
+   tcc_allow_assetsd();
    remove_listed_files();
    disable_bluetooth_audio();
    install_audio_plugin();
