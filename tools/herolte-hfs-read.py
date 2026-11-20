@@ -297,6 +297,39 @@ def main():
         else:
             uid, gid = be('II', rec, 32)
             print('folder', cnid, oct(be('H', rec, 32 + 10)[0]), 'uid', uid, 'gid', gid)
+    elif cmd == 'pullr':
+        # pullr DIR OUT [MAX_MB]: copy a directory tree (data forks, read-only) in one pass; the catalog is read once
+        out_root = sys.argv[3]
+        max_bytes = int(float(sys.argv[4]) * (1 << 20)) if len(sys.argv) > 4 else None
+        total = 0
+        count = 0
+
+        def walk(parent_cnid, rel):
+            nonlocal total, count
+            for name, data in cat.children(parent_cnid):
+                t_, = be('h', data, 0)
+                if t_ == 1:
+                    walk(be('I', data, 8)[0], os.path.join(rel, name))
+                elif t_ == 2:
+                    c2, m2, (size2, exts2) = file_info(data)
+                    if max_bytes is not None and total + size2 > max_bytes:
+                        continue
+                    dest = os.path.join(out_root, rel, name)
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    exts2 = fs.all_extents(exts2, c2, 0)
+                    with open(dest, 'wb') as fh:
+                        left = size2
+                        for start, cnt in exts2:
+                            take = min(cnt * fs.bs, left)
+                            fs.d.read_big(start * fs.bs, take, fh)
+                            left -= take
+                            if left <= 0:
+                                break
+                    total += size2
+                    count += 1
+
+        walk(cnid, '')
+        print('pulled', count, 'files,', total, 'bytes')
     elif cmd == 'get':
         c, m, (size, exts) = file_info(rec)
         exts = fs.all_extents(exts, c, 0)
