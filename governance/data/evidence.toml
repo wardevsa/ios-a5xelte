@@ -4824,3 +4824,18 @@ sha256 = "d03d9100e607f92fa03719f5278eaf4d89df333e71f4606bd353b2e298c99038"
 size = 368256
 immutable = true
 note = "Imagen min105 dfba6e52, kernel CI 44720483558. Siguiente: min106 con el parche 0472 (toque de 120 ms con tres informes y una sonda de 44 puntos que localiza los iconos)."
+
+[[evidence]]
+id = "E-0327"
+title = "min106 (sonda del banco, D-0116): sin pánico del kernel; el toque de 120 ms con tres informes SÍ abre apps (el de 60 ms con un solo informe de min105 no), y la sonda de 44 puntos (4 columnas × 11 filas, coordenadas de panel 1440×2560) localiza los iconos: reaccionan los cuatro puntos de la fila y=250 (asentamiento 3100, 1300, 2900 y 2900 ms; 112, 24, 83 y 83 fotogramas) y dos en el dock (x 180 a y 2230: 1100 ms, 30 fotogramas; x 540 a y 2450: 1200 ms, 17 fotogramas); las 9 filas intermedias (y 470 a 2010) no reaccionan en ningún punto; hay por tanto seis iconos (cuatro arriba, dos en el dock), centro del dock y≈2340; el asentamiento a 1976 MHz va de 1,1 a 3,1 s por app (primera abrir de cada una, 1 sola medida cada una); EN ESTA EJECUCIÓN SE REGISTRA UN CIERRE DE MobileSlideShow (Fotos): señal 6 (abort), pid 324, tras la apertura por la sonda; el Director informa de que Fotos ya no se cerraba al abrirla y que luego acabó cerrándose; el banco terminó y la sonda imprimió su resumen. LÍMITES: una sola apertura por icono, sin repeticiones, por lo que los tiempos no distinguen topes; no se identifica qué icono es cuál ni cuándo ocurrió el cierre dentro de la sonda"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min106-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "7236e72a225c0bea90879c0eeffc155fd6cb71b7d1c7dca02241a6453e478d96"
+size = 258920
+immutable = true
+note = "Imagen min106 edd44fc0, kernel CI 44727843982. Siguiente: min107 con el parche 0473, que toca los seis iconos con heroscens=8 (solo aperturas, tres rondas, tres topes)."
