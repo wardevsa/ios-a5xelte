@@ -4854,3 +4854,18 @@ sha256 = "2f958cc4305e9d99b17b6d2a541f974493901f81dfaf48749d0dbe27318051d9"
 size = 522188
 immutable = true
 note = "Imagen min107 a8cf7991, kernel CI 44731389896. Siguiente propuesto: comparar el gobernador v2 con un tope fijo a 1976 dentro de un mismo arranque (parche 0474), para decidir la política de la v1 de S7PM."
+
+[[evidence]]
+id = "E-0329"
+title = "min108 (gobernador v2 frente a tope fijo a 1976 MHz, mismo arranque, D-0118): sin pánico del kernel, 16 ejecuciones (2 modos × 2 escenarios × 4 rondas alternadas ABBAABBA); EL GOBERNADOR NO APORTA FRENTE AL TOPE FIJO: paginado 1351 mA gobernado (8 muestras) frente a 1363 fijo (8): -0,9 %, indistinguible, con un reparto de intervalos peor en el gobernado (el 23,7 % de 120 ms o más frente al 14,2 % del fijo), 131 cambios de reloj y 28 muestras saturadas de 1900 frente a 0 cambios y 44 de 1920; búsqueda 857 mA frente a 914 (-6 %, 6 y 5 muestras, dentro del ruido, ya que una ejecución individual varía de 662 a 1330 mA) con el mismo espaciado (54,1 % y 59,4 % bajo 40 ms, 11,9 % y 11,7 % de 120 ms o más) y 62 cambios de reloj; la corriente por ejecución del mismo modo varía más que la diferencia entre modos (paginado gobernado 1238 a 1528, fijo 1080 a 1452). CONSECUENCIA: con la carga de estos escenarios (paginado y búsqueda con el panel encendido) el gobernador v2 no ahorra corriente medible y empeora el reparto de intervalos del paginado; el ahorro del v2 sólo podría estar en el reposo con la pantalla encendida (el reposo ya vale ~618 mA con cualquier tope, E-0325) y en los cambios de carga que este guion no produce. DECISIÓN QUE SE PROPONE: S7PM v1 queda cerrada con tope fijo de 1976 MHz (min100) y el gobernador v2 pasa a investigación. LÍMITES: 4 ejecuciones por celda, 5 a 8 muestras de corriente por celda, una sola sesión; no cubre juegos ni cargas largas"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min108-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "a328e55b02ae17a0cd231f609900f002bb932044c1ec7eecdbb7db87b4707b3c"
+size = 389559
+immutable = true
+note = "Imagen min108 eac9e336, kernel CI 44738703013."
