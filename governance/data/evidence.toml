@@ -4734,3 +4734,18 @@ sha256 = "138b7fd3c839b01bb5b64065b4b34154fd7c48bc635634cc633e4b2ea70859d0"
 size = 216827
 immutable = true
 note = "Imagen min100 20b71c8d, kernel CI 44627148218. Reservas: una sola tanda por condición y gestos no idénticos; las ventanas de fotogramas son 14, 16 y 14; las diferencias de fps (11,6 / 10,2 / 12,7) están dentro del ruido: lo que se afirma es que NO hay pérdida apreciable, no que mejore; la corriente es la medida por el propio teléfono; el calor al tacto no se ha medido con instrumento. El análisis lo hizo la herramienta de comparación del laboratorio con los mismos filtros en las tres pruebas."
+
+[[evidence]]
+id = "E-0321"
+title = "min101 (0466, herocpu_mhz=1664, D-0111): arranca, funciona y los núcleos grandes suben a 1664 MHz ('Mongoose at 1664 MHz') sin colgarse ni pánico; con los núcleos grandes en estado alto, la corriente en uso baja de 1422 mA (min100, 1976 MHz) a 1106 mA: -316 mA (-22,2 %), y de 1791 mA (min98, 2288 MHz) en total -38 %; temperatura del chip en las líneas del gobernador, máximo 37 °C frente a 38 y 40 °C; el Director nota la interfaz 'un poco más lenta' que min100 y el teléfono 'un poquito caliente por detrás, 37 °C o menos según TWRP'; los fotogramas por segundo en ventanas de 10 o más fotogramas dan mediana 13,1 frente a 12,7 (+3 %) y media 15,1 frente a 11,6 (+30 %, arrastrada por una ventana de 52,8 fps), pero la tanda NO es comparable: min101 tiene 76 lecturas de carga y 29 ventanas de fotogramas frente a 42 y 14 de min100, es decir, una sesión de uso casi el doble de larga y con otra actividad; además los fps son los fotogramas que iOS pidió (E-0317), no la capacidad, así que la lentitud que nota el Director no tiene por qué verse en esa métrica; el criterio que fijé (ahorro de corriente mayor del 10 % y fluidez que no baje más del 10 %) se cumple en las cifras, pero la percepción del Director lo contradice y la cifra de fluidez no mide lo que él nota"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min101-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "2617acbad31042abaa4fccc7ecc51ab8dd493b53f0250007e4c5c2f4ed1d111e"
+size = 243460
+immutable = true
+note = "Imagen min101 590807bf, kernel CI 44697499882 (0466). La sesión de uso duró casi el doble que las de min98 y min100 (76 frente a 42-46 lecturas de carga de 2 s), así que ni los fps ni la ocupación son comparables en sentido estricto; la corriente en uso se filtra por 'núcleos grandes en estado alto' y es la medida más comparable. Sin una métrica de capacidad (por ejemplo el tiempo que tarda una transición), no se puede medir la lentitud percibida."
