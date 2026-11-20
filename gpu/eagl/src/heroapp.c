@@ -9,6 +9,7 @@
  * is given, as on a device that cannot make one.
  */
 #include <dlfcn.h>
+#include <errno.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
 #include <stdarg.h>
@@ -84,6 +85,68 @@ no_shared_context(id self, SEL command, unsigned long api, id sharegroup)
    return no_context(self, command, api);
 }
 
+
+/*
+ * min113c (E-0337): with the drop zone reachable, assetsd's own words are "assetsd requires TCCPhotosService access", and Messages still
+ * dies in CI::GLContext although CoreImage is asked for software. Two looks from inside the processes, into files of their own:
+ *  - assetsd: its entitlements (csops 7) and what TCC answers for Photos, to see which of the two the check fails on;
+ *  - MobileSMS: the selectors of CIContext, to find a way into CoreImage that does not go through EAGL.
+ */
+#include <stdint.h>
+#include <string.h>
+extern int csops(int pid, unsigned int ops, void *useraddr, size_t usersize);
+
+static void
+hero_file(const char *name, const char *text, size_t len)
+{
+   char path[160];
+   snprintf(path, sizeof path, "/private/var/tmp/%s", name);
+   int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+   if (fd >= 0) {
+      (void)!write(fd, text, len);
+      fchmod(fd, 0666);
+      close(fd);
+   }
+}
+
+static void
+look_at_assetsd(void)
+{
+   uint8_t blob[16384];
+   char out[16384 + 256];
+   memset(blob, 0, sizeof blob);
+   int r = csops(getpid(), 7, blob, sizeof blob);
+   int n = snprintf(out, sizeof out, "csops(ENTITLEMENTS_BLOB) = %d, errno %d\n", r, r != 0 ? errno : 0);
+   uint32_t length = ((uint32_t)blob[4] << 24) | ((uint32_t)blob[5] << 16) | ((uint32_t)blob[6] << 8) | blob[7];
+   n += snprintf(out + n, sizeof out - (size_t)n, "blob length %u\n", length);
+   for (size_t i = 8; i < sizeof blob && i < length && n < (int)sizeof out - 2; i++)
+      out[n++] = (blob[i] >= 32 && blob[i] < 127) || blob[i] == '\n' ? (char)blob[i] : ' ';
+   out[n++] = '\n';
+   void *tcc = dlopen("/System/Library/PrivateFrameworks/TCC.framework/TCC", RTLD_LAZY);
+   int (*preflight)(id, id) = tcc ? (int (*)(id, id))dlsym(tcc, "TCCAccessPreflight") : NULL;
+   id service = ((id (*)(id, SEL, const char *))objc_msgSend)((id)objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), "kTCCServicePhotos");
+   n += snprintf(out + n, sizeof out - (size_t)n, "TCC framework %s, TCCAccessPreflight(kTCCServicePhotos) = %d\n", tcc ? "loaded" : "NOT loaded",
+                 preflight ? preflight(service, nil) : -99);
+   hero_file("heroapp-assetsd.txt", out, (size_t)n);
+}
+
+static void
+look_at_coreimage(void)
+{
+   static char out[65536];
+   size_t n = 0;
+   Class cls = objc_getClass("CIContext");
+   for (int meta = 0; meta < 2 && cls != Nil; meta++) {
+      Class c = meta ? object_getClass((id)cls) : cls;
+      unsigned count = 0;
+      Method *list = class_copyMethodList(c, &count);
+      n += (size_t)snprintf(out + n, sizeof out - n, "== %s methods of CIContext (%u)\n", meta ? "class" : "instance", count);
+      for (unsigned i = 0; i < count && n + 160 < sizeof out; i++)
+         n += (size_t)snprintf(out + n, sizeof out - n, "%s\n", sel_getName(method_getName(list[i])));
+      free(list);
+   }
+   hero_file("heroapp-coreimage.txt", out, n);
+}
 /*
  * CoreImage's default context is CI::GLContext whatever the system has: it fills a table of OpenGL ES's functions, empty
  * here, and calls glDisable(GL_DEPTH_TEST) through it. Every CIContext is asked for CoreImage's software renderer instead.
@@ -286,6 +349,10 @@ install(void)
       ci_software_key = *key;
       ci_init_original = (id (*)(id, SEL, id))method_setImplementation(init, (IMP)ci_init);
    }
+   if (strcmp(getprogname(), "assetsd") == 0)
+      look_at_assetsd();
+   if (strcmp(getprogname(), "MobileSMS") == 0)
+      look_at_coreimage();
    herodrm_log("%s: libheroapp: CoreImage %s", getprogname(), ci_init_original ? "in software" : "as it was");
    hero_note("libheroapp: %s: CoreImage %s", getprogname(), ci_init_original ? "in software" : "as it was");
    Method assertion = class_getInstanceMethod(objc_getClass("NSAssertionHandler"),
