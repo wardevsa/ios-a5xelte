@@ -4809,3 +4809,18 @@ sha256 = "de6482839057c281f3233b404845728da572004b7a8b42cfbe8fff3cc20a877f"
 size = 403545
 immutable = true
 note = "Imagen min104 185f277c, kernel CI 44715165808. El reposo del guion no aporta información por tope (la CPU grande está parada): en el siguiente banco se elimina."
+
+[[evidence]]
+id = "E-0326"
+title = "min105 (banco v3, D-0115): sin pánico; (1) el paginado reproduce E-0325 en otro arranque: 1421 mA (2288 MHz), 1291 (1976) y 1257 (1664), con 5-6 muestras de corriente por celda y 3 ejecuciones; muestras saturadas 11 de 1421 (0,8 %), 34 de 1425 (2,4 %) y 52 de 1434 (3,6 %); intervalos de 120 ms o más 19,2 %, 22,2 % y 25,1 %: 2288 cuesta +10 % frente a 1976 y 1664 no ahorra más (-2 %) y satura más; (2) la búsqueda no distingue topes (espaciado 57-60 % bajo 40 ms; corriente 773, 1049 y 1062 mA, ruido); (3) EL ESCENARIO DE APERTURA DE APPS NO FUNCIONÓ: los 36 toques en el dock (4 huecos × 9 configuraciones) dieron settle -1 y 0 fotogramas, es decir, no abrieron nada; el toque de 60 ms con un solo informe, o las posiciones estimadas (x 180+360n, y 2385 en coordenadas de panel 1440×2560), son incorrectos; las medidas de apertura de apps siguen sin existir; el banco terminó bien y no dejó diálogos atascados (el Director informa de que terminó)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min105-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "d03d9100e607f92fa03719f5278eaf4d89df333e71f4606bd353b2e298c99038"
+size = 368256
+immutable = true
+note = "Imagen min105 dfba6e52, kernel CI 44720483558. Siguiente: min106 con el parche 0472 (toque de 120 ms con tres informes y una sonda de 44 puntos que localiza los iconos)."
