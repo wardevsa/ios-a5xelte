@@ -1,0 +1,126 @@
+herolte: the phone takes its own screenshots, with a gesture script (0484, S7UI lab)
+
+The Director's description of the iPhone-style screen ("se ve raro, algunas cosas mal puestas, la barra de arriba no se ve", side bars, a Control Center that sometimes goes home) cannot be turned into a fix without seeing it. hsnap=<s> starts a thread that, <s> seconds after the power thread (the home screen is up), plays gestures through the real touch path (home, Control Center from the top right, Notification Center from the top left, the home swipe from the bottom edge, a page swipe, the home key) and after each step prints the panel buffer on show, one pixel in five each way (288x512), RGB565 in base64, one log line per row; tools/herolte-snap-decode.py rebuilds the PNGs from a pulled log. Reads only. Off by default; the 10 ms-per-line pacing keeps the log buffer from overflowing.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3457,6 +3457,102 @@
+ 	}
+ }
+ 
++/*
++ * 0484 (S7UI lab, docs/herolte-ui-lab.md): the phone takes its own screenshots. hsnap=<seconds>: that long after the power thread starts (the
++ * home screen is up by then) the kernel plays a short script of gestures (the home screen, Control Center from the top right, Notification Center
++ * from the top left, closing them with the home swipe from the bottom edge, a page swipe, the home key) and after each step copies the panel's
++ * buffer that is on show, one pixel in five each way (288 x 512), as RGB565 in base64, one line per row:
++ *   HEROLTE SNAP <id> <tag> 288x512 rgb565 le         (header)
++ *   HEROLTE SNAP <id> <row> <base64 of 576 bytes>     (512 lines)
++ * tools/herolte-snap-decode.py turns the lines of a pulled log into PNGs. The frame is read through the kernel's map of its physical address after a
++ * cache flush; the lines go out at about 40 KB/s so that the log buffer is not overrun. Reads only: no clock, voltage or register changes.
++ */
++extern void flush_dcache64(uint64_t addr, unsigned count, int phys);
++
++static unsigned
++hs_b64(const uint8_t *in, unsigned n, char *out)
++{
++	static const char tab[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
++	unsigned o = 0;
++	for (unsigned i = 0; i < n; i += 3) {
++		uint32_t v = (uint32_t)in[i] << 16 | (i + 1 < n ? (uint32_t)in[i + 1] << 8 : 0) | (i + 2 < n ? in[i + 2] : 0);
++		out[o++] = tab[(v >> 18) & 63];
++		out[o++] = tab[(v >> 12) & 63];
++		out[o++] = i + 1 < n ? tab[(v >> 6) & 63] : '=';
++		out[o++] = i + 2 < n ? tab[v & 63] : '=';
++	}
++	out[o] = 0;
++	return o;
++}
++
++static void
++hs_snap(unsigned id, const char *tag)
++{
++	uint64_t pa = HG_FB_PA;
++	if (hfb_state == 1 && hfb_idma) {
++		uint32_t shown = hg_rd(hfb_idma, 0xb74);
++		if (shown == (uint32_t)HG_FB2_PA || shown == (uint32_t)HG_FB_PA) {
++			pa = shown;
++		}
++	}
++	flush_dcache64(pa, HG_PANEL_H * HG_FB_STRIDE, TRUE);
++	const uint8_t *fb = (const uint8_t *)phystokv(pa);
++	printf("HEROLTE SNAP %u %s 288x512 rgb565 le at %#llx\n", id, tag, pa);
++	for (unsigned y = 0; y < 512; y++) {
++		uint8_t row[576];
++		char line[780];
++		const uint8_t *src = fb + (uint64_t)(y * 5) * HG_FB_STRIDE;
++		for (unsigned x = 0; x < 288; x++) {
++			const uint8_t *px = src + (x * 5) * 4;
++			uint16_t v = (uint16_t)(((px[2] >> 3) << 11) | ((px[1] >> 2) << 5) | (px[0] >> 3));
++			row[x * 2] = (uint8_t)(v & 0xff);
++			row[x * 2 + 1] = (uint8_t)(v >> 8);
++		}
++		hs_b64(row, sizeof(row), line);
++		printf("HEROLTE SNAP %u %u %s\n", id, y, line);
++		hg_msleep(12);
++	}
++}
++
++static void
++hsnap_thread(__unused void *arg, __unused wait_result_t wr)
++{
++	uint32_t settle = 0;
++	extern volatile uint64_t herolte_screen_off_at;
++	PE_parse_boot_argn("hsnap", &settle, sizeof(settle));
++	if (!settle) {
++		return;
++	}
++	hg_msleep(settle * 1000);
++	printf("HEROLTE SNAP: lab starts\n");
++	unsigned id = 0;
++	hs_home();
++	hg_msleep(2000);
++	hs_snap(id++, "home");
++	hs_swipe(1380, 8, 1380, 1100, 350);                 /* Control Center: down from the top right */
++	hg_msleep(1500);
++	hs_snap(id++, "control-center");
++	hs_swipe(720, 2548, 720, 1500, 300);                /* the home swipe from the bottom edge closes it */
++	hg_msleep(1500);
++	hs_snap(id++, "after-close");
++	hs_swipe(300, 8, 300, 1100, 350);                   /* Notification Center: down from the top left */
++	hg_msleep(1500);
++	hs_snap(id++, "notification-center");
++	hs_swipe(720, 2548, 720, 1500, 300);
++	hg_msleep(1500);
++	hs_snap(id++, "after-close-2");
++	hs_swipe(1250, 1300, 190, 1300, 260);               /* a page to the left */
++	hg_msleep(1500);
++	hs_snap(id++, "page-2");
++	hs_home();
++	hg_msleep(2000);
++	hs_snap(id++, "home-again");
++	if (herolte_screen_off_at != 0) {
++		printf("HEROLTE SNAP: the screen went off during the lab\n");
++	}
++	printf("HEROLTE SNAP: lab finished\n");
++}
++
+ static void
+ hg_cpu_up(void)
+ {
+@@ -3795,6 +3891,16 @@
+ 			printf("HEROLTE GOV2: the governor thread did not start\n");
+ 		}
+ 	}
++	{
++		uint32_t snap_s = 0;
++		PE_parse_boot_argn("hsnap", &snap_s, sizeof(snap_s));
++		if (snap_s) {
++			thread_t hsn;
++			if (kernel_thread_start(hsnap_thread, NULL, &hsn) == KERN_SUCCESS) {
++				thread_deallocate(hsn);
++			}
++		}
++	}
+ 	if (gl_s == 2) {
+ 		thread_t hpth;
+ 		if (kernel_thread_start(hpmu_thread, NULL, &hpth) == KERN_SUCCESS) {
