@@ -42,7 +42,7 @@ fetch_at() {    # fetch_at DIR URL SHA SPARSE...: one commit, only the directori
 }
 if [ "$AIR" = 1 ] && [ ! -f mesa/.herolte-air ]; then
   fetch_at scion https://github.com/Scion-Project/hackios-xnu-kernel "$SCION_REF" tools/mesa
-  fetch_at b2l https://github.com/malthiscode/ios-b1lte "$B2L_REF" userspace/mesa/air-b2l
+  fetch_at b2l https://github.com/malthiscode/ios-b1lte "$B2L_REF" userspace/mesa/air-b2l userspace/metal
   rm -rf mesa/src/compiler/air
   cp -R scion/tools/mesa/air mesa/src/compiler/air
   patch -s -d mesa -p1 < scion/tools/mesa/air-frontend.patch
@@ -156,4 +156,6 @@ for f in "$OUT"/lib/*.dylib "$OUT/osmesa-test" $( [ "$AIR" = 1 ] && echo "$OUT/a
   codesign -s - -f "$f"
   otool -L "$f"
 done
+# Metal M3: the device, the plug-in bundle and hero_mtl_test (gpu/metal), over the libhakiosair just built
+[ "$AIR" = 1 ] && bash "$HERE/../metal/build-metal.sh" "$WORK" "$OUT"
 ls -la "$OUT" "$OUT/lib"

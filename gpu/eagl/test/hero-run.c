@@ -594,7 +594,7 @@ reduce_transparency(void)
 
 /* The plug-in of the sound (gpu/hakios-audio) where mediaserverd looks: it loads plug-ins as it starts, so from the next boot on. */
 static void
-copy_audio_file(const char *from, const char *to, mode_t mode)
+copy_plugin_file(const char *what, const char *from, const char *to, mode_t mode)
 {
    char buffer[65536];
    ssize_t n;
@@ -609,7 +609,7 @@ copy_audio_file(const char *from, const char *to, mode_t mode)
    }
    if (in >= 0)
       close(in);
-   herodrm_log("hero-run: audio plug-in: %s: %s", to, out >= 0 ? "put" : "not put");
+   herodrm_log("hero-run: %s plug-in: %s: %s", what, to, out >= 0 ? "put" : "not put");
 }
 
 /*
@@ -677,8 +677,32 @@ install_audio_plugin(void)
    if (!have || (there && to.st_size == from.st_size && to.st_mtime >= from.st_mtime))
       return;
    mkdir("/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver", 0755);
-   copy_audio_file(DROP_DIR "audio/HakiosAudio", driver, 0755);
-   copy_audio_file(DROP_DIR "audio/Info.plist", "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/Info.plist", 0644);
+   copy_plugin_file("audio", DROP_DIR "audio/HakiosAudio", driver, 0755);
+   copy_plugin_file("audio", DROP_DIR "audio/Info.plist", "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/Info.plist",
+                    0644);
+}
+
+/*
+ * The Metal plug-in (gpu/metal, docs/herolte-metal.md M3) where Metal.framework looks for the kernel's IOAcceleratorES
+ * (MetalPluginName HeroMetal): /System/Library/Extensions/HeroMetal.bundle. It gives a device only to the processes named
+ * in DROP_DIR metal.allow, and loads the driver (DROP_DIR lib/libhakiosmetal.dylib) only for them. Installed when the
+ * drop zone's executable differs from the one there; Metal reads the bundle in each process that asks, so the next
+ * process to ask sees it.
+ */
+static void
+install_metal_plugin(void)
+{
+   struct stat from, to;
+   const char *bundle = "/System/Library/Extensions/HeroMetal.bundle";
+   const char *exe = "/System/Library/Extensions/HeroMetal.bundle/HeroMetal";
+   int have = stat(DROP_DIR "metal/HeroMetal", &from) == 0, there = stat(exe, &to) == 0;
+   herodrm_log("hero-run: Metal plug-in: drop zone %lld bytes, Extensions %lld bytes", have ? (long long)from.st_size : -1,
+               there ? (long long)to.st_size : -1);
+   if (!have || (there && to.st_size == from.st_size && to.st_mtime >= from.st_mtime))
+      return;
+   mkdir(bundle, 0755);
+   copy_plugin_file("Metal", DROP_DIR "metal/HeroMetal", exe, 0755);
+   copy_plugin_file("Metal", DROP_DIR "metal/Info.plist", "/System/Library/Extensions/HeroMetal.bundle/Info.plist", 0644);
 }
 
 /*
@@ -1223,6 +1247,7 @@ main(int main_argc, char **main_argv)
       return register_apps(main_argc, main_argv);
    disable_bluetooth_audio();
    install_audio_plugin();
+   install_metal_plugin();
    reduce_transparency();
    remove_listed_apps();
    remove_ls_db_once();
