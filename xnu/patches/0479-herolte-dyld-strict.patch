@@ -1,0 +1,49 @@
+herolte: herodyld=2 stops forgiving a failed insertion in MobileSMS and assetsd (0479)
+
+min113 and min113c (E-0336): the kernel adds DYLD_INSERT_LIBRARIES to 25 processes, dyld's own code accepts it (AMFI bit 1 sets allowEnvVarsPath, which PathOverrides reads from the environment), yet not even a tiny signed library that depends only on libSystem ever ran, in the applications or in SpringBoard. The answer 0x23 carries bit 5 (allow failed library insertion), so a load that dyld rejects (code signature, library validation, path) is silent. With herodyld=2 that bit is left out for MobileSMS and assetsd, so dyld ends the process and the termination reason says why. Off by default.
+
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -54,6 +54,9 @@
+ #define HGL_APP_PIDS    64
+ static int hgl_app_pids[HGL_APP_PIDS];  /* the latest applications that got libheroapp */
+ static unsigned hgl_app_next;
++#define HGL_STRICT_PIDS 8
++static int hgl_strict_pids[HGL_STRICT_PIDS];       /* 0479: herodyld=2: MobileSMS and assetsd, where a failed insertion must not be forgiven */
++static unsigned hgl_strict_next;
+ 
+ uint64_t
+ herolte_gl_dyld_flags(void)
+@@ -68,8 +71,17 @@
+ 	/* 0478: herodyld=1 also lets the DYLD_PRINT_* variables work (bit 4), as dyld ignored DYLD_PRINT_LIBRARIES with only 0x23 (E-0335) */
+ 	int dyld_print = 0;
+ 	PE_parse_boot_argn("herodyld", &dyld_print, sizeof(dyld_print));
++	/*
++	 * 0479: herodyld=2: for MobileSMS and assetsd the flag that forgives a failed insertion is left out, so that dyld ends the process and its
++	 * termination reason (in the crash line of the log and the crash report) says why the inserted library did not load: min113/min113c showed that
++	 * not even a tiny signed library runs, and with the flag set a failure is silent.
++	 */
++	bool strict = false;
++	for (unsigned i = 0; i < HGL_STRICT_PIDS; i++) {
++		strict = strict || hgl_strict_pids[i] == proc_selfpid();
++	}
+ 	return AMFI_DYLD_OUTPUT_ALLOW_AT_PATH | AMFI_DYLD_OUTPUT_ALLOW_PATH_VARS |
+-	       AMFI_DYLD_OUTPUT_ALLOW_FAILED_LIBRARY_INSERTION | (dyld_print ? AMFI_DYLD_OUTPUT_ALLOW_PRINT_VARS : 0);
++	       (strict ? 0 : AMFI_DYLD_OUTPUT_ALLOW_FAILED_LIBRARY_INSERTION) | (dyld_print ? AMFI_DYLD_OUTPUT_ALLOW_PRINT_VARS : 0);
+ }
+ 
+ /*
+@@ -194,6 +206,13 @@
+ 			 */
+ 			int dyld_log = 0;
+ 			PE_parse_boot_argn("herodyld", &dyld_log, sizeof(dyld_log));
++			if (dyld_log >= 2) {
++				size_t sl = strlen(path);
++				if ((sl >= 10 && strcmp(path + sl - 10, "/MobileSMS") == 0) || (sl >= 8 && strcmp(path + sl - 8, "/assetsd") == 0)) {
++					hgl_strict_pids[hgl_strict_next++ % HGL_STRICT_PIDS] = pid;
++					printf("HEROLTE GL: strict insertion for pid %d: %s\n", pid, path);
++				}
++			}
+ 			if (dyld_log) {
+ 				static unsigned shown;
+ 				if (shown++ < 40) {
