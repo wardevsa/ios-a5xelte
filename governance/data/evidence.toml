@@ -5019,3 +5019,18 @@ sha256 = "14a6686f2d8fb10563a272ff11d05a116fe8d81d5dd200c3983613ef13630e67"
 size = 500390
 immutable = true
 note = "Imagen min115 ac9acd77, kernel CI 44809378545."
+
+[[evidence]]
+id = "E-0340"
+title = "min116c (arranque paciente, apps de serie movidas, D-0125): (1) LAS 32 APPS SE MUEVEN BIEN ('32 moved into /Applications, 0 already there, 0 failed') y el arranque con la base de LaunchServices rehecha tarda unos 10 minutos: lsd al 107-200 % de CPU durante unos 5 minutos y SpringBoard sube a los ~9 minutos; después el Director abre apps (Archivos, Notas, Calculadora...) y el arranque siguiente ya no la rehace; cierres del arranque: MailWidgetExtension x2, TVWidgetExtension (señal 9), PhotosFileProvider, PassbookWidgetsExtension (señal 5) y Measure (señal 5); (2) FALLO REAL: AL APAGAR LA PANTALLA UN RATO Y VOLVER A ENCENDERLA el teléfono se queda sin imagen y hay que apagarlo por la fuerza: con la pantalla apagada unos 100 s la escalera apaga el dominio G3D en su paso 2 (a los 50 s) y lo repone al encender, pero NADIE devuelve los registros CMU_G3D (muxes, divisores y puertas) ni reinicia el Mali: desde la reposición todos los fotogramas del camino de escalado por GPU fallan ('HEROLTE GPU PRESENT: frame 6290 750x1334 -> failed', 8 veces, y los trabajos JS0/JS1 siguen saliendo) y la pantalla no cambia; las pruebas de ciclos de pantalla anteriores eran más cortas que 50 s; hg_power_cycle() sí guardaba y reponía esos registros; (3) el cruce de MobileGestalt: la caché dice iPhone10,3 / iPhone X / DeviceClass iPhone / ArtworkDeviceIdiom phone, ArtworkDeviceSubType 1334 (la altura en píxeles del iPhone 8) y CoreUI repite 8614 veces 'got a device subtype 1334 that it match with idiom 1:phone. Assuming subtype should be 0', que es ruido conocido; la pantalla está en modo iPhone 8 (750x1334, botón de inicio, home-button-type 1); lo que el Director llama 'se parece a un iPad' no se ha podido localizar sin una captura; el modo de barra de gestos de iPhone X exigiría el lienzo de 828x1792 (--scale2, el del iPhone XR, 1,65 veces más píxeles) y otra ADT; PARCHE 0482: el paso 2 de la escalera guarda los 18 registros CMU_G3D y apaga los núcleos antes de bajar el dominio, y al reponerlo escribe los registros, hace el soft reset de la GPU, enciende L2, todos los núcleos de sombreado y el tiler, aplica las rarezas y deja AS0 para reprogramar, bajo hg_mtx; BOOT = min117 (kernel CI 44820043395, línea de min112, 592 caracteres); contadores D-0123: BOOT 7 de 80, DROP 13 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min116c-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "3ffd0c5ff2d23efec9ff2856d3d226e2ad0adf68b9a24d28937fc07f5ae9778e"
+size = 1114465
+immutable = true
+note = "Imagen min116 con hero-run con staged.on (CI 44815464424)."
