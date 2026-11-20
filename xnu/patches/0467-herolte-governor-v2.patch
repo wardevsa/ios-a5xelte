@@ -1,0 +1,373 @@
+herolte: herogov=2, a governor for the big cluster with levels, capacity margin, hysteresis, touch floor, thermal cap and telemetry (0467, D-0112)
+
+min98-min101 (E-0318, E-0320, E-0321): the cores are rarely saturated over 2 s but they are over 100 ms; the old governor samples every 200 ms, has two states (728 MHz and one fixed rate) and needs 1 s to go down, so a rate cap trades fluidity for current. herogov=2: a thread of its own every 20 ms; the busiest big core's load gives the MHz needed to run at 80%; straight to the lowest level that has them (728, 1352, 1664, 1976, 2288), one step down after 120 ms of slack, 728 MHz after 1 s idle, not below 1664 MHz within 400 ms of a finger report (herolte_touch.c stamps herolte_touch_last_mach), 1976 MHz at most within 8 C of herohot, 728 MHz with the screen off or hot. The power thread's governor and rate stepping stay out while it runs. Telemetry every 10 s: residency per level, changes, time per change, saturated samples at the top. One rate table (hc_rate_rows) with a new 1352 MHz row (M 156, 812.5 mV, DIV_SCLK_PROMISE 3). The 0458 screen-cycle argument is renamed herosc: it clashed with the 0433 herocycle rate stepping (E-0322). herogov=2 only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2724,24 +2724,29 @@
+  * lower rate is relocked first and its voltage written after, a higher rate gets its voltage first (hc_go_high). Anything
+  * unexpected puts the previous rate's numbers back. Only the power thread calls it (herocycle=<seconds>, below).
+  */
++/* ECT (read on this phone, E-0321): MNGS_PLL M for P 3 S 0, vdd_mngs register = (mV - 300) / 6.25, DIV_SCLK_PROMISE; the other dividers are the same from 1352 MHz up.
++ * 1352 and 1664 MHz use the voltage Linux sets on this chip (812.5 and 893.75 mV); 1976 and above the lower ones this project tested. */
++static const struct {
++	uint32_t mhz, m;
++	uint8_t volt, promise;
++} hc_rate_rows[] = {
++	{ 1352, 156, 0x52, 3 },
++	{ 1664, 192, 0x5f, 4 },
++	{ 1976, 228, 0x62, 5 },
++	{ 2288, 264, 0x6f, 6 },
++	{ 2600, 300, 0x7c, 7 },
++};
++#define HC_NRATES (sizeof(hc_rate_rows) / sizeof(hc_rate_rows[0]))
++
+ static bool
+ hc_rate(uint32_t mhz)
+ {
+ 	extern bool herolte_apm_mngs_voltage(uint8_t value);
+-	static const struct {
+-		uint32_t mhz, m;
+-		uint8_t volt, promise;
+-	} rates[] = {
+-		{ 1664, 192, 0x5f, 4 },
+-		{ 1976, 228, 0x62, 5 },
+-		{ 2288, 264, 0x6f, 6 },
+-		{ 2600, 300, 0x7c, 7 },
+-	};
+ 	if (!hc.saved || hc.broken || !hc.high) {
+ 		return false;
+ 	}
+-	for (unsigned i = 0; i < sizeof(rates) / sizeof(rates[0]); i++) {
+-		if (rates[i].mhz != mhz) {
++	for (unsigned i = 0; i < HC_NRATES; i++) {
++		if (hc_rate_rows[i].mhz != mhz) {
+ 			continue;
+ 		}
+ 		if (hc.mhz == mhz) {
+@@ -2750,9 +2755,9 @@
+ 		uint32_t old_mhz = hc.mhz, old_m = hc.m;
+ 		uint8_t old_volt = hc.volt, old_promise = hc.promise;
+ 		hc.mhz = mhz;
+-		hc.m = rates[i].m;
+-		hc.volt = rates[i].volt;
+-		hc.promise = rates[i].promise;
++		hc.m = hc_rate_rows[i].m;
++		hc.volt = hc_rate_rows[i].volt;
++		hc.promise = hc_rate_rows[i].promise;
+ 		if (!hc_go_high()) {
+ 			hc.mhz = old_mhz;
+ 			hc.m = old_m;
+@@ -2774,19 +2779,203 @@
+ 	return false;
+ }
+ 
++
++/*
++ * 0467 (D-0112): herogov=2, the governor of the big cluster. herogov=1 looks at the four cores every 200 ms and has two states (the
++ * bootloader's 728 MHz and one fixed rate); min98-min101 (E-0318, E-0320, E-0321) showed that the rate cap alone trades fluidity for
++ * current: the cores are rarely saturated over 2 s but they are over 100 ms, and the climb from 728 MHz takes 200 ms to notice.
++ *
++ * Here a thread of its own every 20 ms: the busiest big core's load (the UI is one thread) gives the capacity needed to run at 80 %,
++ * and the cluster goes at once to the lowest level that has it (728, 1352, 1664, 1976, 2288 MHz), one step down at a time after 120 ms of
++ * slack, back to the bootloader's 728 MHz after 1 s of nothing, never lower than 1664 MHz within 400 ms of a finger report (the touch
++ * driver stamps herolte_touch_last_mach), capped at 1976 MHz when the SoC is within 8 C of herohot, at 728 MHz when the screen is off or hot.
++ * It owns the cluster while it runs: the power thread's own governor and rate stepping stay out. Every ten seconds it prints how long it
++ * spent at each level, how many changes, how long a change takes and how many 20 ms samples were saturated at the top level (the
++ * capacity measure min101 lacked).
++ */
++volatile uint64_t herolte_touch_last_mach;        /* bsd/dev/herolte_touch.c: the last finger report */
++static volatile bool g2_screen_off, g2_hot;
++static volatile int g2_top = -1000;
++static volatile uint32_t g2_hot_c = 60;
++static const uint32_t g2_lv[] = { 728, 1352, 1664, 1976, 2288 };
++#define G2_N (sizeof(g2_lv) / sizeof(g2_lv[0]))
++
++static bool
++g2_go(unsigned lv)
++{
++	if (lv == 0) {
++		return !hc.high || hc_go_low();
++	}
++	uint32_t mhz = g2_lv[lv];
++	if (hc.high) {
++		return hc_rate(mhz);
++	}
++	for (unsigned i = 0; i < HC_NRATES; i++) {
++		if (hc_rate_rows[i].mhz == mhz) {
++			hc.mhz = mhz;
++			hc.m = hc_rate_rows[i].m;
++			hc.volt = hc_rate_rows[i].volt;
++			hc.promise = hc_rate_rows[i].promise;
++			bool ok = hc_go_high();
++			if (ok) {
++				herolte_pm_mhz = mhz;
++			}
++			return ok;
++		}
++	}
++	return false;
++}
++
++static void
++g2_thread(__unused void *arg, __unused wait_result_t wr)
++{
++	extern uint64_t herolte_cluster_busy_mach(int first, int last);
++	uint64_t prev[4] = { 0 }, prev_t = 0, last_log = 0, hold_until = 0;
++	uint64_t res_ns[G2_N] = { 0 }, trans = 0, ups = 0, downs = 0, boosts = 0, sat = 0, samples = 0, tr_ns_sum = 0, tr_ns_max = 0;
++	unsigned lv = 0, down_n = 0, idle_n = 0;
++	bool started = false, boosting = false;
++	for (;;) {
++		hg_msleep(20);
++		if (!hc.saved || hc.broken) {
++			continue;
++		}
++		uint64_t now = mach_absolute_time();
++		if (!started) {
++			started = true;
++			lv = 0;
++			if (hc.high) {
++				lv = (unsigned)G2_N - 1;
++				for (unsigned i = 1; i < G2_N; i++) {
++					if (g2_lv[i] >= hc.mhz) {
++						lv = i;
++						break;
++					}
++				}
++			}
++			printf("HEROLTE GOV2: started at level %u (%u MHz): levels 728 1352 1664 1976 2288, 20 ms, 80 %% target, 120 ms down, 1 s idle, touch floor 1664, thermal cap near %u C\n",
++			    lv, lv ? g2_lv[lv] : 728u, g2_hot_c);
++		}
++		uint64_t dt = prev_t ? now - prev_t : 0, dt_ns = 0;
++		unsigned umax = 0, usum = 0;
++		for (int c = 0; c < 4; c++) {
++			uint64_t cur = herolte_cluster_busy_mach(4 + c, 4 + c);
++			unsigned pm = dt ? (unsigned)((cur - prev[c]) * 1000 / dt) : 0;
++			pm = pm > 1000 ? 1000 : pm;
++			prev[c] = cur;
++			usum += pm;
++			umax = pm > umax ? pm : umax;
++		}
++		prev_t = now;
++		if (!dt) {
++			continue;
++		}
++		absolutetime_to_nanoseconds(dt, &dt_ns);
++		res_ns[lv] += dt_ns;
++		samples++;
++		if (lv == G2_N - 1 && umax >= 900) {
++			sat++;
++		}
++		/* what the busiest core needs, in MHz, to run at 80 % */
++		uint32_t f_cur = g2_lv[lv];
++		uint32_t need = (uint32_t)((uint64_t)umax * f_cur / 800);
++		unsigned want_rate = 1;
++		while (want_rate < G2_N - 1 && g2_lv[want_rate] < need) {
++			want_rate++;
++		}
++		bool touch = herolte_touch_last_mach != 0 && now > herolte_touch_last_mach;
++		if (touch) {
++			uint64_t since = 0;
++			absolutetime_to_nanoseconds(now - herolte_touch_last_mach, &since);
++			touch = since < 400ull * NSEC_PER_SEC / 1000;
++		}
++		unsigned want = lv;
++		if (g2_screen_off || g2_hot) {
++			want = 0;
++			idle_n = 0;
++			down_n = 0;
++		} else {
++			if (usum / 4 < 60) {
++				idle_n++;
++			} else {
++				idle_n = 0;
++			}
++			if (lv == 0) {
++				if (umax > 250 || touch) {
++					want = want_rate;          /* leaving the bootloader's rate: straight to what is needed */
++				}
++			} else if (want_rate > lv) {
++				want = want_rate;                  /* up at once, to the level that has the capacity */
++				down_n = 0;
++			} else if (want_rate < lv) {
++				if (++down_n >= 6 && now > hold_until) {
++					want = lv - 1;                /* down one step after 120 ms of slack */
++					down_n = 0;
++				}
++			} else {
++				down_n = 0;
++			}
++			if (lv != 0 && idle_n >= 50 && !touch) {
++				want = 0;                              /* a second of nothing: the bootloader's rate */
++			}
++			if (touch && want < 2 && want != 0 && !g2_screen_off) {
++				want = 2;                              /* a finger is on the screen: not below 1664 MHz */
++			}
++			if (touch && want == 0 && lv == 0) {
++				want = 2;
++			}
++			if ((int)g2_top >= (int)g2_hot_c - 8 && want > 3) {
++				want = 3;                              /* near the heat limit: 1976 MHz at most */
++			}
++		}
++		if (touch && !boosting) {
++			boosting = true;
++			boosts++;
++		} else if (!touch) {
++			boosting = false;
++		}
++		if (want != lv) {
++			uint64_t t0 = mach_absolute_time(), t1;
++			bool ok = g2_go(want);
++			t1 = mach_absolute_time();
++			uint64_t tr_ns = 0;
++			absolutetime_to_nanoseconds(t1 - t0, &tr_ns);
++			tr_ns_sum += tr_ns;
++			tr_ns_max = tr_ns > tr_ns_max ? tr_ns : tr_ns_max;
++			if (++trans <= 120 || !ok) {
++				printf("HEROLTE GOV2: %u -> %u MHz %s in %llu us (busiest core %u per mille, mean %u, needs %u MHz%s%s%s)\n", g2_lv[lv], g2_lv[want], ok ? "done" : "FAILED",
++				    tr_ns / 1000, umax, usum / 4, need, touch ? ", touch" : "", g2_screen_off ? ", screen off" : "", g2_hot ? ", hot" : "");
++			}
++			if (ok) {
++				if (want > lv) {
++					ups++;
++				} else {
++					downs++;
++				}
++				lv = want;
++				hold_until = t1 + 60ull * NSEC_PER_SEC / 1000;
++			}
++		}
++		if (!last_log || now - last_log > 10ull * 1000 * NSEC_PER_SEC / 1000) {
++			if (last_log) {
++				uint64_t tot = 0;
++				for (unsigned i = 0; i < G2_N; i++) {
++					tot += res_ns[i];
++				}
++				printf("HEROLTE GOV2: residency");
++				for (unsigned i = 0; i < G2_N; i++) {
++					printf(" %u MHz %llu per mille", g2_lv[i], tot ? res_ns[i] * 1000 / tot : 0);
++				}
++				printf("; %llu changes (%llu up, %llu down), a change takes %llu us on average and %llu us at most; touch boosts %llu; saturated samples at the top level %llu of %llu\n",
++				    trans, ups, downs, trans ? tr_ns_sum / trans / 1000 : 0, tr_ns_max / 1000, boosts, sat, samples);
++			}
++			last_log = now;
++		}
++	}
++}
++
+ static void
+ hg_cpu_up(void)
+ {
+-	/* ECT, this phone: rate, MNGS_PLL M (P 3, S 0), vdd_mngs register = (mV - 300) / 6.25, DIV_SCLK_PROMISE */
+-	static const struct {
+-		uint32_t mhz, m;
+-		uint8_t volt, promise;
+-	} rates[] = {
+-		{ 1664, 192, 0x5f, 4 }, /* 893.75 mV: the voltage Linux sets for 1664 MHz on this chip (E-0321; the others are lower by 50-70 mV, tested) */
+-		{ 1976, 228, 0x62, 5 }, /* 912.5 mV */
+-		{ 2288, 264, 0x6f, 6 }, /* 993.75 mV, Samsung's boot rate */
+-		{ 2600, 300, 0x7c, 7 }, /* 1075 mV */
+-	};
+ 	static bool done;
+ 	uint32_t mhz = 0, target_m = 0;
+ 	uint8_t now = 0, set = 0, volt = 0, promise = 0;
+@@ -2794,11 +2983,11 @@
+ 	if (done || !PE_parse_boot_argn("herocpu_mhz", &mhz, sizeof(mhz))) {
+ 		return;
+ 	}
+-	for (unsigned i = 0; i < sizeof(rates) / sizeof(rates[0]); i++) {
+-		if (rates[i].mhz == mhz) {
+-			target_m = rates[i].m;
+-			volt = rates[i].volt;
+-			promise = rates[i].promise;
++	for (unsigned i = 0; i < HC_NRATES; i++) {
++		if (hc_rate_rows[i].mhz == mhz) {
++			target_m = hc_rate_rows[i].m;
++			volt = hc_rate_rows[i].volt;
++			promise = hc_rate_rows[i].promise;
+ 		}
+ 	}
+ 	if (!target_m) {
+@@ -3055,7 +3244,7 @@
+ 	PE_parse_boot_argn("herostep", &step_s, sizeof(step_s));
+ 	PE_parse_boot_argn("herodisp", &disp_s, sizeof(disp_s));
+ 	/*
+-	 * 0458 (D-0096): herocycle=<s>: a test schedule that needs no finger. 150 s after the thread starts, three times: the screen
++	 * 0458 (D-0096): herosc=<s> (was herocycle, E-0322): a test schedule that needs no finger. 150 s after the thread starts, three times: the screen
+ 	 * is turned off for <s> seconds, then on for 20 s. Each change is the "SWEET FB: display on|off" line of a real request.
+ 	 */
+ 	uint32_t cyc_s = 0;
+@@ -3068,7 +3257,7 @@
+ 	PE_parse_boot_argn("herogovlog", &gl_s, sizeof(gl_s));
+ 	bool pm_done_on = false, pm_done_off = false;
+ 	PE_parse_boot_argn("heropmic", &pm_s, sizeof(pm_s));
+-	PE_parse_boot_argn("herocycle", &cyc_s, sizeof(cyc_s));
++	PE_parse_boot_argn("herosc", &cyc_s, sizeof(cyc_s));    /* was herocycle: clashed with the 0433 rate stepping (E-0322) */
+ 	uint64_t cyc_t0 = mach_absolute_time();
+ 	/*
+ 	 * 0437: read-only PSCI probe, once, 30 s after the thread starts: PSCI_VERSION (0x84000000), PSCI_FEATURES of CPU_SUSPEND
+@@ -3113,6 +3302,14 @@
+ 	}
+ 	int gov_on = 0;
+ 	PE_parse_boot_argn("herogov", &gov_on, sizeof(gov_on));
++	if (gov_on == 2) {
++		thread_t g2th;
++		if (kernel_thread_start(g2_thread, NULL, &g2th) == KERN_SUCCESS) {
++			thread_deallocate(g2th);
++		} else {
++			printf("HEROLTE GOV2: the governor thread did not start\n");
++		}
++	}
+ 	uint64_t gov_prev_busy = 0, gov_prev_t = 0, gov_flips = 0;
+ 	unsigned gov_idle_n = 0;
+ 	bool gov_low = false;
+@@ -3477,7 +3674,7 @@
+ 				step_i++;
+ 			}
+ 		}
+-		if (gov_on && !hc.broken) {
++		if (gov_on == 1 && !hc.broken) {
+ 			extern uint64_t herolte_cluster_busy_mach(int first, int last);      /* osfmk/kern/processor.c */
+ 			uint64_t busy = herolte_cluster_busy_mach(4, 7);
+ 			if (gov_prev_t != 0 && now > gov_prev_t) {
+@@ -3512,7 +3709,11 @@
+ 			printf("HEROLTE GOV: busy per mille cores 0-7:%s | big %s %u MHz | screen %s\n", buf, hc.high ? "high" : "low", herolte_pm_mhz, screen_off ? "off" : "on");
+ 		}
+ 		bool want_low = screen_off || hot_now || gov_low;
+-		if (!hc.broken && want_low == hc.high) {
++		g2_screen_off = screen_off;
++		g2_hot = hot_now;
++		g2_top = top;
++		g2_hot_c = hot;
++		if (!hc.broken && want_low == hc.high && gov_on != 2) {
+ 			bool ok = want_low ? hc_go_low() : hc_go_high();
+ 			if (!gov_on || ++gov_flips <= 40 || gov_flips % 100 == 0 || !ok) {
+ 				printf("HEROLTE POWER: Mongoose %s %u MHz (screen %s%s%s, SoC %d C; %llu changes)\n", ok ? "to" : "NOT to",
+@@ -3521,7 +3722,7 @@
+ 			}
+ 		}
+ 		ap_follow(want_low, little_mhz);
+-		if (cycle_s >= 20 && hc.high && !hot_now && !screen_off) {
++		if (cycle_s >= 20 && hc.high && !hot_now && !screen_off && gov_on != 2) {
+ 			uint64_t el = 0;
+ 			if (cycle_at == 0) {
+ 				cycle_at = now;
+--- a/bsd/dev/herolte_touch.c
++++ b/bsd/dev/herolte_touch.c
+@@ -25,6 +25,7 @@
+ 
+ extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
+ extern void sweet_hid_touch(int finger, int down, int x, int y);
++extern volatile uint64_t herolte_touch_last_mach;     /* bsd/dev/herolte_gpu.c (0467) */
+ void herolte_touch_probe(void);
+ 
+ #define HT_ALIVE_PA     0x10580000u     /* GPA1 CON +0x20, DAT +0x24 */
+@@ -717,6 +718,7 @@
+ 		ht_down[tid] = true;
+ 		ht_x[tid] = x;
+ 		ht_y[tid] = y;
++		herolte_touch_last_mach = mach_absolute_time();      /* 0467: the governor keeps the cores out of their lowest rates while a finger is down */
+ 		sweet_hid_touch(tid, 1, x, y);
+ 	}
+ 	return true;
