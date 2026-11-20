@@ -5079,3 +5079,18 @@ sha256 = "aae54bbd2500977c14dfd519db7ea8793947296fad391b9482a636a2c61cb7f4"
 size = 269702
 immutable = true
 note = "Imagen min122 1c5f42a1."
+
+[[evidence]]
+id = "E-0344"
+title = "min123 (ADT original con tipo 1 y sin gestures.off, chronod en heronoexec) NO ARRANCA: se queda en el logo; el registro (310 s, sin pánico) muestra HEROLTE NOEXEC '.../ChronoCore.framework/Support/chronod refused' dos veces (pid 93 y pid 188, este último del arranque de SpringBoard) y 'SPAWN FAILED xpcproxy[93]: chronod -> 1'; a partir de unos 75 s el sistema está parado (kernel_task 5 % y wifid 3 % en todas las ventanas hasta el final, solo 4 'SWEET FB: swap', los del logo), de modo que SpringBoard espera de forma síncrona a chronod, cuya ejecución se rechaza sin que el servicio mach desaparezca; CAUSA: yo añadí chronod a heronoexec para parar la tormenta de widgets (E-0343) sin comprobar que SpringBoard no lo espera; la forma correcta de parar un trabajo es la lista de trabajos desactivados de launchd (disabled.list), que hace que la consulta mach falle de inmediato, y aun así hay que comprobarlo; min124 = la misma imagen sin chronod en la línea (línea de min112, 592 caracteres); contadores D-0123: BOOT 14 de 80, DROP 18 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min123-herolog.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "f27cd3988cae8352d87a56b43fbd8958e4e4a1c7e57d6beb9b03f52d7f450e52"
+size = 183417
+immutable = true
+note = "Imagen min123 94ab4543."
