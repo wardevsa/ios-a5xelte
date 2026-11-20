@@ -33,6 +33,10 @@ uncaught(id exception)
    id name = ((id (*)(id, SEL))objc_msgSend)(exception, sel_registerName("name"));
    id reason = ((id (*)(id, SEL))objc_msgSend)(exception, sel_registerName("reason"));
    herodrm_log("%s: uncaught %s: %s", getprogname(), text_of(name), text_of(reason));
+   /* min112 (E-0334): herodrm_log did not reach the kernel log from assetsd (a sandboxed daemon), and the exception's text never
+    * reached stderr either (libc++abi writes to os_log). stderr is the file launchd opened for the job (assetsd.err), so writing
+    * to it directly bypasses the sandbox. */
+   dprintf(2, "libheroapp: %s: uncaught %s: %s\n", getprogname(), text_of(name), text_of(reason));
 }
 
 static id
@@ -235,6 +239,7 @@ install(void)
       herodrm_log("PosterBoard: home preview in a bitmap: %d", preview != NULL);
    }
    NSSetUncaughtExceptionHandler(uncaught);
+   dprintf(2, "libheroapp: %s: loaded (pid %d)\n", getprogname(), (int)getpid());
    dlopen("/System/Library/Frameworks/OpenGLES.framework/OpenGLES", RTLD_LAZY);
    Class context = objc_getClass("EAGLContext");
    if (context != Nil) {
@@ -254,6 +259,7 @@ install(void)
       ci_init_original = (id (*)(id, SEL, id))method_setImplementation(init, (IMP)ci_init);
    }
    herodrm_log("%s: libheroapp: CoreImage %s", getprogname(), ci_init_original ? "in software" : "as it was");
+   dprintf(2, "libheroapp: %s: CoreImage %s\n", getprogname(), ci_init_original ? "in software" : "as it was");
    Method assertion = class_getInstanceMethod(objc_getClass("NSAssertionHandler"),
       sel_registerName("handleFailureInMethod:object:file:lineNumber:description:"));
    if (assertion != NULL) {
