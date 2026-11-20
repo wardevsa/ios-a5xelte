@@ -5064,3 +5064,18 @@ sha256 = "50f5bd62ca550f3a6b31fd574e9ae67146985e35bba6ee295159b3817929e097"
 size = 193274
 immutable = true
 note = "Registro de la prueba de min118/min119 (el log de la última tanda)."
+
+[[evidence]]
+id = "E-0343"
+title = "min122 (laboratorio S7UI, lienzo XR estirado): el Director informa de que estirado queda muy mal, de que no puede tocar ningún botón y de que esperó 4 minutos antes de volver a TWRP; el registro cubre solo 140 s de arranque (28 ventanas de TOP) y NO contiene ninguna línea de HEROLTE SNAP: el laboratorio (150 s tras el hilo de energía) no llegó a empezar; el arranque estaba SATURADO: 'todo 500-1000 %' de 800, con ocho extensiones de widgets (Podcasts, Stocks, Reminders, Calendar, WorldClock, Weather, ScreenTime, GCWidgets) al 36-61 % de CPU cada una, y la memoria libre bajó a 156 MB a los 120 s (las 32 apps recién movidas y los cambios de caché de MobileGestalt hacen que el anfitrión de widgets, chronod, vuelva a pintar todos): eso explica que no se pueda tocar; HALLAZGO DECISIVO: libherosb.dylib (gpu/eagl/src/herosb.c), que por fin se carga en SpringBoard desde que /private/var/herolte tiene búsqueda para mobile (E-0336), YA TRAE la solución del proyecto de origen para 'lienzo 750x1334 con gestos': la ADT dice botón de inicio (home-button-type 1, así UIKit tiene barra de estado para esta pantalla, mientras que el tipo 2 da la barra roja rdar:45025538) y SpringBoard SOLO recibe tipo 2 por -[BSPlatform homeButtonType] (donde se deciden los gestos de inicio) y SBHomeGestureSettings isHomeGestureEnabled = YES, y además cambia la clase de proveedor de la barra de estado (_UIStatusBarVisualProvider_Phone en lugar de Fallback, con visualProviderSubclassForScreen:visualProviderInfo: y _UIStatusBar setVisualProviderClass:); se activa si NO existe DROP_DIR gestures.off; mis pruebas se desviaron de ese diseño: min121 puso la ADT en tipo 2 (el tipo 2 para TODOS los procesos reintroduce la barra roja en las apps y, según el Director, 'la barra de arriba no se ve'), y gestures.off existió hasta la 14.ª escritura de DROP; la configuración que cumple el diseño es la ADT original con tipo 1 y sin gestures.off: es min123 (ADT original herolte-3g.adt, línea de min112 con chronod en heronoexec para parar el anfitrión de widgets, kernel CI 44829236931, token 'i8back'); contadores D-0123: BOOT 13 de 80, DROP 18 de 80. LECCIÓN: antes de diseñar un laboratorio nuevo había que leer el código ya presente en el repositorio para este mismo problema; el laboratorio S7UI (0484, hsnap) sigue disponible si min123 falla"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min122-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "aae54bbd2500977c14dfd519db7ea8793947296fad391b9482a636a2c61cb7f4"
+size = 269702
+immutable = true
+note = "Imagen min122 1c5f42a1."
