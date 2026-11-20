@@ -4869,3 +4869,18 @@ sha256 = "a328e55b02ae17a0cd231f609900f002bb932044c1ec7eecdbb7db87b4707b3c"
 size = 389559
 immutable = true
 note = "Imagen min108 eac9e336, kernel CI 44738703013."
+
+[[evidence]]
+id = "E-0330"
+title = "Por qué se cierra assetsd (y con él Fotos), leído del teléfono en TWRP, solo lectura (herolte-hfs-read.py sobre USERDATA): el informe de cierre de assetsd (EXC_CRASH, SIGABRT, 'abort() called') lo causa una EXCEPCIÓN DE OBJECTIVE-C lanzada dentro de -[PLLibraryServicesOperation _runOperationBlock:] (PhotoLibraryServices), en la cola de arranque de la biblioteca de fotos (-[PLLibraryServicesManager _awaitLibraryState:sync:completionHandler:]); el texto de la excepción NO está en el informe, y /private/var/tmp/assetsd.err mide 0 bytes; el directorio /private/var/mobile/Media/PhotoData contiene sólo Thumbnails/ (no hay Photos.sqlite ni la base de datos de la biblioteca) y DCIM está vacío: la biblioteca de fotos nunca llega a crearse; assetsd se relanza y vuelve a cerrarse (30 cierres en un arranque, E-0328), y cada cliente de la fototeca (Fotos, PhotosFileProvider) cae con él. HIPÓTESIS, SIN COMPROBAR: la creación de la base de datos de la biblioteca falla en el almacenamiento o por un permiso, una ruta o un atributo que falta en la raíz de iOS; el siguiente paso es capturar el texto de la excepción (stderr de assetsd o el registro unificado) o crear a mano la estructura mínima de PhotoData en la raíz y mirar si el cierre cambia"
+kind = "log"
+path = "/tmp/herolte-work/assetsd-crash/a.ips"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "7f1ca3ffee52de1e0c813341f0e67c156e9a334fc0bc18bd89ec4795c293e6eb"
+size = 19055
+immutable = false
+note = "Informe de Apple, fuera de git."
