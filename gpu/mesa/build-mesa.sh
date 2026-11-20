@@ -148,8 +148,11 @@ done
 
 $CC_IOS -O2 -Wall -I mesa/include -o "$OUT/osmesa-test" "$HERE/osmesa-test.c" \
   -L "$OUT/lib" -lOSMesa.8 -ldrm.2 -Wl,-rpath,/private/var/herolte/lib
+# hero_metal_test (docs/herolte-metal.md, M2): a pipeline given what its shaders declare, through rwa_*.
+[ "$AIR" = 1 ] && $CC_IOS -O2 -Wall -I mesa/src/compiler/air -o "$OUT/hero_metal_test" "$HERE/hero-metal-test.c" \
+  -L "$OUT/lib" -lhakiosair -Wl,-rpath,/private/var/herolte/lib
 
-for f in "$OUT"/lib/*.dylib "$OUT/osmesa-test" $( [ "$AIR" = 1 ] && echo "$OUT/air_metal_test" ); do
+for f in "$OUT"/lib/*.dylib "$OUT/osmesa-test" $( [ "$AIR" = 1 ] && echo "$OUT/air_metal_test $OUT/hero_metal_test" ); do
   codesign -s - -f "$f"
   otool -L "$f"
 done
