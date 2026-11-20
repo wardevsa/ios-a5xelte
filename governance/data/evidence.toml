@@ -4959,3 +4959,18 @@ sha256 = "0d396a5e982e9dd9ee48247d08d624b3bfea62c62c725d2e010d1a32bf8e8f62"
 size = 2913
 immutable = false
 note = "Nota de seguimiento: la evidencia primaria son las lecturas de solo lectura del teléfono hechas el 20-nov (herolte-hfs-read.py) y el registro min112b."
+
+[[evidence]]
+id = "E-0336"
+title = "POR QUÉ NO SE CARGAN LAS BIBLIOTECAS INSERTADAS EN LAS APPS: min114 (herodyld=2, parche 0479: sin el bit 5 de AMFI, 'perdonar un fallo de inserción', para MobileSMS y assetsd) ha hecho que dyld termine esos procesos y diga el motivo en la línea CRASH del registro: 'reason ns 6 code 0x9: tried: /private/var/herolte/lib/libheroapp.dylib (errno=13)' (8 cierres de assetsd y 1 de MobileSMS en el arranque): errno 13 = EACCES, permiso denegado al abrir la biblioteca; causa, leída de la raíz de iOS en solo lectura con herolte-hfs-read.py (ahora imprime propietario y modo de las carpetas): /private/var es 0755 root, /private/var/herolte/lib 0755 root y /private/var/herolte (la zona de la que cuelga todo) es 0744 root: sin permiso de búsqueda (x) para 'otros', y las apps y assetsd corren como mobile; backboardd corre como root y nunca lo notó; por tanto el cierre silencioso se debía al bit 5 permisivo junto con un 0744, y no a la firma, a las dependencias ni a dyld (el desensamblado de dyld, leído del teléfono, confirma que el entorno se acepta con el bit 1); esto explica también que assetsd.err, heroapp.log, dyld.log y heroprobe.log estuvieran vacíos y que Mensajes siguiera cayendo en CI::GLContext sin que el cambio de CoreImage a software se aplicara. CORRECCIÓN: hero-run hace chmod 0755 de /private/var/herolte y de su lib en cada arranque (CI 44799485640); con eso, desde el SEGUNDO arranque tras escribir ese hero-run (el primero lo corrige, y los procesos que ya arrancaron no lo notan) las apps podrán cargar libheroapp y libherosb; para ver el efecto sin riesgo de cerrar apps, BOOT vuelve a min113 (herodyld=1, la inserción se pide pero un fallo se perdona); contadores D-0123: BOOT 4 de 80, DROP 9 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min114-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "9eccb66d9596df04195e080fcd0977a35ec3a3948ae912f92efa31f637212386"
+size = 218953
+immutable = true
+note = "Imagen min114 caf62517, kernel CI 44796260661."
