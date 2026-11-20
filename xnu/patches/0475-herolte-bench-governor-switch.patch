@@ -1,0 +1,135 @@
+herolte: the bench switches governors at run time: v2, fixed and the two-state v1 of min100 in one boot (0475)
+
+min100 runs herogov=1 (two states: the big cluster at its rate only while its four cores are busy), which E-0329 never measured: it compared v2 with a fixed rate. hg_policy now selects who moves the cluster (0 none, 1 the power thread's two-state governor, 2 governor v2 or fixed, 3 a switch in progress with nobody moving it), the v2 thread parks and restarts from the real state when it is not the active one, and heroscenc digit 5 means the v1 governor at 1976 MHz. The defaults need no argument: three rounds, paging and spotlight, caps 385 (v2 governed 1976, fixed 1976, v1), labelled paging, paging_fixed and paging_v1. Needs herocpu_mhz=1976 so that v1 goes to 1976. heroscen only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2801,6 +2801,9 @@
+ #define G2_N (sizeof(g2_lv) / sizeof(g2_lv[0]))
+ /* 0474: fixed mode for the bench: the governor holds the cap instead of following the load, to compare the governor with a fixed rate in one boot */
+ static volatile bool g2_fixed;
++/* 0475: which governor acts, switchable at run time for the bench: 0 none (herogov=0), 1 the two-state governor of the power thread (min100), 2 governor v2 or fixed,
++ * 3 a switch in progress (nobody moves the cluster) */
++static volatile int hg_policy;
+ static volatile unsigned g2_cap = (unsigned)(sizeof(g2_lv) / sizeof(g2_lv[0])) - 1;   /* highest level the governor may use (0468: the scenario bench changes it) */
+ static volatile uint64_t g2_stat_trans, g2_stat_sat, g2_stat_samples;
+ /* 0468: exported for the scenario bench: frames presented, their spacing (ms buckets <20 <40 <70 <120 <250 >=250) and the battery current while discharging */
+@@ -2849,6 +2852,11 @@
+ 		if (!hc.saved || hc.broken) {
+ 			continue;
+ 		}
++		if (hg_policy != 2) {
++			started = false;                      /* 0475: parked while another governor (or nobody) holds the cluster; it restarts from the real state */
++			prev_t = 0;
++			continue;
++		}
+ 		uint64_t now = mach_absolute_time();
+ 		if (!started) {
+ 			started = true;
+@@ -3141,7 +3149,7 @@
+ hs_thread(__unused void *arg, __unused wait_result_t wr)
+ {
+ 	static const char *const names[] = { "paging", "spotlight", "idle", "launch" };
+-	uint32_t settle = 0, rounds = 4, mask = 3, capsarg = 38, digits[4] = { 0 }, ncap = 0;
++	uint32_t settle = 0, rounds = 3, mask = 3, capsarg = 385, digits[4] = { 0 }, ncap = 0;
+ 	extern volatile uint64_t herolte_screen_off_at;
+ 	extern volatile int herolte_fg_temp_dc;
+ 	PE_parse_boot_argn("heroscen", &settle, sizeof(settle));
+@@ -3151,7 +3159,7 @@
+ 	/* 0471: the bench is configured from the boot line, with defaults that need no argument: heroscenr = rounds (3), heroscens = scenario
+ 	 * mask (bit 0 paging, 1 spotlight, 2 idle, 3 launch; default 11 = paging, spotlight, launch), heroscenc = caps as level digits
+ 	 * (4 = 2288, 3 = 1976, 2 = 1664, 1 = 1352; 0474: add 5 for FIXED, the governor holding the cap: 8 = fixed 1976). Round r rotates the list by r.
+-	 * 0474 defaults (no argument needed): 4 rounds, paging and spotlight, caps 38 = governed 1976 against fixed 1976. */
++	 * 0475 defaults (no argument needed): 3 rounds, paging and spotlight, caps 385 = v2 governed 1976, fixed 1976 and the two-state governor of min100 (digit 5). */
+ 	PE_parse_boot_argn("heroscenr", &rounds, sizeof(rounds));
+ 	PE_parse_boot_argn("heroscens", &mask, sizeof(mask));
+ 	PE_parse_boot_argn("heroscenc", &capsarg, sizeof(capsarg));
+@@ -3163,7 +3171,7 @@
+ 	}
+ 	for (unsigned a = 0; a < ncap; a++) {
+ 		uint32_t lvl_d = digits[a] > 5 ? digits[a] - 5 : digits[a];
+-		if (digits[a] == 5 || digits[a] > 9 || lvl_d < 1 || lvl_d >= G2_N) {
++		if (digits[a] > 9 || (digits[a] != 5 && (lvl_d < 1 || lvl_d >= G2_N))) {
+ 			ncap = 0;
+ 		}
+ 	}
+@@ -3203,7 +3211,19 @@
+ 	}
+ 	for (unsigned r = 0; r < rounds; r++) {
+ 		for (unsigned k = 0; k < ncap; k++) {
+-			unsigned dg = (unsigned)digits[(k + r) % ncap], lvl = dg > 5 ? dg - 5 : dg;
++			unsigned dg = (unsigned)digits[(k + r) % ncap], lvl = dg == 5 ? 3 : dg > 5 ? dg - 5 : dg;
++			bool want_v1 = dg == 5;
++			if (want_v1 != (hg_policy == 1)) {
++				hg_policy = 3;                   /* 0475: switch governors with nobody moving the cluster */
++				hg_msleep(150);
++				if (want_v1) {
++					g2_fixed = false;
++					g2_cap = 3;
++					(void)g2_go(3);        /* the two-state governor goes to hc.mhz when busy: make that 1976 MHz */
++				}
++				hg_policy = want_v1 ? 1 : 2;
++				printf("HEROLTE SCEN: governor %s\n", want_v1 ? "v1 (two states, as min100)" : "v2");
++			}
+ 			g2_fixed = dg > 5;
+ 			g2_cap = lvl;
+ 			hg_msleep(2500);
+@@ -3230,8 +3250,10 @@
+ 				hs_play(s);
+ 				absolutetime_to_nanoseconds(mach_absolute_time() - t0, &ns);
+ 				uint64_t pn = herolte_pwr_n - pn0;
++				char label[24];
++				snprintf(label, sizeof(label), "%s%s", names[s], want_v1 ? "_v1" : g2_fixed ? "_fixed" : "");
+ 				printf("HEROLTE SCEN: end round %u cap %u MHz scen %s dur_ms %llu mA_mean %llu mA_n %llu frames %llu gaps %llu %llu %llu %llu %llu %llu temp_dc %d changes %llu saturated %llu of %llu\n",
+-				    r, g2_lv[lvl], s == 0 && g2_fixed ? "paging_fixed" : s == 1 && g2_fixed ? "spotlight_fixed" : s == 3 && g2_fixed ? "launch_fixed" : names[s], ns / 1000000, pn ? (herolte_pwr_sum - ps0) / pn : 0, pn, herolte_fb_presented - fp0,
++				    r, g2_lv[lvl], label, ns / 1000000, pn ? (herolte_pwr_sum - ps0) / pn : 0, pn, herolte_fb_presented - fp0,
+ 				    herolte_fb_gap_hist[0] - h0[0], herolte_fb_gap_hist[1] - h0[1], herolte_fb_gap_hist[2] - h0[2], herolte_fb_gap_hist[3] - h0[3], herolte_fb_gap_hist[4] - h0[4],
+ 				    herolte_fb_gap_hist[5] - h0[5], herolte_fg_temp_dc, g2_stat_trans - tr0, g2_stat_sat - sa0, g2_stat_samples - sm0);
+ 				hg_msleep(1500);
+@@ -3240,6 +3262,11 @@
+ 	}
+ 	g2_cap = (unsigned)G2_N - 1;
+ 	g2_fixed = false;
++	if (hg_policy == 1) {
++		hg_policy = 3;
++		hg_msleep(150);
++		hg_policy = 2;
++	}
+ 	printf("HEROLTE SCEN: bench finished\n");
+ }
+ 
+@@ -3572,6 +3599,7 @@
+ 	}
+ 	int gov_on = 0;
+ 	PE_parse_boot_argn("herogov", &gov_on, sizeof(gov_on));
++	hg_policy = gov_on;
+ 	if (gov_on == 2) {
+ 		thread_t g2th;
+ 		if (kernel_thread_start(g2_thread, NULL, &g2th) == KERN_SUCCESS) {
+@@ -3950,7 +3978,7 @@
+ 				step_i++;
+ 			}
+ 		}
+-		if (gov_on == 1 && !hc.broken) {
++		if (hg_policy == 1 && !hc.broken) {
+ 			extern uint64_t herolte_cluster_busy_mach(int first, int last);      /* osfmk/kern/processor.c */
+ 			uint64_t busy = herolte_cluster_busy_mach(4, 7);
+ 			if (gov_prev_t != 0 && now > gov_prev_t) {
+@@ -3989,7 +4017,7 @@
+ 		g2_hot = hot_now;
+ 		g2_top = top;
+ 		g2_hot_c = hot;
+-		if (!hc.broken && want_low == hc.high && gov_on != 2) {
++		if (!hc.broken && want_low == hc.high && hg_policy <= 1) {
+ 			bool ok = want_low ? hc_go_low() : hc_go_high();
+ 			if (!gov_on || ++gov_flips <= 40 || gov_flips % 100 == 0 || !ok) {
+ 				printf("HEROLTE POWER: Mongoose %s %u MHz (screen %s%s%s, SoC %d C; %llu changes)\n", ok ? "to" : "NOT to",
+@@ -3998,7 +4026,7 @@
+ 			}
+ 		}
+ 		ap_follow(want_low, little_mhz);
+-		if (cycle_s >= 20 && hc.high && !hot_now && !screen_off && gov_on != 2) {
++		if (cycle_s >= 20 && hc.high && !hot_now && !screen_off && hg_policy <= 1) {
+ 			uint64_t el = 0;
+ 			if (cycle_at == 0) {
+ 				cycle_at = now;
