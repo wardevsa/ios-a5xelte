@@ -69,7 +69,7 @@ $CC -O2 -w -bundle -I"$HERE/../hakios-audio" -o "$OUT/audio/HakiosAudio" "$HERE/
 cp "$HERE/../hakios-audio/audio_plugin.plist" "$OUT/audio/Info.plist"
 codesign -s - -f "$OUT/audio/HakiosAudio"
 
-for f in "$OUT/lib/libheroeagl.dylib" "$OUT/lib/libhakiosgl.dylib" "$OUT/lib/libherosb.dylib" "$OUT/lib/libheroapp.dylib" "$OUT/eagl_ca_test" "$OUT/hero-run"; do
+for f in "$OUT/lib/libheroeagl.dylib" "$OUT/lib/libhakiosgl.dylib" "$OUT/lib/libherosb.dylib" "$OUT/lib/libheroapp.dylib" "$OUT/lib/libheroprobe.dylib" "$OUT/eagl_ca_test" "$OUT/hero-run"; do
   codesign -s - -f "$f"
   otool -L "$f"
 done
