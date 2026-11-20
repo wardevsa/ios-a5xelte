@@ -4,7 +4,7 @@ The unified log of min113e (the phone's own logd, parsed from /private/var/db/di
 
 --- a/bsd/kern/sweet_amfi.c
 +++ b/bsd/kern/sweet_amfi.c
-@@ -295,6 +295,33 @@
+@@ -295,6 +295,34 @@
  		proc_name(proc_pid(p), name, sizeof(name));
  		printf("SWEET Sandbox: %s op %d\n", name, call);
  	}
@@ -17,6 +17,7 @@ The unified log of min113e (the phone's own logd, parsed from /private/var/db/di
 +	if ((call == 4 || call == 5 || call == 6) && arg != 0) {
 +		static int dumped[3];
 +		int sbx = 0;
++		extern boolean_t PE_parse_boot_argn(const char *arg_string, void *arg_ptr, int max_len);
 +		PE_parse_boot_argn("herosbx", &sbx, sizeof(sbx));
 +		if (sbx && dumped[call - 4]++ < 6) {
 +			uint64_t w[16] = { 0 };
