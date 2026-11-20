@@ -4974,3 +4974,18 @@ sha256 = "9eccb66d9596df04195e080fcd0977a35ec3a3948ae912f92efa31f637212386"
 size = 218953
 immutable = true
 note = "Imagen min114 caf62517, kernel CI 44796260661."
+
+[[evidence]]
+id = "E-0337"
+title = "min113c (dos arranques tras el chmod de /private/var/herolte, E-0336): LA INSERCIÓN POR FIN FUNCIONA: /private/var/tmp/heroapp.log (8070 bytes) muestra libheroapp cargada y CoreImage en software en assetsd (9 veces), CollectionsPoster (6), MobileSlideShow (5), MobileSMS (4), UnityPosterExtension (3) y Spotlight (3); EL TEXTO DE LA EXCEPCIÓN DE assetsd, por fin: NSInternalInconsistencyException: assetsd requires TCCPhotosService access (7 veces; con los 5 cierres de assetsd, 3 de MobileSlideShow y 1 de PhotosFileProvider del registro); MobileSlideShow: NSInternalInconsistencyException: Invalid parameter not satisfying: !(sectionObject == nil && itemObject == nil && subitemObject == nil) (consecuencia de que no hay biblioteca de fotos); tccd (pid 36) se lanza y vive hasta el apagado (su EXIT con xstat 9 es del apagado), y TCC.db existe (35 filas, 6 tablas, sin entradas de Photos ni de assetsd, tablas policies y access_overrides vacías); MENSAJES SIGUE CAYENDO con la misma pila que antes: sig 11, pc 0, lr CoreImage con las mismas terminaciones de dirección (…58c, …884, …114): a pesar de 'CoreImage in software', CIContext initWithOptions: llama a internalContextWithEAGLContext: y CI::GLContext sigue ejecutándose; el aviso en libheroapp (ci_init) que añade kCIContextUseSoftwareRenderer no basta en esta versión o no se ejecuta en esa llamada; NO se sabe si falla la comprobación de TCC por los derechos (entitlements) de assetsd o por tccd; el siguiente DROP (10 de 80) hace que libheroapp escriba en assetsd los derechos (csops 7) y la respuesta de TCCAccessPreflight(kTCCServicePhotos), y en MobileSMS la lista de selectores de CIContext (heroapp-assetsd.txt, heroapp-coreimage.txt en /private/var/tmp); contadores D-0123: BOOT 4 de 80, DROP 10 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min113c-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "c827fb772ef136a7f1248b144b169a56e2059b978e6030067852d72ea5b3cea3"
+size = 403655
+immutable = true
+note = "Imagen min113 7654698f con el chmod de hero-run (CI 44799485640)."
