@@ -995,8 +995,17 @@ assetsd_stderr_to_file(void)
       CFMutableDictionaryRef d = (CFMutableDictionaryRef)pl;
       CFStringRef want = CFSTR(ASSETSD_ERR);
       CFTypeRef have = CFDictionaryGetValue(d, CFSTR("StandardErrorPath"));
-      if (have && CFGetTypeID(have) == CFStringGetTypeID() && CFStringCompare((CFStringRef)have, want, 0) == kCFCompareEqualTo) {
-         herodrm_log("hero-run: assetsd stderr: %s already points at assetsd.err", plists[i]);
+      /* min112 (E-0330): assetsd.err stayed at 0 bytes because NSLog and os_log do not go to stderr in a launchd daemon; with
+       * OS_ACTIVITY_DT_MODE=YES they do, so the text of the Objective-C exception that kills assetsd reaches the file */
+      bool path_ok = have && CFGetTypeID(have) == CFStringGetTypeID() && CFStringCompare((CFStringRef)have, want, 0) == kCFCompareEqualTo;
+      CFTypeRef envd = CFDictionaryGetValue(d, CFSTR("EnvironmentVariables"));
+      bool env_ok = false;
+      if (envd && CFGetTypeID(envd) == CFDictionaryGetTypeID()) {
+         CFTypeRef ev = CFDictionaryGetValue((CFDictionaryRef)envd, CFSTR("OS_ACTIVITY_DT_MODE"));
+         env_ok = ev && CFGetTypeID(ev) == CFStringGetTypeID() && CFStringCompare((CFStringRef)ev, CFSTR("YES"), 0) == kCFCompareEqualTo;
+      }
+      if (path_ok && env_ok) {
+         herodrm_log("hero-run: assetsd stderr: %s already points at assetsd.err with OS_ACTIVITY_DT_MODE", plists[i]);
          CFRelease(pl);
          return;
       }
@@ -1013,6 +1022,16 @@ assetsd_stderr_to_file(void)
             close(out);
       }
       CFDictionarySetValue(d, CFSTR("StandardErrorPath"), want);
+      {
+         CFMutableDictionaryRef env = (envd && CFGetTypeID(envd) == CFDictionaryGetTypeID())
+             ? CFDictionaryCreateMutableCopy(NULL, 0, (CFDictionaryRef)envd)
+             : CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+         if (env) {
+            CFDictionarySetValue(env, CFSTR("OS_ACTIVITY_DT_MODE"), CFSTR("YES"));
+            CFDictionarySetValue(d, CFSTR("EnvironmentVariables"), env);
+            CFRelease(env);
+         }
+      }
       CFDataRef data = CFPropertyListCreateData(NULL, d, kCFPropertyListBinaryFormat_v1_0, 0, NULL);
       CFRelease(pl);
       if (!data)
