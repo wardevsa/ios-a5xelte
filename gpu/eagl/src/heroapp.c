@@ -9,6 +9,7 @@
  * is given, as on a device that cannot make one.
  */
 #include <dlfcn.h>
+#include <CoreGraphics/CoreGraphics.h>
 #include <errno.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
@@ -153,7 +154,15 @@ look_at_coreimage(void)
  */
 static id (*ci_init_original)(id, SEL, id);
 static id ci_software_key;
+static CGContextRef ci_cg;
+static __thread int ci_in_cg;
 
+/*
+ * min113d (E-0337): asking for kCIContextUseSoftwareRenderer was not enough here: Messages' MobileIcons still went through
+ * -[CIContext initWithOptions:] -> +internalContextWithEAGLContext:options: -> CI::GLContext and died on its empty table of OpenGL ES functions.
+ * CIContext has initWithCGContext:options: (a context backed by a CGContext, rendered by CoreImage's own CPU code): a 1x1 bitmap context is
+ * given to it, so that CoreImage never builds a GL context. A thread-local flag keeps it from coming back into this method.
+ */
 static id
 ci_init(id self, SEL command, id options)
 {
@@ -163,6 +172,20 @@ ci_init(id self, SEL command, id options)
    }
    id yes = ((id (*)(id, SEL, signed char))objc_msgSend)((id)objc_getClass("NSNumber"), sel_registerName("numberWithBool:"), 1);
    ((void (*)(id, SEL, id, id))objc_msgSend)(all, sel_registerName("setObject:forKey:"), yes, ci_software_key);
+   if (!ci_in_cg) {
+      if (ci_cg == NULL) {
+         CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+         ci_cg = CGBitmapContextCreate(NULL, 1, 1, 8, 4, space, (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
+         CGColorSpaceRelease(space);
+         hero_note("libheroapp: %s: CGContext for CoreImage %s", getprogname(), ci_cg ? "made" : "NOT made");
+      }
+      if (ci_cg != NULL) {
+         ci_in_cg = 1;
+         id result = ((id (*)(id, SEL, CGContextRef, id))objc_msgSend)(self, sel_registerName("initWithCGContext:options:"), ci_cg, all);
+         ci_in_cg = 0;
+         return result;
+      }
+   }
    return ci_init_original(self, command, all);
 }
 
