@@ -4914,3 +4914,18 @@ sha256 = "8504e371f828f91e337560b25ff2126ee4bf91921375b09d72a5b2fb73b514e5"
 size = 364690
 immutable = true
 note = "Imagen min110 49908b43, kernel CI 44754830797. Análisis con scratch/pmu_an.py (no versionado)."
+
+[[evidence]]
+id = "E-0333"
+title = "min111 (banco a cuatro topes FIJOS con la PMU, D-0122): sin pánico, 32 ejecuciones (4 topes fijos × 2 escenarios × 4 rondas rotadas), el Director avisa de que el teléfono ya estaba caliente al empezar; CORRIENTE POR TOPE FIJO, PAGINADO (8 muestras por celda, 4 ejecuciones): 1094 mA (1352 MHz), 1205 (1664), 1327 (1976), 1439 (2288): unos +110 a +120 mA (+9 %) por escalón; IC95 bootstrap por ejecuciones frente a 1976: 2288 +8,4 % (-5,4 % a +26,4 %), 1664 -9,2 % (-21,2 % a +5,3 %), 1352 -17,5 % (-26,9 % a -5,4 %, el único que excluye el cero); BÚSQUEDA: 889, 999, 1084 y 1113 mA, con intervalos muy anchos (1352 frente a 1976 -13,8 %, -36,9 % a +15,3 %); FLUIDEZ DEL PAGINADO (intervalos entre fotogramas de 120 ms o más): 29,7 % (1352), 26,4 % (1664), 13,1 % (1976), 8,4 % (2288): HAY UNA RODILLA entre 1664 y 1976 MHz (la fracción de intervalos largos se divide entre dos), y 2288 aún la baja un tercio; muestras saturadas del gobernador 89 de 1918 (1352), 50 (1664), 46 (1976), 35 (2288); en la búsqueda el espaciado casi no cambia (53,9 % a 61,3 % bajo 40 ms; 11,0 % a 12,0 % de 120 ms o más); PMU (mediante tools/herolte-pmu-by-rate.py, 546 filas núcleo-ventana en el banco): trabajo realizado (instrucciones por segundo, suma de los cuatro núcleos grandes): 1,45 (1352), 1,745 (1664), 1,81 (1976) y 1,827 (2288) Ginstr/s: sube un 20 % de 1352 a 1664, un 4 % a 1976 y un 1 % a 2288 aunque la frecuencia sube un 23 %, un 19 % y un 16 %: el guion pide unos 1,8 Ginstr/s y a partir de 1976 MHz la CPU lo cubre; a 1352 y 1664 no alcanza y se pierden fotogramas a tiempo; IPC agregado 0,560, 0,556, 0,545 y 0,525 y ciclos por cada mil instrucciones 1784, 1798, 1835 y 1904: con la frecuencia subiendo un 69 % los ciclos por instrucción solo suben un 6,7 %: la carga es poco sensible a la latencia de memoria (por frecuencia), la hipótesis de que la espera de memoria inflaba la ocupación de forma importante NO se sostiene con este guion, como mucho un efecto del 7 %; fallos de L2 por mil instrucciones 6,5, 6,1, 6,0 y 6,1 (constantes). CORRECCIONES Y CONSECUENCIAS: (a) E-0325/E-0326/E-0328 decían que 1664 no ahorra corriente y que la fluidez no depende del tope: eso se midió con TOPES DEL GOBERNADOR v2 (que puede bajar por debajo del tope entre gestos), no con frecuencia fija; con frecuencia fija la corriente del paginado baja un 9 % por escalón y la fluidez sí cambia, así que aquellas frases solo valen para topes del v2; (b) el tope de 1976 MHz sigue siendo un buen punto porque está justo después de la rodilla de fluidez, y 2288 compra una tercera parte menos de intervalos largos por un 8 % más de corriente (no significativo con 4 ejecuciones); (c) la explicación del fracaso del v2 NO es la espera de memoria: es que cambia de nivel con frecuencia (131 cambios en un paginado) y cada subida llega tarde al trabajo que ya se pidió; LÍMITES: cuatro ejecuciones por celda, una sola sesión con el teléfono caliente (la temperatura reducida a 26,8 no es de fiar), el guion es de tiempo fijo (el trabajo pedido no depende de lo rápido que se va), solo paginado y búsqueda"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min111-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "833c49447629477e39a73bd2793b94f6ef37f3ce8253df1b4adc978a9b3f7b26"
+size = 482993
+immutable = true
+note = "Imagen min111 c24af197, kernel CI 44761092711."
