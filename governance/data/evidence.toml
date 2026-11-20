@@ -4944,3 +4944,18 @@ sha256 = "0a795c46f75f9d2c9e64a9575d5d23d40985cdb046bb3a4b235b6aca64145727"
 size = 26789
 immutable = true
 note = "Informe de Apple, fuera de git. Hallazgos del 20-nov con herolte-hfs-read.py, solo lectura."
+
+[[evidence]]
+id = "E-0335"
+title = "Tras dos arranques con el plist de assetsd verificado en el teléfono (StandardErrorPath = /private/var/tmp/assetsd.err, EnvironmentVariables OS_ACTIVITY_DT_MODE=YES y DYLD_PRINT_LIBRARIES=1, ProgramArguments assetsd, Program AssetsLibrary.framework/Support/assetsd), /private/var/tmp/assetsd.err sigue en 0 bytes (0 extensiones), el Director informa de que las apps cierran, y hero-run, que lo mira desde dentro del sistema de archivos en vivo a los 20, 100 y 220 s, lo vio vacío: no es un retraso de volcado del disco; ni la salida de dyld con DYLD_PRINT_LIBRARIES ni los dprintf(2) de libheroapp ni el texto del terminate de libc++abi llegan a ese fichero; por tanto la redirección de stderr de launchd no se aplica a este trabajo (o launchd no relee el plist, o el proceso no escribe en su descriptor 2), o libheroapp no se carga y dyld ignora las variables; no se sabe cuál; se despliega libheroapp con una segunda vía independiente de stderr (apéndice a /private/var/tmp/heroapp.log, sin pasar por launchd): si ese fichero existe tras un arranque, la biblioteca se carga en los procesos; la sandbox no es la causa (el registro dice 'SWEET permissive sandbox stand-in'); contador D-0123: DROP 4 de 80, BOOT 1 de 80"
+kind = "note"
+path = "docs/herolte-s7pm-cierre.md"
+location = "repo"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "0d396a5e982e9dd9ee48247d08d624b3bfea62c62c725d2e010d1a32bf8e8f62"
+size = 2913
+immutable = false
+note = "Nota de seguimiento: la evidencia primaria son las lecturas de solo lectura del teléfono hechas el 20-nov (herolte-hfs-read.py) y el registro min112b."
