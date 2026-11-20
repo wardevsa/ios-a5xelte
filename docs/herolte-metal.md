@@ -59,6 +59,24 @@ Panfrost on the T880 for OpenGL, over `gpu/mesa/herodrm.c`. PanVK (Scion's other
    buffers, samplers, vertex attributes as `Float4` (switched to `Int4`/`UInt4` when the library says the shader
    wants integers). It times the compile and two draws, counts pixels against the clear colour and NaNs, and on a
    timeout prints a backtrace of where it was.
+
+   On the T880 (boot-18k41..45), in order:
+   - every render pipeline of MercuryPoster compiled (0.01-2.7 s) and drew (1-6 ms), and no pixel changed. Midgard's
+     disassembly (`MIDGARD_MESA_DEBUG=shaders`) showed why: `postVertex` reads its corners from `quadVertices[6]`, an
+     `addrspace(2)` constant with an initializer, which the frontend put in scratch and never wrote -- every vertex
+     one point. air-herolte.py 8 writes a scratch global's initializer at the top of the entry point.
+   - then the colours were wrong: Midgard's writeout takes 32-bit registers and the shaders' `half4` came back as
+     two halves per float (`0.0078` = `0x3c00`, 1.0 as a half, in the high bits). air-herolte.py 10 widens a
+     fragment shader's 16-bit `store_output`.
+   - boot-18k45: **`postVertex` + `postFragment` draw the whole attachment with plausible colours** (a gradient,
+     `0.04 0.04 0.50 1` at a corner, `0.47 0.53 0.50 1` at the centre; RGBA32Float and RGBA8Unorm agree).
+     `fluidity` and `pro24` draw too; `fluidity::sdf` and `torus` with Apple's vertex stages draw nothing over the
+     harness's made-up buffers (their positions come from matrices in those buffers), and `torusFragment` costs
+     0.66 s for 32x32 pixels over them. Their real inputs come with M3.
+   - `pro24MainFragment`'s own `filter::bicubic` sampler is sampled as linear (air-herolte.py 6); Midgard has no
+     `b2i8` (Panfrost's algebraic pass makes it again from the frontend's `u2u8(b2i32)`, so Midgard lowers it after
+     its boolean lowering: 9). `shippou::one::compute` then compiles further but stays more than 90 s in Midgard's
+     register allocator (`mir_ra`): its NIR is about 73K instructions, its four materials inlined and selected.
 3. **M3: the Metal device.** Scion's `hakiosmetal_air.m` as a Metal plug-in for iOS 18's Metal.framework, and the
    kernel service that makes `MTLCreateSystemDefaultDevice` find it.
 4. **M4: MercuryPoster** draws.
