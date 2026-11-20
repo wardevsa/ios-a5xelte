@@ -48,7 +48,17 @@ Panfrost on the T880 for OpenGL, over `gpu/mesa/herodrm.c`. PanVK (Scion's other
    - booleans: 1-bit through calls, 32-bit words in and out of the stage interface.
    - packed varyings, first fit: torusVertex's 40-55 varyings in 12-16 slots instead of 40-55 (the T880 has 16).
    All 22 MercuryPoster functions translate.
-2. **M2: compute and draws on the T880** from `air_metal_test --draw...`, the results read back.
+
+   Second run on the phone (boot-18k40, with air-herolte.py): Midgard compiled `fluidity::sdfVertexShader` +
+   `sdfFragmentShader` and the draw completed (exit 0), the first MercuryPoster pipeline to run on the T880. The
+   others stopped inside `air_metal_test`, which feeds Apple's test shaders fixed shapes: `postFragment` declares a
+   `texture3d` at slot 1, `fluidity::fragmentShader` a 256-byte buffer, `torusVertex` three stage-in attributes.
+   `shippou::one::compute` (about 73K NIR instructions) kept the compiler at 199% CPU for minutes without finishing.
+2. **M2: compute and draws on the T880.** `gpu/mesa/hero-metal-test.c` (`hero_metal_test`) builds a pipeline from
+   what its functions declare, through `rwa_*` alone: textures of each declared kind and element type, 64 KB
+   buffers, samplers, vertex attributes as `Float4` (switched to `Int4`/`UInt4` when the library says the shader
+   wants integers). It times the compile and two draws, counts pixels against the clear colour and NaNs, and on a
+   timeout prints a backtrace of where it was.
 3. **M3: the Metal device.** Scion's `hakiosmetal_air.m` as a Metal plug-in for iOS 18's Metal.framework, and the
    kernel service that makes `MTLCreateSystemDefaultDevice` find it.
 4. **M4: MercuryPoster** draws.
