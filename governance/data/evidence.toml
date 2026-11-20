@@ -5004,3 +5004,18 @@ sha256 = "cc4c66af28aa8df878f4e5f42d8fee038e77730e2a48dfcb55d6fd4671c5e450"
 size = 474224
 immutable = true
 note = "Imagen min113 con libheroapp de CI 44804336062 (icon compositor nil) y fondo oficial iOS 16. El registro unificado completo se copió a /tmp/herolte-work/unifiedlog (no versionado, 950 MB)."
+
+[[evidence]]
+id = "E-0339"
+title = "min115 (herosbx=1, parche 0480): sin pánico; el volcado de los argumentos de la política 'Sandbox' de sustitución da el formato de la operación 5 (emitir extensión) tal como la llama tccd: palabra 0 = puntero a la clase de extensión ('com.apple.tcc.kTCCServiceAddressBook', y de Photos), palabra 1 = 0, palabra 2 = puntero a una cadena corta, palabra 3 = 0, palabra 4 = puntero de montón que es un BÚFER de salida (en una llamada contenía texto antiguo), palabras 5 y 6 = 0, palabra 7 = copia de la palabra 0; la operación 4 (ruta del contenedor) la llaman launchd, fsck, mount, mount_hfs, seputil y mobile_obliterator con palabra 0 = el pid (1, 2, 3, 4, 5, 6), palabra 1 = 0, palabra 2 = un búfer y palabra 3 = 0x400 (su tamaño): devuelve ENOENT, que es el 'error 2' de 'plugin has invalid sandbox or container: error 2' de PhotosFileProvider y de ScreenTimeWidgetIntentsExtension; el Director informa de que Mensajes abre y deja 'enviar mensajes' y de que Fotos sigue fallando; parche 0481: la operación 5 con clase 'com.apple.tcc.' copia en el búfer un token de forma habitual (hash de 64 hex, campos y la clase) y devuelve 0, y la operación 6 (consumir) devuelve 0 en lugar de ENOENT; las demás clases y la operación 4 siguen como antes; BOOT = min116 (kernel CI 44812069038, 602 caracteres, herosbx=1 sigue encendido para ver 'extension issued'); contadores D-0123: BOOT 6 de 80, DROP 12 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min115-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "14a6686f2d8fb10563a272ff11d05a116fe8d81d5dd200c3983613ef13630e67"
+size = 500390
+immutable = true
+note = "Imagen min115 ac9acd77, kernel CI 44809378545."
