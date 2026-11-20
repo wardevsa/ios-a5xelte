@@ -11,6 +11,7 @@ identifiers and userland messages; keep them out of git.
 import struct
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 DEV = '/dev/block/platform/155a0000.ufs/by-name/USERDATA'
@@ -18,11 +19,18 @@ BLOCK = 4096
 RING = 4 << 20
 
 
-def adb(tool, *args):
-    p = subprocess.run([tool, *args], capture_output=True, text=True)
-    if p.returncode:
-        raise SystemExit(f'adb {" ".join(args)} failed: {p.stdout} {p.stderr}')
-    return p.stdout
+def adb(tool, *args, tries=6):
+    """adb con reintentos: el USB del teléfono en TWRP se cae a menudo; entre intentos se espera a que vuelva como recovery."""
+    last = ''
+    for attempt in range(tries):
+        p = subprocess.run([tool, *args], capture_output=True, text=True)
+        if not p.returncode:
+            return p.stdout
+        last = f'{p.stdout} {p.stderr}'.strip()
+        if attempt + 1 < tries:
+            time.sleep(3)
+            subprocess.run([tool, 'wait-for-recovery'], capture_output=True, text=True, timeout=60, check=False)
+    raise SystemExit(f'adb {" ".join(args)} failed after {tries} tries: {last}')
 
 
 def main():
