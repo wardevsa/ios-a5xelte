@@ -1,0 +1,165 @@
+herolte: scenario bench v3 (0471): app launches and boot-line parameters
+
+min104 (E-0325): the scripted idle costs the same with any cap (the big cores are parked), and what the Director felt as slowness at 1664 MHz was opening apps, which the bench did not play. v3 drops idle from the default set, adds a launch scenario that taps the four dock slots and measures how long iOS keeps drawing after each tap (settle_ms), shortens paging to ten swipes, and reads its configuration from the boot line with defaults that need no argument: heroscenr (rounds, 3), heroscens (scenario mask, 11 = paging, spotlight, launch), heroscenc (cap digits, 432). heroscen only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3049,18 +3049,58 @@
+ 	return waited;
+ }
+ 
++/* 0471: "launch" scenario and the time an app takes to settle. Taps the four dock slots in turn (Phone, Safari, Messages and the fourth
++ * of the stock layout; an empty slot opens nothing and is reported as -1) and, after each tap, measures how long iOS keeps drawing:
++ * first it waits up to 1.5 s for frames to start, then until fewer than 2 frames per 300 ms (at most 6 s). That time is the closest
++ * thing to "how long the app took to open" that the kernel can see, and it is what the Director felt as slowness at 1664 MHz. */
++static void
++hs_tap(int x, int y)
++{
++	hs_touch(1, x, y);
++	hg_msleep(60);
++	hs_touch(0, x, y);
++}
++
++static int
++hs_settle(unsigned *frames_out)
++{
++	uint64_t f0 = herolte_fb_presented, t0 = mach_absolute_time(), ns = 0;
++	unsigned waited = 0;
++	bool started = false;
++	while (waited < 1500 && !started) {
++		hg_msleep(100);
++		waited += 100;
++		started = (herolte_fb_presented - f0) >= 2;
++	}
++	if (!started) {
++		*frames_out = 0;
++		return -1;
++	}
++	while (waited < 6000) {
++		uint64_t f1 = herolte_fb_presented;
++		hg_msleep(300);
++		waited += 300;
++		if (herolte_fb_presented - f1 < 2) {
++			break;
++		}
++	}
++	*frames_out = (unsigned)(herolte_fb_presented - f0);
++	absolutetime_to_nanoseconds(mach_absolute_time() - t0, &ns);
++	return (int)(ns / 1000000);
++}
++
+ static void
+ hs_play(unsigned scen)
+ {
+ 	switch (scen) {
+-	case 0:         /* paging: twenty swipes (0470; ten before), left and right */
+-		for (unsigned i = 0; i < 20; i++) {
++	case 0:         /* paging: ten swipes, left and right */
++		for (unsigned i = 0; i < 10; i++) {
+ 			hs_swipe(i % 2 ? 230 : 850, 1200, i % 2 ? 850 : 230, 1200, 240);
+ 			hg_msleep(700);
+ 		}
+ 		break;
+-	case 1:         /* spotlight: pull down, hold, push up, three times */
+-		for (unsigned i = 0; i < 6; i++) {
++	case 1:         /* spotlight: pull down, hold, push up, three times, Home */
++		for (unsigned i = 0; i < 3; i++) {
+ 			hs_swipe(540, 700, 540, 1500, 300);
+ 			hg_msleep(800);
+ 			hs_swipe(540, 1500, 540, 500, 300);
+@@ -3068,6 +3108,16 @@
+ 		}
+ 		hs_home();
+ 		break;
++	case 3:         /* launch: the four dock slots, one app at a time */
++		for (unsigned slot = 0; slot < 4; slot++) {
++			unsigned fr = 0;
++			hs_tap(180 + 360 * (int)slot, 2385);
++			int ms = hs_settle(&fr);
++			printf("HEROLTE SCEN: launch cap %u slot %u settle_ms %d frames %u\n", g2_lv[g2_cap], slot, ms, fr);
++			hs_home();
++			(void)hs_settle(&fr);
++		}
++		break;
+ 	default:        /* idle */
+ 		hg_msleep(20000);
+ 		break;
+@@ -3077,27 +3127,51 @@
+ static void
+ hs_thread(__unused void *arg, __unused wait_result_t wr)
+ {
+-	static const char *const names[] = { "paging", "spotlight", "idle" };
+-	static const unsigned order[3][3] = { { 4, 3, 2 }, { 2, 3, 4 }, { 3, 4, 2 } };      /* 0470: three rounds, each cap once per position */
+-	uint32_t settle = 0;
++	static const char *const names[] = { "paging", "spotlight", "idle", "launch" };
++	uint32_t settle = 0, rounds = 3, mask = 0xB, capsarg = 432, digits[4] = { 0 }, ncap = 0;
+ 	extern volatile uint64_t herolte_screen_off_at;
+ 	extern volatile int herolte_fg_temp_dc;
+ 	PE_parse_boot_argn("heroscen", &settle, sizeof(settle));
+ 	if (!settle) {
+ 		return;
+ 	}
++	/* 0471: the bench is configured from the boot line, with defaults that need no argument: heroscenr = rounds (3), heroscens = scenario
++	 * mask (bit 0 paging, 1 spotlight, 2 idle, 3 launch; default 11 = paging, spotlight, launch), heroscenc = caps as level digits
++	 * (4 = 2288, 3 = 1976, 2 = 1664, 1 = 1352; default 432). Round r rotates the list by r, so with three caps each one meets each position. */
++	PE_parse_boot_argn("heroscenr", &rounds, sizeof(rounds));
++	PE_parse_boot_argn("heroscens", &mask, sizeof(mask));
++	PE_parse_boot_argn("heroscenc", &capsarg, sizeof(capsarg));
++	for (uint32_t c = capsarg; c && ncap < 4; c /= 10) {
++		digits[ncap++] = c % 10;
++	}
++	for (unsigned a = 0, b = ncap ? ncap - 1 : 0; a < b; a++, b--) {
++		uint32_t x = digits[a]; digits[a] = digits[b]; digits[b] = x;      /* the digits were taken from the end */
++	}
++	for (unsigned a = 0; a < ncap; a++) {
++		if (digits[a] < 1 || digits[a] >= G2_N) {
++			ncap = 0;
++		}
++	}
++	if (!ncap || !(mask & 0xF) || rounds < 1 || rounds > 6) {
++		printf("HEROLTE SCEN: bad parameters (rounds %u mask %u caps %u), bench off\n", rounds, mask, capsarg);
++		return;
++	}
+ 	hg_msleep(settle * 1000);
+-	printf("HEROLTE SCEN: bench starts: caps 2288 1976 1664 / 1664 1976 2288 / 1976 2288 1664 MHz, scenarios paging spotlight idle, v2 (warm-up, Home, quiet wait)\n");
+-	g2_cap = 3;     /* 0470: warm-up at 1976 MHz, one paging and one spotlight, not measured: the first run of min103 read 1496 mA against about 700 afterwards */
++	printf("HEROLTE SCEN: bench starts: v3 rounds %u mask %u caps %u (warm-up, Home, quiet wait)\n", rounds, mask, capsarg);
++	g2_cap = 3;     /* warm-up at 1976 MHz, one paging and one spotlight, not measured */
+ 	hs_home();
+ 	hs_play(0);
+ 	hs_play(1);
+ 	printf("HEROLTE SCEN: warm-up done\n");
+-	for (unsigned r = 0; r < 3; r++) {
+-		for (unsigned k = 0; k < 3; k++) {
+-			g2_cap = order[r][k];
++	for (unsigned r = 0; r < rounds; r++) {
++		for (unsigned k = 0; k < ncap; k++) {
++			unsigned lvl = digits[(k + r) % ncap];
++			g2_cap = lvl;
+ 			hg_msleep(2500);
+-			for (unsigned s = 0; s < 3; s++) {
++			for (unsigned s = 0; s < 4; s++) {
++				if (!(mask & (1u << s))) {
++					continue;
++				}
+ 				if (herolte_screen_off_at != 0) {
+ 					printf("HEROLTE SCEN: screen off, bench stops\n");
+ 					g2_cap = (unsigned)G2_N - 1;
+@@ -3106,7 +3180,7 @@
+ 				hs_home();
+ 				if (s == 2) {
+ 					unsigned q = hs_quiet();
+-					printf("HEROLTE SCEN: quiet wait %u ms before idle (round %u cap %u)\n", q, r, g2_lv[order[r][k]]);
++					printf("HEROLTE SCEN: quiet wait %u ms before idle (round %u cap %u)\n", q, r, g2_lv[lvl]);
+ 				}
+ 				uint64_t fp0 = herolte_fb_presented, h0[6], ps0 = herolte_pwr_sum, pn0 = herolte_pwr_n, tr0 = g2_stat_trans, sa0 = g2_stat_sat, sm0 = g2_stat_samples;
+ 				for (unsigned b = 0; b < 6; b++) {
+@@ -3117,7 +3191,7 @@
+ 				absolutetime_to_nanoseconds(mach_absolute_time() - t0, &ns);
+ 				uint64_t pn = herolte_pwr_n - pn0;
+ 				printf("HEROLTE SCEN: end round %u cap %u MHz scen %s dur_ms %llu mA_mean %llu mA_n %llu frames %llu gaps %llu %llu %llu %llu %llu %llu temp_dc %d changes %llu saturated %llu of %llu\n",
+-				    r, g2_lv[order[r][k]], names[s], ns / 1000000, pn ? (herolte_pwr_sum - ps0) / pn : 0, pn, herolte_fb_presented - fp0,
++				    r, g2_lv[lvl], names[s], ns / 1000000, pn ? (herolte_pwr_sum - ps0) / pn : 0, pn, herolte_fb_presented - fp0,
+ 				    herolte_fb_gap_hist[0] - h0[0], herolte_fb_gap_hist[1] - h0[1], herolte_fb_gap_hist[2] - h0[2], herolte_fb_gap_hist[3] - h0[3], herolte_fb_gap_hist[4] - h0[4],
+ 				    herolte_fb_gap_hist[5] - h0[5], herolte_fg_temp_dc, g2_stat_trans - tr0, g2_stat_sat - sa0, g2_stat_samples - sm0);
+ 				hg_msleep(1500);
