@@ -13,7 +13,9 @@
 #include <objc/runtime.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 extern void herodrm_log(const char *format, ...);
 extern void NSSetUncaughtExceptionHandler(void (*handler)(id));
