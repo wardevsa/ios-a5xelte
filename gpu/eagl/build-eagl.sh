@@ -59,6 +59,9 @@ $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroapp.dylib" "$HERE/src/heroapp.c" -
   -framework Foundation -framework UIKit -framework CoreGraphics -framework ImageIO -framework IOSurface \
   -lobjc -L "$OUT/lib" -ldrm.2 -Wl,-rpath,/private/var/herolte/lib
 
+# The smallest inserted library: dyld/insertion bisect (E-0336), dropped as lib/libheroapp.dylib for one boot.
+$CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroprobe.dylib" "$HERE/src/heroprobe.c" -install_name @rpath/libheroprobe.dylib
+
 # The audio plug-in of mediaserverd, for hero-run to put in /System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver.
 mkdir -p "$OUT/audio"
 $CC -O2 -w -bundle -I"$HERE/../hakios-audio" -o "$OUT/audio/HakiosAudio" "$HERE/../hakios-audio/audio_plugin.c" \
