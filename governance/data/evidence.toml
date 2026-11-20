@@ -5049,3 +5049,18 @@ sha256 = "50f5bd62ca550f3a6b31fd574e9ae67146985e35bba6ee295159b3817929e097"
 size = 193274
 immutable = true
 note = "Imagen min118 36f83b35 con ADT live-xr.adt."
+
+[[evidence]]
+id = "E-0342"
+title = "min119 (lienzo XR 828x1792 con la ADT corregida, E-0341): el Director informa de que YA NO HAY LÍNEAS, de que los gestos funcionan, de que a los lados falta pantalla (franjas negras: el lienzo 9:19,5 sobre el panel 9:16, 'parece un Samsung S4'), de que al bajar el menú de arriba (centro de notificaciones o de control) 'se pone a pensar' y vuelve a la pantalla de inicio y a veces funciona y otras no, y pregunta por poner la resolución del iPhone 8 con esta navegación y por si se calienta más; el tiempo que 'piensa' y el regreso a inicio es un síntoma sin causa confirmada: hipótesis, sin comprobar: con franjas el tacto se normaliza sobre la tira centrada y un gesto de borde superior que empieza en la franja o en el borde se pierde o se lee como un gesto de salida; MIN121 (prueba pedida): lienzo de 750x1334 (el bueno de antes, 16:9 que llena el panel) CON navegación por gestos: ADT = la viva con solo home-button-type 1 -> 2, kernel CI 44820043395, línea de min112; BOOT = min121 (8f44b7f7…d988), mgcache.token 'g8gest'; riesgo conocido de esta combinación (docs/herolte-howto.md y mkadt_herolte.py): UIKit pinta una barra de estado ROJA (rdar:45025538) con un tamaño de pantalla de @2x que no es el del XR; min120 (lienzo XR estirado a todo el panel con sweetfb_fill=1, parche 0483, quita herogovlog para caber) se deja construida para comparar; contadores D-0123: BOOT 10 de 80, DROP 16 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min118-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "50f5bd62ca550f3a6b31fd574e9ae67146985e35bba6ee295159b3817929e097"
+size = 193274
+immutable = true
+note = "Registro de la prueba de min118/min119 (el log de la última tanda)."
