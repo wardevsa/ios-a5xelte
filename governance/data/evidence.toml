@@ -5034,3 +5034,18 @@ sha256 = "3ffd0c5ff2d23efec9ff2856d3d226e2ad0adf68b9a24d28937fc07f5ae9778e"
 size = 1114465
 immutable = true
 note = "Imagen min116 con hero-run con staged.on (CI 44815464424)."
+
+[[evidence]]
+id = "E-0341"
+title = "min118 (lienzo del iPhone XR 828x1792, navegación por gestos): el Director informa de que, en los dos arranques, la pantalla sale con líneas y otros defectos como la de un móvil con la pantalla rota, y de que le gusta la navegación por gestos y que la pantalla anterior estaba bien; el kernel NO ve ningún fallo: 11 presentaciones de 828x1792 con 'stride 3328 -> ok', 0 fallidas, sin pánico, AppleCLCD 'presented as 828x1792'; CAUSA, leída del registro: backboardd crea las superficies IOSurface con tamaños mezclados: id 3, 5, 6, 10, 12, 14 y 18 de 750x1334 (bpr 3072) y solo la id 4 y los 'SWEET FB: swap ... 828x1792' son del lienzo nuevo, de modo que UIKit y SpringBoard seguían maquetando a 750x1334 dentro de un lienzo de 828x1792; la ADT que escribí (la viva con solo dos propiedades cambiadas, subtipo 1792 y tipo de botón 2) NO cambió canvas-width y canvas-height de /device-tree/arm-io/disp0, que valían 750 y 1334 (mkadt_herolte.py los fija con el lienzo, líneas 199-200); CORRECCIÓN: min119 con esas dos propiedades a 828 y 1792; comparadas con una ADT recién hecha con --scale2, las seis propiedades de pantalla (canvas-width/height, artwork-device-subtype, artwork-scale-factor, home-button-type, display-scale) son iguales; también un mgcache.token nuevo (xr1792b) para que MobileGestalt se rehaga; BOOT = min119 (kernel CI 44820043395, línea de min118, 592 caracteres); contadores D-0123: BOOT 9 de 80, DROP 15 de 80. AUTOCRÍTICA: mi primera comprobación de la ADT miraba el subtipo, el tipo de botón y la escala y no buscaba las demás propiedades derivadas del lienzo; la comparación con una ADT recién generada era la comprobación que hacía falta desde el principio"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min118-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "50f5bd62ca550f3a6b31fd574e9ae67146985e35bba6ee295159b3817929e097"
+size = 193274
+immutable = true
+note = "Imagen min118 36f83b35 con ADT live-xr.adt."
