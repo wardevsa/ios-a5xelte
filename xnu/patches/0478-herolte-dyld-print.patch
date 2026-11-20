@@ -1,0 +1,51 @@
+herolte: herodyld=1 lets dyld print what it loads into apps and logs each libheroapp insertion (0478)
+
+E-0334/E-0335: libheroapp is in the drop zone and the kernel adds DYLD_INSERT_LIBRARIES for the applications and for assetsd, yet neither its notes (assetsd.err, /private/var/tmp/heroapp.log) nor DYLD_PRINT_LIBRARIES output appeared, and Messages still dies in CI::GLContext. The AMFI answer 0x23 lacks AMFI_DYLD_OUTPUT_ALLOW_PRINT_VARS (bit 4), so dyld ignores the DYLD_PRINT_* variables. With herodyld=1 the answer adds bit 4, the applications get DYLD_PRINT_LIBRARIES=1 and DYLD_PRINT_TO_FILE=/private/var/tmp/dyld.log, and the kernel prints "HEROLTE GL: libheroapp inserted into pid N: path" for the first 40. Off by default.
+
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -42,6 +42,7 @@
+  */
+ #define AMFI_DYLD_OUTPUT_ALLOW_AT_PATH                  (1ull << 0)
+ #define AMFI_DYLD_OUTPUT_ALLOW_PATH_VARS                (1ull << 1)
++#define AMFI_DYLD_OUTPUT_ALLOW_PRINT_VARS               (1ull << 4)
+ #define AMFI_DYLD_OUTPUT_ALLOW_FAILED_LIBRARY_INSERTION (1ull << 5)
+ 
+ static int hgl_mode = -1;
+@@ -64,8 +65,11 @@
+ 	if (!app && (hgl_pid < 0 || proc_selfpid() != hgl_pid) && (hgl_sb_pid < 0 || proc_selfpid() != hgl_sb_pid)) {
+ 		return 0;
+ 	}
++	/* 0478: herodyld=1 also lets the DYLD_PRINT_* variables work (bit 4), as dyld ignored DYLD_PRINT_LIBRARIES with only 0x23 (E-0335) */
++	int dyld_print = 0;
++	PE_parse_boot_argn("herodyld", &dyld_print, sizeof(dyld_print));
+ 	return AMFI_DYLD_OUTPUT_ALLOW_AT_PATH | AMFI_DYLD_OUTPUT_ALLOW_PATH_VARS |
+-	       AMFI_DYLD_OUTPUT_ALLOW_FAILED_LIBRARY_INSERTION;
++	       AMFI_DYLD_OUTPUT_ALLOW_FAILED_LIBRARY_INSERTION | (dyld_print ? AMFI_DYLD_OUTPUT_ALLOW_PRINT_VARS : 0);
+ }
+ 
+ /*
+@@ -184,6 +188,23 @@
+ 			vnode_put(appvp);
+ 			hgl_app_pids[hgl_app_next++ % HGL_APP_PIDS] = pid;
+ 			extra[0] = "DYLD_INSERT_LIBRARIES=" HGL_APP_LIB;
++			/*
++			 * 0478: herodyld=1: dyld prints every image it maps, and why an inserted one failed, into /private/var/tmp/dyld.log (hero-run creates it
++			 * with mode 0666 so the apps, which run as mobile, can append), and the kernel logs each insertion with its path.
++			 */
++			int dyld_log = 0;
++			PE_parse_boot_argn("herodyld", &dyld_log, sizeof(dyld_log));
++			if (dyld_log) {
++				static unsigned shown;
++				if (shown++ < 40) {
++					printf("HEROLTE GL: libheroapp inserted into pid %d: %s\n", pid, path);
++				}
++				if (max >= 3) {
++					extra[1] = "DYLD_PRINT_LIBRARIES=1";
++					extra[2] = "DYLD_PRINT_TO_FILE=/private/var/tmp/dyld.log";
++					return 3;
++				}
++			}
+ 			return 1;
+ 		}
+ 	}

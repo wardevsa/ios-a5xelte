@@ -973,6 +973,14 @@ assetsd_stderr_to_file(void)
          close(ef);
       }
    }
+   {
+      /* 0478: dyld's own log of what the applications and assetsd load (kernel boot-arg herodyld=1), writable by everyone */
+      int df = open("/private/var/tmp/dyld.log", O_WRONLY | O_CREAT | O_APPEND, 0666);
+      if (df >= 0) {
+         fchmod(df, 0666);
+         close(df);
+      }
+   }
    for (size_t i = 0; i < sizeof(plists) / sizeof(plists[0]); i++) {
       CFURLRef url = CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8 *)plists[i], (CFIndex)strlen(plists[i]), false);
       CFReadStreamRef rs = url ? CFReadStreamCreateWithFile(NULL, url) : NULL;
