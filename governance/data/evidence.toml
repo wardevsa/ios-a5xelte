@@ -4764,3 +4764,18 @@ sha256 = ""
 size = 0
 immutable = false
 note = "Detectado al leer el bucle del hilo de energía para diseñar el gobernador nuevo: 'PE_parse_boot_argn(herocycle...)' aparece dos veces en la función con dos significados. Una prueba de que hubo ejecución real son las líneas POWER: cycle de los registros min89, min92c, min94 y min95. Lección: antes de añadir un parámetro de arranque, buscar si el nombre ya se usa (grep del nombre en todo el árbol)."
+
+[[evidence]]
+id = "E-0323"
+title = "min102 (0467, herogov=2, gobernador v2, D-0112): FALLA el criterio de éxito fijado de antemano en docs/herolte-governor-v2.md (corriente en uso menor que la de min100, 1422 mA): la corriente en uso con los núcleos grandes a 1 GHz o más es una mediana de 1646 mA (n=20; media de todas las muestras 1481 mA), peor que min100 (1422) y min101 (1106) y solo un 8 % mejor que el 2288 MHz fijo de min98 (1791); reparto de frecuencias (muestras de 5 s): 728 MHz 9 %, 1664 MHz 4 %, 1976 MHz 13 %, 2288 MHz 72 %; la fluidez medida (fotogramas pedidos por iOS, ventanas de 10 o más) mediana 14,8 fps (n=14), sin relación aparente con la frecuencia; el sistema arranca y funciona: 55 líneas HEROLTE GOV2, cambios de reloj en 1,6-4,7 ms, sin ningún fallo, sin pánico; el Director dice que se calienta (41 °C en TWRP, menos que a 2600 MHz fijo), que es usable y que 'no se nota rápido'; CAUSA PROBABLE (hipótesis): un gobernador por utilización supone que más frecuencia da más trabajo, pero el núcleo grande aparece al 80-100 % en todas las pruebas aunque los fps no cambien con la frecuencia (11,6 a 2288, 12,7 a 1976, 13,1 a 1664): el hilo de dibujado puede esperar memoria o sincronizarse y eso cuenta como ocupado, así que la utilización sube la frecuencia sin ganar fluidez; FALLO DE CÓDIGO (mío): last_log y hold_until estaban en ticks de mach_absolute_time y se compararon con valores en nanosegundos: el resumen cada 10 s no se imprimió nunca y el tiempo mínimo entre bajadas fue de ~2,5 s en vez de 60 ms, lo que sesga el reparto hacia 2288 MHz (corregido en 0469): por tanto parte del 72 % en 2288 MHz es del fallo y parte es inherente a la señal; conclusión: herogov=2 no pasa a producción; la producción sigue siendo min100 (1976) o min101 (1664)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min102-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "f8237c99a29b723e6930a1193271d64c5ab8f89f5511a8f0c1d9a30117676172"
+size = 227137
+immutable = true
+note = "Imagen min102 7f8769f3, kernel CI 44701341191 (0467). Una sola tanda; sesión de uso de duración distinta a las anteriores (comparación aproximada). Las corrientes se filtran igual en las cuatro pruebas (CPU de los grandes a 1 GHz o más). La hipótesis de la espera de memoria se contrastará con el banco de escenarios (reparto del tiempo entre fotogramas por tope) y, más adelante, con instrucciones por ciclo del contador de rendimiento."
