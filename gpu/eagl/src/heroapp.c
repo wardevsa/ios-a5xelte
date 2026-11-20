@@ -154,14 +154,12 @@ look_at_coreimage(void)
  */
 static id (*ci_init_original)(id, SEL, id);
 static id ci_software_key;
-static CGContextRef ci_cg;
-static __thread int ci_in_cg;
 
 /*
- * min113d (E-0337): asking for kCIContextUseSoftwareRenderer was not enough here: Messages' MobileIcons still went through
- * -[CIContext initWithOptions:] -> +internalContextWithEAGLContext:options: -> CI::GLContext and died on its empty table of OpenGL ES functions.
- * CIContext has initWithCGContext:options: (a context backed by a CGContext, rendered by CoreImage's own CPU code): a 1x1 bitmap context is
- * given to it, so that CoreImage never builds a GL context. A thread-local flag keeps it from coming back into this method.
+ * min113d (E-0337): asking for the software renderer was not enough, and a CGContext-backed context (initWithCGContext:options:) ends in the same
+ * CI::GLContext: in this CoreImage every context is GL-based and fills the table of OpenGL ES functions that no GL driver in an app fills. Messages
+ * dies in MobileIcons' shared icon compositor (+[CIContext _MI_sharedIconCompositorContext], and IconServices' twin _IS_...), which only wants a
+ * context to scale icons with Lanczos: both are answered with nil, and what MobileIcons does without it is what min113e shows.
  */
 static id
 ci_init(id self, SEL command, id options)
@@ -172,21 +170,16 @@ ci_init(id self, SEL command, id options)
    }
    id yes = ((id (*)(id, SEL, signed char))objc_msgSend)((id)objc_getClass("NSNumber"), sel_registerName("numberWithBool:"), 1);
    ((void (*)(id, SEL, id, id))objc_msgSend)(all, sel_registerName("setObject:forKey:"), yes, ci_software_key);
-   if (!ci_in_cg) {
-      if (ci_cg == NULL) {
-         CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-         ci_cg = CGBitmapContextCreate(NULL, 1, 1, 8, 4, space, (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
-         CGColorSpaceRelease(space);
-         hero_note("libheroapp: %s: CGContext for CoreImage %s", getprogname(), ci_cg ? "made" : "NOT made");
-      }
-      if (ci_cg != NULL) {
-         ci_in_cg = 1;
-         id result = ((id (*)(id, SEL, CGContextRef, id))objc_msgSend)(self, sel_registerName("initWithCGContext:options:"), ci_cg, all);
-         ci_in_cg = 0;
-         return result;
-      }
-   }
    return ci_init_original(self, command, all);
+}
+
+static id
+no_icon_context(id self, SEL command)
+{
+   (void)self;
+   (void)command;
+   hero_note("libheroapp: %s: icon compositor context refused", getprogname());
+   return nil;
 }
 
 /*
@@ -371,6 +364,17 @@ install(void)
    if (key != NULL && init != NULL) {
       ci_software_key = *key;
       ci_init_original = (id (*)(id, SEL, id))method_setImplementation(init, (IMP)ci_init);
+   }
+   {
+      Class ci_class = objc_getClass("CIContext");
+      static const char *const names[] = { "_MI_sharedIconCompositorContext", "_IS_sharedIconCompositorContext" };
+      for (int k = 0; k < 2 && ci_class != Nil; k++) {
+         Method m = class_getClassMethod(ci_class, sel_registerName(names[k]));
+         if (m != NULL) {
+            method_setImplementation(m, (IMP)no_icon_context);
+            hero_note("libheroapp: %s: %s answers nil", getprogname(), names[k]);
+         }
+      }
    }
    if (strcmp(getprogname(), "assetsd") == 0)
       look_at_assetsd();
