@@ -733,4 +733,49 @@ change('air_metal_test: attribute 2', 'air_metal_test.c',
 
    shape->vertex_layout[l->pos.buffer]''')
 
+# 6. On the T880 (boot-18k41). pro24MainFragment's own sampler asks for filter::bicubic, which Scion refuses because
+# Gallium has no such filter; a wallpaper is better sampled as linear than not drawn, which is what air_run does too.
+change('bicubic sampled as linear: no refusal', 'air_metal.c',
+       '''   if (a->mag_filter == AIR_SAMPLER_BICUBIC || a->min_filter == AIR_SAMPLER_BICUBIC) {
+      say(why, why_size, "the shader's own sampler at index %u asks for filter::bicubic, "
+                         "which neither MTLSamplerDescriptor nor this GPU has", index);
+      return false;
+   }
+''',
+       '''   /* HEROLTE: filter::bicubic is sampled as linear (the table below), as air_run does: MercuryPoster's
+    * pro24MainFragment asks for it, and Gallium has no bicubic filter. */
+''')
+change('bicubic sampled as linear: table', 'air_metal.c',
+       '''      [AIR_SAMPLER_LINEAR] = RWA_FILTER_LINEAR,
+   };''',
+       '''      [AIR_SAMPLER_LINEAR] = RWA_FILTER_LINEAR,
+      [AIR_SAMPLER_BICUBIC] = RWA_FILTER_LINEAR,   /* HEROLTE */
+   };''')
+
+# 7. Midgard has no b2i8 ("MESA: error: Unhandled ALU op b2i8", shippou::one::compute, boot-18k41): the frontend's 8-bit
+# integers made from booleans (uchar flags) are made at 32 bits and narrowed after, which Midgard and softpipe both have.
+change('b2i8 at 32 bits: callback', 'air_metal.c',
+       '''static void
+finalize_for_gallium(nir_shader *nir, struct pipe_screen *screen, unsigned ubo_base)
+{''',
+       '''/* HEROLTE: which ALU instructions nir_lower_bit_size widens: b2i8, which Midgard cannot emit. */
+static unsigned
+herolte_widen_bit_size(const nir_instr *instr, void *data)
+{
+   (void)data;
+   if (instr->type != nir_instr_type_alu)
+      return 0;
+   return nir_instr_as_alu(instr)->op == nir_op_b2i8 ? 32 : 0;
+}
+
+static void
+finalize_for_gallium(nir_shader *nir, struct pipe_screen *screen, unsigned ubo_base)
+{''')
+change('b2i8 at 32 bits: pass', 'air_metal.c',
+       '''   NIR_PASS(_, nir, nir_lower_system_values);
+''',
+       '''   NIR_PASS(_, nir, nir_lower_bit_size, herolte_widen_bit_size, NULL);   /* HEROLTE: b2i8 */
+   NIR_PASS(_, nir, nir_lower_system_values);
+''')
+
 print('air-herolte: ' + ', '.join(done))
