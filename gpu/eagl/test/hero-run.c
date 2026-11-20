@@ -1118,6 +1118,13 @@ main(int main_argc, char **main_argv)
 {
    if (main_argc > 1 && strcmp(main_argv[1], "--register-apps") == 0)
       return register_apps(main_argc, main_argv);
+   /*
+    * min114 (E-0336): dyld, told to insert /private/var/herolte/lib/libheroapp.dylib into MobileSMS and assetsd without forgiving a failure, ended
+    * them with "tried: '...' (errno=13)": the drop zone's directory is root's with mode 0744 (no search bit for others), and those processes
+    * run as mobile; backboardd is root and never noticed. A search bit lets mobile reach the libraries.
+    */
+   chmod("/private/var/herolte", 0755);
+   chmod("/private/var/herolte/lib", 0755);
    remove_listed_files();
    disable_bluetooth_audio();
    install_audio_plugin();

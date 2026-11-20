@@ -295,7 +295,8 @@ def main():
             print('owner flags', hex(rec[41]), 'special', be('I', rec, 44)[0], 'type/creator', rec[64:72],
                   'rsrc size', be('Q', rec, 168)[0])
         else:
-            print('folder', cnid)
+            uid, gid = be('II', rec, 32)
+            print('folder', cnid, oct(be('H', rec, 32 + 10)[0]), 'uid', uid, 'gid', gid)
     elif cmd == 'get':
         c, m, (size, exts) = file_info(rec)
         exts = fs.all_extents(exts, c, 0)
