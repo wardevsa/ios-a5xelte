@@ -4884,3 +4884,18 @@ sha256 = "7f1ca3ffee52de1e0c813341f0e67c156e9a334fc0bc18bd89ec4795c293e6eb"
 size = 19055
 immutable = false
 note = "Informe de Apple, fuera de git."
+
+[[evidence]]
+id = "E-0331"
+title = "min109 (cambio de gobernador en caliente, D-0120): sin pánico del kernel, el cambio v1/v2/fijo funciona (seis cambios, ningún fallo del cambio de reloj) y se miden tres políticas con orden rotado, 3 rondas; con los resultados de min108 (E-0329) se agrupan 7 ejecuciones de v2 y de fijo por escenario y 3 de v1; PAGINADO, corriente media por ejecución: v2 1370 mA (n=7), fijo 1413 (n=7), v1 1467 (n=3): v2 frente a fijo -3,0 % (IC95 bootstrap -10,6 % a +7,6 %), v2 frente a v1 -6,6 % (-13,4 % a +0,3 %), v1 frente a fijo +3,9 % (-4,1 % a +15,2 %): NINGUNA diferencia es significativa; BÚSQUEDA: v2 843 mA, fijo 966, v1 1147: v2 frente a fijo -12,7 % (IC95 -31,8 % a +14,3 %), v2 frente a v1 -26,5 % (-41,4 % a -4,7 %, el único intervalo que excluye el cero, con n=3 de v1 y dos ejecuciones de v1 de 1210 y 1319 mA), v1 frente a fijo +18,7 % (-8,8 % a +50,9 %); FLUIDEZ del paginado (intervalos de 120 ms o más): v2 22,8 % en min109 y 23,7 % en min108, frente a 14,2 % (fijo, las dos veces) y 13,9 % (v1): el v2 empeora el paginado de forma reproducida en dos arranques, y v1 y fijo se parecen; en la búsqueda no hay diferencia de espaciado (10,8 % a 11,7 % de 120 ms o más). CONSECUENCIAS: (1) el gobernador de min100 (v1) no es peor que un tope fijo en estos escenarios (es lo esperable: con la carga continua nunca baja); (2) el v2 ahorra como mucho unos pocos por ciento de corriente, no significativos, a cambio de un paginado más lento: no compensa; (3) ningún gobernador ha mostrado todavía un ahorro significativo en carga, lo que sugiere que en estos escenarios la corriente la fija la carga y no la política, y que el margen de un gobernador está en las transiciones entre carga y reposo, que el guion no estresa; (4) la hipótesis pendiente es la señal (instrucciones por ciclo) y se prueba con la PMU, no con otro ajuste de umbrales. LÍMITES: n de 3 a 7 por celda, 2 a 6 muestras de corriente por ejecución, dos sesiones; los IC son de ejecuciones, no de muestras"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min109-herolog.txt"
+location = "scratch"
+created = "2026-11-20"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "1b9c83dcf4f45ea271cb5e8ad2eb86299670ac318019e9688b8bdb2bd8319293"
+size = 339261
+immutable = true
+note = "Imagen min109 0bec5ad1, kernel CI 44746817379. Análisis conjunto con min108 (E-0329)."
