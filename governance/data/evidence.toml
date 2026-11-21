@@ -5259,3 +5259,18 @@ sha256 = "91cc81b39244b781b045d1c17728d29ac5c98e330e7891e904a9da03d7e76605"
 size = 30339
 immutable = true
 note = "Informe de S7GE Lab (copia en scratch, fuera de git)."
+
+[[evidence]]
+id = "E-0356"
+title = "S7GE Lab con pthread_setspecific(20) en setCurrentContext (E-0355): MISMO resultado (context ok, storage false, GL_RENDERER nil, program linked 0), sin cierre; la hipótesis del hueco 20 NO se confirma (o no basta); las llamadas gl* de la app siguen sin llegar a Mesa; CAMBIO DE ENFOQUE que no depende de cómo busca el contexto el OpenGLES del sistema: libheroapp (que el kernel inserta en cada app) lleva ahora etiquetas de interposición de dyld (__DATA,__interpose, generadas de OpenGLES.tbd por tools/gen_app_interpose.py, todas las gl* entradas) que desvían cada gl* de la aplicación a la exportación del mismo nombre de libheroeagl-app.dylib (enlazadas con dlsym tras cargarlo) y, mientras no está cargado, a la del sistema; DROP 30 de 80 (sin BOOT) con libheroapp de CI 44912186317; PRUEBA: abrir S7GE Lab: GL_RENDERER con texto y storage true = el desvío funciona; cierre = heroapp-crash.txt; contadores D-0123: BOOT 17 de 80, DROP 30 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n2-s7ge-lab.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "7bc61f5770b6f156747631d147baadfaae14990d42fb902fe653c97332e92f3b"
+size = 39518
+immutable = true
+note = "Informe de S7GE Lab (copia en scratch, fuera de git)."
