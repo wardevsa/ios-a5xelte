@@ -453,7 +453,7 @@ herolte_look_at_attachments(NSArray *works)
 	}
 }
 
-@implementation HakiosMetalCommandBuffer
+@implementation HakiosMetalCommandBuffer {
 ''')
 
 print('metal-herolte: ' + ', '.join(done))
