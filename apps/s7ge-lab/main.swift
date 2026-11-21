@@ -290,28 +290,50 @@ final class LabController: UIViewController {
     private var benchText = ""
 
     @objc private func runBench() {
-        guard let device = MTLCreateSystemDefaultDevice(), let bench = MetalBench(device: device) else { benchText = "Banco Metal: no hay dispositivo"; refresh(); return }
-        benchText = "Banco Metal: en marcha (unos 25 s, la pantalla se queda quieta)..."
+        guard let device = MTLCreateSystemDefaultDevice(), let probe = MetalBench(device: device) else { benchText = "Banco Metal: no hay dispositivo"; refresh(); return }
+        _ = probe
+        benchText = "Banco Metal H1b: en marcha (tres pasadas y la presentacion, unos 70 s, la pantalla se queda quieta)..."
         refresh()
         gl.setPaused(true); strip?.setPaused(true)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self = self else { return }
-            let seconds = 2.0
-            bench.run(seconds: seconds)
-            var rows = bench.rows
-            // the same (a)-(c) through OpenGL ES
-            for (kind, name) in [(0, "a clear"), (1, "b 1 triangle"), (48, "c 48 overdrawn triangles")] {
-                if let (n, ms, px) = self.gl.benchOffscreen(kind: kind, seconds: seconds) {
-                    let expect: [UInt8] = kind == 0 ? [64, 128, 191, 255] : [255, 0, 0, 255]   // RGBA
-                    let ok = zip(px, expect).allSatisfy { abs(Int($0) - Int($1)) <= 3 }
-                    rows.append(BenchRow(api: "GLES", name: name, ok: ok, iterations: n, totalMs: ms, note: "centre RGBA \(px)"))
-                } else {
-                    rows.append(BenchRow(api: "GLES", name: name, ok: false, iterations: 0, totalMs: 0, note: "no context"))
+            let seconds = 1.5, passes = 3
+            var order: [String] = [], samples: [String: [BenchRow]] = [:]
+            func add(_ r: BenchRow) {
+                let key = r.api + " " + r.name
+                if samples[key] == nil { order.append(key) }
+                samples[key, default: []].append(r)
+            }
+            for _ in 0..<passes {
+                guard let bench = MetalBench(device: device) else { break }
+                bench.run(seconds: seconds)
+                bench.rows.forEach(add)
+                for (kind, name) in [(0, "a clear"), (1, "b 1 triangle"), (48, "c 48 overdrawn triangles")] {
+                    if let (n, ms, px) = self.gl.benchOffscreen(kind: kind, seconds: seconds) {
+                        let expect: [UInt8] = kind == 0 ? [64, 128, 191, 255] : [255, 0, 0, 255]   // RGBA
+                        let ok = zip(px, expect).allSatisfy { abs(Int($0) - Int($1)) <= 3 }
+                        add(BenchRow(api: "GLES", name: name, ok: ok, iterations: n, totalMs: ms, note: "centre RGBA \(px)"))
+                    } else {
+                        add(BenchRow(api: "GLES", name: name, ok: false, iterations: 0, totalMs: 0, note: "no context"))
+                    }
                 }
             }
-            var lines = ["Banco Metal (512x512 fuera de pantalla, \(Int(seconds)) s por prueba; ms/it = commit hasta waitUntilCompleted, o glFinish)", "device \(device.name)"]
-            lines += rows.map { $0.line }
-            lines.append("PASS \(rows.filter { $0.ok }.count) de \(rows.count)")
+            // presentation, full screen, at the panel's pixel size
+            let pv = PresentView(frame: self.view.bounds)
+            self.view.addSubview(pv)
+            if let bench = MetalBench(device: device) { add(bench.presentTest(view: pv, seconds: 4)) }
+            pv.removeFromSuperview()
+            var lines = ["Banco Metal H1b (512x512 fuera de pantalla, \(seconds) s por prueba, \(passes) pasadas; ms/it = commit a waitUntilCompleted, o glFinish)", "device \(device.name)",
+                         "prueba                              todas  ms/it min / media / max    /s (media)"]
+            var passed = 0
+            for key in order {
+                let rs = samples[key]!
+                let ms = rs.map { $0.msPerIteration }, ok = rs.allSatisfy { $0.ok }
+                if ok { passed += 1 }
+                let mean = ms.reduce(0, +) / Double(ms.count)
+                lines.append(String(format: "%-34@ %@ %9.2f / %8.2f / %8.2f  %8.1f  %@", key as NSString, (ok ? "PASS" : "FAIL") as NSString, ms.min() ?? 0, mean, ms.max() ?? 0, mean > 0 ? 1000 / mean : 0, rs.last!.note as NSString))
+            }
+            lines.append("PASS \(passed) de \(order.count)")
             self.benchText = lines.joined(separator: "\n")
             if let data = (self.benchText + "\n---\n").data(using: .utf8) {
                 let path = "/private/var/tmp/s7ge-bench.txt"
