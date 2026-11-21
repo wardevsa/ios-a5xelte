@@ -5673,3 +5673,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Causa por lectura del código y del contenido de metal.allow en el teléfono; la prueba en el teléfono viene después."
+
+[[evidence]]
+id = "E-0385"
+title = "EL ARREGLO DE E-0384 NO SE INSTALÓ: tras arrancar con el HeroMetal corregido en la zona de drop (DROP 51), el registro del kernel dice 'hero-run: Metal plug-in: drop zone 86304 bytes, Extensions 86304 bytes' y NINGUNA línea 'put'; en el registro no hay ninguna línea 'hero-metal' de Flappy Bird (el viejo complemento sigue instalado) y Flappy se cierra igual (56 registros; el último pid 349, Jet create_program); CAUSA (mía): install_metal_plugin (viene de upstream) solo instala si el tamaño difiere o si el fichero de la zona de drop es MÁS NUEVO que el instalado: mi arreglo cambió los bytes sin cambiar el tamaño (86304 los dos) y el instalado tenía hora posterior a la del fichero de la zona, así que se saltó la instalación; ARREGLO: hero-run compara los bytes cuando el tamaño coincide e instala si difieren (y anota 'same size, different bytes: installing' o 'the installed one has the same bytes'); un primer intento de edición cayó por error en install_audio_plugin (misma condición) y no compiló; deshecho y rehecho en la función de Metal (la CI fallida lo dijo); CI de userland 44945227217: success; DROP 52 de 80 (sin BOOT): autorun = hero-run nuevo; el HeroMetal de la zona de drop es el de DROP 51 (cmp idéntico al de la CI); PRUEBA: arrancar iOS una vez (hero-run corre al arrancar y debe decir 'installing'), abrir Flappy; contadores D-0123: BOOT 19 de 80, DROP 52 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n23.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "678cae49b5ff872fb904e97b03917349c28bd83c92d13b62bae54da2c1374936"
+size = 1413760
+immutable = true
+note = "Registro del kernel con 'drop zone 86304 bytes, Extensions 86304 bytes' (scratch)."

@@ -92,3 +92,12 @@ llamada hecha desde el constructor daba nil sin línea del complemento. La confi
    `metal/HeroMetal` y `metal/Info.plist`; hero-run los instala al arrancar. Es un cambio en código de userland, no un parche del kernel (Nivel 2).
    Pido a Pioxi: arrancar y abrir Flappy una vez. Esperado en el registro: `hero-metal: bundle loaded in Flappy Bird` y `asks for a device`.
    No propongo D-0126 todavía: el arreglo está dentro de D-0123 (DROP); si funciona basta con la evidencia.
+
+### V.4 El arreglo de V.3 no se había instalado (E-0385)
+
+Tras arrancar con el HeroMetal corregido en la zona de drop: `hero-run: Metal plug-in: drop zone 86304 bytes, Extensions 86304 bytes`, sin línea `put`;
+sin líneas `hero-metal` de Flappy; Flappy se cierra igual. Causa mía: el `install_metal_plugin` de upstream solo instala si el tamaño difiere o la zona de drop
+es más nueva; mi arreglo no cambia el tamaño y el instalado era más reciente. Arreglo: comparar bytes (DROP 52, `autorun` nuevo; Nivel 2). Un primer intento de
+edición cayó por error en `install_audio_plugin` y rompió la compilación; lo detectó la CI y lo rehice en la función correcta. Pendiente: otro arranque y
+abrir Flappy una vez. Sugerencia para el orquestador, si ve de nuevo ese código de upstream: su criterio de «instalar» (tamaño y hora) falla con cualquier
+cambio que no varíe el tamaño; conviene decírselo a quien mantiene ese repositorio.
