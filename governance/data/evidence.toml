@@ -5334,3 +5334,18 @@ sha256 = "75462c7c266d71b9e6f2e1d398c6ae92501e66daf50e8aecfb6b6a70db0a8c72"
 size = 16242
 immutable = true
 note = "heroapp-crash.txt (scratch)."
+
+[[evidence]]
+id = "E-0361"
+title = "S7GE Lab con fase de relleno (E-0360), a la primera sin cierre: 'frames 119.5 per second (1 triangle 119.5, 48 overdrawn triangles 117.6)': los dos ritmos son casi iguales y rondan 120, que parece un techo (temporizador/presentación) y no el límite de la GPU, así que NO se sabe aún cuánto aguanta la GPU: hace falta una carga mayor o desactivar el límite; Flappy Bird (el Director: es la app que se cierra) muere con SIGABRT (kernel: 'CRASH Flappy Bird[292] sig 6 ... reason ns 2 code 0x6 (none)', pc 0x1cc1eb198, lr 0x1db77a5f8), SIN texto de excepción de Objective-C en heroapp.log (solo 'loaded' y los avisos habituales): es un abort() directo o una aserción, no una NSException; libheroapp no lo registraba (solo SIGSEGV/BUS/ILL/TRAP); ACCIÓN (DROP 33 de 80, sin BOOT): libheroapp de CI 44920286673 registra también SIGABRT en heroapp-crash.txt con imagen, desplazamiento y símbolo; PRUEBA: abrir Flappy Bird, que se cierra, y volver a TWRP; contadores D-0123: BOOT 18 de 80, DROP 33 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n6-s7ge-lab.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "dfb82df2ed404a86c7661ea10f3ca5b5a54a2916dd09b3b5e3009f1e4f54fe26"
+size = 114749
+immutable = true
+note = "Informe de S7GE Lab con los dos ritmos (scratch)."
