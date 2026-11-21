@@ -1129,4 +1129,44 @@ change('function constants by name', 'air_to_nir.c',
             }
          }''')
 
+# 14. Constant-buffer loads at constant offsets moved to the top of the function, out of every if. Panfrost pushes such
+# loads into uniform registers (B2L_PAN_PUSH_ALL); one it does not push is a LD_UBO, which on these Mali reads zeros
+# for the driver-uploaded constant buffers (ios-b1lte B1L-0063). fluidity::sdfVertexShader reads its shapes' offsets
+# inside the branch its bool picks: on the T880 every shape kept its rotation and lost its offset, all of them drawn
+# about one point -- a fan instead of the fluid (boot-18k56, the SDF attachment saved and looked at on the PC). A load
+# of this kind has no side effect and reads what it would read anywhere in the function.
+change('constant-buffer loads hoisted: callback', 'air_metal.c',
+       '''/* HEROLTE: an 8- or 16-bit load_ubo as 32-bit loads of the words that hold it, each byte or half shifted out. */''',
+       '''/* HEROLTE: a load_ubo of a constant block and offset outside the first block, made again at the top of the function */
+static bool
+herolte_hoist_ubo_load(nir_builder *b, nir_intrinsic_instr *intr, void *data)
+{
+   (void)data;
+   if (intr->intrinsic != nir_intrinsic_load_ubo || !nir_src_is_const(intr->src[0]) ||
+       !nir_src_is_const(intr->src[1]))
+      return false;
+   nir_function_impl *impl = nir_cf_node_get_function(&intr->instr.block->cf_node);
+   if (intr->instr.block == nir_start_block(impl))
+      return false;
+   b->cursor = nir_before_impl(impl);
+   nir_def *v = nir_load_ubo(b, intr->def.num_components, intr->def.bit_size,
+                             nir_imm_int(b, nir_src_as_uint(intr->src[0])),
+                             nir_imm_int(b, nir_src_as_uint(intr->src[1])),
+                             .access = nir_intrinsic_access(intr), .align_mul = nir_intrinsic_align_mul(intr),
+                             .align_offset = nir_intrinsic_align_offset(intr),
+                             .range_base = nir_intrinsic_range_base(intr), .range = nir_intrinsic_range(intr));
+   nir_def_replace(&intr->def, v);
+   return true;
+}
+
+/* HEROLTE: an 8- or 16-bit load_ubo as 32-bit loads of the words that hold it, each byte or half shifted out. */''')
+change('constant-buffer loads hoisted: pass', 'air_metal.c',
+       '''            NULL);   /* HEROLTE: 8/16-bit constant-buffer loads */
+''',
+       '''            NULL);   /* HEROLTE: 8/16-bit constant-buffer loads */
+   NIR_PASS(_, nir, nir_opt_constant_folding);
+   NIR_PASS(_, nir, nir_shader_intrinsics_pass, herolte_hoist_ubo_load, nir_metadata_none,
+            NULL);   /* HEROLTE: out of every if, to be pushed */
+''')
+
 print('air-herolte: ' + ', '.join(done))
