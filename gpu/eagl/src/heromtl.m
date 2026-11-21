@@ -12,6 +12,7 @@
 #import <IOSurface/IOSurfaceRef.h>
 #import <OpenGLES/EAGL.h>
 #import <OpenGLES/ES2/gl.h>
+#import <OpenGLES/ES2/glext.h>
 #import <objc/runtime.h>
 #import <fcntl.h>
 #import <stdarg.h>
