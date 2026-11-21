@@ -5349,3 +5349,18 @@ sha256 = "dfb82df2ed404a86c7661ea10f3ca5b5a54a2916dd09b3b5e3009f1e4f54fe26"
 size = 114749
 immutable = true
 note = "Informe de S7GE Lab con los dos ritmos (scratch)."
+
+[[evidence]]
+id = "E-0362"
+title = "Flappy Bird (pila de libheroapp, SIGABRT): abort() <- err() de libsystem_c <- Jet +0x7214 '_ZN18jet_context_OpenGL29create_texture_from_IOSurfaceEjjj18jet_texture_formatj' <- SpriteKit +0x3ff38 <- SpriteKit +0xaeb8c (cola de libdispatch) ...; es decir, SpriteKit (el motor 2D de Apple), al no haber Metal, elige su ruta OpenGL ES (Jet) y en create_texture_from_IOSurface pide al EAGLContext del sistema texImageIOSurface y, al fallar, llama a err(), que aborta; ESA llamada es una de las que implementa nuestro puente (eagl.m texImageIOSurface); HIPÓTESIS (sin comprobar): con appgl.on incluyendo Flappy Bird, libheroapp carga el puente, que sustituye initWithAPI:/texImageIOSurface y desvía las gl*, y SpriteKit funciona sobre Mesa; ACCIÓN (DROP 34 de 80, sin BOOT): appgl.on = S7GELab y Flappy Bird (un nombre por línea); PRUEBA: abrir Flappy Bird; si falla de otro modo, heroapp-crash.txt/heroeagl.log; contadores D-0123: BOOT 18 de 80, DROP 34 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n7-heroapp-crash.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "0ce584765da2ab6b4ac0d6e7e32aedfe1f0b9c4bfb49756b768a82c91e720252"
+size = 20540
+immutable = true
+note = "heroapp-crash.txt con la pila de Flappy Bird (scratch)."
