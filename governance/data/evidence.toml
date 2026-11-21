@@ -5454,3 +5454,15 @@ sha256 = "ad9fca93e8a8b276094bd5aa2c95bc6f3e87a7c8024ebd6ba1d5b764621c96bb"
 size = 1220879
 immutable = true
 note = "heroeagl.log (scratch)."
+
+[[evidence]]
+id = "E-0369"
+title = "ANÁLISIS DE Jet EN LA CACHÉ DE dyld (copia local de iOS 16, desensamblado con capstone; la copia no trae símbolos): el cierre de Flappy Bird está en Jet +0x7590, la función (Jet +0x7474, dirección de caché 0x1ef5c5474) que crea un 'jet_function' : lee this[0x68] (el contexto GL) y llama a un ayudante de compilación (0x1ef5bf198) que, si su argumento de TEXTO FUENTE del sombreador (x2) es NULL, anota un error y devuelve 0 sin llamar a ninguna función GL, por lo que create_function devuelve NULL y create_program (Jet +0x7524) hace dynamic_cast de ese NULL: coincide con que no haya ninguna llamada glShaderSource/glCreateShader en heroeagl.log (E-0366); es decir, SpriteKit pasa a Jet un texto de sombreador NULO; HIPÓTESIS (sin comprobar): SpriteKit lee ese texto de ficheros de su propio directorio, que en el teléfono existen (SpriteKit.framework/{sprite,color}.{vsh,fsh}, 66 a 239 bytes, y default.metallib de 85028 bytes) y la lectura falla desde la app (permiso, sandbox o ruta); ACCIÓN (DROP 40 de 80, sin BOOT): libheroapp de CI 44925817881 en Flappy Bird anota en heroapp.log, por cada uno de esos ficheros, stat, open, los primeros bytes y si NSBundle encuentra el recurso; contadores D-0123: BOOT 18 de 80, DROP 40 de 80"
+kind = "document"
+path = "docs/S7GE_PLAN_20261121.md"
+location = "git"
+created = "2026-11-21"
+domain = "device"
+level = "L1"
+device = "this-unit"
+note = "Análisis de Jet en la caché local; las pruebas en el teléfono vienen después."
