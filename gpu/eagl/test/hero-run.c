@@ -685,9 +685,33 @@ install_audio_plugin(void)
       return;
    }
    herodrm_log("hero-run: audio plug-in: drop zone %lld bytes, HAL %lld bytes", have ? (long long)from.st_size : -1, there ? (long long)to.st_size : -1);
+   if (!have || (there && to.st_size == from.st_size && to.st_mtime >= from.st_mtime))
+      return;
+   mkdir("/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver", 0755);
+   copy_plugin_file("audio", DROP_DIR "audio/HakiosAudio", driver, 0755);
+   copy_plugin_file("audio", DROP_DIR "audio/Info.plist", "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/Info.plist",
+                    0644);
+}
+
+/*
+ * The Metal plug-in (gpu/metal, docs/herolte-metal.md M3) where Metal.framework looks for the kernel's IOAcceleratorES
+ * (MetalPluginName HeroMetal): /System/Library/Extensions/HeroMetal.bundle. It gives a device only to the processes named
+ * in DROP_DIR metal.allow, and loads the driver (DROP_DIR lib/libhakiosmetal.dylib) only for them. Installed when the
+ * drop zone's executable differs from the one there; Metal reads the bundle in each process that asks, so the next
+ * process to ask sees it.
+ */
+static void
+install_metal_plugin(void)
+{
+   struct stat from, to;
+   const char *bundle = "/System/Library/Extensions/HeroMetal.bundle";
+   const char *exe = "/System/Library/Extensions/HeroMetal.bundle/HeroMetal";
+   int have = stat(DROP_DIR "metal/HeroMetal", &from) == 0, there = stat(exe, &to) == 0;
+   herodrm_log("hero-run: Metal plug-in: drop zone %lld bytes, Extensions %lld bytes", have ? (long long)from.st_size : -1,
+               there ? (long long)to.st_size : -1);
    /*
-    * E-0385: the check was "same size and the installed file is not older than the drop zone's". The fix of E-0384 changed HeroMetal's bytes but not its size
-    * (86304 both), and the installed copy's time was later than the dropped file's, so the old plug-in stayed. Now: same size and same bytes, or install.
+    * E-0385: the check was "same size and the installed file is not older than the drop zone's". The fix of E-0384 changed HeroMetal's bytes but not its
+    * size (86304 both), and the installed copy's time was later than the dropped file's, so the old plug-in stayed. Now: same size and same bytes, or install.
     */
    if (!have)
       return;
@@ -712,30 +736,6 @@ install_audio_plugin(void)
       }
       herodrm_log("hero-run: Metal plug-in: same size, different bytes: installing");
    }
-   mkdir("/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver", 0755);
-   copy_plugin_file("audio", DROP_DIR "audio/HakiosAudio", driver, 0755);
-   copy_plugin_file("audio", DROP_DIR "audio/Info.plist", "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/Info.plist",
-                    0644);
-}
-
-/*
- * The Metal plug-in (gpu/metal, docs/herolte-metal.md M3) where Metal.framework looks for the kernel's IOAcceleratorES
- * (MetalPluginName HeroMetal): /System/Library/Extensions/HeroMetal.bundle. It gives a device only to the processes named
- * in DROP_DIR metal.allow, and loads the driver (DROP_DIR lib/libhakiosmetal.dylib) only for them. Installed when the
- * drop zone's executable differs from the one there; Metal reads the bundle in each process that asks, so the next
- * process to ask sees it.
- */
-static void
-install_metal_plugin(void)
-{
-   struct stat from, to;
-   const char *bundle = "/System/Library/Extensions/HeroMetal.bundle";
-   const char *exe = "/System/Library/Extensions/HeroMetal.bundle/HeroMetal";
-   int have = stat(DROP_DIR "metal/HeroMetal", &from) == 0, there = stat(exe, &to) == 0;
-   herodrm_log("hero-run: Metal plug-in: drop zone %lld bytes, Extensions %lld bytes", have ? (long long)from.st_size : -1,
-               there ? (long long)to.st_size : -1);
-   if (!have || (there && to.st_size == from.st_size && to.st_mtime >= from.st_mtime))
-      return;
    mkdir(bundle, 0755);
    copy_plugin_file("Metal", DROP_DIR "metal/HeroMetal", exe, 0755);
    copy_plugin_file("Metal", DROP_DIR "metal/Info.plist", "/System/Library/Extensions/HeroMetal.bundle/Info.plist", 0644);
