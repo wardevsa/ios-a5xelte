@@ -180,7 +180,6 @@ look_at_spritekit(void)
  * ("all" or one name per line) these interposed entry points ask lib/libheromtl.dylib for a device; for every other application they call Metal's own.
  */
 extern id MTLCreateSystemDefaultDevice(void);
-extern id MTLCopyAllDevices(void);
 static bool
 listed(const char *file)
 {
@@ -222,18 +221,9 @@ hero_MTLCreateSystemDefaultDevice(void)
    id ours = hero_mtl_pick();
    return ours ? ours : MTLCreateSystemDefaultDevice();
 }
-static id
-hero_MTLCopyAllDevices(void)
-{
-   id ours = hero_mtl_pick();
-   if (!ours)
-      return MTLCopyAllDevices();
-   return ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("NSArray"), sel_registerName("arrayWithObject:"), ours);
-}
 struct hero_interpose { const void *replacement, *replacee; };
 __attribute__((used, section("__DATA,__interpose"))) static const struct hero_interpose hero_mtl_interpose[] = {
    { (const void *)hero_MTLCreateSystemDefaultDevice, (const void *)MTLCreateSystemDefaultDevice },
-   { (const void *)hero_MTLCopyAllDevices, (const void *)MTLCopyAllDevices },
 };
 
 /*
