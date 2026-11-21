@@ -5094,3 +5094,18 @@ sha256 = "f27cd3988cae8352d87a56b43fbd8958e4e4a1c7e57d6beb9b03f52d7f450e52"
 size = 183417
 immutable = true
 note = "Imagen min123 94ab4543."
+
+[[evidence]]
+id = "E-0345"
+title = "min124 (ADT original tipo 1, sin gestures.off, sin chronod en heronoexec): ARRANCA; el Director aprendió a apagar con volumen más encendido, informa de que en el primer y el segundo arranque NO VE LA BARRA DE ARRIBA, de que el resto de la pantalla está raro pero le sirve de momento y de que prefiere que se arregle la barra; libherosb.dylib informa en el registro: 'round 1, 15 windows, picture 1, gestures 1, status bar hooks 2 asked 1 replaced 0' y 'round 6, 18 windows': los gestos están puestos (tipo 2 solo en SpringBoard), solo DOS de los tres anzuelos de proveedor entraron (no existe -[_UIStatusBar setVisualProviderClass:] en esta versión 16.7.16, de ahí 'hooks 2' y no 12), la barra pidió su proveedor UNA vez y el anzuelo respondió _UIStatusBarVisualProvider_Phone, 'replaced 0' (el proveedor de reserva nunca se sustituyó), y existen UIStatusBarWindow y SBStatusBarReusePoolWindow; el proveedor 'Phone' se eligió pero la barra no se ve: causas por comprobar: ventana oculta o transparente, vista fuera del lienzo, margen superior seguro o una altura de 0; PRUEBA (min125, DROP 19 y BOOT 15): libherosb vuelca a las rondas 6 y 20 las ventanas de la barra (UIStatusBarWindow, SBStatusBarReusePoolWindow, SBHomeScreenWindow) con límites, márgenes seguros y el árbol de vistas con marcos, estado oculto y transparencia, más los selectores con 'provider/hidden/height/style/region' de _UIStatusBar y UIStatusBar_Modern y las clases _UIStatusBarVisualProvider*; y el laboratorio de capturas hsnap=200 hace los gestos y copia el panel; contadores D-0123: BOOT 15 de 80, DROP 19 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min124-herolog.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "1762477e4e26f69bdd746e9862c41c81214f57d983f63707dcef2ef6f726799d"
+size = 411048
+immutable = true
+note = "Imagen min124 71aa9172."
