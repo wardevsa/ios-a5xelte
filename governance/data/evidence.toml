@@ -5553,3 +5553,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Diseño de Metal; la prueba en el teléfono viene después."
+
+[[evidence]]
+id = "E-0376"
+title = "HITO S7GE M2: UN TRIÁNGULO DIBUJADO POR METAL EN EL TELÉFONO: el Director ve en S7GE Lab 'triángulo y colores, todo' (la franja de Metal con el triángulo RGB girando); informe de la app: 'Metal strip frames 567; Metal triangle: pipeline ok', 'Metal: device S7GE Mali-T880 (Metal on OpenGL ES)'; heromtl.log: 'library from source: 2 function(s): tri_vertex,tri_fragment'; es decir, MSL de texto -> biblioteca -> pipeline por nombre -> GLSL de la tabla -> repetición en el contexto GLES del puente (Mesa/Panfrost) -> lectura a la IOSurface del drawable -> presentación por CAMetalLayer; aviso del Director: el cierre intermitente de E-0374 era probablemente por pulsar 'Probar Metal' varias veces seguidas: hipótesis plausible (segunda llamada a MTLCreateSystemDefaultDevice), sin comprobar la causa del fallo en esa ruta; PASO A M3 (DROP 45 de 80, sin BOOT): libheromtl de CI 44933686383 lee bibliotecas .metallib (nombres y tipos de función desde las etiquetas NAME/TYPE de MTLB, sin intérprete de AIR) y apunta con detalle cada pipeline que se le pide (funciones, formato, mezcla, descriptor de vértices); mtl.on = S7GELab y Flappy Bird; con eso Flappy Bird/SpriteKit recibirá un dispositivo Metal y su default.metallib (85028 bytes) y heromtl.log dirá QUÉ funciones y estados pide SpriteKit, que es la lista de la tabla de sombreadores a escribir; PRUEBA: abrir Flappy Bird (se cerrará o no) y leer heromtl.log y heroapp-crash.txt; contadores D-0123: BOOT 18 de 80, DROP 45 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n18-s7ge-lab.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "26099fb54da757a33a9bc59ba187f0f57f9f5a0df5e3f2d62591a28dc76ba120"
+size = 177509
+immutable = true
+note = "Informe de S7GE Lab con el triángulo de Metal (scratch)."
