@@ -1,0 +1,39 @@
+name: ios-tools
+
+# Programs for the S7's iOS userland (tools/ios/*.c), built with the
+# runner's iPhoneOS SDK for plain arm64 (the iPhone X userland has no
+# arm64e; the S7's cores have no pointer authentication) and ad-hoc
+# signed. They reach the phone through the kernel's USERDATA drop zone
+# (tools/herolte-drop.py). Nothing of Apple's is in the artifact.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [herolte]
+    paths:
+      - "tools/ios/**"
+      - ".github/workflows/ios-tools.yml"
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          set -euo pipefail
+          sdk=$(xcrun --sdk iphoneos --show-sdk-path)
+          mkdir -p out
+          for src in tools/ios/*.c; do
+            name=$(basename "$src" .c)
+            xcrun --sdk iphoneos clang -target arm64-apple-ios16.0 -isysroot "$sdk" \
+              -O2 -Wall -Wextra -Wno-unused-parameter -o "out/$name" "$src" \
+              -framework IOKit -framework CoreFoundation
+            codesign -s - -f "out/$name"
+            file "out/$name"
+          done
+          shasum -a 256 out/* | tee out/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-tools
+          path: out/

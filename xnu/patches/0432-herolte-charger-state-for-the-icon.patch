@@ -1,0 +1,70 @@
+herolte: the battery icon follows the charger, not the sign of the gauge current (0432)
+
+min54: the charger reported input valid and fast charge (0xb3=0x60, 0xb4=0x31) all through the lock screen, but iOS showed "not charging": the old rule was charging = gauge current > 20 mA, and with the screen on at 2600 MHz the load takes the input (a 500 mA USB port) and more. herolte_chg_state() reads the charger's details; SweetBattery uses it when it answers. Read only.
+
+--- a/bsd/dev/herolte_battery.c
++++ b/bsd/dev/herolte_battery.c
+@@ -257,6 +257,26 @@
+ 	return 0;
+ }
+ 
++/*
++ * 0432: what the charger itself says, for the battery icon: input valid (CHG_DETAILS_00 0xb3: CHGIN_DTLS bits 6:5 == 3, or
++ * the wireless input, WCIN_DTLS bits 4:3 == 3) and charging (CHG_DETAILS_01 0xb4: CHG_DTLS bits 3:0 = 1 fast-charge CC,
++ * 2 CV, 3 top-off). min54: 0xb3 = 0x60 and 0xb4 = 0x31 with the cable on, all the way through the lock screen, while
++ * the gauge's current dropped below the 20 mA the old rule took for "charging". Returns -1 without an answer.
++ */
++int herolte_chg_state(int *external, int *charging);
++int
++herolte_chg_state(int *external, int *charging)
++{
++	uint8_t d0, d1;
++	if (!fg_i2c || !fg_byte_at(CHG_ADDR, 0xb3, &d0) || !fg_byte_at(CHG_ADDR, 0xb4, &d1)) {
++		return -1;
++	}
++	*external = ((d0 >> 5) & 3u) == 3u || ((d0 >> 3) & 3u) == 3u;
++	unsigned dtls = d1 & 0xfu;
++	*charging = *external && dtls >= 1u && dtls <= 3u;
++	return 0;
++}
++
+ int
+ herolte_fg_read(unsigned *percent, unsigned *mv, int *ma, unsigned *rem_mah, unsigned *full_mah)
+ {
+--- a/iokit/Kernel/arm/SweetBattery.cpp
++++ b/iokit/Kernel/arm/SweetBattery.cpp
+@@ -15,6 +15,7 @@
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ /* bsd/dev/herolte_battery.c: MAX77854 fuel gauge, read-only. */
+ extern "C" int herolte_fg_init(void);
++extern "C" int herolte_chg_state(int *external, int *charging);
+ extern "C" int herolte_fg_read(unsigned *percent, unsigned *mv, int *ma,
+     unsigned *rem_mah, unsigned *full_mah);
+ #define BATTERY_DESIGN_MAH 3000u        /* SM-G930F EB-BG930ABE */
+@@ -230,14 +231,21 @@
+ 		publish(100, 4200, 0, true, true, false, true, false, false);
+ 		return;
+ 	}
+-	/* No charger driver: the gauge's charge current marks a cable. */
+-	bool charging = ma > 20;
++	/* The gauge's charge current marks a cable... */
++	bool external = ma > 20, charging = external;
++	/* ...unless the charger says (0432): input valid and charging, whatever the load takes out of the battery. */
++	int chg_ext, chg_on;
++	bool from_charger = herolte_chg_state(&chg_ext, &chg_on) == 0;
++	if (from_charger) {
++		external = chg_ext != 0;
++		charging = chg_on != 0;
++	}
+ 	static unsigned logged;
+ 	if (logged++ % 10 == 0) {
+-		IOLog("SWEET BATTERY: %u%% %umV %dmA rem=%umAh full=%umAh\n",
+-		    percent, mv, ma, rem, full);
++		IOLog("SWEET BATTERY: %u%% %umV %dmA rem=%umAh full=%umAh charger=%d external=%d charging=%d\n",
++		    percent, mv, ma, rem, full, from_charger, external, charging);
+ 	}
+-	publish(percent, mv, ma, charging, charging, charging, false, true, true);
++	publish(percent, mv, ma, external, external, charging, false, true, true);
+ }
+ #else
+ void

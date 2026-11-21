@@ -1,0 +1,32 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 3883ca2..e32abb5 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -383,11 +383,14 @@ hg_job_fragment(uint64_t pixels_va, uint32_t size, uint32_t stride, uint32_t col
+ 	fb[11] = (2u << 6) |            /* tie-break MINUS_180_IN_0_OUT, as the A5 */
+ 	    (8u << 9) |                 /* effective tile size log2(16 * 16) */
+ 	    (1u << 24);                 /* color buffer allocation 1 KiB (shr 10) */
+-	fb[12] = 0;
++	fb[12] = 1u << 16;              /* Z internal format D24 (Mesa, no ZS) */
+ 	fb[13] = 0;                     /* Z clear 0.0 */
+-	/* Tiler Context at +56 (word 14): empty list, no hierarchy (A5 values). */
+-	fb[14] = 516;                   /* polygon list size: 512-byte header + 4 */
+-	fb[15] = 4095;
++	/* Tiler Context at +56 (word 14). Mesa pan_emit_midgard_tiler(), tiler
++	 * disabled on a GPU with hierarchical tiling (the T880; 0228's A5 values
++	 * 4095 + 4 are for the T720, which has none): mask DISABLED, 512-byte
++	 * header only, heap start = end = the list. */
++	fb[14] = 512;                   /* MALI_MIDGARD_TILER_MINIMUM_HEADER_SIZE */
++	fb[15] = 4096;                  /* MALI_MIDGARD_TILER_DISABLED */
+ 	*(volatile uint64_t *)(fb + 16) = poly_va;              /* polygon list */
+ 	*(volatile uint64_t *)(fb + 18) = poly_va + 512;        /* body */
+ 	*(volatile uint64_t *)(fb + 20) = poly_va;              /* heap start */
+@@ -407,8 +410,6 @@ hg_job_fragment(uint64_t pixels_va, uint32_t size, uint32_t stride, uint32_t col
+ 	for (unsigned i = 0; i < 4; i++) {
+ 		rt[12 + i] = color;     /* clear color */
+ 	}
+-	volatile uint32_t *poly = (volatile uint32_t *)(hg_mem + HG_DATA_OFF + HG_POLY_OFF);
+-	poly[128] = 0xa0000000;         /* empty-list body */
+ 	__asm__ volatile ("dsb sy" ::: "memory");
+ 	return hg_run(0, panel ? "FRAGMENT panel square" : "FRAGMENT private 16x16");
+ }

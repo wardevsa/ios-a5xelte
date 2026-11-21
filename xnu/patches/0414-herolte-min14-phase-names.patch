@@ -1,0 +1,133 @@
+diag(min14): name every kernel_bootstrap phase on screen
+
+min13h40: arm_init finishes (blocks 30-40 all visible) and the reset happens in machine_startup / kernel_bootstrap. kernel_bootstrap announces each phase with kernel_bootstrap_log() -> kernel_debug_string_early(). Hook it: after sweet_early_phase_begin() (end of arm_init) each call draws a coloured block at slot 41+n of the x=1300 column and writes the phase name, 16x32 px per character, to its left; herostop=N freezes after block N (up to 76). Drawing only; the one line in bsd/kern/kdebug.c is outside D-0043's file allowlist and needs the Director's extension before an image with it is written.
+
+--- a/bsd/kern/kdebug.c	2026-11-14 22:59:49.551459611 +0100
++++ b/bsd/kern/kdebug.c	2026-11-14 23:00:06.391923375 +0100
+@@ -794,9 +794,16 @@
+ 	kernel_debug_flags(debugid, arg1, arg2, arg3, arg4, KDBG_FLAG_FILTERED);
+ }
+ 
++#if defined(A5XELTE)
++extern void sweet_early_phase(const char *message);
++#endif
++
+ void
+ kernel_debug_string_early(const char *message)
+ {
++#if defined(A5XELTE)
++	sweet_early_phase(message);
++#endif
+ 	uintptr_t a[4] = { 0 };
+ 	strncpy((char *)a, message, sizeof(a));
+ 	KERNEL_DEBUG_EARLY(TRACE_INFO_STRING, a[0], a[1], a[2], a[3]);
+--- a/osfmk/arm/arm_init.c	2026-11-14 22:59:49.548183555 +0100
++++ b/osfmk/arm/arm_init.c	2026-11-14 23:00:06.391686576 +0100
+@@ -723,6 +723,7 @@
+ 	 */
+ 	__stack_chk_guard &= ~(0xFFULL << 8);
+ 	sweet_early_block(40, 0xffffffff);
++	sweet_early_phase_begin(); /* from here every kernel_debug_string_early() names its phase on screen (0349) */
+ 	machine_startup(args);
+ }
+ 
+--- a/osfmk/arm64/sweet_early.c	2026-11-14 22:59:49.549958922 +0100
++++ b/osfmk/arm64/sweet_early.c	2026-11-14 23:00:06.391486013 +0100
+@@ -147,6 +147,61 @@
+ 	} while ((now - t0) * 1000ULL < freq * ms);
+ }
+ 
++/*
++ * min14: name every kernel_bootstrap phase on screen. kernel_debug_string_early() (bsd/kern/kdebug.c) calls
++ * sweet_early_phase(); once sweet_early_phase_begin() has run (end of arm_init), each call draws a coloured block at slot
++ * 41+n of the x=1300 column and the phase name, 16x32 px per character, to its left. herostop=N still freezes after block N.
++ */
++static unsigned int a5_phase_n, a5_phase_on;
++
++void
++sweet_early_phase_begin(void)
++{
++	a5_phase_n = 0;
++	a5_phase_on = 1;
++}
++
++static void
++a5_label(unsigned int slot, const char *s)
++{
++	static const unsigned int scale = 2;
++	unsigned int len = 0;
++	while (s[len] && len < 48) {
++		len++;
++	}
++	unsigned int x0 = 1290 - len * 8 * scale;
++	unsigned int y0 = 88 + 32 * slot - 6;
++	for (unsigned int c = 0; c < len; c++) {
++		const unsigned char *glyph = iso_font + (unsigned char)s[c] * 16;
++		for (unsigned int gy = 0; gy < 16; gy++) {
++			for (unsigned int sy = 0; sy < scale; sy++) {
++				volatile uint32_t *line = A5_FB + (y0 + gy * scale + sy) * A5_STRIDE + x0 + c * 8 * scale;
++				for (unsigned int gx = 0; gx < 8; gx++) {
++					uint32_t pixel = (glyph[gy] & (1u << gx)) ? 0xffffffffu : 0xff000000u;
++					for (unsigned int sx = 0; sx < scale; sx++) {
++						line[gx * scale + sx] = pixel;
++					}
++				}
++			}
++		}
++	}
++}
++
++void
++sweet_early_phase(const char *message)
++{
++	static const uint32_t colours[8] = { 0xffff4500, 0xff00ff7f, 0xff1e90ff, 0xffffd700, 0xffff1493, 0xff9932cc, 0xff20b2aa, 0xffffffff };
++	if (!a5_active || !a5_phase_on || !message) {
++		return;
++	}
++	unsigned int slot = 41 + a5_phase_n++;
++	if (slot > 76) {
++		return;
++	}
++	a5_label(slot, message);
++	sweet_early_block(slot, colours[slot & 7]);
++}
++
+ /* Boot-arg herostop=N (read in arm_init after PE_init_platform): freeze the machine right after block N is drawn, so the
+  * screen keeps showing how far it got. -1 = never stop (default). Interrupts are masked at this point of boot. */
+ static volatile int a5_stop_slot = -1;
+@@ -160,7 +215,7 @@
+ void
+ sweet_early_block(unsigned int slot, uint32_t argb)
+ {
+-	if (!a5_active || slot > 60) {
++	if (!a5_active || slot > 76) {
+ 		return;
+ 	}
+ 	for (unsigned int y = 0; y < 21; y++) {
+@@ -323,4 +378,6 @@
+ void sweet_early_set_stop(int slot) { (void)slot; }
+ void sweet_early_hex(const char *label, uint64_t value) { (void)label; (void)value; }
+ void sweet_early_pause_ms(unsigned int ms) { (void)ms; }
++void sweet_early_phase_begin(void) {}
++void sweet_early_phase(const char *message) { (void)message; }
+ #endif /* SWEET */
+--- a/osfmk/arm64/sweet_early.h	2026-11-14 22:59:49.550003685 +0100
++++ b/osfmk/arm64/sweet_early.h	2026-11-14 23:00:06.391316635 +0100
+@@ -11,6 +11,8 @@
+ void sweet_early_block(unsigned int slot, uint32_t argb);
+ void sweet_early_hex(const char *label, uint64_t value);
+ void sweet_early_pause_ms(unsigned int ms);
++void sweet_early_phase_begin(void);
++void sweet_early_phase(const char *message);
+ void sweet_early_set_stop(int slot);
+ void sweet_early_putc(char c);
+ void sweet_early_panic(const char *fmt, va_list *args);
+@@ -26,6 +28,8 @@
+ static inline void sweet_early_set_stop(int slot) { (void)slot; }
+ static inline void sweet_early_hex(const char *label, uint64_t value) { (void)label; (void)value; }
+ static inline void sweet_early_pause_ms(unsigned int ms) { (void)ms; }
++static inline void sweet_early_phase_begin(void) {}
++static inline void sweet_early_phase(const char *message) { (void)message; }
+ static inline void sweet_early_disable(void) {}
+ #endif
+ 

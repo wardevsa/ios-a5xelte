@@ -1,0 +1,3307 @@
+diff --git a/bsd/conf/files b/bsd/conf/files
+index a16d8e0..c8762c8 100644
+--- a/bsd/conf/files
++++ b/bsd/conf/files
+@@ -112,6 +112,9 @@ bsd/dev/herolte_battery.c		standard
+ bsd/dev/herolte_gpu.c			standard
+ bsd/dev/herolte_drop.c			standard
+ bsd/dev/herolte_wifi.c			standard
++bsd/dev/sweet_sta.c			standard
++bsd/dev/sweet_net.c			standard
++bsd/dev/sweet_apple80211.c		standard
+ bsd/dev/herolte_gl.c			standard
+ bsd/dev/a5xelte_keys.c			standard
+ bsd/dev/a5xelte_touch.c			standard
+diff --git a/bsd/dev/hakios.net.h b/bsd/dev/hakios.net.h
+new file mode 100644
+index 0000000..0ffc461
+--- /dev/null
++++ b/bsd/dev/hakios.net.h
+@@ -0,0 +1,70 @@
++/* From HackiOS (github.com/oosexgang/hackios-xnu-kernel, as github.com/JopangJovan/hackios-xnu-kernel-umi
++ * has it; APSL 2.0), for apollo's Wi-Fi (xnu 0128). Its bsd/dev/hakios.X.c are bsd/dev/sweet_X.c here
++ * (and iokit/Kernel/hakios.wlan.cpp is iokit/Kernel/arm/SweetWLAN.cpp). */
++/*
++ * en0, and what stands behind it.
++ *
++ * The network interface iOS uses here is made in bsd/dev/hakios.net.c with the kernel's own
++ * interface KPI: Ethernet as far as the rest of the kernel and user space can tell. What carries
++ * the frames is a "link", a driver of its own that knows nothing about interfaces: QEMU's virtio
++ * network device today (bsd/dev/hakios.virtio_net.c), the phone's radio or frames carried over
++ * the boot loader's USB channel tomorrow. This is all the two know of each other.
++ *
++ * A link driver
++ *   - fills in a struct hakios_net_link and calls hakios_net_attach() once, when it is ready
++ *     to carry frames (for a radio: when its firmware is up, not when it has joined a network);
++ *   - hands every frame that arrives to hakios_net_input(): from its own thread, or from
++ *     the poll function the interface's thread calls for it. Not from interrupt context;
++ *   - says with hakios_net_link_state() when frames can pass and when they no longer can
++ *     (the cable, or for a radio: associated and the keys set). configd starts DHCP on that.
++ * A frame is what goes over an Ethernet cable without the checksum at its end: destination,
++ * source, type, payload; at most HAKIOS_NET_FRAME_MAX bytes. A radio whose frames are 802.11
++ * converts in its driver (or has its firmware do it: "Ethernet decap/encap").
++ */
++#ifndef _SYS_HAKIOS_NET_H_
++#define _SYS_HAKIOS_NET_H_
++
++#ifdef KERNEL
++#include <sys/kpi_mbuf.h>
++
++#define HAKIOS_NET_FRAME_MAX   1514
++#define HAKIOS_NET_UNITS       2       /* en0: the radio (or virtio); en1: the modem's packets (hakios.cell.c) */
++
++struct hakios_net_link {
++	const char *    name;           /* for the log */
++	unsigned        unit;           /* which enN this is (0 unless said otherwise) */
++	uint8_t         address[6];     /* the interface's Ethernet address */
++	bool            wireless;       /* the interface is told to be Wi-Fi (its "subfamily"), which is how the
++	                                 * network stack and configd tell a radio from a cable */
++	bool            up;             /* frames can pass from the start (else: wait for hakios_net_link_state()) */
++	/*
++	 * Send one frame: a chain of mbufs, `length` bytes in all, the Ethernet header first. The
++	 * packet stays the caller's: copy it (mbuf_copydata()). Returns false if it had to be dropped.
++	 * Called by one thread at a time, never from interrupt context.
++	 */
++	bool            (*transmit)(mbuf_t packet, size_t length);
++	/*
++	 * Optional. Look whether frames have arrived and call hakios_net_input() for each; returns
++	 * how many there were. The interface's thread calls it every 2 ms while frames are coming and
++	 * every 10 ms when none has for a while. A link that has a thread or an interrupt of its own
++	 * leaves it NULL.
++	 */
++	unsigned        (*poll)(void);
++};
++
++/* Make en<unit> on top of that link (the structure must stay). One link per unit, once: false if there is one already. */
++bool hakios_net_attach(const struct hakios_net_link *link);
++/* A frame has arrived (on en0 / on en<unit>). Copied; the buffer is the caller's again on return. */
++void hakios_net_input(const uint8_t *frame, size_t length);
++void hakios_net_input_unit(unsigned unit, const uint8_t *frame, size_t length);
++/* Frames can pass now / can no longer pass (on en0 / on en<unit>). */
++void hakios_net_link_state(bool up);
++void hakios_net_link_state_unit(unsigned unit, bool up);
++
++void hakios_net_init(void);            /* the links there are: each looks for its hardware (or its boot-arg) */
++/* an Apple80211 request (SIOCGA80211, SIOCSA80211) for the interface of a radio: hakios.apple80211.c */
++errno_t hakios_apple80211_ioctl(u_long command, void *data);
++void hakios_virtio_net_init(void);     /* boot-arg virtio_net=1: QEMU's virtio network device */
++#endif /* KERNEL */
++
++#endif /* _SYS_HAKIOS_NET_H_ */
+diff --git a/bsd/dev/hakios.say.h b/bsd/dev/hakios.say.h
+new file mode 100644
+index 0000000..69bb89a
+--- /dev/null
++++ b/bsd/dev/hakios.say.h
+@@ -0,0 +1,6 @@
++/* The Wi-Fi log's two kinds of line (sweet_wifi.c): both go to the kernel log here. */
++#ifndef _HAKIOS_SAY_H_
++#define _HAKIOS_SAY_H_
++int hakios_wifi_say(const char *format, ...) __printflike(1, 2);      /* a line of the Wi-Fi log */
++int hakios_wifi_tell(const char *format, ...) __printflike(1, 2);     /* ... one always said */
++#endif
+diff --git a/bsd/dev/hakios.sta.h b/bsd/dev/hakios.sta.h
+new file mode 100644
+index 0000000..eab4f66
+--- /dev/null
++++ b/bsd/dev/hakios.sta.h
+@@ -0,0 +1,125 @@
++/* From HackiOS (github.com/oosexgang/hackios-xnu-kernel, as github.com/JopangJovan/hackios-xnu-kernel-umi
++ * has it; APSL 2.0), for apollo's Wi-Fi (xnu 0128). Its bsd/dev/hakios.X.c are bsd/dev/sweet_X.c here
++ * (and iokit/Kernel/hakios.wlan.cpp is iokit/Kernel/arm/SweetWLAN.cpp). */
++/*
++ * Darwin-on-hakios: the station boundary.
++ *
++ * On one side whatever does the scanning and the joining with a radio: the station logic over
++ * ath11k on the phone (wifi/lx in the repository). On the other whoever wants a network: the
++ * Apple80211 requests of iOS's Wi-Fi side, answered in bsd/dev/hakios.apple80211.c, and the
++ * kernel's own join of the network it was given in a file (bsd/dev/hakios.wifi.c). Frames do
++ * not pass here, and neither does "the link is up": those go through bsd/sys/hakios.net.h,
++ * which the station side calls itself.
++ *
++ * Between the two stands bsd/dev/hakios.sta.c: one thread, on which every call into the station
++ * side is made, one at a time, and what the last scan heard, kept for whoever asks.
++ *
++ * Nothing but C's own types here: the station side is not compiled as XNU's code.
++ */
++#ifndef _SYS_HAKIOS_STA_H_
++#define _SYS_HAKIOS_STA_H_
++
++#include <stdbool.h>
++#include <stdint.h>
++
++#define HAKIOS_STA_ELEMENTS_MOST       1024
++
++/* One access point, as a scan heard it. */
++struct hakios_sta_bss {
++	uint8_t bssid[6];
++	uint8_t ssid[32], ssid_length;
++	uint16_t frequency;                     /* MHz */
++	int16_t rssi;                           /* dBm */
++	uint16_t beacon_interval;               /* in units of 1024 microseconds */
++	uint16_t capability;                    /* the beacon's capability field */
++	uint32_t age_ms;                        /* how long ago it was last heard */
++	uint16_t elements_length;               /* the beacon's information elements as received: who asks */
++	uint8_t elements[HAKIOS_STA_ELEMENTS_MOST];    /* reads the network's protection out of them itself */
++};
++
++/* What to scan for. All zero: every channel, the radio's own way. */
++struct hakios_sta_scan {
++	uint8_t ssid[32], ssid_length;          /* ask for this network by name (a hidden one answers only then) */
++	uint16_t frequencies[64], frequency_count;      /* only these channels */
++	bool passive;                           /* only listen */
++	uint16_t dwell_ms;                      /* on each channel; 0: the radio's own */
++};
++
++enum { HAKIOS_STA_OPEN, HAKIOS_STA_WPA2_PSK };
++
++struct hakios_sta_join {
++	uint8_t ssid[32], ssid_length;
++	uint8_t bssid[6];                       /* all zero: the access point of that name heard best */
++	int security;
++	uint8_t pmk[32];                        /* WPA2 with a passphrase: the key made of the passphrase and the name ... */
++	uint8_t passphrase[64], passphrase_length;      /* ... or, if this is not empty, the passphrase itself */
++};
++
++enum hakios_sta_phase { HAKIOS_STA_OFF, HAKIOS_STA_IDLE, HAKIOS_STA_SCANNING, HAKIOS_STA_JOINING, HAKIOS_STA_JOINED };
++
++struct hakios_sta_state {
++	enum hakios_sta_phase phase;
++	struct hakios_sta_bss bss;             /* the network joined or being joined */
++	int last_error;                         /* why the last join failed or the network was lost (an errno); 0: it was not */
++};
++
++#define HAKIOS_STA_CHANNEL_PASSIVE     1u      /* the radio may only listen there */
++#define HAKIOS_STA_CHANNEL_RADAR       2u      /* ... and has to look out for radar */
++
++struct hakios_sta_channel {
++	uint16_t frequency;                     /* MHz */
++	uint16_t flags;
++};
++
++/*
++ * What the station side supplies. All but state() are called on one thread, one at a time, and
++ * may take as long as the thing takes: scan() returns when the scan is over, join() when frames
++ * can pass or it is known why not. Each gives 0 or an errno.
++ */
++struct hakios_sta_ops {
++	int (*power)(bool on);                  /* off: leave the network, stop the radio; on: start it */
++	int (*scan)(const struct hakios_sta_scan *what);
++	void (*heard)(void (*each)(const struct hakios_sta_bss *bss, void *context), void *context);   /* by the last scan */
++	int (*join)(const struct hakios_sta_join *what);
++	int (*leave)(void);
++	void (*state)(struct hakios_sta_state *state);         /* on any thread; does not sleep */
++	unsigned (*channels)(struct hakios_sta_channel *channels, unsigned most);      /* what the radio may tune to */
++	uint8_t address[6];
++};
++
++/* What happens, said to whoever listens (the Apple80211 side). */
++enum hakios_sta_event {
++	HAKIOS_STA_POWER,                      /* status: 1 on, 0 off */
++	HAKIOS_STA_SCAN_DONE,                  /* status: 0, or the scan's errno */
++	HAKIOS_STA_JOIN_DONE,                  /* status: 0, or the join's errno */
++	HAKIOS_STA_LINK,                       /* status: 1 a network is joined, 0 it has been left when asked,
++	                                         * an errno: it was lost (the access point showed us the door) */
++};
++
++#ifdef KERNEL
++/* ---- the station side ---- */
++void     hakios_sta_attach(const struct hakios_sta_ops *ops);         /* NULL: it is going away (waits for a call under way) */
++void     hakios_sta_lost(int error);                                   /* the network joined is gone by itself */
++
++/* ---- who wants a network: each asks and returns; the outcome is an event. 0, or an errno ---- */
++bool     hakios_sta_present(void);
++int      hakios_sta_ask_power(bool on);
++int      hakios_sta_ask_scan(const struct hakios_sta_scan *what);
++int      hakios_sta_ask_join(const struct hakios_sta_join *what);
++/* ... and joined again whenever the radio is turned on, until some other network is asked for */
++int      hakios_sta_ask_join_standing(const struct hakios_sta_join *what);
++int      hakios_sta_ask_leave(void);
++bool     hakios_sta_busy(void);                                        /* something asked for is not over yet */
++bool     hakios_sta_powered(void);
++/* the `index`th access point the last scan heard: true, or false when there are not that many */
++bool     hakios_sta_heard(unsigned index, struct hakios_sta_bss *bss);
++void     hakios_sta_state(struct hakios_sta_state *state);
++unsigned hakios_sta_channels(struct hakios_sta_channel *channels, unsigned most);
++bool     hakios_sta_address(uint8_t *address);
++
++/* ---- the listener: bsd/dev/hakios.apple80211.c ---- */
++void     hakios_apple80211_event(enum hakios_sta_event event, int status);
++void     hakios_apple80211_summary(void);                              /* what was asked in this run, to the log */
++#endif
++
++#endif
+diff --git a/bsd/dev/herolte_wifi.c b/bsd/dev/herolte_wifi.c
+index 5740792..6f47e90 100644
+--- a/bsd/dev/herolte_wifi.c
++++ b/bsd/dev/herolte_wifi.c
+@@ -6,6 +6,7 @@
+  *
+  * The firmware, the NVRAM and the CLM are the phone's own, from VENDOR, in the drop zone: they are not in this repository.
+  */
++#include <stdarg.h>
+ #include <sys/param.h>
+ #include <sys/systm.h>
+ #include <sys/errno.h>
+@@ -17,14 +18,24 @@
+ #include <sys/random.h>
+ #include <kern/kalloc.h>
+ #include <kern/clock.h>
++#include <kern/locks.h>
++#include <kern/thread.h>
+ #include <mach/mach_time.h>
+ #include <machine/machine_routines.h>
+ #include <pexpert/pexpert.h>
++#include <pexpert/device_tree.h>
++#include "hakios.net.h"
++#include "hakios.say.h"
++#include "hakios.sta.h"
+ 
+ extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
+ extern vm_offset_t ml_io_map_wcomb(vm_offset_t, vm_size_t);
+ extern void IOSleep(unsigned milliseconds);
++extern void thread_set_thread_name(thread_t thread, const char *name);
++extern void SweetNetworkStackStart(void);       /* iokit/Kernel/arm/SweetNetworkStack.cpp */
++extern void SweetIOKitDaemonStandIn(void);
+ void herolte_wifi_firmware(vm_offset_t cfg);
++void herolte_wifi_early(void);
+ 
+ #define HW_BAR0_PA      0x1c100000u
+ #define HW_BAR2_PA      0x1c400000u
+@@ -286,8 +297,8 @@ hw_console(uint32_t console, uint32_t *done)
+ #define HW_RX_BUFS      0x80000u            /* 64 buffers of 2 KiB for frames from the chip */
+ #define HW_RX_COUNT     64u
+ #define HW_RX_ID        0x100u
+-#define HW_TX_BUFS      0xa0000u            /* 16 of 2 KiB for frames to it */
+-#define HW_TX_COUNT     16u
++#define HW_TX_BUFS      0xc0000u            /* 64 of 2 KiB for frames to it */
++#define HW_TX_COUNT     64u
+ #define HW_TX_ID        0x200u
+ #define HW_FLOWRING     0xb0000u            /* H2D flow ring 2, the only one: 512 x 48 */
+ #define HW_FLOW_ID      2u
+@@ -295,6 +306,8 @@ hw_console(uint32_t console, uint32_t *done)
+ 
+ #define MSG_FLOW_RING_CREATE    0x3
+ #define MSG_FLOW_RING_CREATE_CMPLT 0x4
++#define MSG_FLOW_RING_DELETE    0x5
++#define MSG_FLOW_RING_DELETE_CMPLT 0x6
+ #define MSG_IOCTLPTR_REQ        0x9
+ #define MSG_IOCTLRESP_BUF_POST  0xb
+ #define MSG_IOCTL_CMPLT         0xc
+@@ -306,13 +319,17 @@ hw_console(uint32_t console, uint32_t *done)
+ #define MSG_RX_CMPLT            0x12
+ 
+ #define WLC_UP          2
++#define WLC_DOWN        3
+ #define WLC_SET_INFRA   20
+ #define WLC_GET_BSSID   23
+ #define WLC_SET_SSID    26
++#define WLC_DISASSOC    52
+ #define WLC_GET_RSSI    127
+ #define WLC_GET_VAR     262
+ #define WLC_SET_VAR     263
+ #define E_SET_SSID      0
++#define E_DEAUTH_IND    6
++#define E_DISASSOC_IND  12
+ #define E_LINK          16
+ #define E_ESCAN_RESULT  69
+ #define ALGO_TKIP       2
+@@ -330,8 +347,21 @@ static unsigned hw_ssids;
+ static bool hw_link, hw_keyed;
+ static int hw_joined;
+ static char hw_ssid_seen[48][33];
+-static uint8_t hw_seen_group[48];               /* the group cipher of each network's RSN element, 0xff: none */
+ static uint8_t hw_mac[6], hw_bssid[6];
++/*
++ * Once the firmware runs, one thread of ours (hw_service) looks at the chip every few milliseconds, and the station's calls
++ * (sweet_sta.c's thread) and iOS's frames reach it too: everything that touches the chip is under hw_lock.
++ */
++static LCK_GRP_DECLARE(hw_lock_group, "herolte-wifi");
++static LCK_MTX_DECLARE(hw_lock, &hw_lock_group);
++#define HW_HEARD_MOST   64u
++static struct hakios_sta_bss *hw_heard;         /* by the scan under way or the last one */
++static unsigned hw_heard_count;
++static bool hw_scan_done;
++static enum hakios_sta_phase hw_phase = HAKIOS_STA_OFF;
++static struct hakios_sta_bss hw_target;         /* the network joined or being joined */
++static unsigned hw_mic_bad;                     /* message 3s whose MIC did not match, in this join */
++static bool hw_open;                            /* the network joined has no keys */
+ static uint16_t hw_rxpost_w, hw_rxcpl_r, hw_txcpl_r, hw_flow_w;
+ static int hw_flow;                             /* 0 none, 1 asked for, 2 open, -1 refused */
+ static uint32_t hw_tx_next, hw_tx_done, hw_rx_frames;
+@@ -415,22 +445,67 @@ hw_get16be(const volatile uint8_t *p)
+ 	return (uint16_t)((p[0] << 8) | p[1]);
+ }
+ 
+-/* The group cipher in a scanned network's RSN element (2 TKIP, 4 CCMP), 0xff if it has none. */
++/* The group cipher in a network's elements' RSN element (2 TKIP, 4 CCMP), 0xff if it has none. */
+ static uint8_t
+-hw_bss_group(const volatile uint8_t *bss, uint32_t blen)
++hw_bss_group(const struct hakios_sta_bss *bss)
+ {
+-	uint32_t off = hw_get16(bss + 116), len = hw_get32(bss + 120);
+-	if (blen < 124 || off > blen || len > blen - off) {
+-		return 0xff;
+-	}
+-	for (uint32_t i = 0; i + 2 <= len; i += 2u + bss[off + i + 1]) {
+-		if (bss[off + i] == 0x30 && bss[off + i + 1] >= 6 && i + 8 <= len) {
+-			return bss[off + i + 7];
++	const uint8_t *ie = bss->elements;
++	uint32_t len = bss->elements_length;
++	for (uint32_t i = 0; i + 2 <= len; i += 2u + ie[i + 1]) {
++		if (ie[i] == 0x30 && ie[i + 1] >= 6 && i + 8 <= len) {
++			return ie[i + 7];
+ 		}
+ 	}
+ 	return 0xff;
+ }
+ 
++/* One wl_bss_info_le of an escan result into the list of what the scan heard (once per access point). */
++static void
++hw_heard_one(const volatile uint8_t *bss, uint32_t blen)
++{
++	struct hakios_sta_bss *b = NULL;
++	unsigned i;
++	if (hw_heard == NULL || blen < 124) {
++		return;
++	}
++	for (i = 0; i < hw_heard_count; i++) {
++		bool same = true;
++		for (unsigned k = 0; k < 6 && same; k++) {
++			same = hw_heard[i].bssid[k] == bss[8 + k];
++		}
++		if (same) {
++			b = &hw_heard[i];
++			break;
++		}
++	}
++	if (b == NULL) {
++		if (hw_heard_count == HW_HEARD_MOST) {
++			return;
++		}
++		b = &hw_heard[hw_heard_count++];
++	}
++	memset(b, 0, sizeof(*b));
++	for (unsigned k = 0; k < 6; k++) {
++		b->bssid[k] = bss[8 + k];
++	}
++	b->ssid_length = bss[18] > 32 ? 32 : bss[18];
++	for (unsigned k = 0; k < b->ssid_length; k++) {
++		b->ssid[k] = bss[19 + k];
++	}
++	unsigned channel = bss[88] ? bss[88] : hw_get16(bss + 72) & 0xffu;      /* the control channel */
++	b->frequency = (uint16_t)(channel == 14 ? 2484 : channel <= 14 ? 2407 + 5 * channel : 5000 + 5 * channel);
++	b->rssi = (int16_t)hw_get16(bss + 78);
++	b->beacon_interval = hw_get16(bss + 14);
++	b->capability = hw_get16(bss + 16);
++	uint32_t off = hw_get16(bss + 116), len = hw_get32(bss + 120);
++	if (off <= blen && len <= blen - off && len <= sizeof(b->elements)) {
++		for (uint32_t k = 0; k < len; k++) {
++			b->elements[k] = bss[off + k];
++		}
++		b->elements_length = (uint16_t)len;
++	}
++}
++
+ /* struct msgbuf_rx_ioctl_resp_or_event: buffer n (0-7 answers, 8-15 events) given to the chip, its pktid n + 1. */
+ static void
+ hw_fill_post(volatile uint8_t *item, void *arg)
+@@ -473,13 +548,17 @@ hw_event(const volatile uint8_t *pkt, uint16_t len)
+ 		printf("HEROLTE WIFI: event %u status %u reason %u flags %#x\n", type, status, hw_get32be(pkt + 36), flags);
+ 		if (type == E_LINK) {
+ 			hw_link = (flags & 1) != 0;
++			hw_keyed = hw_keyed && hw_link;                 /* a new link, a new handshake */
++		} else if (type == E_DEAUTH_IND || type == E_DISASSOC_IND) {
++			hw_link = hw_keyed = false;
+ 		} else if (type == E_SET_SSID) {
+ 			hw_joined = status == 0 ? 1 : -1;
+ 		}
+ 		return;
+ 	}
+ 	if (status != 8) {
+-		printf("HEROLTE WIFI: scan done, status %u, %u networks\n", status, hw_ssids);
++		printf("HEROLTE WIFI: scan done, status %u, %u access points\n", status, hw_heard_count);
++		hw_scan_done = true;
+ 		return;
+ 	}
+ 	const volatile uint8_t *res = pkt + 72;
+@@ -504,8 +583,10 @@ hw_event(const volatile uint8_t *pkt, uint16_t len)
+ 		for (unsigned k = 0; k < hw_ssids && !seen; k++) {
+ 			seen = strcmp(hw_ssid_seen[k], ssid) == 0;
+ 		}
++		if (bss + blen <= pkt + len) {
++			hw_heard_one(bss, blen);
++		}
+ 		if (!seen && hw_ssids < 48) {
+-			hw_seen_group[hw_ssids] = hw_bss_group(bss, blen);
+ 			strlcpy(hw_ssid_seen[hw_ssids++], ssid, 33);
+ 			printf("HEROLTE WIFI: network \"%s\" %02x:%02x:%02x:%02x:%02x:%02x channel %u, %d dBm\n", slen ? ssid : "(hidden)",
+ 			    bss[8], bss[9], bss[10], bss[11], bss[12], bss[13], hw_get16(bss + 72) & 0xff, (int16_t)hw_get16(bss + 78));
+@@ -520,15 +601,14 @@ hw_event(const volatile uint8_t *pkt, uint16_t len)
+ /*
+  * Frames (msgbuf.c): buffers posted to the rx ring come back full through the rx complete ring as Ethernet frames; frames
+  * out go through one flow ring, made when the access point is known. EAPOL frames wait here for the handshake, which
+- * runs outside the drain (it makes ioctls, and they drain); a DHCP answer is only noted.
++ * runs outside the drain (it makes ioctls, and they drain); every other frame goes up through en0 (sweet_net.c).
+  */
+ #define HW_EAPOL_SLOTS  4u
+ #define HW_EAPOL_MAX    512u
+ static uint8_t hw_eapol_q[HW_EAPOL_SLOTS][HW_EAPOL_MAX];
+ static uint16_t hw_eapol_len[HW_EAPOL_SLOTS];
+ static unsigned hw_eapol_in, hw_eapol_out;
+-static uint32_t hw_dhcp_xid;
+-static bool hw_dhcp_seen;
++static bool hw_en0;                             /* en0 is made (herolte_wifi_early) */
+ 
+ /* struct msgbuf_rx_bufpost: rx buffer n to the chip */
+ static void
+@@ -571,9 +651,8 @@ hw_tx(const uint8_t *frame, uint32_t len)
+ 		return false;
+ 	}
+ 	uint16_t next = (uint16_t)((hw_flow_w + 1) % 512);
+-	if (next == hw_rd16(hw_tcm, hw_h2d_r + HW_FLOW_ID * 4)) {
+-		printf("HEROLTE WIFI: the flow ring is full\n");
+-		return false;
++	if (next == hw_rd16(hw_tcm, hw_h2d_r + HW_FLOW_ID * 4) || hw_tx_next - hw_tx_done >= HW_TX_COUNT) {
++		return false;                                   /* the ring or our buffers are full: dropped (TCP sends again) */
+ 	}
+ 	uint32_t n = hw_tx_next++ % HW_TX_COUNT;
+ 	volatile uint8_t *buf = (volatile uint8_t *)(hw_dma + HW_TX_BUFS + n * HW_FRAME);
+@@ -619,38 +698,13 @@ hw_frame(const volatile uint8_t *f, uint32_t len)
+ 		}
+ 		return;
+ 	}
+-	if (type != 0x0800 || len < 14 + 20 + 8 + 240 || f[14 + 9] != 17) {
+-		return;
+-	}
+-	uint32_t ihl = (f[14] & 0xfu) * 4, at = 14 + ihl + 8;
+-	const volatile uint8_t *udp = f + 14 + ihl, *b = udp + 8;
+-	if (at + 240 > len || hw_get16be(udp + 2) != 68 || b[0] != 2 || hw_get32be(b + 4) != hw_dhcp_xid) {
+-		return;
+-	}
+-	unsigned kind = 0;
+-	uint8_t server[4] = { 0, 0, 0, 0 };
+-	for (uint32_t i = 240; at + i + 2 <= len && b[i] != 255;) {
+-		if (b[i] == 0) {
+-			i++;
+-			continue;
++	if (hw_en0 && (hw_keyed || hw_open) && len <= HAKIOS_NET_FRAME_MAX) {
++		static uint8_t frame[HAKIOS_NET_FRAME_MAX];     /* (only the service thread drains) */
++		for (uint32_t i = 0; i < len; i++) {
++			frame[i] = f[i];
+ 		}
+-		uint32_t olen = b[i + 1];
+-		if (at + i + 2 + olen > len) {
+-			break;
+-		}
+-		if (b[i] == 53 && olen >= 1) {
+-			kind = b[i + 2];
+-		} else if (b[i] == 54 && olen >= 4) {
+-			for (unsigned k = 0; k < 4; k++) {
+-				server[k] = b[i + 2 + k];
+-			}
+-		}
+-		i += 2 + olen;
++		hakios_net_input(frame, len);
+ 	}
+-	printf("HEROLTE WIFI: DHCP %s: %u.%u.%u.%u for us, from %u.%u.%u.%u, sent to %s\n", kind == 2 ? "OFFER" : "answer",
+-	    b[16], b[17], b[18], b[19], server[0], server[1], server[2], server[3],
+-	    f[0] == 0xff ? "everyone (the group key works)" : "us alone");
+-	hw_dhcp_seen = true;
+ }
+ 
+ /* What the chip has put in the completion rings: control, then frames sent and frames come. */
+@@ -668,6 +722,9 @@ hw_drain(void)
+ 				printf("HEROLTE WIFI: flow ring %u refused, status %d\n", hw_get16(m + 10), (int16_t)hw_get16(m + 8));
+ 			}
+ 			break;
++		case MSG_FLOW_RING_DELETE_CMPLT:
++			hw_flow = 0;
++			break;
+ 		case MSG_IOCTL_CMPLT:
+ 			hw_resp_status = (int16_t)hw_get16(m + 8);
+ 			hw_resp_len = hw_get16(m + 12);
+@@ -1237,6 +1294,7 @@ hw_eapol(const uint8_t *f, uint32_t len)
+ 	hw_hmac_finish(&m, mic);
+ 	if (memcmp(mic, e + 81, 16) != 0) {
+ 		printf("HEROLTE WIFI: handshake %s: the MIC does not match (a wrong passphrase?)\n", pairwise ? "3/4" : "group 1/2");
++		hw_mic_bad++;
+ 		return;
+ 	}
+ 	memcpy(hw_replay, e + 9, 8);
+@@ -1335,59 +1393,371 @@ hw_keys(void)
+ 	hw_install = 0;
+ }
+ 
+-/* A DHCP DISCOVER to everyone, answers asked to everyone too: what comes back proves both keys. */
++/*
++ * Fifth step, en0 for iOS. sweet_net.c makes the interface (Ethernet to the rest of the kernel, Wi-Fi by its subfamily and
++ * by its registry entries, SweetWLAN.cpp), sweet_sta.c and sweet_apple80211.c answer wifid's scans and joins: all as on
++ * apollo, whose radio is another. What is here is this radio under them: the link behind en0 (hakios.net.h) and the
++ * station (hakios.sta.h).
++ */
++
++/* Frames from the network stack come on whatever thread sends them: into a queue, which the service thread empties. */
++#define HW_TXQ          128u
++struct hw_txq_frame {
++	uint16_t length;
++	uint8_t bytes[HAKIOS_NET_FRAME_MAX];
++};
++static LCK_MTX_DECLARE(hw_txq_lock, &hw_lock_group);
++static struct hw_txq_frame *hw_txq;
++static uint32_t hw_txq_in, hw_txq_out;
++
++static bool
++hw_link_transmit(mbuf_t packet, size_t length)
++{
++	bool queued = false;
++	lck_mtx_lock(&hw_txq_lock);
++	if (hw_txq != NULL && length <= HAKIOS_NET_FRAME_MAX && hw_txq_in - hw_txq_out < HW_TXQ) {
++		struct hw_txq_frame *f = &hw_txq[hw_txq_in % HW_TXQ];
++		if (mbuf_copydata(packet, 0, length, f->bytes) == 0) {
++			f->length = (uint16_t)length;
++			hw_txq_in++;
++			queued = true;
++		}
++	}
++	lck_mtx_unlock(&hw_txq_lock);
++	return queued;
++}
++
++static struct hakios_net_link hw_net_link = {
++	.name = "the BCM4359",
++	.wireless = true,
++	.transmit = hw_link_transmit,
++};
++
++/* struct msgbuf_tx_flowring_delete_req */
+ static void
+-hw_dhcp_discover(void)
+-{
+-	static const uint8_t options[] = { 0x63, 0x82, 0x53, 0x63, 53, 1, 1, 55, 3, 1, 3, 6, 255 };
+-	static uint8_t f[14 + 20 + 8 + 300];
+-	uint8_t *ip = f + 14, *udp = ip + 20, *b = udp + 8;
+-	uint32_t sum = 0;
+-	memset(f, 0, sizeof(f));
+-	memset(f, 0xff, 6);
+-	memcpy(f + 6, hw_mac, 6);
+-	f[12] = 0x08;
+-	ip[0] = 0x45;
+-	ip[2] = (uint8_t)((20 + 8 + 300) >> 8);
+-	ip[3] = (uint8_t)(20 + 8 + 300);
+-	ip[8] = 64;
+-	ip[9] = 17;
+-	memset(ip + 16, 0xff, 4);
+-	for (unsigned i = 0; i < 20; i += 2) {
+-		sum += ((uint32_t)ip[i] << 8) | ip[i + 1];
+-	}
+-	while (sum >> 16) {
+-		sum = (sum & 0xffff) + (sum >> 16);
+-	}
+-	ip[10] = (uint8_t)(~sum >> 8);
+-	ip[11] = (uint8_t)~sum;
+-	udp[1] = 68;
+-	udp[3] = 67;
+-	udp[4] = (uint8_t)((8 + 300) >> 8);
+-	udp[5] = (uint8_t)(8 + 300);
+-	b[0] = 1;
+-	b[1] = 1;
+-	b[2] = 6;
+-	read_random(&hw_dhcp_xid, sizeof(hw_dhcp_xid));
+-	hw_put32(b + 4, __builtin_bswap32(hw_dhcp_xid));        /* as hw_get32be() will read it back */
+-	b[10] = 0x80;                                           /* answer to everyone */
+-	memcpy(b + 28, hw_mac, 6);
+-	memcpy(b + 236, options, sizeof(options));
+-	hw_dhcp_seen = false;
+-	printf("HEROLTE WIFI: DHCP DISCOVER %s\n", hw_tx(f, sizeof(f)) ? "sent" : "not sent");
++hw_fill_flow_delete(volatile uint8_t *item, __unused void *arg)
++{
++	item[0] = MSG_FLOW_RING_DELETE;
++	hw_put16(item + 8, HW_FLOW_ID);
++}
++
++/* Off the network: brcmf_link_down()'s disassociation, the flow ring away, the keys forgotten. Under hw_lock. */
++static void
++hw_leave_locked(void)
++{
++	uint8_t scb[12] = { 3 };                                /* struct brcmf_scb_val_le: WLAN_REASON_DEAUTH_LEAVING */
++	(void)hw_ioctl(WLC_DISASSOC, NULL, scb, sizeof(scb), NULL, 0);
++	if (hw_flow == 2 && hw_submit(hw_fill_flow_delete, NULL)) {
++		for (unsigned t = 0; t < 200 && hw_flow == 2; t++) {
++			IOSleep(5);
++			hw_drain();
++		}
++	}
++	hw_flow = 0;
++	hw_tx_done = hw_tx_next;                                /* what was in the ring is not coming back */
++	hw_link = hw_keyed = hw_have_ptk = hw_open = false;
++	hw_install = 0;
++	memset(hw_pmk_key, 0, sizeof(hw_pmk_key));
++	memset(hw_ptk, 0, sizeof(hw_ptk));
++	if (hw_phase != HAKIOS_STA_OFF) {
++		hw_phase = HAKIOS_STA_IDLE;
++	}
++	if (hw_en0) {
++		hakios_net_link_state(false);
++	}
++}
++
++static int
++hw_sta_power(bool on)
++{
++	uint32_t one = 1;
++	lck_mtx_lock(&hw_lock);
++	if (!on && hw_phase >= HAKIOS_STA_JOINING) {
++		hw_leave_locked();
++	}
++	int err = hw_ioctl(on ? WLC_UP : WLC_DOWN, NULL, &one, 4, NULL, 0);
++	if (err == 0) {
++		hw_phase = on ? HAKIOS_STA_IDLE : HAKIOS_STA_OFF;
++	}
++	lck_mtx_unlock(&hw_lock);
++	printf("HEROLTE WIFI: the radio %s: %d\n", on ? "on" : "off", err);
++	return err == 0 ? 0 : EIO;
++}
++
++/* brcmf_escan_params_le, version 1: every channel (the radio's own times), a name if one is asked for. */
++static int
++hw_sta_scan(const struct hakios_sta_scan *what)
++{
++	uint8_t escan[72] = { 0 };
++	uint32_t v = 1, minus = 0xffffffffu, slen = what->ssid_length <= 32 ? what->ssid_length : 0;
++	uint16_t action = 1, sync = 0x1234;
++	memcpy(escan, &v, 4);
++	memcpy(escan + 4, &action, 2);
++	memcpy(escan + 6, &sync, 2);
++	memcpy(escan + 8, &slen, 4);
++	memcpy(escan + 12, what->ssid, slen);
++	memset(escan + 8 + 36, 0xff, 6);                        /* bssid: broadcast */
++	escan[8 + 42] = 2;                                      /* bss_type: any */
++	escan[8 + 43] = what->passive ? 1 : 0;
++	for (unsigned i = 0; i < 4; i++) {
++		memcpy(escan + 8 + 44 + i * 4, &minus, 4);
++	}
++	lck_mtx_lock(&hw_lock);
++	if (hw_phase == HAKIOS_STA_OFF) {
++		lck_mtx_unlock(&hw_lock);
++		return ENETDOWN;
++	}
++	hw_heard_count = 0;
++	hw_scan_done = false;
++	if (hw_phase == HAKIOS_STA_IDLE) {
++		hw_phase = HAKIOS_STA_SCANNING;
++	}
++	int err = hw_ioctl(WLC_SET_VAR, "escan", escan, sizeof(escan), NULL, 0);
++	lck_mtx_unlock(&hw_lock);
++	for (unsigned t = 0; err == 0 && t < 800 && !hw_scan_done; t++) {
++		IOSleep(10);
++	}
++	lck_mtx_lock(&hw_lock);
++	if (hw_phase == HAKIOS_STA_SCANNING) {
++		hw_phase = HAKIOS_STA_IDLE;
++	}
++	lck_mtx_unlock(&hw_lock);
++	return err == 0 ? 0 : EIO;
++}
++
++static void
++hw_sta_heard(void (*each)(const struct hakios_sta_bss *bss, void *context), void *context)
++{
++	for (unsigned i = 0; i < hw_heard_count; i++) {
++		each(&hw_heard[i], context);
++	}
++}
++
++/*
++ * brcmf_cfg80211_connect() as wpa_supplicant drives it: WPA2-PSK with our RSN element (or an open network), the handshake
++ * ours. Returns when the keys are in (0), the passphrase is wrong (EAUTH: message 3's MIC does not match), or after 20 s.
++ */
++static int
++hw_sta_join(const struct hakios_sta_join *what)
++{
++	const struct hakios_sta_bss *found = NULL;
++	bool open = what->security == HAKIOS_STA_OPEN, any_bssid = true;
++	uint64_t t0 = mach_absolute_time(), ns = 0;
++	int error = 0;
++	for (unsigned k = 0; k < 6; k++) {
++		any_bssid = any_bssid && what->bssid[k] == 0;
++	}
++	lck_mtx_lock(&hw_lock);
++	if (hw_phase == HAKIOS_STA_OFF) {
++		lck_mtx_unlock(&hw_lock);
++		return ENETDOWN;
++	}
++	if (hw_phase >= HAKIOS_STA_JOINING) {
++		hw_leave_locked();
++	}
++	/* the access point of that name heard best, or the one asked for */
++	for (unsigned i = 0; i < hw_heard_count; i++) {
++		const struct hakios_sta_bss *b = &hw_heard[i];
++		if (b->ssid_length == what->ssid_length && memcmp(b->ssid, what->ssid, what->ssid_length) == 0 &&
++		    (any_bssid || memcmp(b->bssid, what->bssid, 6) == 0) && (found == NULL || b->rssi > found->rssi)) {
++			found = b;
++		}
++	}
++	memset(&hw_target, 0, sizeof(hw_target));
++	if (found != NULL) {
++		hw_target = *found;
++	} else {
++		hw_target.ssid_length = what->ssid_length;
++		memcpy(hw_target.ssid, what->ssid, what->ssid_length);
++	}
++	uint8_t group = found != NULL ? hw_bss_group(found) : 0xff;
++	hw_group = group == 2 ? 2 : 4;
++	int ie = 0;
++	if (!open) {
++		static const uint8_t rsn[sizeof(hw_rsn)] = { 0x30, 20, 1, 0, 0x00, 0x0f, 0xac, 4, 1, 0, 0x00, 0x0f, 0xac, 4, 1, 0, 0x00, 0x0f, 0xac, 2, 0, 0 };
++		memcpy(hw_rsn, rsn, sizeof(rsn));
++		hw_rsn[7] = hw_group;
++		if (what->passphrase_length != 0) {
++			hw_pmk((const char *)what->passphrase, what->passphrase_length, (const char *)what->ssid, what->ssid_length, hw_pmk_key);
++		} else {
++			memcpy(hw_pmk_key, what->pmk, sizeof(hw_pmk_key));
++		}
++		ie = hw_ioctl(WLC_SET_VAR, "wpaie", hw_rsn, sizeof(hw_rsn), NULL, 0);
++	}
++	uint32_t one = 1;
++	int infra = hw_ioctl(WLC_SET_INFRA, NULL, &one, 4, NULL, 0);
++	int wpa = hw_setint("wpa_auth", open ? 0 : 0x80);      /* WPA2_AUTH_PSK */
++	int auth = hw_setint("auth", 0);                        /* open system */
++	int wsec = hw_setint("wsec", open ? 0 : hw_group == 2 ? 6 : 4);        /* AES, and TKIP for the group */
++	int mfp = hw_setint("mfp", 0);
++
++	/* brcmf_join_params, the SSID alone: any BSSID, any channel */
++	uint8_t join_params[4 + 32] = { 0 };
++	uint32_t sl = what->ssid_length;
++	memcpy(join_params, &sl, 4);
++	memcpy(join_params + 4, what->ssid, what->ssid_length);
++	hw_link = hw_keyed = hw_have_ptk = false;
++	hw_joined = 0;
++	hw_install = 0;
++	hw_mic_bad = 0;
++	hw_open = open;
++	hw_phase = HAKIOS_STA_JOINING;
++	int ssid_err = hw_ioctl(WLC_SET_SSID, NULL, join_params, sizeof(join_params), NULL, 0);
++	printf("HEROLTE WIFI: joining a network of %u bytes, %s, %s (group cipher %u); wpaie %d, infra %d, wpa_auth %d, auth %d, wsec %d, "
++	    "mfp %d, set_ssid %d\n", what->ssid_length, open ? "open" : "WPA2", found ? "heard by the last scan" : "not heard by the last scan",
++	    group, ie, infra, wpa, auth, wsec, mfp, ssid_err);
++	lck_mtx_unlock(&hw_lock);
++
++	/* the service thread does the handshake */
++	for (unsigned t = 0; ssid_err == 0 && t < 2000 && !(hw_link && (open || hw_keyed)) && hw_mic_bad < 2 && hw_joined >= 0; t++) {
++		IOSleep(10);
++	}
++	absolutetime_to_nanoseconds(mach_absolute_time() - t0, &ns);
++	lck_mtx_lock(&hw_lock);
++	if (ssid_err == 0 && hw_link && (open || hw_keyed)) {
++		uint8_t rssi[12] = { 0 }, bssid[6] = { 0 };
++		hw_phase = HAKIOS_STA_JOINED;
++		if (hw_ioctl(WLC_GET_BSSID, NULL, NULL, 0, bssid, sizeof(bssid)) == 0) {
++			memcpy(hw_target.bssid, bssid, 6);
++		}
++		if (hw_ioctl(WLC_GET_RSSI, NULL, NULL, 0, rssi, sizeof(rssi)) == 0 && (int32_t)hw_get32(rssi) < 0) {
++			hw_target.rssi = (int16_t)(int32_t)hw_get32(rssi);
++		}
++		printf("HEROLTE WIFI: CONNECTED in %llu ms: %02x:%02x:%02x:%02x:%02x:%02x, %d dBm; en0's link up\n", ns / 1000000,
++		    bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], hw_target.rssi);
++		if (hw_en0) {
++			hakios_net_link_state(true);
++		}
++	} else {
++		error = hw_mic_bad >= 2 ? EAUTH : ETIMEDOUT;
++		printf("HEROLTE WIFI: not connected after %llu ms: link %d, keys %d, join %d, wrong MICs %u\n", ns / 1000000, hw_link, hw_keyed,
++		    hw_joined, hw_mic_bad);
++		hw_leave_locked();
++	}
++	lck_mtx_unlock(&hw_lock);
++	return error;
++}
++
++static int
++hw_sta_leave(void)
++{
++	lck_mtx_lock(&hw_lock);
++	if (hw_phase >= HAKIOS_STA_JOINING) {
++		printf("HEROLTE WIFI: leaving the network\n");
++	}
++	hw_leave_locked();
++	lck_mtx_unlock(&hw_lock);
++	return 0;
++}
++
++/* On any thread, without sleeping: what is known now. */
++static void
++hw_sta_state(struct hakios_sta_state *state)
++{
++	state->phase = hw_phase;
++	state->bss = hw_target;
++	state->last_error = 0;
++}
++
++/* What the radio may tune to: 2.4 GHz 1-13, 5 GHz UNII-1 to 3, the radar channels only listened on. */
++static unsigned
++hw_sta_channels(struct hakios_sta_channel *out, unsigned most)
++{
++	static const uint16_t five[] = { 36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 149, 153,
++		                         157, 161, 165 };
++	unsigned n = 0;
++	for (unsigned c = 1; c <= 13 && n < most; c++) {
++		out[n].frequency = (uint16_t)(2407 + 5 * c);
++		out[n++].flags = 0;
++	}
++	for (unsigned i = 0; i < sizeof(five) / sizeof(five[0]) && n < most; i++) {
++		out[n].frequency = (uint16_t)(5000 + 5 * five[i]);
++		out[n++].flags = (uint16_t)(five[i] >= 52 && five[i] <= 144 ? HAKIOS_STA_CHANNEL_PASSIVE | HAKIOS_STA_CHANNEL_RADAR : 0);
++	}
++	return n;
+ }
+ 
++static struct hakios_sta_ops hw_sta_ops = {
++	.power = hw_sta_power,
++	.scan = hw_sta_scan,
++	.heard = hw_sta_heard,
++	.join = hw_sta_join,
++	.leave = hw_sta_leave,
++	.state = hw_sta_state,
++	.channels = hw_sta_channels,
++};
++
+ /*
+- * brcmf_cfg80211_connect() for wpa_supplicant: WPA2-PSK with our RSN element, the handshake ours. The network is in the
+- * drop zone's wifi/network.txt, its name on the first line and its passphrase on the second; the passphrase is not logged.
++ * The service thread: the chip looked at every millisecond while frames move and every 5 when they do not; the handshakes
++ * (and the group key's renewals), en0's frames out. A link that goes and does not come back in 10 s (the firmware joins
++ * again by itself after a deauthentication) is said to be lost: wifid joins again.
+  */
+ static void
+-hw_join(void)
++hw_service(__unused void *arg, __unused wait_result_t wr)
++{
++	uint64_t down_since = 0;
++	for (;;) {
++		bool lost = false;
++		lck_mtx_lock(&hw_lock);
++		uint32_t before = hw_rx_frames + hw_tx_next;
++		hw_drain();
++		for (; hw_eapol_out != hw_eapol_in; hw_eapol_out++) {
++			unsigned slot = hw_eapol_out % HW_EAPOL_SLOTS;
++			hw_eapol(hw_eapol_q[slot], hw_eapol_len[slot]);
++		}
++		hw_keys();
++		while (hw_txq_out != hw_txq_in) {
++			struct hw_txq_frame *f = &hw_txq[hw_txq_out % HW_TXQ];
++			if (hw_phase == HAKIOS_STA_JOINED && (hw_keyed || hw_open) && !hw_tx(f->bytes, f->length)) {
++				break;                                  /* full: the next time round */
++			}
++			lck_mtx_lock(&hw_txq_lock);
++			hw_txq_out++;                           /* sent, or dropped while there is no network */
++			lck_mtx_unlock(&hw_txq_lock);
++		}
++		if (hw_phase == HAKIOS_STA_JOINED) {
++			uint64_t now = mach_absolute_time(), ns = 0;
++			bool up = hw_link && (hw_keyed || hw_open);
++			if (!up && down_since == 0) {
++				down_since = now;
++				printf("HEROLTE WIFI: the link is gone; the firmware tries again\n");
++				hakios_net_link_state(false);
++			} else if (up && down_since != 0) {
++				down_since = 0;
++				printf("HEROLTE WIFI: the link is back\n");
++				hakios_net_link_state(true);
++			} else if (!up) {
++				absolutetime_to_nanoseconds(now - down_since, &ns);
++				if (ns > 10000000000ull) {
++					printf("HEROLTE WIFI: the link did not come back in 10 s: the network is lost\n");
++					hw_leave_locked();
++					down_since = 0;
++					lost = true;
++				}
++			}
++		}
++		bool moving = hw_rx_frames + hw_tx_next != before || hw_txq_out != hw_txq_in;
++		lck_mtx_unlock(&hw_lock);
++		if (lost) {
++			hakios_sta_lost(ECONNRESET);
++		}
++		IOSleep(moving ? 1 : 5);
++	}
++}
++
++/*
++ * The network of the drop zone's wifi/network.txt (its name on the first line, its passphrase on the second; the passphrase
++ * is not logged), joined at once and whenever the radio comes back on, until iOS asks for another (sweet_sta.c's standing
++ * network).
++ */
++static void
++hw_standing(void)
+ {
+ 	static char text[256];
++	static struct hakios_sta_join join;
+ 	uint32_t n = hw_read_file("/private/var/herolte/wifi/network.txt", text, sizeof(text) - 1);
+ 	if (n == 0) {
+-		printf("HEROLTE WIFI: no wifi/network.txt, no joining\n");
++		printf("HEROLTE WIFI: no wifi/network.txt: iOS chooses the network\n");
+ 		return;
+ 	}
+ 	text[n] = 0;
+@@ -1405,46 +1775,26 @@ hw_join(void)
+ 		}
+ 	}
+ 	size_t slen = line[0] ? strlen(line[0]) : 0, plen = line[1] ? strlen(line[1]) : 0;
+-	if (slen == 0 || slen > 32 || plen < 8 || plen > 63) {
+-		printf("HEROLTE WIFI: wifi/network.txt: a name of %zu bytes and a passphrase of %zu; wanted 1-32 and 8-63\n", slen, plen);
+-		memset(text, 0, sizeof(text));
+-		return;
+-	}
+-	printf("HEROLTE WIFI: joining \"%s\", a passphrase of %zu characters\n", line[0], plen);
+-	if (!hw_crypto_check()) {
+-		memset(text, 0, sizeof(text));
+-		return;
+-	}
+-
+-	/* the group cipher the scan saw; the RSN element is the one of the association request and of message 2 */
+-	uint8_t group = 0xff;
+-	bool seen = false;
+-	for (unsigned k = 0; k < hw_ssids && !seen; k++) {
+-		if ((seen = strcmp(hw_ssid_seen[k], line[0]) == 0)) {
+-			group = hw_seen_group[k];
+-		}
++	if (slen == 0 || slen > 32 || (plen != 0 && (plen < 8 || plen > 63))) {
++		printf("HEROLTE WIFI: wifi/network.txt: a name of %zu bytes and a passphrase of %zu; wanted 1-32 and 8-63 (or none)\n", slen, plen);
++	} else {
++		memset(&join, 0, sizeof(join));
++		join.ssid_length = (uint8_t)slen;
++		memcpy(join.ssid, line[0], slen);
++		join.security = plen ? HAKIOS_STA_WPA2_PSK : HAKIOS_STA_OPEN;
++		join.passphrase_length = (uint8_t)plen;
++		memcpy(join.passphrase, line[1] ? line[1] : "", plen);
++		printf("HEROLTE WIFI: the standing network \"%s\" (%s): %d\n", line[0], plen ? "WPA2" : "open", hakios_sta_ask_join_standing(&join));
++		memset(&join, 0, sizeof(join));
+ 	}
+-	hw_group = group == 2 ? 2 : 4;
+-	static const uint8_t rsn[sizeof(hw_rsn)] = { 0x30, 20, 1, 0, 0x00, 0x0f, 0xac, 4, 1, 0, 0x00, 0x0f, 0xac, 4, 1, 0, 0x00, 0x0f, 0xac, 2, 0, 0 };
+-	memcpy(hw_rsn, rsn, sizeof(rsn));
+-	hw_rsn[7] = hw_group;
+-	printf("HEROLTE WIFI: %s; group cipher %u (2 TKIP, 4 CCMP, 255 no RSN element), using %u\n", seen ? "seen by the scan" : "not seen by the scan",
+-	    group, hw_group);
+-
+-	uint64_t t0 = mach_absolute_time(), ns = 0;
+-	hw_pmk(line[1], plen, line[0], slen, hw_pmk_key);
+-	absolutetime_to_nanoseconds(mach_absolute_time() - t0, &ns);
+-	printf("HEROLTE WIFI: PMK made in %llu ms\n", ns / 1000000);
+-
+-	uint32_t one = 1;
+-	int ie = hw_ioctl(WLC_SET_VAR, "wpaie", hw_rsn, sizeof(hw_rsn), NULL, 0);
+-	int infra = hw_ioctl(WLC_SET_INFRA, NULL, &one, 4, NULL, 0);
+-	int wpa = hw_setint("wpa_auth", 0x80);                 /* WPA2_AUTH_PSK */
+-	int auth = hw_setint("auth", 0);                        /* open */
+-	int wsec = hw_setint("wsec", hw_group == 2 ? 6 : 4);    /* AES, and TKIP for the group */
+-	int mfp = hw_setint("mfp", 0);
+-	printf("HEROLTE WIFI: wpaie %d, infra %d, wpa_auth %d, auth %d, wsec %d, mfp %d\n", ie, infra, wpa, auth, wsec, mfp);
++	memset(text, 0, sizeof(text));
++}
+ 
++/* The firmware is up: the station is offered to iOS, and the chip has a thread of its own from now on. */
++static void
++hw_station_start(void)
++{
++	thread_t thread;
+ 	uint8_t mask[16] = { 0 };
+ 	int err = hw_ioctl(WLC_GET_VAR, "event_msgs", NULL, 0, mask, sizeof(mask));
+ 	static const uint8_t wanted[] = { 0, 1, 3, 5, 6, 7, 12, 16, E_ESCAN_RESULT };
+@@ -1452,48 +1802,26 @@ hw_join(void)
+ 		mask[wanted[i] / 8] = (uint8_t)(mask[wanted[i] / 8] | (1u << (wanted[i] % 8)));
+ 	}
+ 	int mask_err = hw_ioctl(WLC_SET_VAR, "event_msgs", mask, sizeof(mask), NULL, 0);
+-
+-	/* brcmf_join_params, the SSID alone: any BSSID, any channel */
+-	uint8_t join_params[4 + 32] = { 0 };
+-	uint32_t sl = (uint32_t)slen;
+-	memcpy(join_params, &sl, 4);
+-	memcpy(join_params + 4, line[0], slen);
+-	hw_link = hw_keyed = hw_have_ptk = false;
+-	hw_joined = 0;
+-	hw_install = 0;
+-	int ssid_err = hw_ioctl(WLC_SET_SSID, NULL, join_params, sizeof(join_params), NULL, 0);
+-	printf("HEROLTE WIFI: event_msgs %d/%d, set_ssid %d\n", err, mask_err, ssid_err);
+-	memset(text, 0, sizeof(text));
+-
+-	t0 = mach_absolute_time();
+-	for (unsigned t = 0; t < 3000 && !(hw_link && hw_keyed) && hw_joined >= 0; t++) {
+-		IOSleep(10);
+-		hw_drain();
+-		for (; hw_eapol_out != hw_eapol_in; hw_eapol_out++) {
+-			unsigned slot = hw_eapol_out % HW_EAPOL_SLOTS;
+-			hw_eapol(hw_eapol_q[slot], hw_eapol_len[slot]);
+-		}
+-		hw_keys();
++	hw_heard = kalloc_data(HW_HEARD_MOST * sizeof(*hw_heard), Z_WAITOK | Z_ZERO);
++	hw_txq = kalloc_data(HW_TXQ * sizeof(*hw_txq), Z_WAITOK | Z_ZERO);
++	printf("HEROLTE WIFI: event_msgs %d/%d\n", err, mask_err);
++	if (hw_heard == NULL || hw_txq == NULL || !hw_crypto_check()) {
++		printf("HEROLTE WIFI: no memory or no crypto: no station\n");
++		return;
+ 	}
+-	absolutetime_to_nanoseconds(mach_absolute_time() - t0, &ns);
+-	if (hw_link && hw_keyed) {
+-		uint8_t rssi[12] = { 0 }, bssid[6] = { 0 };
+-		hw_ioctl(WLC_GET_RSSI, NULL, NULL, 0, rssi, sizeof(rssi));
+-		hw_ioctl(WLC_GET_BSSID, NULL, NULL, 0, bssid, sizeof(bssid));
+-		printf("HEROLTE WIFI: CONNECTED with WPA2 in %llu ms: %02x:%02x:%02x:%02x:%02x:%02x, %d dBm\n", ns / 1000000,
+-		    bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], (int32_t)hw_get32(rssi));
+-		hw_dhcp_discover();
+-		for (unsigned t = 0; t < 500 && !hw_dhcp_seen; t++) {
+-			IOSleep(10);
+-			hw_drain();
+-		}
+-		printf("HEROLTE WIFI: %s; %u frames came, %u of %u sent\n", hw_dhcp_seen ? "the network answers" : "no DHCP answer in 5 s",
+-		    hw_rx_frames, hw_tx_done, hw_tx_next);
+-	} else {
+-		printf("HEROLTE WIFI: not connected after %llu ms: link %d, keys %d, join %d; %u frames came, %u of %u sent\n", ns / 1000000,
+-		    hw_link, hw_keyed, hw_joined, hw_rx_frames, hw_tx_done, hw_tx_next);
++	hw_phase = HAKIOS_STA_IDLE;
++	if (kernel_thread_start(hw_service, NULL, &thread) != KERN_SUCCESS) {
++		printf("HEROLTE WIFI: no thread for the chip: no station\n");
++		return;
+ 	}
+-	memset(hw_pmk_key, 0, sizeof(hw_pmk_key));
++	thread_set_thread_name(thread, "herolte-wifi");
++	thread_deallocate(thread);
++	static struct hakios_sta_scan all;
++	printf("HEROLTE WIFI: a first scan: %d, %u access points\n", hw_sta_scan(&all), hw_heard_count);
++	memcpy(hw_sta_ops.address, hw_mac, 6);
++	hakios_sta_attach(&hw_sta_ops);
++	printf("HEROLTE WIFI: the station is iOS's%s\n", hw_en0 ? ", behind en0" : " (BUT THERE IS NO EN0)");
++	hw_standing();
+ }
+ 
+ static void
+@@ -1552,6 +1880,14 @@ hw_msgbuf(uint32_t shared, uint32_t ramsize, const uint8_t *clm, uint32_t clm_le
+ 	int err = hw_ioctl(WLC_GET_VAR, "cur_etheraddr", NULL, 0, mac, 6);
+ 	printf("HEROLTE WIFI: cur_etheraddr: %d, %02x:%02x:%02x:%02x:%02x:%02x\n", err, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+ 	memcpy(hw_mac, mac, 6);
++	if (hw_en0) {
++		/* en0's address (the one MobileGestalt reports), the firmware's too: set before it is up, as brcmfmac does */
++		err = hw_ioctl(WLC_SET_VAR, "cur_etheraddr", hw_net_link.address, 6, NULL, 0);
++		printf("HEROLTE WIFI: the firmware takes en0's address: %d%s\n", err, err == 0 ? "" : ": EN0'S FRAMES WILL NOT REACH IT");
++		if (err == 0) {
++			memcpy(hw_mac, hw_net_link.address, 6);
++		}
++	}
+ 	char ver[128] = { 0 };
+ 	err = hw_ioctl(WLC_GET_VAR, "ver", NULL, 0, ver, sizeof(ver) - 1);
+ 	for (unsigned i = 0; i < sizeof(ver); i++) {
+@@ -1585,31 +1921,7 @@ hw_msgbuf(uint32_t shared, uint32_t ramsize, const uint8_t *clm, uint32_t clm_le
+ 
+ 	uint32_t one = 1;
+ 	printf("HEROLTE WIFI: up: %d\n", hw_ioctl(WLC_UP, NULL, &one, 4, NULL, 0));
+-	uint8_t mask[16] = { 0 };
+-	err = hw_ioctl(WLC_GET_VAR, "event_msgs", NULL, 0, mask, sizeof(mask));
+-	mask[E_ESCAN_RESULT / 8] = (uint8_t)(mask[E_ESCAN_RESULT / 8] | (1u << (E_ESCAN_RESULT % 8)));
+-	printf("HEROLTE WIFI: event_msgs: %d, set %d\n", err, hw_ioctl(WLC_SET_VAR, "event_msgs", mask, sizeof(mask), NULL, 0));
+-
+-	/* brcmf_escan_params_le, version 1: every channel, active, the firmware's own times */
+-	uint8_t escan[72] = { 0 };
+-	uint32_t v = 1, minus = 0xffffffffu;
+-	uint16_t action = 1, sync = 0x1234;
+-	memcpy(escan, &v, 4);
+-	memcpy(escan + 4, &action, 2);
+-	memcpy(escan + 6, &sync, 2);
+-	memset(escan + 8 + 36, 0xff, 6);                        /* bssid: broadcast */
+-	escan[8 + 42] = 2;                                      /* bss_type: any */
+-	escan[8 + 43] = 0;                                      /* active */
+-	for (unsigned i = 0; i < 4; i++) {
+-		memcpy(escan + 8 + 44 + i * 4, &minus, 4);
+-	}
+-	printf("HEROLTE WIFI: escan: %d\n", hw_ioctl(WLC_SET_VAR, "escan", escan, sizeof(escan), NULL, 0));
+-	for (unsigned t = 0; t < 1500; t++) {
+-		IOSleep(10);
+-		hw_drain();
+-	}
+-	printf("HEROLTE WIFI: %u networks seen\n", hw_ssids);
+-	hw_join();
++	hw_station_start();
+ }
+ 
+ void
+@@ -1743,8 +2055,65 @@ herolte_wifi_firmware(vm_offset_t cfg)
+ 	if (clm) {
+ 		kfree_data(clm, HW_CLM_MAX);
+ 	}
+-	for (unsigned t = 0; t < 5; t++) {
+-		IOSleep(1000);
+-		hw_console(console, &hw_console_done);
+-	}
+ }
++
++/* sweet_sta.c's lines (hakios.say.h): to the kernel log. */
++int
++hakios_wifi_say(const char *format, ...)
++{
++	char line[256];
++	va_list ap;
++	va_start(ap, format);
++	int n = vsnprintf(line, sizeof(line), format, ap);
++	va_end(ap);
++	printf("HEROLTE WIFI: %s", line);
++	return n;
++}
++
++int
++hakios_wifi_tell(const char *format, ...)
++{
++	char line[256];
++	va_list ap;
++	va_start(ap, format);
++	int n = vsnprintf(line, sizeof(line), format, ap);
++	va_end(ap);
++	printf("HEROLTE WIFI: %s", line);
++	return n;
++}
++
++/*
++ * herowifi=1, before launchd (bsd_init.c): en0 and the registry entries iOS looks for, made at once with the link down;
++ * wifid and configd look for them as they start, once, and the radio comes up behind them some 45 s later
++ * (herolte_gpu.c). As on apollo (xnu 0129, 0131): IONetworkStack for configd's interface namer, and the IOKit daemon's
++ * arrival stood in for so that the registry goes quiet (herowifiquiet=0 leaves that out).
++ */
++void
++herolte_wifi_early(void)
++{
++	uint32_t wifi = 0, quiet = 1;
++	DTEntry node;
++	void const *prop = NULL;
++	unsigned int size = 0;
++	if (!PE_parse_boot_argn("herowifi", &wifi, sizeof(wifi)) || !wifi) {
++		return;
++	}
++	PE_parse_boot_argn("herowifiquiet", &quiet, sizeof(quiet));
++	if (quiet) {
++		SweetIOKitDaemonStandIn();
++	}
++	SweetNetworkStackStart();
++	hakios_net_init();
++	/* the address MobileGestalt reports as the Wi-Fi's (mkadt_herolte.py's /chosen mac-address-wifi0) */
++	bool adt = SecureDTLookupEntry(NULL, "/chosen", &node) == kSuccess &&
++	    SecureDTGetProperty(node, "mac-address-wifi0", &prop, &size) == kSuccess && size == 6;
++	if (adt) {
++		memcpy(hw_net_link.address, prop, 6);
++	} else {
++		read_random(hw_net_link.address, 6);
++		hw_net_link.address[0] = (uint8_t)((hw_net_link.address[0] & 0xfe) | 0x02);
++	}
++	hw_en0 = hakios_net_attach(&hw_net_link);
++	printf("HEROLTE WIFI: en0 %s, its address %s; the radio comes later\n", hw_en0 ? "made" : "NOT MADE",
++	    adt ? "the ADT's mac-address-wifi0" : "a random one");
++}
+\ No newline at end of file
+diff --git a/bsd/dev/sweet_apple80211.c b/bsd/dev/sweet_apple80211.c
+new file mode 100644
+index 0000000..f08af90
+--- /dev/null
++++ b/bsd/dev/sweet_apple80211.c
+@@ -0,0 +1,846 @@
++/* From HackiOS's bsd/dev/hakios.apple80211.c (the Mi 10 port's) (github.com/oosexgang/hackios-xnu-kernel, as
++ * github.com/JopangJovan/hackios-xnu-kernel-umi has it; APSL 2.0), for apollo's Wi-Fi (xnu 0128).
++ * Imported as it is: it was written for a build without -Werror, so its warnings are not
++ * looked at here (this kernel builds with -Weverything -Werror). */
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_HEROLTE)
++#pragma clang diagnostic ignored "-Weverything"
++/*
++ * Darwin-on-hakios: Apple80211, answered in the kernel.
++ *
++ * iOS's Wi-Fi side -- wifid, and through it Settings and the status bar -- talks to a Wi-Fi
++ * driver in requests that were once ioctls and are, where the driver offers no user client,
++ * ioctls still: SIOCGA80211 and SIOCSA80211 on any socket, with a struct apple80211req that
++ * names the interface, a request type, a value, and a buffer in the caller's memory
++ * (IO80211.framework: Apple80211Get/Set and their kin all end there). XNU hands an interface
++ * ioctl it does not know to the interface, so they arrive in bsd/dev/hakios.net.c, which
++ * passes them here when its link is a radio.
++ *
++ * What is asked is answered from the station boundary (sys/hakios.sta.h): the radio's power,
++ * its channels, a scan and what it heard, the network joined. What happens there by itself is
++ * told to iOS the way a driver tells it: kernel events of class 6 (IEEE 802.11), subclass 1,
++ * whose code is Apple80211's own event number and whose data begins with the interface's name
++ * in 16 bytes (IO80211.framework reads them from a PF_SYSTEM socket and compares the name).
++ *
++ * Every request is still written to the log -- who asks, get or set, the type, the value, the
++ * length -- because which of them wifid needs is found that way. Never what a request carries:
++ * a network's name or its key may be in there.
++ *
++ * The request types and the layouts are Apple's. The old ones are as the headers of its open
++ * IO80211 sources once described them (apple80211_ioctl.h, apple80211_var.h); where iOS 16.5
++ * differs the layout was read out of IO80211.framework of 16.5, which fills and reads the same
++ * structures on the other side (Apple80211GetWithIOCTL, _getScanData, _addScanResultToList,
++ * _performAssociation, _dispatchAsyncAssocEvent, _dispatchLinkChangedEvent).
++ *
++ * A join: ASSOCIATE (20) carries the network's name, perhaps its access point, and the
++ * passphrase as typed (the framework does not make the key of it), and is answered at once;
++ * when the station has joined or failed, event 9 says so, and ASSOCIATE_RESULT (21) gives the
++ * outcome as one of Apple80211's result numbers, which the framework turns into its errors:
++ * 1 success, 21 "invalid PMK" (a wrong passphrase), 9 a timeout, 2 anything else.
++ */
++#include <kern/kalloc.h>
++#include <kern/locks.h>
++#include <libkern/libkern.h>
++#include <sys/errno.h>
++#include <sys/kern_event.h>
++#include <sys/kernel.h>
++#include <sys/proc.h>
++#include "hakios.say.h"
++#include "hakios.net.h"
++#include "hakios.sta.h"
++#include <sys/sockio.h>
++#include <sys/systm.h>
++
++#define SIOCSA80211             0x802869c8u     /* _IOW('i', 200, struct apple80211req) */
++#define SIOCGA80211             0xc02869c9u     /* _IOWR('i', 201, struct apple80211req) */
++
++struct apple80211req {
++	char req_if_name[16];
++	int32_t req_type;
++	int32_t req_val;
++	uint32_t req_len;
++	user_addr_t req_data __attribute__((aligned(8)));
++};
++
++/* (as far as they have come by: the names help reading the log) */
++static const char *
++type_name(int32_t type)
++{
++	static const struct {
++		int32_t type;
++		const char *name;
++	} names[] = {
++		{ 1, "SSID" }, { 2, "AUTH_TYPE" }, { 3, "CIPHER_KEY" }, { 4, "CHANNEL" }, { 5, "POWERSAVE" }, { 6, "PROTMODE" },
++		{ 7, "TXPOWER" }, { 8, "RATE" }, { 9, "BSSID" }, { 10, "SCAN_REQ" }, { 11, "SCAN_RESULT" }, { 12, "CARD_CAPABILITIES" },
++		{ 13, "STATE" }, { 14, "PHY_MODE" }, { 15, "OP_MODE" }, { 16, "RSSI" }, { 17, "NOISE" }, { 18, "INT_MIT" }, { 19, "POWER" },
++		{ 20, "ASSOCIATE" }, { 21, "ASSOCIATE_RESULT" }, { 22, "DISASSOCIATE" }, { 23, "STATUS_DEV_NAME" }, { 24, "IBSS_MODE" },
++		{ 25, "HOST_AP_MODE" }, { 26, "AP_MODE" }, { 27, "SUPPORTED_CHANNELS" }, { 28, "LOCALE" }, { 29, "DEAUTH" },
++		{ 30, "COUNTERMEASURES" }, { 32, "RATE_SET" }, { 42, "STATION_LIST" }, { 43, "DRIVER_VERSION" },
++		{ 44, "HARDWARE_VERSION" }, { 46, "RSN_IE" }, { 47, "BACKGROUND_SCAN" }, { 48, "AP_IE_LIST" }, { 49, "STATS" },
++		{ 50, "ASSOCIATION_STATUS" }, { 51, "COUNTRY_CODE" }, { 54, "RADIO_INFO" }, { 57, "MCS" }, { 66, "MCS_INDEX_SET" },
++		{ 79, "STA_STATS" }, { 80, "ROAM_THRESH" }, { 85, "IE" }, { 86, "SCAN_REQ_MULTIPLE" }, { 87, "BTCOEX_MODE" },
++		{ 90, "SCANCACHE_CLEAR" }, { 94, "VIRTUAL_IF_CREATE" }, { 95, "VIRTUAL_IF_DELETE" }, { 103, "CURRENT_NETWORK" },
++		{ 106, "RSSI_BOUNDS" }, { 107, "ROAM" }, { 207, "CHANNELS_INFO" }, { 254, "HW_SUPPORTED_CHANNELS" },
++	};
++
++	for (unsigned i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
++		if (names[i].type == type) {
++			return names[i].name;
++		}
++	}
++	return "?";
++}
++
++/* ---- the layouts ------------------------------------------------------------------------------------------ */
++
++/*
++ * The noise floor told with every signal (xnu 0131): ath11k's own figure (ATH11K_DEFAULT_NOISE_FLOOR, the value
++ * it reckons signal strengths against); the firmware is not asked. Without a noise floor (0) iOS's signal-to-noise
++ * is the signal itself, -41 dBm, and the status bar showed a weak signal next to the access point (boot 56).
++ */
++#define NOISE_FLOOR             (-95)
++/*
++ * RSSI_BOUNDS (106): wifid asks it while it sets the device up (and tries again only on an error); the
++ * layout {version 1, the weakest, the strongest, a threshold} (dBm) and these values are iOSPlus10's
++ * (patches/xnu/README-wifi.md "0345", from the 20H392 binaries; the values are its guess, min < threshold
++ * < max). Refused, wifid had no range to put a signal in (boot 57: the status bar weak at -41 dBm).
++ */
++#define RSSI_BOUND_MIN          (-90)
++#define RSSI_BOUND_MAX          (-40)
++#define RSSI_BOUND_THRESHOLD    (-80)
++#define PHY_11A                 0x2u
++#define PHY_11B                 0x4u
++#define PHY_11G                 0x8u
++#define CHANNEL_20MHZ           0x2u
++#define CHANNEL_2GHZ            0x8u
++#define CHANNEL_5GHZ            0x10u
++#define CHANNEL_ACTIVE          0x80u           /* the radio may send there */
++#define CHANNEL_DFS             0x100u
++
++struct apple80211_channel {
++	uint32_t version, channel, flags;
++};
++
++/* SUPPORTED_CHANNELS (27) and HW_SUPPORTED_CHANNELS (254): 4824 bytes */
++struct apple80211_channels {
++	uint32_t version, count;
++	struct apple80211_channel channels[401];
++	uint32_t unused;
++};
++
++/* CHANNELS_INFO (207): 10016 bytes; of each channel a byte in each of several rows, and a word of flags */
++struct apple80211_channels_info {
++	uint8_t unknown_0[12];
++	uint16_t count;
++	uint8_t unknown_1[800];
++	uint8_t number[400], indoor[400], dfs[400], passive[400], wide_40[400], wide_80[400];
++	uint8_t unknown_2[1602];
++	uint32_t flags[400];
++	uint8_t unknown_3[3600];
++} __attribute__((packed));
++
++/* SCAN_REQ (10): 5456 bytes */
++struct apple80211_scan_request {
++	uint32_t version, bss_type;
++	uint8_t bssid[6], unused_0[2];
++	uint32_t ssid_length;
++	uint8_t ssid[32];
++	uint32_t scan_type;                     /* 1: asking, 2: listening only */
++	uint32_t phy_mode;
++	uint16_t dwell_ms, unused_1;
++	uint32_t rest_ms;
++	uint32_t channel_count;
++	struct apple80211_channel channels[400];
++	uint64_t flags;
++	uint32_t unused_2;
++	uint32_t name_count;                    /* networks asked for by name, each in 56 bytes */
++	uint8_t names[10][56];
++	uint32_t short_ssid, unused_3;
++};
++
++/* SCAN_RESULT (11) and CURRENT_NETWORK (103): 1164 bytes */
++struct apple80211_scan_result {
++	uint32_t version;
++	struct apple80211_channel channel;
++	uint16_t noise_known;
++	int16_t noise, snr, rssi;
++	uint16_t beacon_interval, capability;
++	uint8_t bssid[6];
++	uint8_t rate_count, unused_0;
++	uint32_t rates[15];                     /* Mbit/s */
++	uint8_t ssid_length, ssid[32], unused_1[3];
++	uint32_t age_ms;
++	uint8_t flags, unused_2;
++	uint16_t elements_length;               /* comes in as the room there is */
++	uint8_t elements[1024];
++};
++
++/* ASSOCIATE (20): 592 bytes; of what follows the key (the RSN element wifid built, flags) nothing is used */
++struct apple80211_assoc {
++	uint32_t version;
++	uint16_t mode, auth_lower, auth_upper, unused_0;
++	uint32_t ssid_length;
++	uint8_t ssid[32];
++	uint8_t bssid[6], unused_1[2];
++	uint32_t key_version, key_length, key_cipher;   /* cipher 10: a passphrase as typed; 6: the key (from 64 hex digits) */
++	uint16_t key_flags, key_index;
++	uint8_t key[64];
++	uint8_t rest[0x250 - 0x88];
++};
++
++#define CIPHER_PMK              6
++#define CIPHER_PASSPHRASE       10
++
++/* the link event's data (at least 32 bytes, or the framework drops the event) */
++struct apple80211_link_changed {
++	uint8_t down, unused_0[3];
++	int32_t rssi;
++	uint16_t snr, noise;
++	uint8_t unused_1[4];
++	uint8_t involuntary, unused_2[3];
++	uint32_t reason, subreason;
++	uint8_t unused_3[4];
++};
++
++_Static_assert(sizeof(struct apple80211_assoc) == 592 && offsetof(struct apple80211_assoc, key) == 0x48,
++    "the association request as iOS 16.5 has it");
++_Static_assert(sizeof(struct apple80211_link_changed) == 32 && offsetof(struct apple80211_link_changed, reason) == 0x14,
++    "the link event as iOS 16.5 reads it");
++_Static_assert(sizeof(struct apple80211_channels) == 4824, "the channel list as iOS 16.5 has it");
++_Static_assert(sizeof(struct apple80211_channels_info) == 10016 && offsetof(struct apple80211_channels_info, number) == 0x32e &&
++    offsetof(struct apple80211_channels_info, flags) == 0x12d0, "the channels' description as iOS 16.5 has it");
++_Static_assert(sizeof(struct apple80211_scan_request) == 5456 && offsetof(struct apple80211_scan_request, channels) == 0x48 &&
++    offsetof(struct apple80211_scan_request, flags) == 0x1308 && offsetof(struct apple80211_scan_request, names) == 0x1318,
++    "the scan request as iOS 16.5 has it");
++_Static_assert(sizeof(struct apple80211_scan_result) == 1164 && offsetof(struct apple80211_scan_result, ssid_length) == 0x60 &&
++    offsetof(struct apple80211_scan_result, age_ms) == 0x84 && offsetof(struct apple80211_scan_result, elements) == 0x8c,
++    "a scan's result as iOS 16.5 has it");
++
++/* Apple80211's events (APPLE80211_M_...) */
++enum { EVENT_POWER_CHANGED = 1, EVENT_SSID_CHANGED = 2, EVENT_BSSID_CHANGED = 3, EVENT_LINK_CHANGED = 4, EVENT_ASSOC_DONE = 9,
++       EVENT_SCAN_DONE = 10 };
++
++static const char interface_name[16] = "en0";   /* (bsd/dev/hakios.net.c makes one interface, and that is its name) */
++
++static LCK_GRP_DECLARE(apple80211_lock_group, "hakios-apple80211");
++static LCK_MTX_DECLARE(apple80211_lock, &apple80211_lock_group);
++static unsigned result_next;                    /* which of what the last scan heard a SCAN_RESULT request gets next */
++static uint32_t join_result;                    /* of the last join asked for: 0 while it runs, then Apple80211's number */
++
++/* ---- channels ---------------------------------------------------------------------------------------- */
++
++static unsigned
++channel_number(unsigned frequency)
++{
++	return frequency == 2484 ? 14 : frequency < 4000 ? (frequency - 2407) / 5 : (frequency - 5000) / 5;
++}
++
++static unsigned
++channel_frequency(const struct apple80211_channel *channel)
++{
++	bool low = channel->flags & CHANNEL_2GHZ ? true : channel->flags & CHANNEL_5GHZ ? false : channel->channel <= 14;
++
++	if (channel->channel == 0 || channel->channel > 196 || (channel->flags & 0x2000)) {     /* (0x2000: 6 GHz) */
++		return 0;
++	}
++	return low ? (channel->channel == 14 ? 2484 : 2407 + 5 * channel->channel) : 5000 + 5 * channel->channel;
++}
++
++static void
++channel_fill(struct apple80211_channel *channel, unsigned frequency, unsigned flags)
++{
++	channel->version = 1;
++	channel->channel = channel_number(frequency);
++	channel->flags = CHANNEL_20MHZ | (frequency < 4000 ? CHANNEL_2GHZ : CHANNEL_5GHZ) | (flags & HAKIOS_STA_CHANNEL_PASSIVE ?
++	    0 : CHANNEL_ACTIVE) | (flags & HAKIOS_STA_CHANNEL_RADAR ? CHANNEL_DFS : 0);
++}
++
++/* ---- what the caller is given back ------------------------------------------------------------------- */
++
++/* At most as many bytes as it has room for. */
++static int
++give(const struct apple80211req *request, const void *data, size_t length)
++{
++	return request->req_data == USER_ADDR_NULL ? 0 : copyout(data, request->req_data, length < request->req_len ? length :
++	       request->req_len);
++}
++
++/* An access point in the form a scan's result has; the caller has said how much room for elements there is. */
++static int
++give_network(const struct apple80211req *request, const struct hakios_sta_bss *bss)
++{
++	struct apple80211_scan_result *result = kalloc_data(sizeof(*result), Z_WAITOK | Z_ZERO);
++	unsigned room = sizeof(result->elements);
++	int error;
++
++	if (result == NULL) {
++		return ENOMEM;
++	}
++	if (request->req_len >= sizeof(*result) && copyin(request->req_data, result, offsetof(struct apple80211_scan_result,
++	    elements)) == 0 && result->elements_length < room) {
++		room = result->elements_length;
++	}
++	bzero(result, sizeof(*result));
++	result->version = 1;
++	channel_fill(&result->channel, bss->frequency, 0);
++	result->rssi = bss->rssi;
++	result->noise_known = 1;
++	result->noise = NOISE_FLOOR;
++	result->snr = (int16_t)(bss->rssi - NOISE_FLOOR);
++	result->beacon_interval = bss->beacon_interval;
++	result->capability = bss->capability;
++	memcpy(result->bssid, bss->bssid, sizeof(result->bssid));
++	result->ssid_length = bss->ssid_length;
++	memcpy(result->ssid, bss->ssid, bss->ssid_length);
++	result->age_ms = bss->age_ms;
++	result->elements_length = (uint16_t)(bss->elements_length <= room ? bss->elements_length : 0);
++	memcpy(result->elements, bss->elements, result->elements_length);
++	/* the rates it says it has (elements 1 and 50: units of 500 kbit/s, the top bit marks the ones everybody must have) */
++	for (unsigned at = 0; at + 2 <= bss->elements_length && at + 2 + bss->elements[at + 1] <= bss->elements_length;
++	    at += 2 + bss->elements[at + 1]) {
++		for (unsigned i = 0; (bss->elements[at] == 1 || bss->elements[at] == 50) && i < bss->elements[at + 1]; i++) {
++			unsigned rate = (bss->elements[at + 2 + i] & 0x7f) / 2;
++
++			if (rate != 0 && rate <= 54 && result->rate_count < 15) {
++				result->rates[result->rate_count++] = rate;
++			}
++		}
++	}
++	error = give(request, result, sizeof(*result));
++	kfree_data(result, sizeof(*result));
++	return error;
++}
++
++/* ---- get ---------------------------------------------------------------------------------------------- */
++
++static int
++get(struct apple80211req *request)
++{
++	struct hakios_sta_state *state;
++	int error = 0;
++
++	switch (request->req_type) {
++	case 43:
++	case 44: {                              /* the driver's and the hardware's name: the text alone, in 256 bytes */
++		static const char name[256] =
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		    "herolte: BCM4359 (bcmdhd 9.96.17)";
++#else
++		    "hakios: ath11k for the WCN6750";
++#endif
++
++		return give(request, name, sizeof(name));
++	}
++	case 12: {
++		/*
++		 * What the card can do, a bit each (apple80211_var.h: APPLE80211_CAP_*): the 13 bytes are the
++		 * bits alone, from the first (the framework hands in a buffer that begins after the old
++		 * header's version word). TKIP with Michael MIC, AES, AES-CCM, power management, short slot and preamble, WPA2, WME,
++		 * short guard interval at 20 MHz. Read wrong, the framework sees no WPA2 and builds no join
++		 * for a WPA2 network ("Unable to join").
++		 */
++		uint8_t bits[13] = { 0 };
++		static const uint8_t has[] = { 1, 2, 3, 6, 9, 10, 12, 14, 17, 19 };
++
++		for (unsigned i = 0; i < sizeof(has); i++) {
++			bits[has[i] / 8] |= (uint8_t)(1u << (has[i] % 8));
++		}
++		return give(request, bits, sizeof(bits));
++	}
++	case 19: {                              /* the radio's power: one radio, as last asked for (on until then). Also */
++		struct {                        /* before the driver is up (0135): iOS asks this once, early */
++			uint32_t version, radios, state[4];
++		} answer = { .version = 1, .radios = 1, .state = { hakios_sta_powered() } };
++
++		return give(request, &answer, sizeof(answer));
++	}
++	case 15:                                /* the mode: a station (APPLE80211_M_STA) */
++		request->req_val = 1;
++		return 0;
++	case 106: {                             /* (xnu 0132) the range a signal is put in, see RSSI_BOUND_MIN */
++		struct {
++			uint32_t version;
++			int32_t min, max, threshold;
++		} answer = { .version = 1, .min = RSSI_BOUND_MIN, .max = RSSI_BOUND_MAX, .threshold = RSSI_BOUND_THRESHOLD };
++
++		return give(request, &answer, sizeof(answer));
++	}
++	case 5:                                 /* (0132) power save: off (value) */
++	case 18:                                /* (0132) interference mitigation: off (value) */
++		request->req_val = 0;
++		return 0;
++	case 6: {                               /* (0132) protection mode {version, mode: off, threshold} */
++		struct {
++			uint32_t version, mode, threshold;
++		} answer = { .version = 1 };
++
++		return give(request, &answer, sizeof(answer));
++	}
++	case 27:
++	case 254: {                             /* the channels the radio may tune to */
++		struct apple80211_channels *answer;
++		struct hakios_sta_channel channels[96];
++		unsigned count = hakios_sta_channels(channels, 96);
++
++		if (count == 0 || (answer = kalloc_data(sizeof(*answer), Z_WAITOK | Z_ZERO)) == NULL) {
++			return count == 0 ? ENXIO : ENOMEM;
++		}
++		answer->version = 1;
++		answer->count = count;
++		for (unsigned i = 0; i < count; i++) {
++			channel_fill(&answer->channels[i], channels[i].frequency, channels[i].flags);
++		}
++		error = give(request, answer, sizeof(*answer));
++		kfree_data(answer, sizeof(*answer));
++		return error;
++	}
++	case 207: {                             /* ... and more of each */
++		struct apple80211_channels_info *answer;
++		struct hakios_sta_channel channels[96];
++		unsigned count = hakios_sta_channels(channels, 96);
++
++		if (count == 0 || (answer = kalloc_data(sizeof(*answer), Z_WAITOK | Z_ZERO)) == NULL) {
++			return count == 0 ? ENXIO : ENOMEM;
++		}
++		answer->count = (uint16_t)count;
++		for (unsigned i = 0; i < count; i++) {
++			struct apple80211_channel channel;
++
++			channel_fill(&channel, channels[i].frequency, channels[i].flags);
++			answer->number[i] = (uint8_t)channel.channel;
++			answer->dfs[i] = (channels[i].flags & HAKIOS_STA_CHANNEL_RADAR) != 0;
++			answer->passive[i] = (channels[i].flags & HAKIOS_STA_CHANNEL_PASSIVE) != 0;
++			answer->flags[i] = channel.flags;
++		}
++		error = give(request, answer, sizeof(*answer));
++		kfree_data(answer, sizeof(*answer));
++		return error;
++	}
++	case 21:                                /* how the last join went (0: not over yet) */
++		lck_mtx_lock(&apple80211_lock);
++		request->req_val = (int32_t)join_result;
++		lck_mtx_unlock(&apple80211_lock);
++		return 0;
++	case 11: {                              /* what the last scan heard, one access point a request; EIO: that was all */
++		struct hakios_sta_bss *bss = kalloc_data(sizeof(*bss), Z_WAITOK);
++		unsigned index;
++		bool there;
++
++		if (bss == NULL) {
++			return ENOMEM;
++		}
++		lck_mtx_lock(&apple80211_lock);
++		index = result_next++;
++		lck_mtx_unlock(&apple80211_lock);
++		there = hakios_sta_heard(index, bss);
++		error = there ? give_network(request, bss) : EIO;
++		kfree_data(bss, sizeof(*bss));
++		return error;
++	}
++	default:
++		break;
++	}
++
++	/* the rest is about the network joined, and there is none unless the station says so */
++	if ((state = kalloc_data(sizeof(*state), Z_WAITOK)) == NULL) {
++		return ENOMEM;
++	}
++	hakios_sta_state(state);
++	switch (request->req_type) {
++	case 13:                                /* the state: APPLE80211_S_INIT 0, _SCAN 1, _AUTH 2, _ASSOC 3, _RUN 4 */
++		request->req_val = state->phase == HAKIOS_STA_JOINED ? 4 : state->phase == HAKIOS_STA_JOINING ? 2 :
++		    state->phase == HAKIOS_STA_SCANNING ? 1 : 0;
++		break;
++	case 1:                                 /* its name; the length goes back in the request */
++		if (state->phase != HAKIOS_STA_JOINED) {
++			error = ENXIO;
++		} else if ((error = give(request, state->bss.ssid, state->bss.ssid_length)) == 0) {
++			request->req_len = state->bss.ssid_length;
++		}
++		break;
++	case 9:                                 /* its access point's address */
++		error = state->phase != HAKIOS_STA_JOINED ? ENXIO : give(request, state->bss.bssid, 6);
++		break;
++	case 4: {                               /* its channel */
++		struct {
++			uint32_t version;
++			struct apple80211_channel channel;
++		} answer = { .version = 1 };
++
++		if (state->phase != HAKIOS_STA_JOINED) {
++			error = ENXIO;
++		} else {
++			channel_fill(&answer.channel, state->bss.frequency, 0);
++			error = give(request, &answer, sizeof(answer));
++		}
++		break;
++	}
++	case 16: {                              /* how strongly it is heard: dBm, per radio and all together, twice over */
++		struct {
++			uint32_t version, radios, unit;
++			int32_t each[4], all, each_ext[4], all_ext;
++		} answer = { .version = 1, .radios = 1, .each = { state->bss.rssi }, .all = state->bss.rssi,
++			     .each_ext = { state->bss.rssi }, .all_ext = state->bss.rssi };
++
++		error = state->phase != HAKIOS_STA_JOINED ? ENXIO : give(request, &answer, sizeof(answer));
++		break;
++	}
++	case 14: {                              /* (0132) PHY mode {version, supported, active}: a/b/g; active 0 when not joined */
++		struct {
++			uint32_t version, supported, active;
++		} answer = { .version = 1, .supported = PHY_11A | PHY_11B | PHY_11G };
++
++		if (state->phase == HAKIOS_STA_JOINED) {
++			answer.active = state->bss.frequency != 0 && state->bss.frequency < 4000 ? PHY_11G : PHY_11A;
++		}
++		error = give(request, &answer, sizeof(answer));
++		break;
++	}
++	case 8:                                 /* (0132) the rate (value, Mbit/s): not measured; 54, the best legacy one */
++		if (state->phase != HAKIOS_STA_JOINED) {
++			error = ENXIO;
++		} else {
++			request->req_val = 54;
++		}
++		break;
++	case 17: {                              /* the noise floor, as the signal above */
++		struct {
++			uint32_t version, radios, unit;
++			int32_t each[4], all, each_ext[4], all_ext;
++		} answer = { .version = 1, .radios = 1, .each = { NOISE_FLOOR }, .all = NOISE_FLOOR,
++			     .each_ext = { NOISE_FLOOR }, .all_ext = NOISE_FLOOR };
++
++		error = state->phase != HAKIOS_STA_JOINED ? ENXIO : give(request, &answer, sizeof(answer));
++		break;
++	}
++	case 103:                               /* all of it, as a scan's result */
++		error = state->phase != HAKIOS_STA_JOINED ? ENXIO : give_network(request, &state->bss);
++		break;
++	case 2: {                               /* how it was joined: open system, then WPA2 with a passphrase */
++		struct {
++			uint32_t version, lower, upper, extended;
++		} answer = { .version = 1, .lower = 1, .upper = 8 };
++
++		error = state->phase != HAKIOS_STA_JOINED ? ENXIO : give(request, &answer, sizeof(answer));
++		break;
++	}
++	default:
++		error = EOPNOTSUPP;
++		break;
++	}
++	kfree_data(state, sizeof(*state));
++	return error;
++}
++
++/* ---- set ---------------------------------------------------------------------------------------------- */
++
++static int
++set_scan(const struct apple80211req *request, char *said, size_t said_size)
++{
++	struct apple80211_scan_request *asked;
++	struct hakios_sta_scan *what;
++	unsigned unknown = 0;
++	int error;
++
++	if (request->req_len != sizeof(*asked)) {
++		return EINVAL;
++	}
++	if (!hakios_sta_present()) {
++		return EBUSY;                   /* (the radio is still being brought up: the framework tries again) */
++	}
++	asked = kalloc_data(sizeof(*asked), Z_WAITOK);
++	what = kalloc_data(sizeof(*what), Z_WAITOK | Z_ZERO);
++	if (asked == NULL || what == NULL || (error = copyin(request->req_data, asked, sizeof(*asked))) != 0) {
++		error = asked == NULL || what == NULL ? ENOMEM : error;
++		goto out;
++	}
++	if (asked->ssid_length <= sizeof(what->ssid)) {
++		what->ssid_length = (uint8_t)asked->ssid_length;
++		memcpy(what->ssid, asked->ssid, asked->ssid_length);
++	}
++	what->passive = asked->scan_type == 2;
++	what->dwell_ms = asked->dwell_ms;
++	/* (more channels than there is room to name: every channel) */
++	for (unsigned i = 0; i < asked->channel_count && i < 400 && asked->channel_count <= 64; i++) {
++		unsigned frequency = channel_frequency(&asked->channels[i]);
++
++		if (frequency != 0) {
++			what->frequencies[what->frequency_count++] = (uint16_t)frequency;
++		} else {
++			unknown++;
++		}
++	}
++	snprintf(said, said_size, " (a scan: type %u, %u channels of which %u are not the radio's, %u ms on each, a name of %u bytes, "
++	    "%u more names, flags %#llx)", asked->scan_type, asked->channel_count, unknown, asked->dwell_ms, asked->ssid_length,
++	    asked->name_count, asked->flags);
++	if (asked->channel_count != 0 && asked->channel_count <= 64 && what->frequency_count == 0) {
++		error = EINVAL;                 /* (nothing of what is asked for is a channel of this radio's) */
++	} else {
++		lck_mtx_lock(&apple80211_lock);
++		result_next = 0;
++		lck_mtx_unlock(&apple80211_lock);
++		error = hakios_sta_ask_scan(what);
++	}
++out:
++	if (asked != NULL) {
++		kfree_data(asked, sizeof(*asked));
++	}
++	if (what != NULL) {
++		kfree_data(what, sizeof(*what));
++	}
++	return error;
++}
++
++static int
++set_join(const struct apple80211req *request, char *said, size_t said_size)
++{
++	struct apple80211_assoc *asked;
++	struct hakios_sta_join *what;
++	int error;
++
++	if (request->req_len < offsetof(struct apple80211_assoc, rest)) {
++		return EINVAL;
++	}
++	asked = kalloc_data(sizeof(*asked), Z_WAITOK | Z_ZERO);
++	what = kalloc_data(sizeof(*what), Z_WAITOK | Z_ZERO);
++	if (asked == NULL || what == NULL || (error = copyin(request->req_data, asked, offsetof(struct apple80211_assoc, rest))) != 0) {
++		error = asked == NULL || what == NULL ? ENOMEM : error;
++		goto out;
++	}
++	/* (lengths and kinds only: the name, the access point and the key stay out of the log) */
++	snprintf(said, said_size, " (a join: a name of %u bytes, %s access point, authentication %#x/%#x, a key of %u bytes of kind %u)",
++	    asked->ssid_length, asked->bssid[0] | asked->bssid[1] | asked->bssid[2] | asked->bssid[3] | asked->bssid[4] |
++	    asked->bssid[5] ? "a given" : "any", asked->auth_lower, asked->auth_upper, asked->key_length, asked->key_cipher);
++	printf("apple80211: join request: SSID length %u, authentication %#x/%#x, key cipher %u, key length %u\n",
++	    asked->ssid_length, asked->auth_lower, asked->auth_upper, asked->key_cipher, asked->key_length);
++	if (asked->ssid_length == 0 || asked->ssid_length > sizeof(what->ssid)) {
++		error = EINVAL;
++		goto out;
++	}
++	what->ssid_length = (uint8_t)asked->ssid_length;
++	memcpy(what->ssid, asked->ssid, asked->ssid_length);
++	memcpy(what->bssid, asked->bssid, sizeof(what->bssid));
++	if (asked->key_length == 0) {
++		what->security = HAKIOS_STA_OPEN;
++	} else if (asked->key_cipher == CIPHER_PASSPHRASE && asked->key_length >= 8 && asked->key_length <= 63) {
++		what->security = HAKIOS_STA_WPA2_PSK;
++		what->passphrase_length = (uint8_t)asked->key_length;
++		memcpy(what->passphrase, asked->key, asked->key_length);
++	} else if (asked->key_cipher == CIPHER_PMK && asked->key_length == sizeof(what->pmk)) {
++		what->security = HAKIOS_STA_WPA2_PSK;
++		memcpy(what->pmk, asked->key, sizeof(what->pmk));
++	} else {
++		error = EINVAL;
++		goto out;
++	}
++	lck_mtx_lock(&apple80211_lock);
++	join_result = 0;
++	lck_mtx_unlock(&apple80211_lock);
++	error = hakios_sta_ask_join(what);
++out:
++	if (asked != NULL) {
++		memset_s(asked, sizeof(*asked), 0, sizeof(*asked));
++		kfree_data(asked, sizeof(*asked));
++	}
++	if (what != NULL) {
++		memset_s(what, sizeof(*what), 0, sizeof(*what));
++		kfree_data(what, sizeof(*what));
++	}
++	return error;
++}
++
++static int
++set(const struct apple80211req *request, char *said, size_t said_size)
++{
++	switch (request->req_type) {
++	case 20:
++		return set_join(request, said, said_size);
++	case 22:                                /* leave the network */
++		return hakios_sta_ask_leave();
++	case 19: {                              /* the radio's power */
++		struct {
++			uint32_t version, radios, state[4];
++		} asked;
++		int error;
++
++		if (request->req_len < sizeof(asked) || (error = copyin(request->req_data, &asked, sizeof(asked))) != 0) {
++			return request->req_len < sizeof(asked) ? EINVAL : error;
++		}
++		snprintf(said, said_size, " (power: %s)", asked.state[0] ? "on" : "off");
++		return hakios_sta_ask_power(asked.state[0] != 0);
++	}
++	case 10:
++		return set_scan(request, said, said_size);
++	case 5:                                 /* (0132) power save: the driver has none */
++	case 365:                               /* (0132) the display on or off: nothing to do */
++	case 382:                               /* (0132) abort a scan: ours end by themselves (a scan is over) */
++		snprintf(said, said_size, " (accepted, nothing to do)");
++		return 0;
++	default:
++		return EOPNOTSUPP;
++	}
++}
++
++/* ---- events -------------------------------------------------------------------------------------------- */
++
++static void
++post(uint32_t code, const void *data, uint32_t length)
++{
++	struct kev_msg message = { .vendor_code = KEV_VENDOR_APPLE, .kev_class = KEV_IEEE80211_CLASS, .kev_subclass = 1,
++		                   .event_code = code };
++	char name[16];
++
++	memcpy(name, interface_name, sizeof(name));
++	message.dv[0].data_length = sizeof(name);
++	message.dv[0].data_ptr = name;
++	if (length != 0) {
++		message.dv[1].data_length = length;
++		message.dv[1].data_ptr = __DECONST(void *, data);
++	}
++	kev_post_msg(&message);
++}
++
++/* What the station side says has happened (bsd/dev/hakios.sta.c calls this, on its thread or the station's). */
++void
++hakios_apple80211_event(enum hakios_sta_event event, int status)
++{
++	static unsigned said;
++
++	if (said < 200) {
++		said++;
++		printf("apple80211: the station says: %s, %d\n", event == HAKIOS_STA_POWER ? "power" : event == HAKIOS_STA_SCAN_DONE ?
++		    "a scan is over" : event == HAKIOS_STA_JOIN_DONE ? "a join is over" : "the link", status);
++	}
++	switch (event) {
++	case HAKIOS_STA_POWER:
++		post(EVENT_POWER_CHANGED, NULL, 0);
++		break;
++	case HAKIOS_STA_SCAN_DONE:
++		lck_mtx_lock(&apple80211_lock);
++		result_next = 0;
++		lck_mtx_unlock(&apple80211_lock);
++		post(EVENT_SCAN_DONE, NULL, 0);
++		break;
++	case HAKIOS_STA_JOIN_DONE:
++		lck_mtx_lock(&apple80211_lock);
++		join_result = status == 0 ? 1 : status == EAUTH ? 21 : status == ETIMEDOUT ? 9 : 2;
++		lck_mtx_unlock(&apple80211_lock);
++		post(EVENT_ASSOC_DONE, NULL, 0);
++		break;
++	case HAKIOS_STA_LINK: {
++		struct apple80211_link_changed link = { .down = status != 1, .involuntary = status != 1 && status != 0,
++			                                .reason = status != 1 && status != 0 ? 4 : 0 };      /* (4: gone, not asked) */
++		struct hakios_sta_state *state = kalloc_data(sizeof(*state), Z_WAITOK | Z_ZERO);
++
++		if (state != NULL) {
++			hakios_sta_state(state);
++			link.rssi = status == 1 ? state->bss.rssi : 0;
++			if (status == 1) {
++				link.snr = (uint16_t)(state->bss.rssi - NOISE_FLOOR);
++				link.noise = (uint16_t)NOISE_FLOOR;
++			}
++			kfree_data(state, sizeof(*state));
++		}
++		post(EVENT_SSID_CHANGED, NULL, 0);
++		post(EVENT_BSSID_CHANGED, NULL, 0);
++		post(EVENT_LINK_CHANGED, &link, sizeof(link));
++		break;
++	}
++	}
++}
++
++/* ---- the requests as they arrive --------------------------------------------------------------------- */
++
++/*
++ * How often each kind of request came and how it fared: said when the run ends, because the
++ * lines said along the way can be lost with the middle of a long log.
++ */
++static struct {
++	int32_t type;
++	bool set;
++	unsigned times, answered;
++	int last_error;
++} kinds[96];
++static unsigned kind_count;
++
++static void
++note(const struct apple80211req *request, bool is_set, int error)
++{
++	unsigned i;
++
++	lck_mtx_lock(&apple80211_lock);
++	for (i = 0; i < kind_count && !(kinds[i].type == request->req_type && kinds[i].set == is_set); i++) {
++	}
++	if (i < sizeof(kinds) / sizeof(kinds[0])) {
++		if (i == kind_count) {
++			kinds[kind_count++] = (typeof(kinds[0])) { .type = request->req_type, .set = is_set };
++		}
++		kinds[i].times++;
++		kinds[i].answered += error == 0;
++		kinds[i].last_error = error != 0 ? error : kinds[i].last_error;
++	}
++	lck_mtx_unlock(&apple80211_lock);
++}
++
++void
++hakios_apple80211_summary(void)
++{
++	static bool said;
++
++	if (said) {
++		return;
++	}
++	said = true;
++	for (unsigned i = 0; i < kind_count; i++) {
++		printf("apple80211: in this run: %s %d (%s) %u times, answered %u times%s", kinds[i].set ? "set" : "get", kinds[i].type,
++		    type_name(kinds[i].type), kinds[i].times, kinds[i].answered, kinds[i].last_error == 0 ? "\n" : "");
++		if (kinds[i].last_error != 0) {
++			printf("; the last refusal: %d%s\n", kinds[i].last_error, kinds[i].last_error == EOPNOTSUPP ? " (not built)" : "");
++		}
++	}
++}
++
++/* An Apple80211 request for the radio's interface, from the process that is running now. */
++errno_t
++hakios_apple80211_ioctl(u_long command, void *data)
++{
++	/*
++	 * (xnu 0133) Said: each kind of request (its number, get or set) its first 12 times; scans, joins,
++	 * leaves, power and the join's result (10, 19, 20, 21, 22) up to 600 times in all; a kind's answer
++	 * when it differs from the last one said. One count for all of them (800 lines) used to run out
++	 * before the first join (boot 57: nothing said after the ASSOCIATE).
++	 */
++	static uint16_t said[512][2];
++	static int said_error[512][2];
++	static unsigned said_important;
++	struct apple80211req *request = data;
++	char who[32] = "?", what[200] = "";
++	bool is_set = command == SIOCSA80211;
++	int error;
++
++	if (command != SIOCSA80211 && command != SIOCGA80211) {
++		return EOPNOTSUPP;
++	}
++	proc_selfname(who, sizeof(who));
++	error = is_set ? set(request, what, sizeof(what)) : get(request);
++	note(request, is_set, error);
++	unsigned kind = request->req_type < 512 ? request->req_type : 511;
++	bool important = kind == 10 || kind == 19 || kind == 20 || kind == 21 || kind == 22;
++	bool changed = said[kind][is_set] != 0 && said_error[kind][is_set] != error;
++	if (said[kind][is_set] < 12 || (important && said_important < 600) || (changed && said_important < 600)) {
++		if (said[kind][is_set] >= 12) {
++			said_important++;
++		}
++		if (said[kind][is_set] < UINT16_MAX) {
++			said[kind][is_set]++;
++		}
++		said_error[kind][is_set] = error;
++		printf("apple80211: %s %s %d (%s), value %d, %u bytes%s: %s", who, is_set ? "sets" : "gets", request->req_type,
++		    type_name(request->req_type), request->req_val, request->req_len, what, error == 0 ? "answered\n" : error ==
++		    EOPNOTSUPP ? "REFUSED\n" : "");
++		if (error != 0 && error != EOPNOTSUPP) {
++			printf("error %d\n", error);
++		}
++	}
++	return error;
++}
++#endif /* ARM64_BOARD_CONFIG_SWEET || ARM64_BOARD_CONFIG_HEROLTE */
+diff --git a/bsd/dev/sweet_net.c b/bsd/dev/sweet_net.c
+new file mode 100644
+index 0000000..4253110
+--- /dev/null
++++ b/bsd/dev/sweet_net.c
+@@ -0,0 +1,434 @@
++/* From HackiOS's bsd/dev/hakios.net.c (github.com/oosexgang/hackios-xnu-kernel, as
++ * github.com/JopangJovan/hackios-xnu-kernel-umi has it; APSL 2.0), for apollo's Wi-Fi (xnu 0128).
++ * Imported as it is: it was written for a build without -Werror, so its warnings are not
++ * looked at here (this kernel builds with -Weverything -Werror). */
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_HEROLTE)
++#pragma clang diagnostic ignored "-Weverything"
++/*
++ * en0: a network interface that is Ethernet as far as the rest of the kernel and iOS can tell.
++ *
++ * iOS expects its interfaces from IONetworkingFamily, which this kernel does not have; the BSD
++ * half of the kernel does not need it. The interface is made with the kernel's own interface
++ * KPI, the way bsd/net/if_fake.c makes its "feth": family Ethernet, the stock Ethernet framing
++ * and demultiplexing, one function that is given a frame to send and one call to hand a frame
++ * that has arrived to the stack. What iOS's user space makes of an interface that has no
++ * IOKit object behind it is another matter: see userland/src/net_test.m.
++ *
++ * What carries the frames is a link driver's business; sys/hakios.net.h is all that the two
++ * know of each other. The first link is QEMU's virtio network device (hakios.virtio_net.c).
++ * There can be two interfaces: en0 for the Wi-Fi (or virtio), en1 for the modem's packets
++ * through the IPA (hakios.cell.c); each has its link, its state and its thread.
++ */
++#include <kern/clock.h>
++#include <kern/locks.h>
++#include <kern/thread.h>
++#include <libkern/libkern.h>
++#include <mach/mach_types.h>
++#include <net/bpf.h>
++#include <net/ethernet.h>
++#include <net/if.h>
++#include <net/if_ether.h>
++#include <net/if_media.h>
++#include <net/if_types.h>
++#include <net/kpi_interface.h>
++#include <netinet/in.h>
++#include <pexpert/pexpert.h>
++#include <sys/kern_event.h>
++#include <sys/kpi_mbuf.h>
++#include <sys/proc.h>
++#include "hakios.net.h"
++#include <sys/sockio.h>
++#include <sys/systm.h>
++
++extern void HakiosWLANStart(const char *interface, const uint8_t *address);  /* iokit/Kernel/hakios.wlan.cpp */
++
++static LCK_GRP_DECLARE(net_lck_grp, "hakios-net");
++
++/* One interface: enN on its link. */
++struct net_if {
++	unsigned        unit;
++	const struct hakios_net_link *link;
++	bool            up;             /* the link says frames can pass */
++	ifnet_t         ifp;
++	lck_mtx_t       tx_lock;        /* one frame at a time to the link */
++	/* What has gone through: said once a minute while anything moves. */
++	struct {
++		uint64_t sent, received, sent_bytes, received_bytes, dropped_out, dropped_in;
++	} count;
++};
++static struct net_if net_ifs[HAKIOS_NET_UNITS];
++
++static inline struct net_if *
++net_if_of(ifnet_t ifp)
++{
++	return ifnet_softc(ifp);
++}
++
++/* The interface on unit `unit`, once attached; NULL before. */
++static struct net_if *
++net_if_unit(unsigned unit)
++{
++	return unit < HAKIOS_NET_UNITS && net_ifs[unit].ifp != NULL ? &net_ifs[unit] : NULL;
++}
++
++/*
++ * Boot-arg net_trace=N: a line in the log for each of the first N frames, either way.
++ * Boot-arg net_names=1: a line for every name asked of a DNS server and for every TCP connection
++ * begun from here -- which is how to see what a system that has just been given a network does
++ * with it (up to NAMES_MAX lines).
++ */
++#define NAMES_MAX       3000
++static uint32_t net_trace, net_names;
++
++static void
++trace_frame(const char *way, const uint8_t *frame, size_t length, size_t whole)
++{
++	static uint32_t said, names;
++	const uint8_t *end = frame + length, *ip = frame + ETHER_HDR_LEN, *l4;
++	uint16_t type;
++	bool ports;
++
++	if (length < ETHER_HDR_LEN + 28 || (said >= net_trace && (!net_names || names >= NAMES_MAX))) {
++		return;
++	}
++	type = (uint16_t)(frame[12] << 8 | frame[13]);
++	l4 = ip + 4 * (ip[0] & 0xf);
++	ports = type == ETHERTYPE_IP && (ip[9] == IPPROTO_TCP || ip[9] == IPPROTO_UDP) && l4 + 4 <= end;
++	if (net_names && names < NAMES_MAX && ports && way[0] == 'o') {
++		if (ip[9] == IPPROTO_UDP && (l4[2] << 8 | l4[3]) == 53 && l4 + 8 + 12 < end) {
++			char name[128];
++			const uint8_t *label = l4 + 8 + 12;
++			size_t n = 0;
++
++			/* the question: lengths and labels, up to a zero */
++			while (label < end && *label != 0 && *label < 64 && label + 1 + *label < end && n + *label + 2 < sizeof(name)) {
++				memcpy(name + n, label + 1, *label);
++				n += *label;
++				name[n++] = '.';
++				label += 1 + *label;
++			}
++			name[n ? n - 1 : 0] = 0;
++			names++;
++			printf("net: asks for the name %s (type %u)\n", name, label + 2 < end ? label[1] << 8 | label[2] : 0);
++		} else if (ip[9] == IPPROTO_TCP && l4 + 14 <= end && (l4[13] & 0x12) == 0x02) {
++			names++;
++			printf("net: connects to %u.%u.%u.%u port %u\n", ip[16], ip[17], ip[18], ip[19], l4[2] << 8 | l4[3]);
++		}
++	}
++	if (said >= net_trace) {
++		return;
++	}
++	said++;
++	if (type == ETHERTYPE_IP) {
++		printf("net: %s %zu bytes: IPv4 %s %u.%u.%u.%u:%u -> %u.%u.%u.%u:%u%s\n", way, whole, ip[9] == IPPROTO_TCP ? "TCP" :
++		    ip[9] == IPPROTO_UDP ? "UDP" : ip[9] == IPPROTO_ICMP ? "ICMP" : "protocol?", ip[12], ip[13], ip[14], ip[15],
++		    ports ? l4[0] << 8 | l4[1] : 0, ip[16], ip[17], ip[18], ip[19], ports ? l4[2] << 8 | l4[3] : 0,
++		    ip[9] == IPPROTO_TCP && ports && l4 + 14 <= end ? (l4[13] & 2 ? " SYN" : l4[13] & 1 ? " FIN" : l4[13] & 4 ? " RST" : "") : "");
++	} else {
++		printf("net: %s %zu bytes: %s (type %#x) to %02x:%02x:%02x:%02x:%02x:%02x\n", way, whole, type == ETHERTYPE_ARP ? "ARP" :
++		    type == ETHERTYPE_IPV6 ? "IPv6" : "?", type, frame[0], frame[1], frame[2], frame[3], frame[4], frame[5]);
++	}
++}
++
++/* ... of a frame on its way out: the start of it is enough */
++static void
++trace_packet(mbuf_t packet, size_t length)
++{
++	uint8_t start[192];
++	size_t have = length < sizeof(start) ? length : sizeof(start);
++
++	if ((net_trace || net_names) && mbuf_copydata(packet, 0, have, start) == 0) {
++		trace_frame("out", start, have, length);
++	}
++}
++
++/* ---- the interface -------------------------------------------------------------------------------- */
++
++/* The stack has a frame to send (a chain of mbufs that starts with the Ethernet header). */
++static errno_t
++net_output(ifnet_t ifp, mbuf_t packet)
++{
++	struct net_if *n = net_if_of(ifp);
++	size_t length = mbuf_pkthdr_len(packet);
++	bool sent = false;
++
++	if (length <= HAKIOS_NET_FRAME_MAX && n->up) {
++		bpf_tap_out(ifp, DLT_EN10MB, packet, NULL, 0);
++		trace_packet(packet, length);
++		lck_mtx_lock(&n->tx_lock);
++		sent = n->link->transmit(packet, length);
++		lck_mtx_unlock(&n->tx_lock);
++	}
++	if (sent) {
++		n->count.sent++;
++		n->count.sent_bytes += length;
++		ifnet_stat_increment_out(ifp, 1, (uint32_t)length, 0);
++	} else {
++		n->count.dropped_out++;
++		ifnet_stat_increment_out(ifp, 0, 0, 1);
++	}
++	mbuf_freem(packet);
++	return 0;
++}
++
++/* A frame has arrived on unit `unit`. */
++void
++hakios_net_input_unit(unsigned unit, const uint8_t *frame, size_t length)
++{
++	struct net_if *n = net_if_unit(unit);
++	struct ifnet_stat_increment_param stats = { .packets_in = 1, .bytes_in = (uint32_t)length };
++	unsigned int chunks = 1;
++	mbuf_t packet = NULL;
++	char *header;
++
++	if (n == NULL) {
++		return;
++	}
++	trace_frame("in ", frame, length, length);
++	if (length < ETHER_HDR_LEN || length > HAKIOS_NET_FRAME_MAX || mbuf_allocpacket(MBUF_DONTWAIT, length, &chunks, &packet) != 0) {
++		n->count.dropped_in++;
++		return;
++	}
++	if (mbuf_copyback(packet, 0, length, frame, MBUF_DONTWAIT) != 0) {
++		mbuf_freem(packet);
++		n->count.dropped_in++;
++		return;
++	}
++	/* as every Ethernet driver hands a frame up: the header noted and stepped over */
++	header = mbuf_data(packet);
++	mbuf_pkthdr_setrcvif(packet, n->ifp);
++	mbuf_pkthdr_setheader(packet, header);
++	mbuf_pkthdr_adjustlen(packet, -ETHER_HDR_LEN);
++	mbuf_setdata(packet, header + ETHER_HDR_LEN, length - ETHER_HDR_LEN);
++	bpf_tap_in(n->ifp, DLT_EN10MB, packet, header, ETHER_HDR_LEN);
++	n->count.received++;
++	n->count.received_bytes += length;
++	ifnet_input(n->ifp, packet, &stats);
++}
++
++void
++hakios_net_input(const uint8_t *frame, size_t length)
++{
++	hakios_net_input_unit(0, frame, length);
++}
++
++static unsigned net_ioctls_said;
++
++static errno_t
++net_ioctl(ifnet_t ifp, u_long command, void *data)
++{
++	struct net_if *n = net_if_of(ifp);
++	/* (a radio says it is one here too: IO80211.framework lists the interfaces whose media is 802.11) */
++	const int media[] = { (n->link->wireless ? IFM_IEEE80211 : IFM_ETHER) | IFM_AUTO };
++	struct ifreq *request = data;
++	struct ifmediareq *media_request = data;
++	user_addr_t list;
++	errno_t error = 0;
++
++	if (n->link->wireless && net_ioctls_said < 80) {
++		char who[32] = "?";
++
++		/* (while iOS's Wi-Fi side is being got to talk to this: who asks the interface what) */
++		proc_selfname(who, sizeof(who));
++		if (strcmp(who, "configd") != 0) {
++			net_ioctls_said++;
++			printf("net: en0 is asked %#lx by %s\n", command, who);
++		}
++	}
++	switch (command) {
++	case SIOCSIFADDR:
++		ifnet_set_flags(ifp, IFF_UP, IFF_UP);
++		break;
++	case SIOCSIFFLAGS:
++		/* running whenever it is up: the link is there or it is not, nothing is switched on */
++		ifnet_set_flags(ifp, (ifnet_flags(ifp) & IFF_UP) ? IFF_RUNNING : 0, IFF_RUNNING);
++		break;
++	case SIOCGIFMEDIA32:
++	case SIOCGIFMEDIA64:
++		/* what configd asks to learn whether the cable is in */
++		list = command == SIOCGIFMEDIA64 ? ((struct ifmediareq64 *)media_request)->ifmu_ulist :
++		    CAST_USER_ADDR_T(((struct ifmediareq32 *)media_request)->ifmu_ulist);
++		media_request->ifm_active = media_request->ifm_current = media[0];
++		media_request->ifm_mask = 0;
++		media_request->ifm_status = IFM_AVALID | (n->up ? IFM_ACTIVE : 0);
++		if (list != USER_ADDR_NULL && media_request->ifm_count > 0) {
++			error = copyout(media, list, sizeof(media));
++		}
++		media_request->ifm_count = 1;
++		break;
++	case SIOCGIFDEVMTU:
++		request->ifr_devmtu.ifdm_current = ifnet_mtu(ifp);
++		request->ifr_devmtu.ifdm_max = ETHERMTU;
++		request->ifr_devmtu.ifdm_min = IF_MINMTU;
++		break;
++	case SIOCSIFMTU:
++		error = request->ifr_mtu > ETHERMTU || request->ifr_mtu < IF_MINMTU ? EINVAL : ifnet_set_mtu(ifp, request->ifr_mtu);
++		break;
++	case SIOCADDMULTI:
++	case SIOCDELMULTI:
++		break;                          /* the link hands us everything anyway */
++	default:
++		/* what iOS's Wi-Fi side asks of a radio's interface: bsd/dev/hakios.apple80211.c */
++		error = n->link->wireless ? hakios_apple80211_ioctl(command, data) : EOPNOTSUPP;
++		break;
++	}
++	return error;
++}
++
++/* Tell whoever listens for kernel events (configd does) that the link is up, or down. */
++static void
++net_link_event(ifnet_t ifp, uint32_t code)
++{
++	_Alignas(struct kern_event_msg) char message[sizeof(struct kern_event_msg) + sizeof(struct net_event_data)] = { 0 };
++	struct kern_event_msg *header = (struct kern_event_msg *)message;
++	struct net_event_data *about = (struct net_event_data *)(header + 1);
++
++	header->total_size = sizeof(message);
++	header->vendor_code = KEV_VENDOR_APPLE;
++	header->kev_class = KEV_NETWORK_CLASS;
++	header->kev_subclass = KEV_DL_SUBCLASS;
++	header->event_code = code;
++	about->if_family = ifnet_family(ifp);
++	about->if_unit = ifnet_unit(ifp);
++	strlcpy(about->if_name, ifnet_name(ifp), IFNAMSIZ);
++	ifnet_event(ifp, header);
++}
++
++void
++hakios_net_link_state_unit(unsigned unit, bool up)
++{
++	struct net_if *n = net_if_unit(unit);
++
++	if (n == NULL || up == n->up) {
++		return;
++	}
++	n->up = up;
++	printf("net: en%u's link (%s) is %s\n", n->unit, n->link->name, up ? "up" : "down");
++	net_link_event(n->ifp, up ? KEV_DL_LINK_ON : KEV_DL_LINK_OFF);
++}
++
++void
++hakios_net_link_state(bool up)
++{
++	hakios_net_link_state_unit(0, up);
++}
++
++/* The interface's own thread: for a link that wants to be asked, and for the minute's line in the log. */
++static void
++net_thread(void *parameter, __unused wait_result_t result)
++{
++	struct net_if *n = parameter;
++	uint64_t said = 0, total;
++	unsigned quiet = 0;
++
++	for (unsigned tick = 1;; tick++) {
++		quiet = n->link->poll != NULL && n->link->poll() ? 0 : quiet + 1;
++		/* about once a minute, if anything has moved since */
++		total = n->count.sent + n->count.received + n->count.dropped_out + n->count.dropped_in;
++		if (tick % 8192 == 0 && total != said) {
++			said = total;
++			printf("net: en%u so far %llu frames sent (%llu bytes), %llu received (%llu bytes); dropped: %llu out, %llu in\n",
++			    n->unit, n->count.sent, n->count.sent_bytes, n->count.received, n->count.received_bytes,
++			    n->count.dropped_out, n->count.dropped_in);
++		}
++		delay_for_interval(quiet < 100 ? 2 : 10, NSEC_PER_MSEC);
++	}
++}
++
++bool
++hakios_net_attach(const struct hakios_net_link *link)
++{
++	unsigned unit = link->unit;
++	struct net_if *n = unit < HAKIOS_NET_UNITS ? &net_ifs[unit] : NULL;
++	char uniqueid[16];
++	struct ifnet_init_eparams init = {
++		.ver = IFNET_INIT_CURRENT_VERSION,
++		.len = sizeof(init),
++		/*
++		 * The simple model: every frame straight to net_output(). And no Skywalk "nexus" made for
++		 * the interface by itself: sockets are all that is asked of it so far.
++		 */
++		.flags = IFNET_INIT_LEGACY | IFNET_INIT_NX_NOAUTO,
++		.uniqueid = uniqueid,
++		.uniqueid_len = 11,
++		.name = "en",
++		.unit = unit,
++		.softc = n,
++		.family = IFNET_FAMILY_ETHERNET,
++		.subfamily = link->wireless ? IFNET_SUBFAMILY_WIFI : IFNET_SUBFAMILY_ANY,
++		.type = IFT_ETHER,
++		.output = net_output,
++		.demux = ether_demux,
++		.add_proto = ether_add_proto,
++		.del_proto = ether_del_proto,
++		.check_multi = ether_check_multi,
++		.framer_extended = ether_frameout_extended,
++		.ioctl = net_ioctl,
++		.broadcast_addr = etherbroadcastaddr,
++		.broadcast_len = ETHER_ADDR_LEN,
++	};
++	const uint8_t *address = link->address;
++	ifnet_t ifp = NULL;
++	thread_t thread;
++	errno_t error;
++
++	if (n == NULL) {
++		printf("net: there is no unit %u for %s\n", unit, link->name);
++		return false;
++	}
++	if (n->link != NULL) {
++		printf("net: en%u is on %s already; %s is not attached\n", unit, n->link->name, link->name);
++		return false;
++	}
++	snprintf(uniqueid, sizeof(uniqueid), "hakios-en%u", unit);
++	n->unit = unit;
++	n->link = link;
++	n->up = link->up;
++	lck_mtx_init(&n->tx_lock, &net_lck_grp, LCK_ATTR_NULL);
++	error = ifnet_allocate_extended(&init, &ifp);
++	if (error != 0) {
++		printf("net: the interface en%u cannot be made: error %d\n", unit, error);
++		n->link = NULL;
++		return false;
++	}
++	ifnet_set_capabilities_enabled(ifp, 0, -1);
++	ifnet_set_addrlen(ifp, ETHER_ADDR_LEN);
++	ifnet_set_baudrate(ifp, 100 * 1000 * 1000);
++	ifnet_set_mtu(ifp, ETHERMTU);
++	ifnet_set_flags(ifp, IFF_BROADCAST | IFF_MULTICAST | IFF_SIMPLEX, 0xffff);
++	ifnet_set_hdrlen(ifp, ETHER_HDR_LEN);
++	ifnet_set_offload(ifp, 0);
++	error = ifnet_attach(ifp, NULL);
++	if (error != 0) {
++		printf("net: the interface en%u cannot be attached: error %d\n", unit, error);
++		ifnet_release(ifp);
++		n->link = NULL;
++		return false;
++	}
++	ifnet_set_lladdr(ifp, address, ETHER_ADDR_LEN);
++	bpfattach(ifp, DLT_EN10MB, ETHER_HDR_LEN);
++	n->ifp = ifp;
++	if (n->up) {
++		net_link_event(ifp, KEV_DL_LINK_ON);
++	}
++	if (link->wireless) {
++		/* (a radio's address is the phone's own: not for the log; and iOS's Wi-Fi side finds the interface by a service) */
++		printf("net: en%u attached on %s (a radio), link %s\n", unit, link->name, n->up ? "up" : "down");
++		HakiosWLANStart(uniqueid + 7, address);
++	} else {
++		printf("net: en%u attached on %s, address %02x:%02x:%02x:%02x:%02x:%02x, link %s\n", unit, link->name, address[0],
++		    address[1], address[2], address[3], address[4], address[5], n->up ? "up" : "down");
++	}
++	if (kernel_thread_start(net_thread, n, &thread) == KERN_SUCCESS) {
++		thread_deallocate(thread);
++	}
++	return true;
++}
++
++void
++hakios_net_init(void)
++{
++	PE_parse_boot_argn("net_trace", &net_trace, sizeof(net_trace));
++	PE_parse_boot_argn("net_names", &net_names, sizeof(net_names));
++}
++#endif /* ARM64_BOARD_CONFIG_SWEET || ARM64_BOARD_CONFIG_HEROLTE */
+diff --git a/bsd/dev/sweet_sta.c b/bsd/dev/sweet_sta.c
+new file mode 100644
+index 0000000..235fe61
+--- /dev/null
++++ b/bsd/dev/sweet_sta.c
+@@ -0,0 +1,409 @@
++/* From HackiOS's bsd/dev/hakios.sta.c (github.com/oosexgang/hackios-xnu-kernel, as
++ * github.com/JopangJovan/hackios-xnu-kernel-umi has it; APSL 2.0), for apollo's Wi-Fi (xnu 0128).
++ * Imported as it is: it was written for a build without -Werror, so its warnings are not
++ * looked at here (this kernel builds with -Weverything -Werror). */
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_HEROLTE)
++#pragma clang diagnostic ignored "-Weverything"
++/*
++ * Darwin-on-hakios: what stands between the two sides of the station boundary
++ * (sys/hakios.sta.h).
++ *
++ * Whoever wants a network asks from wherever it happens to be: an ioctl of wifid's, the thread
++ * that brings the radio up. The station side wants to be called by one thread, one call at a
++ * time, and a scan or a join takes seconds. So what is asked for is noted here and done by a
++ * thread of this file's; the asker returns at once and hears the outcome as an event. One
++ * request of each kind can wait: a second scan asked for while the first has not begun
++ * replaces it, as does a second join.
++ *
++ * What the last scan heard is kept here, so that it can be read without entering the station
++ * side, and so is the list of channels.
++ *
++ * The network the kernel was given in a file is a standing request: joined at the start, and
++ * again whenever the radio is turned back on (Settings' switch), until somebody asks for
++ * another network -- as iOS itself rejoins the networks it knows. If that other network cannot
++ * be joined (a wrong passphrase), the standing one is joined again.
++ */
++#include <kern/kalloc.h>
++#include <kern/locks.h>
++#include <kern/sched_prim.h>
++#include <kern/thread.h>
++#include <libkern/libkern.h>
++#include <mach/mach_types.h>
++#include <sys/errno.h>
++#include "hakios.say.h"
++#include "hakios.sta.h"
++#include <sys/systm.h>
++
++extern void thread_set_thread_name(thread_t thread, const char *name);
++
++#define HEARD_MOST      128
++#define CHANNELS_MOST   96
++
++static LCK_GRP_DECLARE(sta_lock_group, "hakios-sta");
++static LCK_MTX_DECLARE(sta_lock, &sta_lock_group);
++
++static const struct hakios_sta_ops *sta_ops;   /* the station side, while there is one */
++static bool sta_thread_made;
++static bool sta_calls;                          /* the thread is in a call of the station side's */
++static unsigned sta_reads;                      /* ... and so many others are in its state() */
++static bool sta_on = true;                      /* the radio's power, as last asked for (on until then; also when */
++                                                /* asked before the station side is there: xnu 0135) */
++
++/* what has been asked for and not begun */
++static bool asked_power, asked_power_on, asked_scan, asked_join, asked_leave;
++static struct hakios_sta_scan asked_scan_what;
++static struct hakios_sta_join asked_join_what;
++static struct hakios_sta_join standing;        /* the network joined whenever the radio comes on (ssid_length 0: none) */
++static struct hakios_sta_join fallback;        /* ... as it was before a join that has not come through yet */
++
++static struct hakios_sta_bss *heard;           /* by the last scan that came to an end */
++static unsigned heard_count;
++static struct hakios_sta_channel channels[CHANNELS_MOST];
++static unsigned channel_count;
++
++static void
++heard_one(const struct hakios_sta_bss *bss, __unused void *context)
++{
++	/* (only the thread writes the list, and it reads the count without the lock) */
++	if (heard_count < HEARD_MOST) {
++		lck_mtx_lock(&sta_lock);
++		heard[heard_count++] = *bss;
++		lck_mtx_unlock(&sta_lock);
++	}
++}
++
++static void
++sta_runs(__unused void *parameter, __unused wait_result_t result)
++{
++	static struct hakios_sta_scan scan;
++	static struct hakios_sta_join join;
++
++	for (;;) {
++		const struct hakios_sta_ops *ops;
++		bool power = false, power_on = false, leave = false, do_join = false, do_scan = false;
++		int error = 0;
++
++		lck_mtx_lock(&sta_lock);
++		while (sta_ops == NULL || !(asked_power || asked_leave || asked_join || asked_scan)) {
++			lck_mtx_sleep(&sta_lock, LCK_SLEEP_DEFAULT, (event_t)&sta_ops, THREAD_UNINT);
++		}
++		ops = sta_ops;
++		/* one thing at a time, in the order that makes sense when several wait */
++		if (asked_power) {
++			power = true;
++			power_on = asked_power_on;
++			asked_power = false;
++		} else if (asked_leave) {
++			leave = true;
++			asked_leave = false;
++		} else if (asked_join) {
++			do_join = true;
++			join = asked_join_what;
++			bzero(&asked_join_what, sizeof(asked_join_what));
++			asked_join = false;
++		} else {
++			do_scan = true;
++			scan = asked_scan_what;
++			asked_scan = false;
++		}
++		sta_calls = true;
++		lck_mtx_unlock(&sta_lock);
++
++		if (power) {
++			struct hakios_sta_state *state = kalloc_data(sizeof(*state), Z_WAITOK | Z_ZERO);
++			bool was_joined = false;
++
++			if (state != NULL) {
++				ops->state(state);
++				was_joined = state->phase == HAKIOS_STA_JOINED;
++				kfree_data(state, sizeof(*state));
++			}
++			error = ops->power(power_on);
++			if (!power_on && was_joined) {
++				hakios_apple80211_event(HAKIOS_STA_LINK, 0);
++			}
++			hakios_apple80211_event(HAKIOS_STA_POWER, error == 0 ? power_on : !power_on);
++			lck_mtx_lock(&sta_lock);
++			if (error == 0 && power_on && standing.ssid_length != 0 && !asked_join) {
++				asked_join_what = standing;
++				asked_join = true;
++			}
++			lck_mtx_unlock(&sta_lock);
++		} else if (leave) {
++			/*
++			 * (xnu 0133) The link is said to be gone only if there was one (as when the power goes off,
++			 * above): wifid leaves before every join, twice, joined or not, and a "link down" that reaches
++			 * it after its join has begun reads as the join failing (boot 57: the saved network's join came
++			 * through in the kernel, and Settings asked for the password again).
++			 */
++			struct hakios_sta_state *state = kalloc_data(sizeof(*state), Z_WAITOK | Z_ZERO);
++			bool was_joined = false;
++
++			if (state != NULL) {
++				ops->state(state);
++				was_joined = state->phase == HAKIOS_STA_JOINED || state->phase == HAKIOS_STA_JOINING;
++				kfree_data(state, sizeof(*state));
++			}
++			ops->leave();
++			if (was_joined) {
++				hakios_apple80211_event(HAKIOS_STA_LINK, 0);
++			}
++		} else if (do_join) {
++			error = ops->join(&join);
++			bzero(&join, sizeof(join));
++			hakios_apple80211_event(HAKIOS_STA_JOIN_DONE, error);
++			if (error == 0) {
++				hakios_apple80211_event(HAKIOS_STA_LINK, 1);
++			}
++			/* a join that did not come through (a wrong passphrase) leaves things as they were: the standing network again */
++			lck_mtx_lock(&sta_lock);
++			if (error != 0 && fallback.ssid_length != 0 && !asked_join && !asked_leave && !asked_power) {
++				standing = asked_join_what = fallback;
++				asked_join = true;
++			}
++			bzero(&fallback, sizeof(fallback));
++			lck_mtx_unlock(&sta_lock);
++		} else if (do_scan) {
++			error = ops->scan(&scan);
++			lck_mtx_lock(&sta_lock);
++			heard_count = 0;
++			lck_mtx_unlock(&sta_lock);
++			ops->heard(heard_one, NULL);
++			hakios_apple80211_event(HAKIOS_STA_SCAN_DONE, error);
++		}
++
++		lck_mtx_lock(&sta_lock);
++		sta_calls = false;
++		lck_mtx_unlock(&sta_lock);
++		thread_wakeup((event_t)&sta_calls);
++	}
++}
++
++/* ---- the station side ---------------------------------------------------------------------------------- */
++
++void
++hakios_sta_attach(const struct hakios_sta_ops *ops)
++{
++	thread_t thread;
++	bool on;
++
++	if (ops == NULL) {
++		lck_mtx_lock(&sta_lock);
++		sta_ops = NULL;
++		asked_power = asked_scan = asked_join = asked_leave = false;
++		while (sta_calls || sta_reads != 0) {
++			lck_mtx_sleep(&sta_lock, LCK_SLEEP_DEFAULT, (event_t)&sta_calls, THREAD_UNINT);
++		}
++		heard_count = channel_count = 0;
++		lck_mtx_unlock(&sta_lock);
++		return;
++	}
++	if (heard == NULL) {
++		heard = kalloc_data(HEARD_MOST * sizeof(*heard), Z_WAITOK | Z_ZERO);
++	}
++	if (heard == NULL) {
++		hakios_wifi_tell("wifi: no memory for what a scan hears: nobody can ask the radio for a network\n");
++		return;
++	}
++	if (!sta_thread_made) {
++		if (kernel_thread_start(sta_runs, NULL, &thread) != KERN_SUCCESS) {
++			hakios_wifi_tell("wifi: no thread for the station: nobody can ask the radio for a network\n");
++			return;
++		}
++		thread_set_thread_name(thread, "wifi-station");
++		thread_deallocate(thread);
++		sta_thread_made = true;
++	}
++	channel_count = ops->channels(channels, CHANNELS_MOST);
++	lck_mtx_lock(&sta_lock);
++	sta_ops = ops;
++	on = sta_on;
++	if (!on) {
++		/* (xnu 0135) off was asked for before the station side was there: it is put down now */
++		asked_power = true;
++		asked_power_on = false;
++	}
++	lck_mtx_unlock(&sta_lock);
++	thread_wakeup((event_t)&sta_ops);
++	hakios_apple80211_event(HAKIOS_STA_POWER, on);
++}
++
++void
++hakios_sta_lost(int error)
++{
++	hakios_apple80211_event(HAKIOS_STA_LINK, error != 0 ? error : ECONNRESET);
++}
++
++/* ---- who wants a network ------------------------------------------------------------------------------- */
++
++bool
++hakios_sta_present(void)
++{
++	return sta_ops != NULL;
++}
++
++bool
++hakios_sta_powered(void)
++{
++	return sta_on;
++}
++
++bool
++hakios_sta_busy(void)
++{
++	bool busy;
++
++	lck_mtx_lock(&sta_lock);
++	busy = sta_ops != NULL && (sta_calls || asked_power || asked_leave || asked_join || asked_scan);
++	lck_mtx_unlock(&sta_lock);
++	return busy;
++}
++
++int
++hakios_sta_ask_power(bool on)
++{
++	lck_mtx_lock(&sta_lock);
++	sta_on = on;
++	if (sta_ops == NULL) {
++		/*
++		 * (xnu 0135) The station side is not there yet (the driver is still coming up) or is
++		 * being restarted: what is asked for is kept and done when it comes (hakios_sta_attach).
++		 * Refused, wifid's idea of the power and ours parted: boot 59, wifid asked for off as it
++		 * started, before the driver was up (ENXIO); the radio came on all the same, and then
++		 * the Settings switch could not be turned off -- no other power request reached us.
++		 */
++		lck_mtx_unlock(&sta_lock);
++		hakios_apple80211_event(HAKIOS_STA_POWER, on);
++		return 0;
++	}
++	asked_power = true;
++	asked_power_on = on;
++	if (!on) {
++		asked_scan = asked_join = asked_leave = false;
++	}
++	lck_mtx_unlock(&sta_lock);
++	thread_wakeup((event_t)&sta_ops);
++	return 0;
++}
++
++int
++hakios_sta_ask_scan(const struct hakios_sta_scan *what)
++{
++	lck_mtx_lock(&sta_lock);
++	if (sta_ops == NULL || !sta_on) {
++		lck_mtx_unlock(&sta_lock);
++		return sta_ops == NULL ? ENXIO : ENETDOWN;
++	}
++	asked_scan_what = *what;
++	asked_scan = true;
++	lck_mtx_unlock(&sta_lock);
++	thread_wakeup((event_t)&sta_ops);
++	return 0;
++}
++
++int
++hakios_sta_ask_join_standing(const struct hakios_sta_join *what)
++{
++	int error = hakios_sta_ask_join(what);
++
++	lck_mtx_lock(&sta_lock);
++	if (error == 0) {
++		standing = *what;
++	}
++	lck_mtx_unlock(&sta_lock);
++	return error;
++}
++
++int
++hakios_sta_ask_join(const struct hakios_sta_join *what)
++{
++	lck_mtx_lock(&sta_lock);
++	if (sta_ops == NULL || !sta_on) {
++		lck_mtx_unlock(&sta_lock);
++		return sta_ops == NULL ? ENXIO : ENETDOWN;
++	}
++	if (standing.ssid_length != 0) {
++		fallback = standing;
++	}
++	bzero(&standing, sizeof(standing));     /* (whoever asks for a network now has the say) */
++	asked_join_what = *what;
++	asked_join = true;
++	asked_leave = false;
++	lck_mtx_unlock(&sta_lock);
++	thread_wakeup((event_t)&sta_ops);
++	return 0;
++}
++
++int
++hakios_sta_ask_leave(void)
++{
++	lck_mtx_lock(&sta_lock);
++	if (sta_ops == NULL) {
++		lck_mtx_unlock(&sta_lock);
++		return ENXIO;
++	}
++	asked_leave = true;
++	asked_join = false;
++	bzero(&asked_join_what, sizeof(asked_join_what));
++	bzero(&fallback, sizeof(fallback));
++	lck_mtx_unlock(&sta_lock);
++	thread_wakeup((event_t)&sta_ops);
++	return 0;
++}
++
++bool
++hakios_sta_heard(unsigned index, struct hakios_sta_bss *bss)
++{
++	bool there;
++
++	lck_mtx_lock(&sta_lock);
++	if ((there = index < heard_count)) {
++		*bss = heard[index];
++	}
++	lck_mtx_unlock(&sta_lock);
++	return there;
++}
++
++void
++hakios_sta_state(struct hakios_sta_state *state)
++{
++	const struct hakios_sta_ops *ops;
++
++	bzero(state, sizeof(*state));
++	lck_mtx_lock(&sta_lock);
++	if ((ops = sta_ops) != NULL) {
++		sta_reads++;
++	}
++	lck_mtx_unlock(&sta_lock);
++	if (ops != NULL) {
++		ops->state(state);
++		lck_mtx_lock(&sta_lock);
++		sta_reads--;
++		lck_mtx_unlock(&sta_lock);
++		thread_wakeup((event_t)&sta_calls);
++	}
++}
++
++unsigned
++hakios_sta_channels(struct hakios_sta_channel *out, unsigned most)
++{
++	unsigned count;
++
++	lck_mtx_lock(&sta_lock);
++	count = channel_count < most ? channel_count : most;
++	memcpy(out, channels, count * sizeof(*out));
++	lck_mtx_unlock(&sta_lock);
++	return count;
++}
++
++bool
++hakios_sta_address(uint8_t *address)
++{
++	const struct hakios_sta_ops *ops = sta_ops;
++
++	if (ops != NULL) {
++		memcpy(address, ops->address, 6);
++	}
++	return ops != NULL;
++}
++#endif /* ARM64_BOARD_CONFIG_SWEET || ARM64_BOARD_CONFIG_HEROLTE */
+diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+index 37b738a..8692b66 100644
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -1079,6 +1079,7 @@ bsd_init(void)
+ 
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ extern void herolte_drop_apply(void);
++extern void herolte_wifi_early(void);
+ #endif
+ 
+ void
+@@ -1110,6 +1111,8 @@ bsdinit_task(void)
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ 	/* Files from the USERDATA drop zone, before launchd (bsd/dev/herolte_drop.c). */
+ 	herolte_drop_apply();
++	/* en0 for the Wi-Fi before wifid and configd look for it (bsd/dev/herolte_wifi.c) */
++	herolte_wifi_early();
+ #endif
+ 	load_init_program(p);
+ 	lock_trace = 1;
+diff --git a/iokit/Kernel/arm/SweetNetworkStack.cpp b/iokit/Kernel/arm/SweetNetworkStack.cpp
+new file mode 100644
+index 0000000..0d8b3e5
+--- /dev/null
++++ b/iokit/Kernel/arm/SweetNetworkStack.cpp
+@@ -0,0 +1,215 @@
++/* From HackiOS's iokit/Kernel/MiniIONetworkStack.cpp (github.com/oosexgang/hackios-xnu-kernel; APSL 2.0), for
++ * apollo's Wi-Fi (xnu 0129); its warnings are not looked at (written for a build without -Werror). */
++#pragma clang diagnostic ignored "-Weverything"
++/*
++ * IONetworkStack: a stand-in for IONetworkStack of Apple's IONetworkingFamily, as seen by
++ * configd's interface namer.
++ *
++ * The real one gives the BSD names (en0, en1, ...) to the IONetworkInterface objects of the
++ * drivers, when the interface namer asks. Here interfaces are made with the BSD interface KPI
++ * (bsd/dev/sweet_net.c) and are born with their names, so there is never anything to name.
++ * But the namer wants this object all the same: until it has opened it, it does not say in
++ * configd's store that the registry has gone quiet (the key Plugin:InterfaceNamer, "*QUIET*"),
++ * and gives up only after five minutes ("*TIMEOUT*"). SystemConfiguration's
++ * SCNetworkInterfaceCopyAll() waits for one of the two, and with it whoever asks for the list of
++ * interfaces: wifid as soon as it has a device, and behind wifid Settings (boot 54: Settings hung
++ * on its Wi-Fi and About pages; the cause as iOSPlus10 traced it, patches/xnu/README-wifi.md).
++ *
++ * So: the service, a user client that can be opened, and a refusal of the naming request.
++ * Started by sweet_wifi_init() for sweetwifi=11 and 12, before launchd.
++ */
++
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_HEROLTE)
++#include <IOKit/IOLib.h>
++#include <IOKit/IOKitKeys.h>
++#include <IOKit/IOService.h>
++#include <IOKit/IOUserClient.h>
++#include <IOKit/IORegistryEntry.h>
++#include <libkern/c++/OSKext.h>
++#include <sys/systm.h>
++#include <sys/proc.h>
++
++extern "C" void SweetNetworkStackStart(void);
++extern "C" void SweetIOKitDaemonStandIn(void);
++
++class IONetworkStack : public IOService
++{
++	OSDeclareDefaultStructors(IONetworkStack);
++
++public:
++	virtual bool start(IOService * provider) APPLE_KEXT_OVERRIDE;
++};
++
++OSDefineMetaClassAndStructors(IONetworkStack, IOService);
++
++bool
++IONetworkStack::start(IOService * provider)
++{
++	if (!IOService::start(provider)) {
++		return false;
++	}
++	setProperty(kIOUserClientClassKey, "IONetworkStackUserClient");
++	setName("IONetworkStack");
++	registerService();
++	return true;
++}
++
++class IONetworkStackUserClient : public IOUserClient
++{
++	OSDeclareDefaultStructors(IONetworkStackUserClient);
++
++public:
++	virtual bool start(IOService * provider) APPLE_KEXT_OVERRIDE;
++	virtual IOReturn clientClose(void) APPLE_KEXT_OVERRIDE;
++	virtual IOReturn setProperties(OSObject * properties) APPLE_KEXT_OVERRIDE;
++};
++
++OSDefineMetaClassAndStructors(IONetworkStackUserClient, IOUserClient);
++
++/*
++ * Boot 55: configd opened this with the registry busy (1), and still waited its 300 s: the
++ * namer publishes "*QUIET*" only when the whole registry is idle, so something stays busy. Which
++ * services are busy (the busiest leaves: busy, with no busy child) is said 20, 60 and 120 s after
++ * configd opened the stack.
++ */
++static void
++sayBusy(unsigned seconds)
++{
++	IOService * root = IOService::getServiceRoot();
++	unsigned shown = 0;
++
++	IOLog("SweetNetworkStack: %u s after configd: the registry's busy state is %u\n", seconds,
++	    (unsigned) root->getBusyState());
++	if (root->getBusyState() == 0) {
++		return;
++	}
++	IORegistryIterator * all = IORegistryIterator::iterateOver(root, gIOServicePlane, kIORegistryIterateRecursively);
++	if (all == NULL) {
++		return;
++	}
++	IORegistryEntry * entry;
++	while ((entry = all->getNextObject()) != NULL && shown < 12) {
++		IOService * service = OSDynamicCast(IOService, entry);
++		if (service == NULL || service->getBusyState() == 0) {
++			continue;
++		}
++		bool busyChild = false;
++		OSIterator * children = service->getChildIterator(gIOServicePlane);
++		if (children != NULL) {
++			OSObject * child;
++			while (!busyChild && (child = children->getNextObject()) != NULL) {
++				IOService * other = OSDynamicCast(IOService, child);
++				busyChild = other != NULL && other->getBusyState() != 0;
++			}
++			children->release();
++		}
++		if (!busyChild) {
++			IOLog("SweetNetworkStack: %u s after configd: BUSY: %s (class %s, busy %u)\n", seconds, service->getName(),
++			    service->getMetaClass()->getClassName(), (unsigned) service->getBusyState());
++			shown++;
++		}
++	}
++	all->release();
++}
++
++static void
++watchBusy(void * argument)
++{
++	static const unsigned at[] = { 20, 60, 120 };
++	unsigned waited = 0;
++
++	for (unsigned i = 0; i < sizeof(at) / sizeof(at[0]); i++) {
++		IOSleep((at[i] - waited) * 1000);
++		waited = at[i];
++		sayBusy(at[i]);
++	}
++	IOExitThread();
++}
++
++bool
++IONetworkStackUserClient::start(IOService * provider)
++{
++	char who[32] = "?";
++
++	if (!IOUserClient::start(provider)) {
++		return false;
++	}
++	/* whether the registry is quiet at this moment is what the namer goes on to ask */
++	proc_selfname(who, sizeof(who));
++	IOLog("SweetNetworkStack: opened by %s; the registry's busy state is %u\n", who,
++	    (unsigned) IOService::getServiceRoot()->getBusyState());
++	static bool watching;
++	if (!watching) {
++		watching = true;
++		(void) IOCreateThread(watchBusy, NULL);
++	}
++	return true;
++}
++
++IOReturn
++IONetworkStackUserClient::clientClose(void)
++{
++	if (!isInactive()) {
++		terminate();
++	}
++	return kIOReturnSuccess;
++}
++
++/* "Name this interface" (a dictionary: IONetworkStackUserCommand, IOPathMatch, IOInterfaceUnit). */
++IOReturn
++IONetworkStackUserClient::setProperties(OSObject * properties)
++{
++	static unsigned said;
++
++	if (said++ < 4) {
++		IOLog("SweetNetworkStack: asked to name an interface: there are none of that kind\n");
++	}
++	return kIOReturnUnsupported;
++}
++
++/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
++
++/*
++ * Boot 56: the registry stayed busy (1) with no busy service under its root. That is the count
++ * StartIOKitMatching() adds to the root "until the IOKit daemon has completely finished launching"
++ * (IOStartIOKit.cpp): this kernel is built with the macOS SDK (!NO_KEXTD), so it waits for
++ * kernelmanagerd, which an iOS root does not have (an iOS kernel, NO_KEXTD, never adds the count).
++ * The registry never went quiet, so configd's interface namer never said "*QUIET*" and everything
++ * behind SCNetworkInterfaceCopyAll() waited its 300 s (wifid, Settings). So the daemon's arrival is
++ * stood in for, once, as early as sweet_wifi_init() runs (bsd_init, after PE_init_iokit's
++ * StartIOKitMatching): the deferred matches start, the root's count goes, IOUserResources gets
++ * "IOKit", as when kernelmanagerd checks in. (Not when the kernel has no daemon to wait for:
++ * boot-arg -restore.)
++ */
++void
++SweetIOKitDaemonStandIn(void)
++{
++	static bool done;
++
++	if (done || !OSKext::iokitDaemonAvailable()) {
++		return;
++	}
++	done = true;
++	IOLog("SweetNetworkStack: no IOKit daemon on iOS: its arrival is stood in for (the registry's busy state %u)\n",
++	    (unsigned) IOService::getServiceRoot()->getBusyState());
++	IOService::iokitDaemonLaunched();
++}
++
++void
++SweetNetworkStackStart(void)
++{
++	/* where the real one is: IOService:/IOResources/IONetworkStack */
++	IOService * resources = IOService::getResourceService();
++	IONetworkStack * stack = OSTypeAlloc(IONetworkStack);
++
++	if (resources == NULL || stack == NULL || !stack->init() || !stack->attach(resources)) {
++		OSSafeReleaseNULL(stack);
++		IOLog("SweetNetworkStack: cannot create the service\n");
++		return;
++	}
++	if (!stack->start(resources)) {
++		stack->detach(resources);
++	}
++	stack->release();
++}
++#endif /* ARM64_BOARD_CONFIG_SWEET || ARM64_BOARD_CONFIG_HEROLTE */
+diff --git a/iokit/Kernel/arm/SweetWLAN.cpp b/iokit/Kernel/arm/SweetWLAN.cpp
+new file mode 100644
+index 0000000..126bede
+--- /dev/null
++++ b/iokit/Kernel/arm/SweetWLAN.cpp
+@@ -0,0 +1,142 @@
++/* From HackiOS's iokit/Kernel/hakios.wlan.cpp (github.com/oosexgang/hackios-xnu-kernel; APSL 2.0), for
++ * apollo's Wi-Fi (xnu 0128); its warnings are not looked at (written for a build without -Werror). */
++#pragma clang diagnostic ignored "-Weverything"
++/*
++ * HakiosWLAN: the registry entries by which iOS finds the Wi-Fi interface.
++ *
++ * en0 is made with the BSD interface KPI (bsd/dev/hakios.net.c) and has no IOKit object behind
++ * it of its own; iOS looks for two, as IO80211Family would have made them:
++ *
++ *   - wifid's device is whatever service has the property IO80211InterfaceRole =
++ *     "Infrastructure", and IO80211.framework binds to an interface through a service whose
++ *     IOInterfaceName is the interface's name. The service has no user client, on purpose:
++ *     the framework's attempt to open one fails, it says "Falling back to IOCTL path", and
++ *     from then on every request is an ioctl on a socket, which bsd/dev/hakios.apple80211.c
++ *     answers.
++ *   - SystemConfiguration (SCNetworkInterfaceCopyAll) lists the network interfaces it finds as
++ *     objects of the class IONetworkInterface, and calls one a Wi-Fi interface when its parent
++ *     is of the class IO80211Controller; type, unit, name and built-in-ness are properties of
++ *     the interface, the hardware address one of the controller. configd makes a network
++ *     service (DHCP and the rest) for an interface it has listed, and only an interface with a
++ *     service can be the one the system routes through -- which wifid waits for after a join
++ *     ("failed to become routable interface") before Settings ticks the network.
++ *
++ * So: a controller of the class IO80211Controller under the platform, and below it one object
++ * that is both, an IONetworkInterface with wifid's properties. Both classes are ours, named as
++ * IO80211Family and IONetworkingFamily name theirs; neither has anything but properties.
++ */
++
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_HEROLTE)
++#include <IOKit/IOLib.h>
++#include <IOKit/IOPlatformExpert.h>
++#include <IOKit/IOService.h>
++#include <IOKit/IOUserClient.h>
++#include <libkern/c++/OSData.h>
++#include <libkern/c++/OSNumber.h>
++
++extern "C" void HakiosWLANStart(const char * interface, const uint8_t * address);
++
++class IO80211Controller : public IOService
++{
++	OSDeclareDefaultStructors(IO80211Controller);
++};
++
++OSDefineMetaClassAndStructors(IO80211Controller, IOService);
++
++class IONetworkInterface : public IOService
++{
++	OSDeclareDefaultStructors(IONetworkInterface);
++};
++
++OSDefineMetaClassAndStructors(IONetworkInterface, IOService);
++
++class HakiosWLAN : public IONetworkInterface
++{
++	OSDeclareDefaultStructors(HakiosWLAN);
++
++public:
++	virtual IOReturn newUserClient(task_t owningTask, void * securityID, UInt32 type, OSDictionary * properties,
++	    IOUserClient ** handler) APPLE_KEXT_OVERRIDE;
++};
++
++OSDefineMetaClassAndStructors(HakiosWLAN, IONetworkInterface);
++
++/* There is none (see the top); that somebody asked shows that the service was found. */
++IOReturn
++HakiosWLAN::newUserClient(task_t owningTask, void * securityID, UInt32 type, OSDictionary * properties, IOUserClient ** handler)
++{
++	static unsigned said;
++
++	if (said++ < 8) {
++		IOLog("HakiosWLAN: a user client of type %u is asked for: there is none\n", (unsigned) type);
++	}
++	return kIOReturnUnsupported;
++}
++
++/* attach, start, register: the service, or NULL */
++static IOService *
++publish(IOService * service, IOService * provider, const char * name)
++{
++	if (service == NULL || !service->attach(provider)) {
++		OSSafeReleaseNULL(service);
++		return NULL;
++	}
++	service->setName(name);
++	if (!service->start(provider)) {
++		service->detach(provider);
++		service->release();
++		return NULL;
++	}
++	service->registerService();
++	return service;
++}
++
++/* Once, when the interface of a radio exists. */
++void
++HakiosWLANStart(const char * interface, const uint8_t * address)
++{
++	IOService * platform = IOService::getPlatform();
++	IO80211Controller * controller = OSTypeAlloc(IO80211Controller);
++	HakiosWLAN * wlan = OSTypeAlloc(HakiosWLAN);
++	OSData * mac;
++	OSNumber * number;
++
++	if (platform == NULL || controller == NULL || wlan == NULL || !controller->init() || !wlan->init()) {
++		OSSafeReleaseNULL(controller);
++		OSSafeReleaseNULL(wlan);
++		IOLog("HakiosWLAN: cannot create the services\n");
++		return;
++	}
++	if ((mac = OSData::withBytes(address, 6)) != NULL) {
++		controller->setProperty("IOMACAddress", mac);
++		mac->release();
++	}
++	controller->setProperty("IOBuiltin", true);
++	if ((controller = (IO80211Controller *) publish(controller, platform, "HakiosWLANController")) == NULL) {
++		wlan->release();
++		IOLog("HakiosWLAN: the controller did not start\n");
++		return;
++	}
++
++	wlan->setProperty("IOInterfaceName", interface);
++	wlan->setProperty("BSD Name", interface);
++	wlan->setProperty("IOInterfaceNamePrefix", "en");
++	if ((number = OSNumber::withNumber(6ULL, 32)) != NULL) {        /* IFT_ETHER */
++		wlan->setProperty("IOInterfaceType", number);
++		number->release();
++	}
++	if ((number = OSNumber::withNumber((unsigned long long) (interface[2] - '0'), 32)) != NULL) {
++		wlan->setProperty("IOInterfaceUnit", number);
++		number->release();
++	}
++	wlan->setProperty("IOBuiltin", true);
++	wlan->setProperty("IOPrimaryInterface", true);
++	wlan->setProperty("IO80211InterfaceRole", "Infrastructure");
++	if (publish(wlan, controller, "HakiosWLAN") == NULL) {
++		IOLog("HakiosWLAN: the service did not start\n");
++	} else {
++		wlan->release();
++	}
++	controller->release();
++}
++#endif /* ARM64_BOARD_CONFIG_SWEET || ARM64_BOARD_CONFIG_HEROLTE */
+diff --git a/iokit/conf/files.arm64 b/iokit/conf/files.arm64
+index 4e56d3d..e72b03f 100644
+--- a/iokit/conf/files.arm64
++++ b/iokit/conf/files.arm64
+@@ -18,6 +18,8 @@ iokit/Kernel/arm/SweetFramebuffer.cpp                            optional iokitc
+ iokit/Kernel/arm/A5XELTEGPU.cpp                                 optional iokitcpp
+ iokit/Kernel/arm/SweetBattery.cpp                                optional iokitcpp
+ iokit/Kernel/arm/HeroGPU.cpp                                     optional iokitcpp
++iokit/Kernel/arm/SweetWLAN.cpp                                   optional iokitcpp
++iokit/Kernel/arm/SweetNetworkStack.cpp                           optional iokitcpp
+ iokit/Kernel/arm/hid/SweetHID.cpp                                optional iokitcpp
+ iokit/Kernel/arm/hid/IOHIDEvent.cpp                              optional iokitcpp
+ iokit/Kernel/arm/hid/IOHIDEventServiceQueue.cpp                  optional iokitcpp

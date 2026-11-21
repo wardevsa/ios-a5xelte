@@ -1,0 +1,148 @@
+herolte: herocycle test schedule, black-pixel count, DECON stop only after the fade (0458, D-0096)
+
+min88 (E-0305): the one-step DECON stop works (372/366 mA against 519-535) but the Director saw the lock screen text and the dock with the screen "off". herocycle=<s>: 150 s after the power thread starts, three times, the screen goes off for <s> s and on for 20 s through herolte_fb_power (the same state change as RequestPowerChange; iOS is not told), so a test needs no finger. When the fade-out ends, SweetFramebuffer counts the pixels that are not black once and logs "HEROLTE FB: fade done, N of M pixels not black", and sets herolte_fb_dark; herodisp stops the DECON only when that flag is set. Nothing changes without herocycle/herodisp.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2611,6 +2611,7 @@
+  * Boot-arg heropower=0: none of it. herotmu=0: the SoC's four TMUs are not read; by default they (BOOT DTB tmuctrl@1006x000, no clocks of their own)
+  * are read, nothing written, once a minute after the first two, for their calibration.
+  */
++volatile uint32_t herolte_fb_dark;             /* 0458: fade-out over, panel memory black (SweetFramebuffer.cpp) */
+ volatile uint64_t herolte_screen_off_at;        /* mach time the display went off; 0 while it is on */
+ volatile int herolte_fg_temp_dc = -10000;       /* the battery, tenths of a degree; -10000 not read */
+ 
+@@ -2816,6 +2817,13 @@
+ 	PE_parse_boot_argn("herostep", &step_s, sizeof(step_s));
+ 	PE_parse_boot_argn("herodisp", &disp_s, sizeof(disp_s));
+ 	/*
++	 * 0458 (D-0096): herocycle=<s>: a test schedule that needs no finger. 150 s after the thread starts, three times: the screen
++	 * is turned off for <s> seconds, then on for 20 s. Each change is the "SWEET FB: display on|off" line of a real request.
++	 */
++	uint32_t cyc_s = 0;
++	PE_parse_boot_argn("herocycle", &cyc_s, sizeof(cyc_s));
++	uint64_t cyc_t0 = mach_absolute_time();
++	/*
+ 	 * 0437: read-only PSCI probe, once, 30 s after the thread starts: PSCI_VERSION (0x84000000), PSCI_FEATURES of CPU_SUSPEND
+ 	 * (0xc4000001), CPU_OFF and SYSTEM_SUSPEND, and AFFINITY_INFO (0xc4000004: 0 ON, 1 OFF, 2 ON_PENDING) of each core. Linux in
+ 	 * TWRP idles its cores with CPU_SUSPEND param 0x10000 (cpu-sleep: 560 s against 5 s of WFI); this says whether the same call
+@@ -2869,6 +2877,18 @@
+ 			absolutetime_to_nanoseconds(now - off, &ns);
+ 		}
+ 		bool screen_off = off != 0 && ns > 3ull * NSEC_PER_SEC;
++		if (cyc_s) {
++			extern void herolte_fb_power(int off);
++			uint64_t el_ns = 0;
++			absolutetime_to_nanoseconds(now - cyc_t0, &el_ns);
++			uint64_t el = el_ns / NSEC_PER_SEC;
++			if (el >= 150) {
++				uint64_t per = (uint64_t)cyc_s + 20, k = (el - 150) / per, ph = (el - 150) % per;
++				if (k < 3 && (ph < cyc_s) != (off != 0)) {
++					herolte_fb_power(ph < cyc_s);
++				}
++			}
++		}
+ 		if (cpd_allowed && cpd_screen_only) {
+ 			extern volatile uint32_t herolte_cpd_enable;
+ 			uint32_t want = screen_off;            /* 0453 */
+@@ -3113,12 +3133,13 @@
+ 		 * safety net) and re-arm. The screen's own "off" flag is used (off != 0), not screen_off, which only turns true after 3 s.
+ 		 */
+ 		if (disp_s >= 1) {
++			extern volatile uint32_t herolte_fb_dark;
+ 			extern void herolte_disp_stop(unsigned level);
+ 			extern void herolte_disp_restore(void);
+ 			bool single = disp_s < 10;
+ 			unsigned levels = single ? 1 : 2;
+ 			uint64_t first = single ? disp_s : 30;
+-			if (off != 0 && disp_i < levels && ns >= (first + (single ? 0 : (uint64_t)disp_i * disp_s)) * NSEC_PER_SEC) {
++			if (off != 0 && disp_i < levels && herolte_fb_dark && ns >= (first + (single ? 0 : (uint64_t)disp_i * disp_s)) * NSEC_PER_SEC) {
+ 				herolte_disp_stop(disp_i + 1);
+ 				disp_i++;
+ 			} else if (off == 0 && herolte_disp_state) {
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -76,6 +76,7 @@
+ /* Two panel buffers (herofb2): the Mali draws into the one not shown; the CPU writes only the first, shown first. */
+ extern "C" bool herolte_fb_two_buffers(void);
+ extern "C" void herolte_fb_primary(void);
++extern "C" volatile uint32_t herolte_fb_dark;   /* bsd/dev/herolte_gpu.c (0458): 1 once the fade-out has finished and the memory is black */
+ extern "C" volatile uint64_t herolte_screen_off_at;    /* bsd/dev/herolte_gpu.c (0330) */
+ extern "C" void herolte_disp_restore(void);                 /* bsd/dev/herolte_gpu.c (0456): DECON running again before the first frame */
+ extern "C" boolean_t mach_timer_coalescing_enabled;    /* osfmk/kern/timer_call.c, sysctl kern.timer_coalescing_enabled */
+@@ -508,10 +509,13 @@
+ 	IOFreeData(rec, SWEET_FB_SWAP_REC_SIZE);
+ }
+ 
++static AppleCLCD *sweet_fb_main;        /* the one framebuffer, for herolte_fb_power (0458) */
++
+ void
+ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+ {
+ 	AppleCLCD *fb = (AppleCLCD *)owner;
++	sweet_fb_main = fb;
+ 	uint64_t now = fb->fVsyncNext ? fb->fVsyncNext : mach_absolute_time();
+ 	uint64_t count = ++fb->fVsyncCount;
+ 	uint64_t values[6] = {
+@@ -547,6 +551,18 @@
+ 			}
+ 		}
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		if (step == 7 && !herolte_fb_dark) {
++			/* (0458) the fade is over: count what is not black, once, and tell the power thread it may stop the DECON */
++			uint64_t lit = 0;
++			for (uint32_t y = 0; y < fb->fHeight; y++) {
++				volatile uint32_t *row = (volatile uint32_t *)(fb->fPixels + (uint64_t)y * fb->fRowBytes);
++				for (uint32_t x = 0; x < fb->fWidth; x++) {
++					lit += (row[x] & 0x00ffffff) != 0;
++				}
++			}
++			IOLog("HEROLTE FB: fade done, %llu of %llu pixels not black\n", lit, (uint64_t)fb->fWidth * fb->fHeight);
++			__atomic_store_n(&herolte_fb_dark, 1, __ATOMIC_SEQ_CST);
++		}
+ 		if (step > 6) {
+ 			/* (0330) black and off: 5 ticks a second instead of 60, so that whatever waits for them sleeps */
+ 			fb->fVsyncNext = 0;
+@@ -1311,6 +1327,9 @@
+ 				fFB->fPowerOff = off;
+ 				fFB->fFadeStep = 0;
+ 				fFB->fDirty = true;     /* on: redraw the latest frame */
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++				herolte_fb_dark = 0;
++#endif
+ 			}
+ 			IOLockUnlock(fFB->fLock);
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+@@ -1365,3 +1384,32 @@
+ 	return ret;
+ }
+ #endif /* SWEET || A5XELTE */
++
++
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++/*
++ * 0458 (D-0096): the same state change as RequestPowerChange, for the herocycle test schedule in bsd/dev/herolte_gpu.c, so that a
++ * test needs no finger on the Power button. iOS is not told: it keeps its own idea of the screen and redraws on the next swap.
++ */
++extern "C" void
++herolte_fb_power(int off)
++{
++	AppleCLCD *fb = sweet_fb_main;
++	if (fb == NULL) {
++		return;
++	}
++	if (!off) {
++		herolte_disp_restore();
++	}
++	IOLockLock(fb->fLock);
++	if ((bool)off != fb->fPowerOff) {
++		fb->fPowerOff = off;
++		fb->fFadeStep = 0;
++		fb->fDirty = true;
++		herolte_fb_dark = 0;
++	}
++	IOLockUnlock(fb->fLock);
++	herolte_screen_off_at = off ? mach_absolute_time() : 0;
++	IOLog("SWEET FB: display %s\n", off ? "off" : "on");
++}
++#endif

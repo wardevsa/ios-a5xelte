@@ -1,0 +1,112 @@
+diag(min11): print the translation state and test the virtual framebuffer alias with AT instead of touching it
+
+min10 panicked 'Invalid kernel stack pointer' at vm_fault_internal+0x24 with FAR=0x9e: the SECOND fault. The first one (probably the probe's store through the alias) is hidden because the early data-abort path calls vm_fault with no current thread. Add sweet_early_hex() (one 'A5V label=0x...' line) and print TTBR1_EL1, TCR_EL1, cpu_ttep, the alias VA, the L1 and L2 entries; ask the MMU with 'AT S1E1W' and print PAR_EL1; only if the walk succeeds write and read back the probe pixel; if not, stop (wfe) with the numbers on screen. Block 20 = verdict (green/red).
+
+--- a/osfmk/arm64/arm_vm_init.c	2026-11-14 17:58:44.430663009 +0100
++++ b/osfmk/arm64/arm_vm_init.c	2026-11-14 17:58:44.448766394 +0100
+@@ -2274,18 +2274,44 @@
+ #if defined(A5XELTE)
+ 	sweet_early_block(19, 0xffffffff);
+ 	{
+-		/* min10: probe the virtual alias while TTBR0 still maps the physical one (a fault here is drawn by the panic path through the
+-		 * physical alias). Write a pixel through the alias, read it back through the physical mapping, and show the verdict. */
+-		volatile uint32_t *pa_fb = (volatile uint32_t *)(uintptr_t)A5XELTE_FB_PA;
+-		volatile uint32_t *va_fb = (volatile uint32_t *)(uintptr_t)(A5_EARLY_FB_VA + A5_EARLY_FB_OFF);
+-		const uintptr_t probe = (uintptr_t)1500 * (A5XELTE_FB_STRIDE / 4) + 1300;
+-		uint32_t seen = 0;
+-		va_fb[probe] = 0xff123456u;
+-		__asm__ volatile ("dsb sy; isb" ::: "memory");
+-		for (unsigned int tries = 0; tries < 1000 && seen != 0xff123456u; tries++) {
+-			seen = pa_fb[probe];
++		/* min11: look at the virtual alias WITHOUT touching it (a data abort here only reaches vm_fault with no current thread and
++		 * panics on the second fault, hiding the first one): print the translation state, ask the MMU with AT, and only touch the
++		 * alias if the walk succeeds; otherwise stop with the numbers on screen. */
++		const uint64_t va_probe = A5_EARLY_FB_VA + A5_EARLY_FB_OFF;
++		uint64_t par = 1, ttbr1 = 0, tcr = 0;
++		__asm__ volatile ("mrs %0, ttbr1_el1" : "=r"(ttbr1));
++		__asm__ volatile ("mrs %0, tcr_el1" : "=r"(tcr));
++		tt_entry_t l1e = cpu_tte[(A5_EARLY_FB_VA & ARM_TT_L1_INDEX_MASK) >> ARM_TT_L1_SHIFT];
++		sweet_early_hex("TTBR1", ttbr1);
++		sweet_early_hex("TCR", tcr);
++		sweet_early_hex("cpu_ttep", (uint64_t)cpu_ttep);
++		sweet_early_hex("VA", va_probe);
++		sweet_early_hex("L1e", (uint64_t)l1e);
++		if ((l1e & (ARM_TTE_VALID | ARM_TTE_TYPE_MASK)) == (ARM_TTE_VALID | ARM_TTE_TYPE_TABLE)) {
++			tt_entry_t *l2 = (tt_entry_t *)phystokv(l1e & ARM_TTE_TABLE_MASK);
++			sweet_early_hex("L2e", (uint64_t)l2[(A5_EARLY_FB_VA & ARM_TT_L2_INDEX_MASK) >> ARM_TT_L2_SHIFT]);
++		}
++		__asm__ volatile ("at s1e1w, %1\n\tisb\n\tmrs %0, par_el1" : "=r"(par) : "r"(va_probe) : "memory");
++		sweet_early_hex("PAR", par);
++		int alias_ok = 0;
++		if ((par & 1) == 0) {
++			volatile uint32_t *pa_fb = (volatile uint32_t *)(uintptr_t)A5XELTE_FB_PA;
++			volatile uint32_t *va_fb = (volatile uint32_t *)(uintptr_t)va_probe;
++			const uintptr_t probe = (uintptr_t)1500 * (A5XELTE_FB_STRIDE / 4) + 1300;
++			uint32_t seen = 0;
++			va_fb[probe] = 0xff123456u;
++			__asm__ volatile ("dsb sy; isb" ::: "memory");
++			for (unsigned int tries = 0; tries < 1000 && seen != 0xff123456u; tries++) {
++				seen = pa_fb[probe];
++			}
++			alias_ok = (seen == 0xff123456u);
++		}
++		sweet_early_block(20, alias_ok ? 0xff00ff00 : 0xffff0000);
++		if (!alias_ok) {
++			for (;;) {
++				__asm__ volatile ("wfe" ::: "memory");
++			}
+ 		}
+-		sweet_early_block(20, seen == 0xff123456u ? 0xff00ff00 : 0xffff0000);
+ 	}
+ 	sweet_early_relocate(A5_EARLY_FB_VA + A5_EARLY_FB_OFF); /* TTBR1 is final: draw through the kernel alias from here */
+ 	sweet_early_block(21, 0xffffd700); /* drawn through the virtual alias while TTBR0 still maps the physical one */
+--- a/osfmk/arm64/sweet_early.c	2026-11-14 17:58:44.430821818 +0100
++++ b/osfmk/arm64/sweet_early.c	2026-11-14 17:58:44.448357348 +0100
+@@ -114,6 +114,23 @@
+  * stage-text line (about 1060 px at scale 3) so the text can never overwrite it. Same physical alias as the text
+  * (valid until arm_vm_init replaces TTBR0), so it follows a5_active.
+  */
++/* min11: one line "A5V label=0x<16 hex digits>" on the early console (no kprintf, no allocation). */
++void
++sweet_early_hex(const char *label, uint64_t value)
++{
++	if (!a5_active) {
++		return;
++	}
++	a5_string("A5V ");
++	a5_string(label);
++	a5_string("=0x");
++	for (int shift = 60; shift >= 0; shift -= 4) {
++		sweet_early_putc("0123456789abcdef"[(value >> shift) & 0xf]);
++	}
++	sweet_early_putc('\n');
++	__asm__ volatile("dsb sy" ::: "memory");
++}
++
+ /* Boot-arg herostop=N (read in arm_init after PE_init_platform): freeze the machine right after block N is drawn, so the
+  * screen keeps showing how far it got. -1 = never stop (default). Interrupts are masked at this point of boot. */
+ static volatile int a5_stop_slot = -1;
+@@ -288,4 +305,5 @@
+ 
+ void sweet_early_block(unsigned int slot, uint32_t argb) { (void)slot; (void)argb; }
+ void sweet_early_set_stop(int slot) { (void)slot; }
++void sweet_early_hex(const char *label, uint64_t value) { (void)label; (void)value; }
+ #endif /* SWEET */
+--- a/osfmk/arm64/sweet_early.h	2026-11-14 17:58:44.430883318 +0100
++++ b/osfmk/arm64/sweet_early.h	2026-11-14 17:58:44.448205539 +0100
+@@ -9,6 +9,7 @@
+ #if defined(SWEET)
+ void sweet_early_mark(unsigned int stage, const char *label);
+ void sweet_early_block(unsigned int slot, uint32_t argb);
++void sweet_early_hex(const char *label, uint64_t value);
+ void sweet_early_set_stop(int slot);
+ void sweet_early_putc(char c);
+ void sweet_early_panic(const char *fmt, va_list *args);
+@@ -22,6 +23,7 @@
+ }
+ static inline void sweet_early_block(unsigned int slot, uint32_t argb) { (void)slot; (void)argb; }
+ static inline void sweet_early_set_stop(int slot) { (void)slot; }
++static inline void sweet_early_hex(const char *label, uint64_t value) { (void)label; (void)value; }
+ static inline void sweet_early_disable(void) {}
+ #endif
+ 

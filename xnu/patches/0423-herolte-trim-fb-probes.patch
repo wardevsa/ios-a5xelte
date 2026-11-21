@@ -1,0 +1,33 @@
+diag: trim the framebuffer probes now that the display works (0358)
+
+The FBPROBE thumbnails (64 lines each), FBSRC scans and FBCALL argument logs of 0353-0355 did their job (E-0201, E-0208, E-0217): about 2000 FBP lines (18 % of the persistent log) were still written per boot. Now: at most 6 probes (the first 4 presents, then every 250th) and 24 FBCALL lines. Behaviour unchanged.
+
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -855,7 +855,7 @@
+ 	uint64_t copied = 0;
+ 	static uint32_t src_presents, src_probes;
+ 	src_presents++;
+-	bool src_due = src_probes < 40 && (src_presents <= 12 || src_presents % 25 == 0);
++	bool src_due = src_probes < 6 && (src_presents <= 4 || src_presents % 250 == 0);
+ 
+ 
+ 	if (!fConsolePaused) {
+@@ -1017,7 +1017,7 @@
+ 	{
+ 		static uint32_t presents, probes;
+ 		presents++;
+-		if (copied != 0 && probes < 40 && (presents <= 12 || presents % 25 == 0)) {
++		if (copied != 0 && probes < 6 && (presents <= 4 || presents % 250 == 0)) {
+ 			static const char hex[] = "0123456789abcdef";
+ 			char line[40];
+ 			probes++;
+@@ -1331,7 +1331,7 @@
+ 		/* min25 probe: the arguments of the first 120 calls, in full, and whether the call is asynchronous (a
+ 		 * notification port): where does iOS 16 register for vsync, if not selector 72? */
+ 		static uint32_t calls_logged;
+-		if (calls_logged < 120 && selector != kSweetFBSwapEnd) {
++		if (calls_logged < 24 && selector != kSweetFBSwapEnd) {
+ 			calls_logged++;
+ 			char pname[32];
+ 			proc_selfname(pname, sizeof(pname));

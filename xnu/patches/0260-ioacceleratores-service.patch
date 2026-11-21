@@ -1,0 +1,40 @@
+diff --git a/iokit/Kernel/arm/HeroGPU.cpp b/iokit/Kernel/arm/HeroGPU.cpp
+index 1ac390c..3ba3cb8 100644
+--- a/iokit/Kernel/arm/HeroGPU.cpp
++++ b/iokit/Kernel/arm/HeroGPU.cpp
+@@ -262,6 +262,18 @@ public:
+ 
+ OSDefineMetaClassAndStructors(HeroGPU, IOService);
+ 
++/*
++ * QuartzCore polls for this class every 100 ms, up to 30 s, the first time a
++ * CoreGraphics IOSurface context flushes, and SpringBoard's main thread can end
++ * up behind that wait. It only checks that the service exists, so an empty one
++ * ends the wait. No user client: anything that tries to open it just fails.
++ */
++class IOAcceleratorES : public IOService {
++	OSDeclareDefaultStructors(IOAcceleratorES);
++};
++
++OSDefineMetaClassAndStructors(IOAcceleratorES, IOService);
++
+ class HeroGPUUserClient : public IOUserClient {
+ 	OSDeclareDefaultStructors(HeroGPUUserClient);
+ 
+@@ -291,6 +303,16 @@ HeroGPU::start(IOService *provider)
+ 	setProperty("GPU", "Mali-T880 MP12");
+ 	registerService();
+ 	IOLog("HEROGPU: registered\n");
++	int accel = 1;
++	PE_parse_boot_argn("heroaccel", &accel, sizeof(accel));
++	if (accel) {
++		IOAcceleratorES *es = OSTypeAlloc(IOAcceleratorES);
++		if (es != NULL && es->init() && es->attach(this)) {
++			es->registerService();
++			IOLog("HEROGPU: IOAcceleratorES registered\n");
++		}
++		OSSafeReleaseNULL(es);
++	}
+ 	int selftest = 0;
+ 	thread_t thread;
+ 	if (PE_parse_boot_argn("herogpu_selftest", &selftest, sizeof(selftest)) && selftest &&

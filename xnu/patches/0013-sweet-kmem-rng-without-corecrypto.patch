@@ -1,7 +1,8 @@
 diff --git a/osfmk/vm/vm_kern.c b/osfmk/vm/vm_kern.c
+index 2927d4b..54edb01 100644
 --- a/osfmk/vm/vm_kern.c
 +++ b/osfmk/vm/vm_kern.c
-@@ -2439,22 +2439,68 @@
+@@ -2439,22 +2439,68 @@ kmem_sizeclass_init(void)
  	}
  }
  
@@ -71,7 +72,7 @@ diff --git a/osfmk/vm/vm_kern.c b/osfmk/vm/vm_kern.c
  		}
  	}
  }
-@@ -2711,17 +2757,20 @@
+@@ -2711,17 +2757,20 @@ kmem_get_next_slot(
  	assert(num_slots > 0);
  	if (__improbable(startup_phase < STARTUP_SUB_EARLY_BOOT)) {
  		/*

@@ -1,0 +1,128 @@
+diag(min5): persistent progress blocks in C
+
+sweet_early_block(slot, argb) draws a 36x21 block at x=1300, y=88+32*slot (right of the widest text line, so the stage text cannot overwrite it) after each stage mark in arm_init: slots 0-9 = stages 1,2,3,4,5,6,6a,6b,6c,7. Same alias and a5_active gating as the text; no logic change.
+
+--- a/osfmk/arm/arm_init.c	2026-11-14 13:40:30.096703498 +0100
++++ b/osfmk/arm/arm_init.c	2026-11-14 13:40:44.358327379 +0100
+@@ -348,6 +348,7 @@
+ 	unsigned int dt_entry_size = 0;
+ 
+ 	sweet_early_mark(1, "arm_init entered (MMU on)");
++	sweet_early_block(0, 0xffff0000);
+ 
+ 	arm_setup_pre_sign();
+ 
+@@ -388,6 +389,7 @@
+ 	}
+ #endif /* ARM64_BOARD_CONFIG_HEROLTE */
+ 	sweet_early_mark(2, "PE_init_platform done");
++	sweet_early_block(1, 0xff00ff00);
+ 
+ #if __arm64__
+ 	configure_timer_apple_regs();
+@@ -450,6 +452,7 @@
+ 
+ 	ml_parse_cpu_topology();
+ 	sweet_early_mark(3, "ml_parse_cpu_topology done");
++	sweet_early_block(2, 0xff0000ff);
+ 
+ 
+ 	master_cpu = ml_get_boot_cpu_number();
+@@ -481,12 +484,14 @@
+ 	thread->machine.preemption_count = 0;
+ 	cpu_bootstrap();
+ 	sweet_early_mark(4, "cpu_bootstrap done");
++	sweet_early_block(3, 0xffffff00);
+ 
+ 	rtclock_early_init();
+ 
+ 	kernel_debug_string_early("kernel_startup_bootstrap");
+ 	kernel_startup_bootstrap();
+ 	sweet_early_mark(5, "kernel_startup_bootstrap done");
++	sweet_early_block(4, 0xff00ffff);
+ 
+ 	/*
+ 	 * Initialize the timer callout world
+@@ -496,8 +501,10 @@
+ 	cpu_init();
+ 
+ 	sweet_early_mark(6, "cpu_init done");
++	sweet_early_block(5, 0xffff00ff);
+ 	processor_bootstrap();
+ 	sweet_early_mark(6, "6a processor_bootstrap done");
++	sweet_early_block(6, 0xffff8000);
+ 
+ 	if (PE_parse_boot_argn("maxmem", &maxmem, sizeof(maxmem))) {
+ 		xmaxmem = (uint64_t) maxmem * (1024 * 1024);
+@@ -532,6 +539,7 @@
+ #endif /* SCHED_HYGIENE_DEBUG */
+ 
+ 	sweet_early_mark(6, "6b maxmem and hygiene done");
++	sweet_early_block(7, 0xff80ff00);
+ 	nanoseconds_to_absolutetime(XCALL_ACK_TIMEOUT_NS, &xcall_ack_timeout_abstime);
+ 
+ #if HAS_BP_RET
+@@ -546,7 +554,9 @@
+ #endif  /* __ARM_PAN_AVAILABLE__ */
+ 
+ 	sweet_early_mark(6, "6c boot-args parsed, PAN set");
++	sweet_early_block(8, 0xff8000ff);
+ 	sweet_early_mark(7, "entering arm_vm_init");
++	sweet_early_block(9, 0xffffffff);
+ 	arm_vm_init(xmaxmem, args);
+ 	sweet_early_mark(15, "arm_vm_init returned");
+ 
+--- a/osfmk/arm64/sweet_early.c	2026-11-14 13:40:30.098749720 +0100
++++ b/osfmk/arm64/sweet_early.c	2026-11-14 13:40:44.357753149 +0100
+@@ -109,6 +109,26 @@
+ 	__asm__ volatile("dsb sy" ::: "memory");
+ }
+ 
++/*
++ * Persistent progress block (min5): 36x21 pixels in a column at x=1300, y=88+32*slot, far right of the widest
++ * stage-text line (about 1060 px at scale 3) so the text can never overwrite it. Same physical alias as the text
++ * (valid until arm_vm_init replaces TTBR0), so it follows a5_active.
++ */
++void
++sweet_early_block(unsigned int slot, uint32_t argb)
++{
++	if (!a5_active || slot > 60) {
++		return;
++	}
++	for (unsigned int y = 0; y < 21; y++) {
++		volatile uint32_t *line = A5_FB + (88u + 32u * slot + y) * A5_STRIDE + 1300u;
++		for (unsigned int x = 0; x < 36; x++) {
++			line[x] = argb;
++		}
++	}
++	__asm__ volatile("dsb sy" ::: "memory");
++}
++
+ void sweet_early_relocate(uint64_t base) { (void)base; }
+ void sweet_early_disable(void) { a5_active = 0; }
+ #elif defined(SWEET)
+@@ -244,4 +264,6 @@
+ 	early_disabled = 1;
+ 	__asm__ volatile("dsb sy" ::: "memory");
+ }
++
++void sweet_early_block(unsigned int slot, uint32_t argb) { (void)slot; (void)argb; }
+ #endif /* SWEET */
+--- a/osfmk/arm64/sweet_early.h	2026-11-14 13:40:30.098823054 +0100
++++ b/osfmk/arm64/sweet_early.h	2026-11-14 13:40:30.123183571 +0100
+@@ -8,6 +8,7 @@
+ 
+ #if defined(SWEET)
+ void sweet_early_mark(unsigned int stage, const char *label);
++void sweet_early_block(unsigned int slot, uint32_t argb);
+ void sweet_early_putc(char c);
+ void sweet_early_panic(const char *fmt, va_list *args);
+ void sweet_early_relocate(uint64_t base);
+@@ -18,6 +19,7 @@
+ 	(void)stage;
+ 	(void)label;
+ }
++static inline void sweet_early_block(unsigned int slot, uint32_t argb) { (void)slot; (void)argb; }
+ static inline void sweet_early_disable(void) {}
+ #endif
+ 

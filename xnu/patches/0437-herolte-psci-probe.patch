@@ -1,0 +1,68 @@
+herolte: read-only PSCI probe (0437)
+
+TWRP idles its cores with PSCI CPU_SUSPEND (param 0x10000, cpu-sleep: 560 s against 5 s of WFI, E-0288). Before writing anything for deep idle: 30 s after the power thread starts, HEROLTE PSCI lines: PSCI_VERSION, PSCI_FEATURES of CPU_SUSPEND, CPU_OFF, SYSTEM_SUSPEND and SYSTEM_OFF, and AFFINITY_INFO of the eight cores (0 ON, 1 OFF, 2 ON_PENDING). SMC reads only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2693,6 +2693,13 @@
+ 	uint64_t pd_at = 0;
+ 	unsigned pd_i = 0;
+ 	PE_parse_boot_argn("heropd", &pd_s, sizeof(pd_s));
++	/*
++	 * 0437: read-only PSCI probe, once, 30 s after the thread starts: PSCI_VERSION (0x84000000), PSCI_FEATURES of CPU_SUSPEND
++	 * (0xc4000001), CPU_OFF and SYSTEM_SUSPEND, and AFFINITY_INFO (0xc4000004: 0 ON, 1 OFF, 2 ON_PENDING) of each core. Linux in
++	 * TWRP idles its cores with CPU_SUSPEND param 0x10000 (cpu-sleep: 560 s against 5 s of WFI); this says whether the same call
++	 * is there for us. SMC reads only: nothing is turned off.
++	 */
++	bool psci_done = false;
+ 	int gov_on = 0;
+ 	PE_parse_boot_argn("herogov", &gov_on, sizeof(gov_on));
+ 	uint64_t gov_prev_busy = 0, gov_prev_t = 0, gov_flips = 0;
+@@ -2727,6 +2734,47 @@
+ 				hot_now = false;
+ 			}
+ 		}
++		if (!psci_done && mach_absolute_time() > 0) {
++			static uint64_t psci_t0;
++			if (psci_t0 == 0) {
++				psci_t0 = now;
++			}
++			uint64_t el = 0;
++			absolutetime_to_nanoseconds(now - psci_t0, &el);
++			if (el > 30ull * NSEC_PER_SEC) {
++				psci_done = true;
++				static const struct { const char *name; uint64_t fid, arg; } calls[] = {
++					{ "VERSION", 0x84000000ull, 0 },
++					{ "FEATURES(CPU_SUSPEND)", 0x8400000aull, 0xc4000001ull },
++					{ "FEATURES(CPU_OFF)", 0x8400000aull, 0x84000002ull },
++					{ "FEATURES(SYSTEM_SUSPEND)", 0x8400000aull, 0xc400000eull },
++					{ "FEATURES(SYSTEM_OFF)", 0x8400000aull, 0x84000008ull },
++				};
++				printf("HEROLTE PSCI:");
++				for (unsigned i = 0; i < sizeof(calls) / sizeof(calls[0]); i++) {
++					register uint64_t x0 __asm__("x0") = calls[i].fid;
++					register uint64_t x1 __asm__("x1") = calls[i].arg;
++					register uint64_t x2 __asm__("x2") = 0;
++					register uint64_t x3 __asm__("x3") = 0;
++					__asm__ volatile ("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : :
++					    "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
++					printf(" %s=%d", calls[i].name, (int)(int32_t)x0);
++				}
++				printf("\n");
++				printf("HEROLTE PSCI: AFFINITY_INFO");
++				for (unsigned c = 0; c < 8; c++) {
++					/* MPIDR as the boot log shows it: the A53s (logical 0-3) are 0x100-0x103, the Mongooses (4-7) 0x0-0x3 */
++					register uint64_t x0 __asm__("x0") = 0xc4000004ull;
++					register uint64_t x1 __asm__("x1") = c < 4 ? (0x100ull + c) : (uint64_t)(c - 4);
++					register uint64_t x2 __asm__("x2") = 0;
++					register uint64_t x3 __asm__("x3") = 0;
++					__asm__ volatile ("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : :
++					    "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
++					printf(" cpu%u=%d", c, (int)(int32_t)x0);
++				}
++				printf("\n");
++			}
++		}
+ 		if (pd_s >= 20 && pd_i < 6) {
+ 			uint64_t el = 0;
+ 			if (pd_at == 0) {

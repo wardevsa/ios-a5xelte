@@ -1,0 +1,156 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+index b2ef08b..8466a09 100644
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -17,20 +17,47 @@
+ #include <sys/param.h>
+ #include <sys/systm.h>
+ #include <sys/vnode.h>
++#include <sys/proc.h>
+ #include <string.h>
+ #include <pexpert/pexpert.h>
+ 
+-int herolte_gl_env(const char *path, const char **extra, int max);
++int herolte_gl_env(const char *path, int pid, const char **extra, int max);
++uint64_t herolte_gl_dyld_flags(void);
+ 
+ #define HGL_TARGET      "/usr/libexec/backboardd"
+ #define HGL_SHIM        "/private/var/herolte/lib/libheroeagl.dylib"
+ #define HGL_MAX_LAUNCHES 2
+ 
++/*
++ * dyld only honours DYLD_* variables when AMFI allows them
++ * (amfi_check_dyld_policy_self: __mac_syscall("AMFI", 90, {in, &out})); with
++ * no "AMFI" policy the call fails and dyld treats the process as
++ * restricted, so 0245's DYLD_INSERT_LIBRARIES was ignored. sweet_amfi.c's
++ * "AMFI" policy answers through herolte_gl_dyld_flags(): the backboardd
++ * this file just gave the shim may use @-paths and path variables, and may
++ * start without an inserted library that fails to load; every other
++ * process gets no answer, as before.
++ */
++#define AMFI_DYLD_OUTPUT_ALLOW_AT_PATH                  (1ull << 0)
++#define AMFI_DYLD_OUTPUT_ALLOW_PATH_VARS                (1ull << 1)
++#define AMFI_DYLD_OUTPUT_ALLOW_FAILED_LIBRARY_INSERTION (1ull << 5)
++
+ static int hgl_mode = -1;
+ static int hgl_launches;
++static int hgl_pid = -1;        /* the backboardd that got the shim */
++
++uint64_t
++herolte_gl_dyld_flags(void)
++{
++	if (hgl_pid < 0 || proc_selfpid() != hgl_pid) {
++		return 0;
++	}
++	return AMFI_DYLD_OUTPUT_ALLOW_AT_PATH | AMFI_DYLD_OUTPUT_ALLOW_PATH_VARS |
++	       AMFI_DYLD_OUTPUT_ALLOW_FAILED_LIBRARY_INSERTION;
++}
+ 
+ int
+-herolte_gl_env(const char *path, const char **extra, int max)
++herolte_gl_env(const char *path, int pid, const char **extra, int max)
+ {
+ 	if (hgl_mode < 0) {
+ 		hgl_mode = 0;
+@@ -57,7 +84,9 @@ herolte_gl_env(const char *path, const char **extra, int max)
+ 	if (hgl_mode >= 2) {
+ 		extra[n++] = "EAGL_SHIM_DEBUG=1";
+ 	}
+-	printf("HEROLTE GL: backboardd launch %d: EAGL shim inserted (herogl=%d)\n", launch, hgl_mode);
++	hgl_pid = pid;
++	printf("HEROLTE GL: backboardd launch %d (pid %d): EAGL shim inserted (herogl=%d)\n",
++	    launch, hgl_pid, hgl_mode);
+ 	return n;
+ }
+ #endif /* ARM64_BOARD_CONFIG_HEROLTE */
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index fa74c10..c3c2e8c 100644
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -5744,9 +5744,11 @@ exec_extract_strings(struct image_params *imgp)
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ 	/* bsd/dev/herolte_gl.c: the EAGL shim for backboardd (boot-arg herogl). */
+ 	{
+-		extern int herolte_gl_env(const char *path, const char **extra, int max);
++		extern int herolte_gl_env(const char *path, int pid, const char **extra, int max);
+ 		const char *extra[4];
+-		int n = herolte_gl_env(imgp->ip_strings + strlen(EXECUTABLE_KEY), extra, 4);
++		/* posix_spawn runs this on the parent's thread: the new process is the context's. */
++		int n = herolte_gl_env(imgp->ip_strings + strlen(EXECUTABLE_KEY),
++		    proc_getpid(vfs_context_proc(imgp->ip_vfs_context)), extra, 4);
+ 		for (int i = 0; i < n; i++) {
+ 			error = exec_add_user_string(imgp, CAST_USER_ADDR_T(extra[i]), UIO_SYSSPACE, TRUE);
+ 			if (error) {
+diff --git a/bsd/kern/sweet_amfi.c b/bsd/kern/sweet_amfi.c
+index 0241a1a..177cb1b 100644
+--- a/bsd/kern/sweet_amfi.c
++++ b/bsd/kern/sweet_amfi.c
+@@ -28,6 +28,7 @@
+ #include <libkern/amfi/amfi.h>
+ #include <mach/kern_return.h>
+ #include <sys/codesign.h>
++#include <sys/errno.h>
+ #include <sys/mount.h>
+ #include <sys/priv.h>
+ #include <sys/proc.h>
+@@ -367,6 +368,50 @@ static struct mac_policy_conf sweet_amfi_mac_conf = {
+ 
+ static mac_policy_handle_t sweet_amfi_mac_handle;
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++/*
++ * Policy "AMFI": dyld's amfi_check_dyld_policy_self() is
++ * __mac_syscall("AMFI", 90, &{ u64 input flags, u64 *output flags }).
++ * Without a policy of that name it fails with ENOPOLICY and dyld ignores
++ * every DYLD_* variable. Only HEROLTE GL's backboardd gets an answer
++ * (bsd/dev/herolte_gl.c); every other call keeps failing with ENOPOLICY,
++ * exactly as with no policy at all.
++ */
++extern uint64_t herolte_gl_dyld_flags(void);
++
++static int
++sweet_amfi_dyld_syscall(__unused struct proc *p, int call, user_addr_t arg)
++{
++	struct {
++		uint64_t input_flags;
++		uint64_t output;        /* user pointer to a u64 */
++	} args;
++	uint64_t flags;
++
++	if (call != 90 || (flags = herolte_gl_dyld_flags()) == 0) {
++		return ENOPOLICY;
++	}
++	if (copyin(arg, &args, sizeof(args)) != 0) {
++		return EFAULT;
++	}
++	printf("SWEET AMFI: dyld policy for pid %d: input 0x%llx -> 0x%llx\n",
++	    proc_selfpid(), args.input_flags, flags);
++	return copyout(&flags, (user_addr_t)args.output, sizeof(flags));
++}
++
++static const struct mac_policy_ops sweet_amfi_dyld_mac_ops = {
++	.mpo_policy_syscall = sweet_amfi_dyld_syscall,
++};
++
++static struct mac_policy_conf sweet_amfi_dyld_mac_conf = {
++	.mpc_name = "AMFI",
++	.mpc_fullname = "SWEET dyld policy for HEROLTE GL",
++	.mpc_ops = &sweet_amfi_dyld_mac_ops,
++};
++
++static mac_policy_handle_t sweet_amfi_dyld_mac_handle;
++#endif
++
+ /* Called from bsd_init once MAC policies can register, before any exec. */
+ void sweet_amfi_policy_register(void);
+ 
+@@ -379,5 +424,9 @@ sweet_amfi_policy_register(void)
+ 	error = mac_policy_register(&sweet_sandbox_mac_conf, &sweet_sandbox_mac_handle, NULL);
+ 	printf("SWEET Sandbox: permissive policy %s (%d)\n",
+ 	    error ? "NOT registered" : "registered", error);
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	error = mac_policy_register(&sweet_amfi_dyld_mac_conf, &sweet_amfi_dyld_mac_handle, NULL);
++	printf("SWEET AMFI: dyld policy %s (%d)\n", error ? "NOT registered" : "registered", error);
++#endif
+ }
+ #endif /* ARM64_BOARD_CONFIG_SWEET || ARM64_BOARD_CONFIG_A5XELTE */

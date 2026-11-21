@@ -1,0 +1,28 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 4fe5bf5..8a3fb45 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2387,6 +2387,10 @@ ha_tone(void)
+ 	ha_step("AUD clocks");
+ 	hg_wr(aud, 0x800, 1);
+ 	hg_wr(aud, 0x804, 0x1f3fff);
++	/* The I2S block's own clocks (gate_aud_sclk_mi2s): its registers read without them, but its FIFO doesn't run. */
++	printf("HEROLTE AUDIO: sclk i2s %#x bclk %#x\n", hg_rd(aud, 0x810), hg_rd(aud, 0x828));
++	hg_wr(aud, 0x810, hg_rd(aud, 0x810) | 1u);
++	hg_wr(aud, 0x828, hg_rd(aud, 0x828) | 1u);
+ 	ha_step("LPASS");
+ 	hg_wr(lpass, 0x08, hg_rd(lpass, 0x08) | (3u << 7));
+ 	printf("HEROLTE AUDIO: lpass version %#x reset %#x; i2s con %#x mod %#x ver %#x\n", hg_rd(lpass, 0), hg_rd(lpass, 0x08), hg_rd(i2s, 0),
+@@ -2412,9 +2416,12 @@ ha_tone(void)
+ 	hg_wr(i2s, 0x08, 1u << 15);             /* FIC_TXFLUSH */
+ 	delay(10);
+ 	hg_wr(i2s, 0x08, 0);
++	ha_step("I2S mode");
+ 	hg_wr(i2s, 0x04, 1u << 12);             /* MOD (Exynos5430 layout): slave, 16 bits, TX only */
++	ha_step("I2S active");
+ 	hg_wr(i2s, 0x00, 1u);                   /* CON_ACTIVE */
+ 	printf("HEROLTE AUDIO: i2s con %#x mod %#x fic %#x\n", hg_rd(i2s, 0), hg_rd(i2s, 4), hg_rd(i2s, 8));
++	ha_step("I2S samples");
+ 	/* A table of one 440 Hz period at 48 kHz (109 samples, close enough), low level. */
+ 	static int16_t wave[109];
+ 	int32_t a = 0, b = 2621;                /* a recurrence for a sine: c = 2 sin(pi f/fs) in 1/32768 */

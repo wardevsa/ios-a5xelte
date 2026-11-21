@@ -1,0 +1,16 @@
+diag(min8 fix): allocate the L1 entry for the early framebuffer alias
+
+0343's a5_early_map_final() panicked ('arm_vm_init.c:1878 Assertion failed: (l1 & (VALID|TYPE_MASK)) == (VALID|TYPE_TABLE)', seen on screen with min8h23): without ARM_LARGE_MEMORY no one creates the L1 table entry at VM_MIN_KERNEL_ADDRESS. Create it with init_ptpages() first (it skips existing entries). The panic text itself proved the early console draws panics.
+
+--- a/osfmk/arm64/arm_vm_init.c	2026-11-14 16:59:10.776707659 +0100
++++ b/osfmk/arm64/arm_vm_init.c	2026-11-14 16:59:10.795981785 +0100
+@@ -1874,6 +1874,9 @@
+ {
+ 	const vm_map_address_t va = A5_EARLY_FB_VA;
+ 	assert(va + ARM_TT_L2_SIZE <= gVirtBase);
++	/* min8 fix: without ARM_LARGE_MEMORY nothing else creates the L1 entry for VM_MIN_KERNEL_ADDRESS (the donor's physmap
++	 * did), so allocate its L2 table here; init_ptpages leaves an existing entry alone. */
++	init_ptpages(cpu_tte, va, va + ARM_TT_L2_SIZE, TRUE, ARM_DYNAMIC_TABLE_XN | ARM_TTE_TABLE_AP(ARM_TTE_TABLE_AP_USER_NA));
+ 	tt_entry_t l1 = cpu_tte[(va & ARM_TT_L1_INDEX_MASK) >> ARM_TT_L1_SHIFT];
+ 	assert((l1 & (ARM_TTE_VALID | ARM_TTE_TYPE_MASK)) == (ARM_TTE_VALID | ARM_TTE_TYPE_TABLE));
+ 	tt_entry_t *l2 = (tt_entry_t *)phystokv(l1 & ARM_TTE_TABLE_MASK);

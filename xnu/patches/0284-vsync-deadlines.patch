@@ -1,0 +1,79 @@
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index c1b8a32..d749c26 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -121,6 +121,9 @@ class AppleCLCD : public IOMobileFramebuffer {
+ 	IOWorkLoop         *fWorkLoop;
+ 	IOTimerEventSource *fVsync;
+ 	uint64_t            fVsyncCount;
++	uint64_t            fVsyncNext;     /* the tick due, mach time: ticks are 60 Hz apart however long one takes */
++	uint64_t            fVsyncMissed;   /* ticks passed over: one took longer than the period */
++	void rearmVsync(IOTimerEventSource *sender);
+ 
+ 	static void vsyncFired(OSObject *owner, IOTimerEventSource *sender);
+ 
+@@ -334,11 +337,34 @@ AppleCLCD::start(IOService *provider)
+ 	return true;
+ }
+ 
++/*
++ * Timed from the tick that was due, not from the end of the work: counted from the end, the 2.6 ms of a frame's copy
++ * came on top of the period, ticks were 18-19.5 ms apart (51-55 Hz, unevenly), and CoreAnimation's 60 Hz frames beat
++ * against them. A tick too late is passed over, so that the ones after it are on time.
++ */
++AppleCLCD::rearmVsync(IOTimerEventSource *sender)
++{
++	uint64_t period, now = mach_absolute_time();
++	nanoseconds_to_absolutetime(SWEET_FB_VSYNC_US * 1000ULL, &period);
++	if (fVsyncNext == 0) {
++		fVsyncNext = now;
++	}
++	fVsyncNext += period;
++	if (fVsyncNext <= now) {
++		uint64_t missed = (now - fVsyncNext) / period + 1;
++		fVsyncNext += missed * period;
++		fVsyncMissed += missed;
++	}
++	AbsoluteTime due;
++	AbsoluteTime_to_scalar(&due) = fVsyncNext;
++	sender->wakeAtTime(due);
++}
++
+ void
+ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+ {
+ 	AppleCLCD *fb = (AppleCLCD *)owner;
+-	uint64_t now = mach_absolute_time();
++	uint64_t now = fb->fVsyncNext ? fb->fVsyncNext : mach_absolute_time();
+ 	uint64_t count = ++fb->fVsyncCount;
+ 	uint64_t values[6] = {
+ 		(uint32_t)count, (uint32_t)(count >> 32),
+@@ -367,7 +393,7 @@ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+ 				}
+ 			}
+ 		}
+-		sender->setTimeoutUS(SWEET_FB_VSYNC_US);
++		fb->rearmVsync(sender);
+ 		return;
+ 	}
+ 	bool flush = fb->fDirty && (count % fb->fFlushTicks) == 0;
+@@ -416,16 +442,16 @@ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+ 		absolutetime_to_nanoseconds(finished - fb->fPerfWindowStart, &elapsedNS);
+ 		if (fb->fPerfFrames != 0 && elapsedNS != 0) {
+ 			uint64_t fpsTenths = fb->fPerfFrames * 10000000000ULL / elapsedNS;
+-			IOLog("A5XELTE FB: frames=%llu elapsed_ms=%llu fps=%llu.%llu bytes=%llu avg_copy_us=%llu max_copy_us=%llu\n",
++			IOLog("A5XELTE FB: frames=%llu elapsed_ms=%llu fps=%llu.%llu bytes=%llu avg_copy_us=%llu max_copy_us=%llu missed=%llu\n",
+ 			    fb->fPerfFrames, elapsedNS / 1000000, fpsTenths / 10,
+ 			    fpsTenths % 10, fb->fPerfBytes,
+-			    fb->fPerfNS / fb->fPerfFrames / 1000, fb->fPerfMaxNS / 1000);
++			    fb->fPerfNS / fb->fPerfFrames / 1000, fb->fPerfMaxNS / 1000, fb->fVsyncMissed);
+ 		}
+ 		fb->fPerfFrames = fb->fPerfBytes = fb->fPerfNS = fb->fPerfMaxNS = 0;
+ 		fb->fPerfWindowStart = finished;
+ 	}
+ #endif
+-	sender->setTimeoutUS(SWEET_FB_VSYNC_US);
++	fb->rearmVsync(sender);
+ }
+ 
+ void

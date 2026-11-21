@@ -1,0 +1,73 @@
+diag(min7): boot-arg herostop=N freezes the CPU right after progress block N
+
+With herostop=N (read right after PE_init_platform) sweet_early_block() spins in wfe after drawing slot N and its dsb, so a reset can no longer wipe the evidence: the screen stays frozen showing blocks 0..N. Bisect by changing only the command line (no kernel rebuild). Default -1 = never stops; nothing changes without the boot-arg. Slot 0 (arm_init entry) is before the parse and cannot stop.
+
+--- a/osfmk/arm/arm_init.c	2026-11-14 14:58:48.203904883 +0100
++++ b/osfmk/arm/arm_init.c	2026-11-14 14:58:48.223726987 +0100
+@@ -386,6 +386,11 @@
+ 			sweet_console_muted = 1;
+ 			sweet_early_disable();
+ 		}
++		/* herostop=N: freeze after progress block N (see sweet_early.c); diagnostic only. */
++		int herostop = -1;
++		if (PE_parse_boot_argn("herostop", &herostop, sizeof(herostop))) {
++			sweet_early_set_stop(herostop);
++		}
+ 	}
+ #endif /* ARM64_BOARD_CONFIG_HEROLTE */
+ 	sweet_early_mark(2, "PE_init_platform done");
+--- a/osfmk/arm64/sweet_early.c	2026-11-14 14:58:48.205894272 +0100
++++ b/osfmk/arm64/sweet_early.c	2026-11-14 14:58:48.223540331 +0100
+@@ -112,6 +112,16 @@
+  * stage-text line (about 1060 px at scale 3) so the text can never overwrite it. Same physical alias as the text
+  * (valid until arm_vm_init replaces TTBR0), so it follows a5_active.
+  */
++/* Boot-arg herostop=N (read in arm_init after PE_init_platform): freeze the machine right after block N is drawn, so the
++ * screen keeps showing how far it got. -1 = never stop (default). Interrupts are masked at this point of boot. */
++static volatile int a5_stop_slot = -1;
++
++void
++sweet_early_set_stop(int slot)
++{
++	a5_stop_slot = slot;
++}
++
+ void
+ sweet_early_block(unsigned int slot, uint32_t argb)
+ {
+@@ -125,6 +135,11 @@
+ 		}
+ 	}
+ 	__asm__ volatile("dsb sy" ::: "memory");
++	if (a5_stop_slot >= 0 && slot == (unsigned int)a5_stop_slot) {
++		for (;;) {
++			__asm__ volatile("wfe" ::: "memory");
++		}
++	}
+ }
+ 
+ void sweet_early_relocate(uint64_t base) { (void)base; }
+@@ -264,4 +279,5 @@
+ }
+ 
+ void sweet_early_block(unsigned int slot, uint32_t argb) { (void)slot; (void)argb; }
++void sweet_early_set_stop(int slot) { (void)slot; }
+ #endif /* SWEET */
+--- a/osfmk/arm64/sweet_early.h	2026-11-14 14:58:48.205969788 +0100
++++ b/osfmk/arm64/sweet_early.h	2026-11-14 14:58:48.223379771 +0100
+@@ -9,6 +9,7 @@
+ #if defined(SWEET)
+ void sweet_early_mark(unsigned int stage, const char *label);
+ void sweet_early_block(unsigned int slot, uint32_t argb);
++void sweet_early_set_stop(int slot);
+ void sweet_early_putc(char c);
+ void sweet_early_panic(const char *fmt, va_list *args);
+ void sweet_early_relocate(uint64_t base);
+@@ -20,6 +21,7 @@
+ 	(void)label;
+ }
+ static inline void sweet_early_block(unsigned int slot, uint32_t argb) { (void)slot; (void)argb; }
++static inline void sweet_early_set_stop(int slot) { (void)slot; }
+ static inline void sweet_early_disable(void) {}
+ #endif
+ 

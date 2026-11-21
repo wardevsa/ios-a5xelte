@@ -1,0 +1,36 @@
+herolte: the last core of the Mongoose cluster calls CPU_SUSPEND with the cluster-sleep power state 0x01000000 (0452)
+
+min81 (0451, E-0297): heroidle=91376 hung within a second of arming; min82 (mask 0xf0, no CPD bit) ran 240 s, so cpu4 can sleep and the CPD bit was the difference. Samsung's psci.c (psci_suspend_customized_finisher) takes the cluster down with power state {id 0, type 0, affinity level 1} = 0x01000000, not the core's 0x10000 (PSCI 0.2 packing: id 15:0, type 16, affinity 25:24). 0451 set the PMU sequencer bit but kept 0x10000. Now the core that sets the bit also passes 0x01000000. Hypothesis, not measured: the hardware cut the cluster without the monitor's cluster sequence. heroidle bit 16 only (D-0089).
+
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -572,6 +572,14 @@
+ 	 * explanations in the comments of 0445 and 0447 (SGIs and XNU's timer do not wake a core) were wrong: they came from a missing
+ 	 * register write, not from the hardware.
+ 	 */
++	/*
++	 * 0452: min81 (0451) hung within a second of arming cpu4-7 with CPD, min82 (the same mask without the CPD bit) ran 240 s. Samsung's
++	 * psci.c (psci_suspend_customized_finisher) does not call CPU_SUSPEND with the core's state 0x10000 when it takes the cluster
++	 * down: PSCI_CLUSTER_SLEEP is power state {id 0, type 0, affinity level 1} = 0x01000000 (packed as in psci_power_state_pack:
++	 * id bits 15:0, type bit 16, affinity bits 25:24). 0451 set the sequencer bit but still passed 0x10000, so the cluster could be
++	 * cut by the hardware without the monitor's cluster sequence (state save, L2 flush).
++	 */
++	uint64_t pstate = 0x10000ULL;
+ 	if (herolte_cpd_enable && c >= 4 && (herolte_idle_mask & 0xf0u) == 0xf0u && herolte_idle_pmu_cfg[4] && !herolte_cpd_on) {
+ 		/* 0451: the last of cpu4-7 to idle: every other one is already in suspend (since != 0) */
+ 		bool others = true;
+@@ -586,12 +594,13 @@
+ 			__builtin_arm_dsb(DSB_SY);
+ 			herolte_cpd_on = 1;
+ 			herolte_cpd_set++;
++			pstate = 0x01000000ULL;      /* 0452: PSCI_CLUSTER_SLEEP */
+ 		}
+ 	}
+ 	*pcfg = *pcfg & ~0xfu;
+ 	__builtin_arm_dsb(DSB_SY);
+ 	register uint64_t x0 __asm__("x0") = 0xC4000001ULL;     /* CPU_SUSPEND (the DTB's cpu_suspend) */
+-	register uint64_t x1 __asm__("x1") = 0x10000ULL;        /* power state: power down (cpu-sleep) */
++	register uint64_t x1 __asm__("x1") = pstate;            /* 0x10000 power down (cpu-sleep); 0x01000000 cluster sleep (0452) */
+ 	register uint64_t x2 __asm__("x2") = herolte_idle_entry_pa;
+ 	register uint64_t x3 __asm__("x3") = c;
+ 	__asm__ volatile ("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : :

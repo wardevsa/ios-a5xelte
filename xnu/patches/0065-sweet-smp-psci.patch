@@ -1,3 +1,5 @@
+diff --git a/iokit/Kernel/arm/SweetCPU.cpp b/iokit/Kernel/arm/SweetCPU.cpp
+index bbe6515..0da3b8b 100644
 --- a/iokit/Kernel/arm/SweetCPU.cpp
 +++ b/iokit/Kernel/arm/SweetCPU.cpp
 @@ -1,7 +1,7 @@
@@ -49,7 +51,7 @@
  	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
  	void free(void) APPLE_KEXT_OVERRIDE;
  	void initCPU(bool boot) APPLE_KEXT_OVERRIDE;
-@@ -37,17 +62,21 @@
+@@ -37,17 +62,21 @@ bool
  SweetCPU::start(IOService *provider)
  {
  	const ml_topology_info_t *topology = ml_get_topology_info();
@@ -76,7 +78,7 @@
  	}
  	if (!IOCPU::start(provider)) {
  		return false;
-@@ -77,21 +106,75 @@
+@@ -77,21 +106,75 @@ SweetCPU::start(IOService *provider)
  		panic("SWEET CPU: PMI routing is not implemented");
  	}
  
@@ -94,7 +96,7 @@
 +			panic("SWEET CPU: cannot create startup thread: %d", result);
 +		}
 +		thread_deallocate(thread);
-+	}
+ 	}
 +	return true;
 +}
 +
@@ -144,7 +146,7 @@
 +		}
 +		IOLog("SWEET CPU: cpu=%u mpidr=0x%x came alive; SGI1 OK\n",
 +		    i, topology->cpus[i].phys_id);
- 	}
++	}
 +	/* Publish exactly once, after every selected CPU has completed initCPU(). */
  	ml_cpu_init_completed();
 -	cpusRunning();
@@ -163,7 +165,7 @@
  }
  
  void
-@@ -105,33 +188,33 @@
+@@ -105,33 +188,33 @@ void
  SweetCPU::initCPU(bool boot)
  {
  	if (!boot) {
@@ -212,7 +214,7 @@
  	unsigned int aff0 = mpidr & 0xff;
  	if (aff0 >= 16) {
  		panic("SWEET CPU: SGI target requires unsupported range selector");
-@@ -146,9 +229,25 @@
+@@ -146,9 +229,25 @@ SweetCPU::signalCPU(IOCPU *target)
  }
  
  kern_return_t
@@ -240,9 +242,11 @@
  }
  
  void
+diff --git a/osfmk/arm64/cpu.c b/osfmk/arm64/cpu.c
+index 94e9130..b082a10 100644
 --- a/osfmk/arm64/cpu.c
 +++ b/osfmk/arm64/cpu.c
-@@ -922,6 +922,19 @@
+@@ -922,6 +922,19 @@ cpu_start(int cpu)
  
  		flush_dcache((vm_offset_t)&CpuDataEntries[cpu], sizeof(cpu_data_entry_t), FALSE);
  		flush_dcache((vm_offset_t)cpu_data_ptr, sizeof(cpu_data_t), FALSE);
@@ -262,7 +266,7 @@
  #if defined(KERNEL_INTEGRITY_CTRR)
  
  		/* First CPU being started within a cluster goes ahead to lock CTRR for cluster;
-@@ -950,6 +963,21 @@
+@@ -950,6 +963,21 @@ cpu_start(int cpu)
  }
  
  
@@ -284,9 +288,11 @@
  void
  cpu_timebase_init(boolean_t from_boot)
  {
+diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
+index c9e1ac1..a99d031 100644
 --- a/osfmk/arm64/machine_routines.c
 +++ b/osfmk/arm64/machine_routines.c
-@@ -954,6 +954,16 @@
+@@ -954,6 +954,16 @@ ml_parse_cpu_topology(void)
  	const boolean_t cpus_boot_arg_present = PE_parse_boot_argn("cpus", &cpu_boot_arg, sizeof(cpu_boot_arg));
  	const boolean_t cpumask_boot_arg_present = PE_parse_boot_argn("cpumask", &cpumask_boot_arg, sizeof(cpumask_boot_arg));
  
@@ -303,7 +309,7 @@
  	// The cpus=N and cpumask=N boot args cannot be used simultaneously. Flag this
  	// so that we trigger a panic later in the boot process, once serial is enabled.
  	if (cpus_boot_arg_present && cpumask_boot_arg_present) {
-@@ -1077,8 +1087,14 @@
+@@ -1077,8 +1087,14 @@ ml_parse_cpu_topology(void)
  		}
  #endif
  
@@ -318,9 +324,11 @@
  
  		cluster->num_cpus++;
  		cluster->cpu_mask |= 1ULL << cpu->cpu_id;
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index 777aca4..023086f 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -143,8 +143,8 @@
+@@ -143,8 +143,8 @@ LEXT(reset_vector)
  	adrp	x19, EXT(ResetHandlerData)@page			// Get address of the reset handler data
  	add		x19, x19, EXT(ResetHandlerData)@pageoff
  	mrs		x15, MPIDR_EL1						// Load MPIDR to get CPU number
@@ -331,7 +339,7 @@
  #else
  	and		x0, x15, #0xFF						// CPU number is in MPIDR Affinity Level 0
  #endif
-@@ -279,6 +279,56 @@
+@@ -279,6 +279,56 @@ LEXT(LowExceptionVectorBase)
  LEXT(bootstrap_instructions)
  
  #endif /* defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR) */
@@ -388,7 +396,7 @@
  	.align 2
  	.globl EXT(resume_idle_cpu)
  LEXT(resume_idle_cpu)
-@@ -743,6 +793,12 @@
+@@ -743,6 +793,12 @@ common_start:
  	ic		iallu
  #endif
  
@@ -401,6 +409,8 @@
  	/* If x21 is not 0, then this is either the start_cpu path or
  	 * the resume_idle_cpu path.  cpu_ttep should already be
  	 * populated, so just switch to the kernel_pmap now.
+diff --git a/pexpert/pexpert/arm64/SWEET.h b/pexpert/pexpert/arm64/SWEET.h
+index a044ad0..789187c 100644
 --- a/pexpert/pexpert/arm64/SWEET.h
 +++ b/pexpert/pexpert/arm64/SWEET.h
 @@ -17,6 +17,9 @@

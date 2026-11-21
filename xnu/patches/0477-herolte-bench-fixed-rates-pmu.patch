@@ -1,0 +1,42 @@
+herolte: bench at four fixed rates with the PMU, and a monotonic check of the PMU counters (0477)
+
+min110 (E-0332): the PMU works from EL1 (N=6, PMCEID0 all common events) but the IPC alone does not separate computing from waiting for memory on that load; the deciding question is whether the work done per second (instructions per second) of a use load rises with the frequency. The bench defaults now run four rounds of paging and spotlight at FIXED 1352, 1664, 1976 and 2288 MHz (heroscenc 6789 as the default) with the PMU sampler (herogovlog=2). The PMU line gains the big cluster's rate, and a sample is dropped as "first" when any event counter went backwards (a counter reset after a core power-down made a few rows absurd). heroscen only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3150,7 +3150,7 @@
+ hs_thread(__unused void *arg, __unused wait_result_t wr)
+ {
+ 	static const char *const names[] = { "paging", "spotlight", "idle", "launch" };
+-	uint32_t settle = 0, rounds = 3, mask = 3, capsarg = 385, digits[4] = { 0 }, ncap = 0;
++	uint32_t settle = 0, rounds = 4, mask = 3, capsarg = 6789, digits[4] = { 0 }, ncap = 0;
+ 	extern volatile uint64_t herolte_screen_off_at;
+ 	extern volatile int herolte_fg_temp_dc;
+ 	PE_parse_boot_argn("heroscen", &settle, sizeof(settle));
+@@ -3160,7 +3160,7 @@
+ 	/* 0471: the bench is configured from the boot line, with defaults that need no argument: heroscenr = rounds (3), heroscens = scenario
+ 	 * mask (bit 0 paging, 1 spotlight, 2 idle, 3 launch; default 11 = paging, spotlight, launch), heroscenc = caps as level digits
+ 	 * (4 = 2288, 3 = 1976, 2 = 1664, 1 = 1352; 0474: add 5 for FIXED, the governor holding the cap: 8 = fixed 1976). Round r rotates the list by r.
+-	 * 0475 defaults (no argument needed): 3 rounds, paging and spotlight, caps 385 = v2 governed 1976, fixed 1976 and the two-state governor of min100 (digit 5). */
++	 * 0477 defaults (no argument needed): 4 rounds, paging and spotlight, caps 6789 = FIXED 1352, 1664, 1976 and 2288 MHz (with the PMU sampler: instructions per second against frequency). */
+ 	PE_parse_boot_argn("heroscenr", &rounds, sizeof(rounds));
+ 	PE_parse_boot_argn("heroscens", &mask, sizeof(mask));
+ 	PE_parse_boot_argn("heroscenc", &capsarg, sizeof(capsarg));
+@@ -3369,7 +3369,7 @@
+ 				continue;
+ 			}
+ 			uint64_t cur[6] = { hpmu_slot[c][1], hpmu_slot[c][2], hpmu_slot[c][3], hpmu_slot[c][4], hpmu_slot[c][5], hpmu_slot[c][6] };
+-			if (have[c] && !hpmu_slot[c][7] && cur[0] >= prev[c][0]) {
++			if (have[c] && !hpmu_slot[c][7] && cur[0] >= prev[c][0] && cur[1] >= prev[c][1] && cur[2] >= prev[c][2] && cur[3] >= prev[c][3] && cur[4] >= prev[c][4]) {
+ 				o += (unsigned)snprintf(line + o, sizeof(line) - o, " | cpu%d cyc %llu inst %llu l1r %llu l2r %llu bus %llu", c, (unsigned long long)(cur[0] - prev[c][0]),
+ 				    (unsigned long long)(cur[1] - prev[c][1]), (unsigned long long)(cur[2] - prev[c][2]), (unsigned long long)(cur[3] - prev[c][3]),
+ 				    (unsigned long long)(cur[4] - prev[c][4]));
+@@ -3383,7 +3383,7 @@
+ 			have[c] = true;
+ 		}
+ 		if (got) {
+-			printf("HEROLTE PMU:%s\n", line);
++			printf("HEROLTE PMU: mhz %u%s\n", herolte_pm_mhz, line);
+ 		}
+ 	}
+ }

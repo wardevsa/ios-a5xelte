@@ -1,3 +1,68 @@
+# iOS 16 on the Samsung Galaxy S7 (SM-G930F, Exynos 8890) — `herolte` branch
+
+**Status, 2026-11-07:** Apple's XNU kernel boots on a flat Galaxy S7 and runs the
+unmodified **iPhone X iOS 16.7.16 userland** to the home screen with **GPU
+acceleration**, **Wi-Fi** and **sound**: CoreAnimation renders on the Mali-T880
+through OpenGL ES (Mesa Panfrost under HakiOS's EAGL bridge), the BCM4359 joins
+WPA2 networks, and the loudspeaker plays. Apps open and load, and it is usable
+day to day apart from the gaps below. There is no Metal.
+
+**Try it:** [docs/herolte-howto.md](docs/herolte-howto.md). Apple's software and
+the Wi-Fi firmware are not in this repository: you build the iOS root from
+Apple's IPSW in a private repository and take the firmware from your own phone.
+
+| Area | State |
+| --- | --- |
+| Boot | Samsung S-Boot loads our loader from BOOT (`shim/herolte/`), which starts XNU |
+| CPU | All 8 cores, Mongoose at 2288 MHz (Samsung's own voltage table). UI threads move from the A53s to an idle Mongoose (0274, 0321). No thermal limit yet |
+| RAM | About 3 GiB: the second DRAM bank (2 GiB) plus the first bank's free pieces (0326-0329, `tools/herolte-adt-ram-banks.py`) |
+| Storage | Own Exynos UFS driver; iOS root is HFSX in USERDATA, read/write, with the system apps |
+| GPU | Mali-T880 MP12 at 650 MHz through EAGL → OSMesa/Panfrost → our kernel job service |
+| Display | iOS draws an iPhone 8 screen, 750×1334 @2x, scaled to the 1440×2560 panel by the GPU into two buffers flipped on the display's IDMA (0322: no tearing). Panel at a real 60 Hz (0296); CoreAnimation told 120 Hz and the kernel's timer coalescing off (0323) |
+| Wi-Fi | BCM4359 over PCIe with the phone's own firmware, WPA2 handshake in the kernel, `en0` and Apple80211 for wifid: the Wi-Fi icon, internet, Safari (0308-0315) |
+| Sound | The loudspeaker through the I2S block and an AudioServerPlugIn (`gpu/hakios-audio`, `heroaudio=3`) |
+| Navigation | Physical Home button (`home-button-type` 1). Home gestures need type 2, which brings UIKit's red rdar:45025538 status bar at this size; not solved |
+| Wallpaper | iOS's own wallpapers and gallery, except the stock iOS 16 one (black) |
+| Touch, buttons, battery | Working |
+| Not working | modem, Bluetooth, camera, sensors, sleep, Face ID, Metal (the Today view and Control Center blurs are black), Siri's voices |
+
+Thanks to [Scion](https://github.com/Scion-Project/scion-kernel) and
+[danstronics/ios-s9plus-exynos](https://github.com/danstronics/ios-s9plus-exynos) (Galaxy S9/S9+):
+the display flip, the CoreAnimation timing, the UI-thread migration and the RAM banks follow their work.
+
+What made it usable, in the order found: factory GPU and CPU rates at factory
+voltages, the apps in the root image, moving `BTAudioHALPlugin` away (it kept
+asking the absent bluetoothd; idle CPU fell from over 300% to under 25% of 800%,
+found by [syncmodz/ios-s9](https://github.com/syncmodz/ios-s9)), and the lower
+resolution. Boot arguments and how to build the ADT: `tools/mkadt_herolte.py --iphone8`
+and [HEROLTE_PROGRESS.md](HEROLTE_PROGRESS.md) (Spanish).
+
+How to try it: [docs/herolte-howto.md](docs/herolte-howto.md) (erases USERDATA;
+Apple's software is not in this repository). The S7 kernel patches are
+`xnu/patches/0200` and up; the board config is `MACHINE_CONFIG=HEROLTE`.
+
+Next: thermal limit, audio, Wi-Fi, more optimization. Help is welcome. Please
+open an issue with the log from `tools/herolte-log-pull.py` and a photo of the screen.
+
+Credits: Mesa/Panfrost, [HakiOS](https://github.com/oosexgang/hackios-xnu-kernel) EAGL bridge (`gpu/hakios-gl`, see its NOTICE),
+Bergamota's EAGL shim (`gpu/eagl`), [ios-sweet](https://github.com/dipa-studio/ios-sweet),
+[syncmodz/ios-s9](https://github.com/syncmodz/ios-s9) and the LineageOS Exynos 8890 kernel for the hardware tables.
+
+Based on [orhunnx/ios-a5xelte](https://github.com/orhunnx/ios-a5xelte) (A5 2016)
+and its Redmi Note 10 Pro donor, documented below.
+
+---
+
+# ios-a5xelte (SM-A510F experimental port)
+
+This fork targets the Samsung Galaxy A5 (2016), `a5xelte` / Exynos7580. The original `ios-sweet` README remains below as a **donor reference**. Its iOS home-screen claim, Xiaomi boot commands, 16 KiB pages, UFS root, Qualcomm drivers and `userdata` flashing instructions do **not** describe the Samsung port.
+
+**A5XELTE status, 2026-10-20:** A 4 KiB, A5XELTE-configured XNU 8796 kernel enters on the physical SM-A510F. The Samsung BOOT loader hands off the firmware display through Exynos7580 DECON/DSIM. The user has verified XNU-owned assembly text and dynamic C/`kprintf` output through VM bootstrap, CPU0 self-IPI, pthread registration, scheduled network workers and passing Skywalk self-tests. An 8 MiB HFS+ RAM disk was mounted earlier. The new Exynos7580 read-only eMMC driver identifies GPT `SYSTEM` p20 as `/dev/emmcroot0`; the phone screen confirms `BSD root: emmcroot0` and `hfs: mounted A5XNU on device b(1, 0)`. The A5XELTE unsigned-root exception passes the next check, and XNU attempts process 1. The HFS volume is empty, so `/sbin/launchd` is missing and iOS userland is not running.
+
+The A5XELTE path uses `shim/a5xelte/`, `tools/mkadt_a5xelte.py`, `tools/a5xelte-pack-probe.py` and XNU patches `0082` onward. BOOT p10 carries the test XNU; the user also explicitly authorized replacing Linux SYSTEM p20 with a dedicated HFS+ root. Recovery p11, EFS p3 and USERDATA p23 are preserved. Device and build evidence is in [A5XELTE_PROGRESS.md](A5XELTE_PROGRESS.md), with technical setup in [docs/a5xelte-bringup.md](docs/a5xelte-bringup.md). [docs/a5xelte-migration-map.md](docs/a5xelte-migration-map.md) tracks which donor components can be reused and when SWEET-specific code can be retired.
+
+## Original ios-sweet README (donor reference)
+
 # ios-sweet
 
 **Apple's iOS 16 running on a Redmi Note 10 Pro.**

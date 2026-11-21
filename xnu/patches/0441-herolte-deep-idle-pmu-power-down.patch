@@ -1,0 +1,93 @@
+herolte: the PMU step of deep idle that Samsung's Linux does before the SMC (0441)
+
+min70: no breadcrumb at all, so the core never reached the entry; CPU_ON said it was OFF. Reading Samsung's open kernel (LineageOS android_kernel_samsung_universal8890, drivers/soc/samsung/exynos-powermode.c and exynos-pmu.c): enter_c2() calls exynos_cpu.power_down(cpu) first, which clears the local power bits (0xf) of the core's PMU CONFIGURATION register (PMU base 0x105c0000 + 0x2000 + 0x80 * (Aff1 << 2 | Aff0)); only then the PSCI call. We had only the SMC. 0441: the idle path clears those bits before CPU_SUSPEND and restores them if the call returns; the registers are mapped by the power thread when deep idle is armed (no mapping, no deep idle) and CONFIG/STATUS of all cores are logged (read only); the watchdog restores 0xf before its CPU_ON. heroidle only (D-0089).
+
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -493,14 +493,16 @@
+ volatile uint64_t herolte_idle_entry_pa;
+ volatile uint64_t herolte_idle_enter[MAX_CPUS], herolte_idle_resume[MAX_CPUS], herolte_idle_since[MAX_CPUS];
+ volatile uint64_t herolte_idle_arm[MAX_CPUS];        /* 0440: arm_init_idle_cpu reached (MMU on) */
++volatile uint64_t herolte_idle_pmu_cfg[MAX_CPUS];   /* 0441: VA of each core's PMU CONFIGURATION register (PMU+0x2000+0x80*(Aff1<<2|Aff0)); 0 = not mapped: no deep idle */
+ 
+ static bool
+ herolte_idle_suspend(cpu_data_t *cdp)
+ {
+ 	unsigned c = (unsigned)cdp->cpu_number;
+-	if (c == 0 || c >= MAX_CPUS || !(herolte_idle_mask & (1u << c)) || herolte_idle_entry_pa == 0) {
++	if (c == 0 || c >= MAX_CPUS || !(herolte_idle_mask & (1u << c)) || herolte_idle_entry_pa == 0 || herolte_idle_pmu_cfg[c] == 0) {
+ 		return false;
+ 	}
++	volatile uint32_t *pcfg = (volatile uint32_t *)herolte_idle_pmu_cfg[c];
+ 	herolte_idle_enter[c]++;
+ 	herolte_idle_since[c] = mach_absolute_time();
+ 	CleanPoC_Dcache();
+@@ -509,6 +511,14 @@
+ 	 * of a powered-down core; the architected virtual timer (PPI 27, the one XNU uses) is what Linux's idle wakes on. Armed for
+ 	 * 2 ms ahead (52 000 ticks at 26 MHz) before the call; the timer is re-synchronized if the call returns.
+ 	 */
++	/*
++	 * 0441: what Samsung's Linux does before the SMC and min68-min70 did not (exynos-powermode.c enter_c2 ->
++	 * exynos_cpu.power_down -> exynos-pmu.c exynos_cpu_down): the core's PMU CONFIGURATION register, local power bits 0xf, goes
++	 * to 0, so that the WFI the monitor executes powers the core down and an interrupt can bring it back. On a return from the
++	 * call (error or no power-down) it goes back to 0xf, as Linux's wakeup_from_c2(early_wakeup) does.
++	 */
++	*pcfg = *pcfg & ~0xfu;
++	__builtin_arm_dsb(DSB_SY);
+ 	__builtin_arm_wsr64("CNTV_CVAL_EL0", __builtin_arm_rsr64("CNTVCT_EL0") + 52000ULL);
+ 	__builtin_arm_wsr64("CNTV_CTL_EL0", 1ULL);
+ 	__builtin_arm_isb(ISB_SY);
+@@ -520,6 +530,8 @@
+ 	__asm__ volatile ("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : :
+ 	    "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
+ 	/* Only reached when the call returns: an error, or the core did not power down. */
++	*pcfg = *pcfg | 0xfu;
++	__builtin_arm_dsb(DSB_SY);
+ 	herolte_idle_since[c] = 0;
+ 	timer_resync_deadlines();
+ 	return true;
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2758,6 +2758,27 @@
+ 				idle_armed = true;
+ 				vm_offset_t tr = ml_io_map(0x8fffe000u, 0x1000);
+ 				if (tr && ((volatile uint32_t *)tr)[0] == 0x58000050u && ((volatile uint32_t *)tr)[1] == 0xd61f0200u) {
++					/*
++					 * 0441: map the PMU CPU CONFIGURATION registers (0x105c2000: PMU 0x105c0000 + 0x2000, 0x80 per core: index
++					 * Aff1 << 2 | Aff0; the Mongooses are MPIDR 0x0-0x3, the A53s 0x100-0x103) and show CONFIG/STATUS of all
++					 * eight cores as the bootloader left them (read only), then give the idle path the register of each core
++					 * under test.
++					 */
++					{
++						extern volatile uint64_t herolte_idle_pmu_cfg[];
++						vm_offset_t pmu2 = ml_io_map(0x105c2000u, 0x1000);
++						if (pmu2) {
++							printf("HEROLTE IDLE: PMU CPU config/status:");
++							for (unsigned c = 0; c < 8; c++) {
++								unsigned idx = c >= 4 ? (c - 4) : (4 + c);
++								printf(" cpu%u=%x/%x", c, hg_rd(pmu2, idx * 0x80), hg_rd(pmu2, idx * 0x80 + 4));
++								if (idle_mask_want & (1u << c) && c != 0) {
++									herolte_idle_pmu_cfg[c] = (uint64_t)(pmu2 + idx * 0x80);
++								}
++							}
++							printf("\n");
++						}
++					}
+ 					/* 0440: clear the breadcrumb slots (start.s HEROLTE_CRUMB) of the cores under test before they sleep */
+ 					for (unsigned c = 1; c < 8; c++) {
+ 						if (idle_mask_want & (1u << c)) {
+@@ -2788,6 +2809,14 @@
+ 					printf("HEROLTE IDLE: cpu%u has not come back after %llu ms (enter %llu, resume %llu): deep idle off\n", c,
+ 					    age / NSEC_PER_MSEC, herolte_idle_enter[c], herolte_idle_resume[c]);
+ 					herolte_idle_mask = 0;
++					{
++						extern volatile uint64_t herolte_idle_pmu_cfg[];
++						volatile uint32_t *pcfg = (volatile uint32_t *)herolte_idle_pmu_cfg[c];
++						if (pcfg) {
++							printf("HEROLTE IDLE: cpu%u PMU config %#x status %#x\n", c, *pcfg, *(pcfg + 1));
++							*pcfg = *pcfg | 0xfu;      /* power it back on before CPU_ON, as exynos_cpu_up does */
++						}
++					}
+ 					/*
+ 					 * 0439: which kind of failure? PSCI CPU_ON on a core that is OFF returns 0 and brings it up through the
+ 					 * reset vector (handler resume_idle_cpu: it should come back as from idle); on one that is ON (stuck

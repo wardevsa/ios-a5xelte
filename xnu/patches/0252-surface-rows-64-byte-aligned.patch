@@ -1,0 +1,24 @@
+diff --git a/iokit/Kernel/arm/SweetSurface.cpp b/iokit/Kernel/arm/SweetSurface.cpp
+index e70590a..05e6546 100644
+--- a/iokit/Kernel/arm/SweetSurface.cpp
++++ b/iokit/Kernel/arm/SweetSurface.cpp
+@@ -299,6 +299,19 @@ sweet_surface_layout(SweetSurface *s, OSDictionary *props)
+ 	if (s->bytesPerRow < (uint64_t)sweet_div_up(s->width, s->elementWidth) * s->bytesPerElement) {
+ 		return kIOReturnBadArgument;
+ 	}
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/*
++	 * Every surface is memory this driver allocates (wrapping client memory
++	 * is refused), and clients take the row pitch from the lock result: round
++	 * an explicit pitch up to 64 bytes as the limits selector advertises.
++	 * CoreAnimation asked for 720-byte rows (180-pixel icons), which Panfrost
++	 * cannot import (linear rows must be 64-byte aligned), so those surfaces
++	 * went through CPU copies and the icons stayed blank.
++	 */
++	if (props->getObject("IOSurfacePlaneInfo") == NULL) {
++		s->bytesPerRow = (s->bytesPerRow + SWEET_SURFACE_ROW_ALIGN - 1) & ~(uint32_t)(SWEET_SURFACE_ROW_ALIGN - 1);
++	}
++#endif
+ 	end = (uint64_t)s->offset + (uint64_t)s->bytesPerRow * sweet_div_up(s->height, s->elementHeight);
+ 
+ 	OSArray *planes = OSDynamicCast(OSArray, props->getObject("IOSurfacePlaneInfo"));

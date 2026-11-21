@@ -1,0 +1,142 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 8cdb635..6c4a173 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2788,6 +2788,125 @@ hg_twrp_thread(void *arg, __unused wait_result_t wr)
+ 	}
+ }
+ 
++/*
++ * Boot-arg herowifi=1, the first step of Wi-Fi: the BCM4359 is on PCIe channel 0 (FSYS1), as Linux's pci-exynos.c brings it up.
++ * Its enable pin high, clocks, the PHY's table, the link trained, and the chip's identity read through the iATU. A step a
++ * flush apart, so that the log says which one stalled the bus. Nothing is written to the chip itself.
++ */
++static void
++hw_step(const char *what)
++{
++	printf("HEROLTE WIFI: step: %s\n", what);
++	hg_msleep(11000);
++}
++
++static void
++hg_wifi_thread(__unused void *arg, __unused wait_result_t wr)
++{
++	static const uint8_t cmn[26] = { 0x01, 0x0F, 0xA6, 0x31, 0x90, 0x62, 0x20, 0x00, 0x00, 0xA7, 0x0A, 0x37, 0x20, 0x08, 0xEF, 0xFC, 0x96, 0x14,
++		                         0x00, 0x10, 0x60, 0x01, 0x00, 0x00, 0x04, 0x10 };
++	static const uint8_t trsv[41] = { 0x31, 0xF4, 0xF4, 0x80, 0x25, 0x40, 0xD8, 0x03, 0x35, 0x55, 0x4C, 0xC3, 0x10, 0x54, 0x70, 0xC5, 0x00, 0x2F,
++		                          0x38, 0xA4, 0x00, 0x3B, 0x30, 0x9A, 0x64, 0x00, 0x1F, 0x83, 0x1B, 0x01, 0xE0, 0x00, 0x00, 0x02, 0x00, 0x00,
++		                          0x00, 0x00, 0x00, 0x1D, 0x00 };
++	hg_msleep(45000);
++	vm_offset_t pins = ml_io_map(0x14CC0000u, 0x1000), cmu = ml_io_map(0x156e0000u, 0x1000), pmu = ml_io_map(0x105c0000u, 0x1000);
++	vm_offset_t elbi = ml_io_map(0x15660000u, 0x1000), phy = ml_io_map(0x15630000u, 0x1000), sys = ml_io_map(0x15601000u, 0x1000);
++	vm_offset_t dbi = ml_io_map(0x157a0000u, 0x1000), pcs = ml_io_map(0x156f0000u, 0x1000), cfg = ml_io_map(0x1c000000u, 0x1000);
++	if (!pins || !cmu || !pmu || !elbi || !phy || !sys || !dbi || !pcs || !cfg) {
++		printf("HEROLTE WIFI: mapping failed\n");
++		return;
++	}
++	printf("HEROLTE WIFI: gpj1 con %#x dat %#x; fsys1 mux %#x gate %#x\n", hg_rd(pins, 0x60), hg_rd(pins, 0x64), hg_rd(cmu, 0x200), hg_rd(cmu, 0x800));
++	hw_step("pins, WLAN_EN");
++	/* gpj1: 0 CLKREQ (function 2), 2 PERST (output, low), 3 WLAN_EN (output) */
++	hg_wr(pins, 0x64, hg_rd(pins, 0x64) & ~(1u << 2));
++	hg_wr(pins, 0x60, (hg_rd(pins, 0x60) & ~0xf00fu & ~0xf00u) | 2u | (1u << 8) | (1u << 12));
++	hg_wr(pins, 0x64, hg_rd(pins, 0x64) | (1u << 3));
++	hw_step("clocks");
++	hg_wr(cmu, 0x800, hg_rd(cmu, 0x800) | (0x1fu << 12) | (1u << 28));
++	hg_wr(cmu, 0x0824, hg_rd(cmu, 0x0824) | 1u);
++	hg_wr(cmu, 0x854, hg_rd(cmu, 0x854) | 1u);
++	hg_wr(cmu, 0x214, hg_rd(cmu, 0x214) | (1u << 12));
++	hw_step("PHY power");
++	hg_wr(pmu, 0x71c, hg_rd(pmu, 0x71c) | 1u);
++	hg_wr(phy, 0x15 * 4, hg_rd(phy, 0x15 * 4) & ~(0xfu << 3));
++	hg_wr(phy, 0x4e * 4, 0);
++	hg_wr(phy, 0x4f * 4, 0);
++	hw_step("core reset");
++	hg_wr(pcs, 0xec, hg_rd(pcs, 0xec) | (1u << 3));
++	hg_wr(elbi, 0x1d0, 0);
++	delay(20);
++	hg_wr(elbi, 0x1d0, 1);
++	hg_wr(pins, 0x64, hg_rd(pins, 0x64) | (1u << 2));       /* PERST high */
++	hg_msleep(20);
++	hg_wr(elbi, 0xf4, hg_rd(elbi, 0xf4) | 0x11u);
++	hg_wr(elbi, 0x1b8, 2);
++	hg_wr(elbi, 0x2c8, (hg_rd(elbi, 0x2c8) & ~3u) | 3u);
++	hw_step("PHY table");
++	hg_wr(sys, 0x44, hg_rd(sys, 0x44) & ~2u);
++	hg_wr(sys, 0x50, ((hg_rd(sys, 0x50) & ~(0xfu << 4) & ~(0xfu << 2)) | (3u << 2)) & ~2u);
++	for (unsigned t = 0; t < 3; t++) {
++		hg_wr(elbi, 0x288, t != 1);
++		delay(10);
++	}
++	for (unsigned i = 0; i < sizeof(cmn); i++) {
++		hg_wr(phy, i * 4, cmn[i]);
++	}
++	for (unsigned i = 0; i < sizeof(trsv); i++) {
++		hg_wr(phy, (0x30 + i) * 4, trsv[i]);
++	}
++	hg_wr(phy, 0x5c * 4, 0x14);
++	hg_wr(pcs, 0xf8, 0x70);
++	hg_wr(pcs, 0xc, hg_rd(pcs, 0xc) | (1u << 4));
++	for (unsigned t = 0; t < 3; t++) {
++		hg_wr(elbi, 0x290, t != 1);
++		delay(10);
++	}
++	for (unsigned t = 0; t < 3; t++) {
++		hg_wr(elbi, 0x28c, t != 1);
++		delay(10);
++	}
++	hw_step("PHY clocks");
++	hg_wr(cmu, 0x230, hg_rd(cmu, 0x230) | (1u << 12));
++	hg_wr(cmu, 0x234, hg_rd(cmu, 0x234) | (1u << 12));
++	hg_wr(cmu, 0x240, hg_rd(cmu, 0x240) | (1u << 12));
++	hg_wr(cmu, 0x86c, hg_rd(cmu, 0x86c) | 1u);
++	hg_wr(cmu, 0x870, hg_rd(cmu, 0x870) | 1u);
++	hg_wr(cmu, 0x87c, hg_rd(cmu, 0x87c) | 1u);
++	hg_wr(elbi, 0x18, hg_rd(elbi, 0x18) & ~2u);
++	hg_wr(elbi, 0x38, 1);
++	hw_step("root complex");
++	printf("HEROLTE WIFI: root port id %#x\n", hg_rd(dbi, 0));
++	hg_wr(dbi, 0x18, 0x00010100u);                          /* buses: primary 0, secondary 1, subordinate 1 */
++	hg_wr(dbi, 0x04, hg_rd(dbi, 0x04) | 7u);
++	hg_wr(pcs, 0xec, hg_rd(pcs, 0xec) & ~(1u << 3));
++	hw_step("link");
++	hg_wr(elbi, 0x2c, 1);
++	uint32_t state = 0;
++	for (unsigned t = 0; t < 20000; t++) {
++		state = hg_rd(elbi, 0x74) & 0x1f;
++		if (state >= 0x0d && state <= 0x14) {
++			break;
++		}
++		delay(10);
++	}
++	printf("HEROLTE WIFI: link state %#x, history %#x %#x\n", state, hg_rd(elbi, 0x138), hg_rd(elbi, 0x13c));
++	if (state < 0x0d || state > 0x14) {
++		printf("HEROLTE WIFI: no link\n");
++		return;
++	}
++	hw_step("the chip");
++	hg_wr(dbi, 0x900, 0);                                   /* outbound window 0: configuration of bus 1 */
++	hg_wr(dbi, 0x904, 4);
++	hg_wr(dbi, 0x90c, 0x1c000000u);
++	hg_wr(dbi, 0x910, 0);
++	hg_wr(dbi, 0x914, 0x1c000fffu);
++	hg_wr(dbi, 0x918, 1u << 24);
++	hg_wr(dbi, 0x91c, 0);
++	hg_wr(dbi, 0x908, 1u << 31);
++	printf("HEROLTE WIFI: chip id %#x class %#x bar0 %#x bar2 %#x\n", hg_rd(cfg, 0), hg_rd(cfg, 8), hg_rd(cfg, 0x10), hg_rd(cfg, 0x18));
++}
++
+ void
+ herolte_gpu_probe(void)
+ {
+@@ -2796,6 +2915,11 @@ herolte_gpu_probe(void)
+ 	uint32_t twrp = 0;
+ 
+ 	PE_parse_boot_argn("herogpu_flush", &hg_flush_mode, sizeof(hg_flush_mode));
++	int wifi = 0;
++	if (PE_parse_boot_argn("herowifi", &wifi, sizeof(wifi)) && wifi &&
++	    kernel_thread_start(hg_wifi_thread, NULL, &thread) == KERN_SUCCESS) {
++		thread_deallocate(thread);
++	}
+ 	if (kernel_thread_start(hg_bus_thread, NULL, &thread) == KERN_SUCCESS) {
+ 		thread_deallocate(thread);
+ 	}

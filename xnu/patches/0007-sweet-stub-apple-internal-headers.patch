@@ -61,7 +61,7 @@ index 0000000..4a790c2
 +#endif /* _ARM64_PPL_UAT_H_ */
 diff --git a/osfmk/arm64/tunables/tunables.s b/osfmk/arm64/tunables/tunables.s
 new file mode 100644
-index 0000000..711cdef
+index 0000000..959c1a2
 --- /dev/null
 +++ b/osfmk/arm64/tunables/tunables.s
 @@ -0,0 +1,7 @@

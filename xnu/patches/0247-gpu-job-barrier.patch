@@ -1,0 +1,18 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index baa9393..f16af8f 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -365,6 +365,13 @@ hg_run(unsigned js, const char *what)
+ 		printf("HEROLTE GPU: %s: MMU update timeout\n", what);
+ 		return false;
+ 	}
++	/*
++	 * Clients write their job chains through write-combined mappings; let
++	 * those writes land before the job manager reads the chain (Linux gets
++	 * this from writel's barrier). Without it ~4% of backboardd's chains
++	 * stopped with JOB_READ_FAULT (0x42) at their first job.
++	 */
++	__asm__ volatile ("dsb sy" ::: "memory");
+ 	hg_wr(hg_gpu, slot + 0x40, (uint32_t)hg_job_va);        /* HEAD_NEXT */
+ 	hg_wr(hg_gpu, slot + 0x44, (uint32_t)(hg_job_va >> 32));
+ 	hg_wr(hg_gpu, slot + 0x50, hg_affinity);                /* AFFINITY */

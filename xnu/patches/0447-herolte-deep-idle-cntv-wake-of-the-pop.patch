@@ -1,0 +1,63 @@
+herolte: deep idle wakes on the architected virtual timer armed by hand (0447)
+
+min76 (log written from cpu 0 every second): cpu1 enter 1, cpu2 1, cpu3 3, cpu5 13, cpu6 19, cpu7 8 and resume 0 for all, with 562 wake-up SGIs and the PMU registers in their normal state: a core that is powered down does not wake on an SGI, and XNU's own deadline did not wake it either; the only wake-ups ever seen (min71, min72) were those of the CNTV that 0439 armed by hand right before CPU_SUSPEND. So 0447 does that again, for the earlier of the core's next pop and 5 ms (not 2 ms), with the 3 ms residency of 0443 and the PMU restore of 0444, and re-synchronizes XNU's timer when the call returns. The tick of 0445 (SGIs) is not started. heroidle only (D-0089).
+
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -522,6 +522,7 @@
+ 	 * than the state's min-residency (exynos-powermode.c get_next_event_time_us; DTB: 750 us boot cluster, 2000 us the others).
+ 	 * Here: the core's own next timer pop (what XNU armed in SetIdlePop: rtcPop) must be at least 3 ms away; otherwise plain WFI.
+ 	 */
++	uint64_t sleep_ticks = 130000ULL;
+ 	{
+ 		uint64_t now_t = mach_absolute_time(), pop = cdp->rtcPop;
+ 		if (pop <= now_t || pop - now_t < 78000ULL) {      /* a timer already due, or less than 3 ms away (26 MHz) */
+@@ -534,11 +535,23 @@
+ 		 * sleep and debounce of a sleeping core waited for the next IPI. The pop is published here; a tick on cpu 0 sends the SGI.
+ 		 */
+ 		herolte_idle_pop[c] = pop;
++		/*
++		 * 0447: min76 (the log written from cpu 0 every second at last): the six cores entered (enter 1/1/3/13/19/8) and NONE came back
++		 * (resume 0) with 562 wake-up SGIs: a powered-down core is not woken by an SGI, and XNU's own deadline did not wake it either
++		 * (every sleep ended only when 0439's explicit CNTV, armed right before the call, rang: min71 and min72). So the wake-up is
++		 * the architected virtual timer, armed here by hand for the earlier of the core's pop and 5 ms, as in min71/min72 but with
++		 * the 3 ms residency and no 2 ms storm. The tick of 0445 (SGIs) is not started any more.
++		 */
++		sleep_ticks = pop - now_t > 130000ULL ? 130000ULL : pop - now_t;
+ 	}
+ 	herolte_idle_enter[c]++;
+ 	herolte_idle_since[c] = mach_absolute_time();
+ 	CleanPoC_Dcache();
+ 	__builtin_arm_dsb(DSB_SY);
++	__builtin_arm_wsr64("CNTV_CVAL_EL0", __builtin_arm_rsr64("CNTVCT_EL0") + sleep_ticks);
++	__builtin_arm_wsr64("CNTV_CTL_EL0", 1ULL);
++	__builtin_arm_isb(ISB_SY);
++	__builtin_arm_dsb(DSB_SY);
+ 	register uint64_t x0 __asm__("x0") = 0xC4000001ULL;     /* CPU_SUSPEND (the DTB's cpu_suspend) */
+ 	register uint64_t x1 __asm__("x1") = 0x10000ULL;        /* power state: power down (cpu-sleep) */
+ 	register uint64_t x2 __asm__("x2") = herolte_idle_entry_pa;
+@@ -546,6 +559,7 @@
+ 	__asm__ volatile ("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : :
+ 	    "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
+ 	/* Only reached when the call returns: an error, or the core did not power down. */
++	timer_resync_deadlines();      /* 0447: XNU's own deadline back in the timer */
+ 	*pcfg = *pcfg | 0xfu;
+ 	__builtin_arm_dsb(DSB_SY);
+ 	herolte_idle_since[c] = 0;
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2838,12 +2838,8 @@
+ 					__builtin_arm_dsb(0xf);      /* DSB SY */
+ 					herolte_idle_mask = idle_mask_want & ~1u;
+ 					printf("HEROLTE IDLE: deep idle on for CPUs %#x through the trampoline at 0x8fffe000\n", herolte_idle_mask);
+-					{
+-						thread_t tick;
+-						if (kernel_thread_start(hg_idle_tick, NULL, &tick) == KERN_SUCCESS) {
+-							thread_deallocate(tick);
+-						}
+-					}
++					/* 0447: the broadcast tick of 0445 is not started: SGIs do not wake a powered-down core (min76) */
++					(void)hg_idle_tick;
+ 				} else {
+ 					printf("HEROLTE IDLE: no CPU_ON trampoline at 0x8fffe000 (%#x %#x): deep idle stays off\n",
+ 					    tr ? ((volatile uint32_t *)tr)[0] : 0, tr ? ((volatile uint32_t *)tr)[1] : 0);

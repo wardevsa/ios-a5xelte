@@ -1,0 +1,43 @@
+herolte: per-core load log every ~2 s (0464)
+
+E-0316: the frame copy takes a median 5 ms (4 % of the time); the UI frame rate (median 9 fps) is limited by the CPU drawing. The governor only watches the big cluster (cores 4-7) and the little cluster runs at whatever the bootloader left, but iOS uses all eight cores (HEROLTE RESIDENCY lines of min86: 29-44 % busy on both clusters). herogovlog=1 prints, every ~2 s, the busy per mille of each core, the governor state and the big cluster rate, so the frame rate of the same minutes can be compared with the load of each cluster. Reads only. herogovlog only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2870,6 +2870,10 @@
+ 	 */
+ 	uint32_t cyc_s = 0;
+ 	uint32_t pm_s = 0;          /* 0462: heropmic=1 */
++	uint32_t gl_s = 0;          /* 0464: herogovlog=1 */
++	uint64_t gl_prev[8] = { 0 }, gl_t = 0;
++	unsigned gl_n = 0;
++	PE_parse_boot_argn("herogovlog", &gl_s, sizeof(gl_s));
+ 	bool pm_done_on = false, pm_done_off = false;
+ 	PE_parse_boot_argn("heropmic", &pm_s, sizeof(pm_s));
+ 	PE_parse_boot_argn("herocycle", &cyc_s, sizeof(cyc_s));
+@@ -3296,6 +3300,25 @@
+ 			gov_prev_busy = busy;
+ 			gov_prev_t = now;
+ 		}
++		if (gl_s && ++gl_n >= 10) {
++			/*
++			 * 0464: every ~2 s, how busy each of the eight cores was (per mille) and what the big cluster's governor holds, so
++			 * the frame rates of the same minutes can be set against the load of each cluster. Reads only.
++			 */
++			extern uint64_t herolte_cluster_busy_mach(int first, int last);
++			char buf[8 * 5 + 1];
++			unsigned o = 0;
++			uint64_t dt = now - gl_t;
++			gl_n = 0;
++			for (int c = 0; c < 8; c++) {
++				uint64_t cur = herolte_cluster_busy_mach(c, c);
++				unsigned pm = (gl_t && dt) ? (unsigned)((cur - gl_prev[c]) * 1000 / dt) : 0;
++				o += (unsigned)snprintf(buf + o, sizeof(buf) - o, "%4u", pm > 1000 ? 1000 : pm);
++				gl_prev[c] = cur;
++			}
++			gl_t = now;
++			printf("HEROLTE GOV: busy per mille cores 0-7:%s | big %s %u MHz | screen %s\n", buf, hc.high ? "high" : "low", herolte_pm_mhz, screen_off ? "off" : "on");
++		}
+ 		bool want_low = screen_off || hot_now || gov_low;
+ 		if (!hc.broken && want_low == hc.high) {
+ 			bool ok = want_low ? hc_go_low() : hc_go_high();

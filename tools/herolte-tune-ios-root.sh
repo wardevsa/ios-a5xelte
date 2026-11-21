@@ -1,0 +1,112 @@
+#!/bin/bash
+# HEROLTE: adjust a staged iOS 16 root (tools/a5xelte-stage-ios-root.sh) for a
+# phone without modem, GPU or SEP, following the SWEET donor's image v12/v13
+# (NOTES.md). Run as root (macOS or Linux) with the HFSX root mounted read-write.
+# On Linux, where there is no /usr/bin/plutil, tools/plutil_lite.py makes the same calls.
+#   - com.apple.migration.plist LastSystemVersion = this build: backboardd
+#     holds SpringBoard's system-shell check-in until DataMigration finishes,
+#     and the migration plugin wrapper aborts on every boot.
+#   - CommCenter jobs removed from launchd.plist (no modem: crash loop).
+#   - com.herolte.autorun added: runs /private/var/herolte/autorun at boot
+#     (test programs from the kernel's USERDATA drop zone).
+#   - SpringBoard watchdogs off; Setup (purplebuddy) exempt from the scene
+#     watchdog (it blocks in CoreTelephony without CommCenter).
+#   - Setup marked complete (donor image v14), no cloud configuration UI.
+#   - /private/var/containers skeleton (on iOS it lives on the data volume).
+set -euo pipefail
+
+if [[ $# != 2 || ${EUID} != 0 ]]; then
+    echo "usage (as root): $0 HFSX_MOUNT BUILD" >&2
+    exit 2
+fi
+root=$1 build=$2
+if [[ -x /usr/bin/plutil ]]; then
+    plutil() { /usr/bin/plutil "$@"; }
+else
+    plutil_py=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/plutil_lite.py
+    [[ -f $plutil_py ]] || { echo "no plutil and no $plutil_py" >&2; exit 1; }
+    plutil() { python3 "$plutil_py" "$@"; }
+fi
+[[ -f "$root/sbin/launchd" ]] || { echo "not a staged root: $root" >&2; exit 1; }
+
+prefs="$root/private/var/mobile/Library/Preferences"
+install -d -o 501 -g 501 -m 0755 "$root/private/var/mobile" \
+    "$root/private/var/mobile/Library" "$prefs"
+
+plist() {  # plist FILE KEY TYPE VALUE ...  (creates or updates entries)
+    local file=$1; shift
+    [[ -f $file ]] || plutil -create xml1 "$file"
+    while (($#)); do
+        plutil -replace "$1" "-$2" "$3" "$file"
+        shift 3
+    done
+    plutil -convert xml1 "$file"
+    chown 501:501 "$file"
+    chmod 0600 "$file"
+}
+
+# WallpaperKit offers only the wallpapers that name this screen's class
+# (1440x2560 at @3x); the IPSW has none. The 375w-812h ones are given it.
+find "$root/Library/Wallpaper/Collections" -path '*375w-812h*' -name Wallpaper.plist -print0 |
+while IFS= read -r -d '' wallpaper; do
+    plutil -replace logicalScreenClass -string '480w-853h@3x~iphone' "$wallpaper"
+done
+
+plist "$prefs/com.apple.migration.plist" LastSystemVersion string "$build"
+plist "$prefs/com.apple.springboard.plist" \
+    BKNoWatchdogs bool YES \
+    FBLaunchWatchdogExceptions json '{"com.apple.purplebuddy":100}' \
+    MCForceShowCloudConfigurationUI bool NO
+# Setup (purplebuddy) recognises the swipe but never finishes: it waits on
+# CoreTelephony and activation (donor image v14). Mark it complete;
+# activation itself comes from the ADT /chosen production-status 0 and
+# security-mode 1 properties (mobileactivationd's native branch).
+plist "$prefs/com.apple.purplebuddy.plist" \
+    SetupDone bool YES \
+    SetupFinishedAllSteps bool YES \
+    SetupVersion integer 11 \
+    daemonizeNeedsToRun bool NO
+plist "$prefs/com.apple.managedconfiguration.notbackedup.plist" \
+    LockdownActivationIndicatesCloudConfigurationAvailable bool NO
+
+launchd="$root/System/Library/xpc/launchd.plist"
+python3 - "$launchd" <<'EOF'
+import plistlib, sys
+path = sys.argv[1]
+with open(path, 'rb') as f:
+    data = plistlib.load(f)
+fmt = plistlib.FMT_BINARY
+removed = []
+for section in ('LaunchDaemons', 'Agents', 'LaunchAgents'):
+    jobs = data.get(section, {})
+    for key in list(jobs):
+        label = jobs[key].get('Label', '') if isinstance(jobs[key], dict) else ''
+        if 'CommCenter' in key or 'CommCenter' in label:
+            removed.append(label or key)
+            del jobs[key]
+if not removed:
+    sys.exit('no CommCenter job found in launchd.plist')
+# Developer hook: /private/var/herolte/autorun once per boot, as root, if the
+# kernel's USERDATA drop zone put it there (bsd/dev/herolte_drop.c,
+# tools/herolte-drop.py). Without the file launchd just logs an error.
+data['LaunchDaemons']['/System/Library/LaunchDaemons/com.herolte.autorun.plist'] = {
+    'Label': 'com.herolte.autorun',
+    'ProgramArguments': ['/private/var/herolte/autorun'],
+    'RunAtLoad': True,
+    'UserName': 'root',
+    'POSIXSpawnType': 'Interactive',
+    'StandardOutPath': '/private/var/herolte/autorun.out',
+    'StandardErrorPath': '/private/var/herolte/autorun.out',
+}
+with open(path, 'wb') as f:
+    plistlib.dump(data, f, fmt=fmt)
+print('launchd.plist: removed', ', '.join(removed), '; added com.herolte.autorun')
+EOF
+
+containers="$root/private/var/containers"
+install -d -o 0 -g 0 -m 0755 "$containers" "$containers/Bundle" "$containers/Data" \
+    "$containers/Data/System" "$containers/Shared" "$containers/Shared/SystemGroup" \
+    "$containers/Temp"
+
+sync
+echo "HEROLTE root tuning complete for build $build"

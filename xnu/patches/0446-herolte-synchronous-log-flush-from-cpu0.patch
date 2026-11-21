@@ -1,0 +1,90 @@
+herolte: the power thread on cpu 0 writes the persistent log once a second while deep idle is armed (0446)
+
+min73, min74 and min75 hung or stalled about 25 s after boot and came back with only the second flush of the log: the log thread (every 10 s, on any core) was one of the things that stopped. herolte_log_flush_now() in herolte_ufs.c does the same writes synchronously (mutex only tried) and the power thread, bound to cpu 0, which never sleeps deeply, calls it once a second when heroidle is armed, so that the next hang leaves its counters in the log. heroidle only.
+
+--- a/bsd/dev/herolte_ufs.c
++++ b/bsd/dev/herolte_ufs.c
+@@ -696,6 +696,65 @@
+ }
+ 
+ /*
++ * 0446: a synchronous flush of the console ring, for the power thread on cpu 0 (bsd/dev/herolte_gpu.c). The log thread flushes
++ * every 10 s from whatever core it sleeps on; with cores in deep idle (heroidle) min73-min75 hung at the logo and the log stopped
++ * at the second flush, so every hang came back without a trace. Called once a second while deep idle is armed. Same writes as
++ * herolte_log_thread (ring bytes since the last call, then the header, then SYNCHRONIZE CACHE); the mutex is only tried.
++ */
++int herolte_log_flush_now(void);
++int
++herolte_log_flush_now(void)
++{
++	static uint64_t flushed, seq = 0x40000000u;
++	const char *ring;
++	uint32_t rsize;
++	uint64_t total;
++	if (!su.writable || !su.nblocks) {
++		return -1;
++	}
++	a5xelte_log_snapshot(&ring, &rsize, &total);
++	if (total == flushed) {
++		return 0;
++	}
++	if (!lck_mtx_try_lock(&herolte_ufs_lock)) {
++		return -2;
++	}
++	uint64_t first = su.first_block + su.nblocks - (1 + rsize / UFS_BLOCK);
++	uint8_t *bounce = (uint8_t *)(su.dma + DMA_BOUNCE);
++	uint64_t pos = total - flushed >= rsize ? total - rsize : flushed;
++	uint64_t left = total - pos;
++	int error = 0;
++	while (left && !error) {
++		uint32_t blk = (uint32_t)((pos % rsize) / UFS_BLOCK);
++		uint32_t skip = (uint32_t)(pos % UFS_BLOCK);
++		uint32_t n = (uint32_t)MIN((uint64_t)(BOUNCE_SIZE / UFS_BLOCK),
++		    MIN((uint64_t)(rsize / UFS_BLOCK - blk), (left + skip + UFS_BLOCK - 1) / UFS_BLOCK));
++		memcpy(bounce, ring + (size_t)blk * UFS_BLOCK, (size_t)n * UFS_BLOCK);
++		error = ufs_write_blocks(first + 1 + blk, n);
++		uint64_t adv = (uint64_t)n * UFS_BLOCK - skip;
++		pos += adv;
++		left -= MIN(adv, left);
++	}
++	if (!error) {
++		struct herolte_log_header h = {
++			.magic = { 'H', 'E', 'R', 'O', 'L', 'O', 'G', '1' },
++			.version = 1, .size = rsize, .total = total, .seq = ++seq,
++		};
++		bzero(bounce, UFS_BLOCK);
++		memcpy(bounce, &h, sizeof(h));
++		error = ufs_write_blocks(first, 1);
++	}
++	if (!error) {
++		error = ufs_sync_cache();
++	}
++	lck_mtx_unlock(&herolte_ufs_lock);
++	if (!error) {
++		flushed = total;
++	}
++	return error;
++}
++
++/*
+  * For bsd/dev/herolte_drop.c: read count blocks of the root partition,
+  * starting `back` blocks before the start of the log area (so back = 1 is
+  * the last block below it), into dst. 0 or an errno.
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2788,6 +2788,15 @@
+ 			if (idle_t0 == 0) {
+ 				idle_t0 = now;
+ 			}
++			{
++				/* 0446: write the log from here, once a second, whatever the log thread is doing */
++				static uint64_t flush_at;
++				extern int herolte_log_flush_now(void);
++				if (now - flush_at > 26000000ull) {
++					flush_at = now;
++					(void)herolte_log_flush_now();
++				}
++			}
+ 			uint64_t el = 0;
+ 			absolutetime_to_nanoseconds(now - idle_t0, &el);
+ 			if (!idle_armed && el > 20ull * NSEC_PER_SEC) {

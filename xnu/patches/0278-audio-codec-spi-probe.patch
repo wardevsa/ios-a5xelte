@@ -1,0 +1,141 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index f6895b6..0f1da29 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2181,6 +2181,107 @@ hg_thread(void *arg, __unused wait_result_t wr)
+ 	}
+ }
+ 
++/*
++ * Boot-arg heroaudio=1: the first step to sound, the codec answering over SPI from XNU. CS47L91 ("moon") on SPI0,
++ * 0x14d20000, pins GPE2-0/2/3 function 2 and chip select GPE2-1 by hand, reset GPE6-5 (bank_type_4, PERIC1 pins at
++ * 0x14cc0000); DCVDD is LDO31. SCLK from OSCCLK (the mux left at 0), 26 MHz / 4. All values from Linux in TWRP: register
++ * 0 reads 0x6364 there.
++ */
++extern bool herolte_apm_pmic_write(uint8_t reg, uint8_t value);
++#define HA_SPI_PA       0x14d20000u
++#define HA_CMU_PA       0x14c80000u
++#define HA_PINS_PA      0x14cc0000u
++#define HA_GPE6         0x40u
++#define HA_GPE2         0xa0u
++
++static vm_offset_t ha_spi, ha_pins;
++
++static bool
++ha_byte(uint8_t out, uint8_t *in)
++{
++	hg_wr(ha_spi, 0x18, out);
++	for (unsigned i = 0; i < 20000; i++) {
++		if ((hg_rd(ha_spi, 0x14) >> 15) & 0x1ff) {
++			*in = (uint8_t)hg_rd(ha_spi, 0x1c);
++			return true;
++		}
++		delay(1);
++	}
++	return false;
++}
++
++static bool
++ha_read(uint32_t reg, uint16_t *value)
++{
++	uint32_t address = reg | 0x80000000u;
++	uint8_t bytes[8] = { (uint8_t)(address >> 24), (uint8_t)(address >> 16), (uint8_t)(address >> 8), (uint8_t)address };
++	uint8_t got[8] = { 0 };
++	uint32_t dat = hg_rd(ha_pins, HA_GPE2 + 4);
++	hg_wr(ha_pins, HA_GPE2 + 4, dat & ~(1u << 1));
++	delay(2);
++	bool ok = true;
++	for (unsigned i = 0; ok && i < 8; i++) {
++		ok = ha_byte(bytes[i], &got[i]);
++	}
++	delay(2);
++	hg_wr(ha_pins, HA_GPE2 + 4, dat | (1u << 1));
++	*value = (uint16_t)((got[6] << 8) | got[7]);
++	return ok;
++}
++
++static void
++hg_audio_thread(__unused void *arg, __unused wait_result_t wr)
++{
++	hg_msleep(20000);
++	vm_offset_t cmu = ml_io_map(HA_CMU_PA, 0x2000);
++	ha_pins = ml_io_map(HA_PINS_PA, 0x1000);
++	ha_spi = ml_io_map(HA_SPI_PA, 0x1000);
++	if (!cmu || !ha_pins || !ha_spi) {
++		printf("HEROLTE AUDIO: mapping failed\n");
++		return;
++	}
++	printf("HEROLTE AUDIO: cmu mux %#x stat %#x pclk %#x sclk %#x\n", hg_rd(cmu, 0x204), hg_rd(cmu, 0x604), hg_rd(cmu, 0x800),
++	    hg_rd(cmu, 0x840));
++	printf("HEROLTE AUDIO: gpe2 con %#x dat %#x pud %#x; gpe6 con %#x dat %#x\n", hg_rd(ha_pins, HA_GPE2), hg_rd(ha_pins, HA_GPE2 + 4),
++	    hg_rd(ha_pins, HA_GPE2 + 8), hg_rd(ha_pins, HA_GPE6), hg_rd(ha_pins, HA_GPE6 + 4));
++	uint8_t l30 = 0, l31 = 0;
++	herolte_apm_pmic_read(0x5a, &l30);
++	herolte_apm_pmic_read(0x5b, &l31);
++	printf("HEROLTE AUDIO: LDO30 %#x LDO31 %#x\n", l30, l31);
++	herolte_apm_pmic_write(0x5b, (uint8_t)(l31 | 0xc0));
++	hg_msleep(5);
++	hg_wr(cmu, 0x800, hg_rd(cmu, 0x800) | (1u << 18));
++	hg_wr(cmu, 0x840, hg_rd(cmu, 0x840) | 1u);
++	hg_wr(cmu, 0x204, hg_rd(cmu, 0x204) & ~(1u << 12));
++	hg_msleep(1);
++	/* The pins: bus function 2, chip select an output, high; reset an output, pulsed. */
++	uint32_t con = hg_rd(ha_pins, HA_GPE2);
++	con = (con & ~0xffffu) | 0x2212u;
++	hg_wr(ha_pins, HA_GPE2 + 4, hg_rd(ha_pins, HA_GPE2 + 4) | (1u << 1));
++	hg_wr(ha_pins, HA_GPE2, con);
++	hg_wr(ha_pins, HA_GPE6, (hg_rd(ha_pins, HA_GPE6) & ~(0xfu << 20)) | (1u << 20));
++	hg_wr(ha_pins, HA_GPE6 + 4, hg_rd(ha_pins, HA_GPE6 + 4) & ~(1u << 5));
++	hg_msleep(5);
++	hg_wr(ha_pins, HA_GPE6 + 4, hg_rd(ha_pins, HA_GPE6 + 4) | (1u << 5));
++	hg_msleep(10);
++	/* SPI: reset, 8-bit, mode 0, 26 MHz / 2(1+1), chip select by hand. */
++	hg_wr(ha_spi, 0x00, 1u << 5);
++	delay(10);
++	hg_wr(ha_spi, 0x00, 0);
++	hg_wr(ha_spi, 0x04, (1u << 8) | 1u);
++	hg_wr(ha_spi, 0x08, 0);
++	hg_wr(ha_spi, 0x0c, 0);
++	hg_wr(ha_spi, 0x10, 0);
++	hg_wr(ha_spi, 0x00, 3u);
++	printf("HEROLTE AUDIO: SPI ch %#x clk %#x mode %#x status %#x\n", hg_rd(ha_spi, 0), hg_rd(ha_spi, 4), hg_rd(ha_spi, 8), hg_rd(ha_spi, 0x14));
++	static const uint16_t regs[] = { 0x0000, 0x0001, 0x0100, 0x0101 };
++	for (unsigned i = 0; i < sizeof(regs) / sizeof(regs[0]); i++) {
++		uint16_t value = 0;
++		bool ok = ha_read(regs[i], &value);
++		printf("HEROLTE AUDIO: codec register %#x = %#x (%s), SPI status %#x\n", regs[i], value, ok ? "read" : "TIMEOUT", hg_rd(ha_spi, 0x14));
++	}
++}
++
+ /*
+  * Boot-arg herotwrp=SECONDS: after that long the phone restarts into recovery by itself, as Samsung's sec_reboot does
+  * for "reboot recovery", so that a test runs with nobody at the buttons. The log has its last flush first.
+@@ -2212,6 +2313,11 @@ herolte_gpu_probe(void)
+ 		thread_deallocate(thread);
+ 	}
+ 
++	int audio = 0;
++	if (PE_parse_boot_argn("heroaudio", &audio, sizeof(audio)) && audio &&
++	    kernel_thread_start(hg_audio_thread, NULL, &thread) == KERN_SUCCESS) {
++		thread_deallocate(thread);
++	}
+ 	PE_parse_boot_argn("herogpu", &enabled, sizeof(enabled));
+ 	if (!enabled) {
+ 		printf("HEROLTE GPU: probe disabled\n");
+diff --git a/bsd/dev/herolte_touch.c b/bsd/dev/herolte_touch.c
+index e184d5b..a2772e1 100644
+--- a/bsd/dev/herolte_touch.c
++++ b/bsd/dev/herolte_touch.c
+@@ -482,6 +482,12 @@ apm_pmic_write(uint8_t reg, uint8_t value)
+ 
+ /* For herolte_gpu.c: vdd_mngs only (BUCK2, 0x1d). Refused until the touch thread has started the APM. */
+ bool herolte_apm_mngs_voltage(uint8_t value);
++
++bool
++herolte_apm_pmic_write(uint8_t reg, uint8_t value)
++{
++	return apm_pmic_write(reg, value);
++}
+ bool
+ herolte_apm_mngs_voltage(uint8_t value)
+ {

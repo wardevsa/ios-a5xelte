@@ -1,32 +1,6 @@
---- a/iokit/conf/files.arm64
-+++ b/iokit/conf/files.arm64
-@@ -15,3 +15,7 @@
- iokit/Kernel/arm/SweetWatchdog.cpp                               optional iokitcpp
- iokit/Kernel/arm/SweetSurface.cpp                                optional iokitcpp
- iokit/Kernel/arm/SweetFramebuffer.cpp                            optional iokitcpp
-+iokit/Kernel/arm/hid/SweetHID.cpp                                optional iokitcpp
-+iokit/Kernel/arm/hid/IOHIDEvent.cpp                              optional iokitcpp
-+iokit/Kernel/arm/hid/IOHIDEventServiceQueue.cpp                  optional iokitcpp
-+iokit/Kernel/arm/hid/IOHIDEventServiceUserClient.cpp             optional iokitcpp
---- a/iokit/KernelConfigTables.cpp
-+++ b/iokit/KernelConfigTables.cpp
-@@ -67,6 +67,16 @@
-     "     'IOProviderClass' = IOPlatformDevice;"
-     "     'IONameMatch'     = 'sweet,display';"
-     "   },"
-+    "   {"
-+    "     'IOClass'         = SweetHIDButtons;"
-+    "     'IOProviderClass' = IOResources;"
-+    "     'IOMatchCategory' = SweetHIDButtons;"
-+    "   },"
-+    "   {"
-+    "     'IOClass'         = SweetHIDTouch;"
-+    "     'IOProviderClass' = IOResources;"
-+    "     'IOMatchCategory' = SweetHIDTouch;"
-+    "   },"
- #endif
-     "   {"
-     "     'IOClass'         = IOPanicPlatform;"
+diff --git a/iokit/Kernel/arm/hid/AppleHIDUsageTables.h b/iokit/Kernel/arm/hid/AppleHIDUsageTables.h
+new file mode 100644
+index 0000000..c00cbd4
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/AppleHIDUsageTables.h
 @@ -0,0 +1,22 @@
@@ -52,6 +26,9 @@
 + * 
 + * @APPLE_LICENSE_HEADER_END@
 + */
+diff --git a/iokit/Kernel/arm/hid/IOGraphicsTypes.h b/iokit/Kernel/arm/hid/IOGraphicsTypes.h
+new file mode 100644
+index 0000000..0505bdf
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOGraphicsTypes.h
 @@ -0,0 +1,22 @@
@@ -77,6 +54,9 @@
 +} IOGBounds;
 +
 +#endif /* _IOKIT_IOGRAPHICSTYPES_H */
+diff --git a/iokit/Kernel/arm/hid/IOHIDDebug.h b/iokit/Kernel/arm/hid/IOHIDDebug.h
+new file mode 100644
+index 0000000..6833c4d
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDDebug.h
 @@ -0,0 +1,31 @@
@@ -111,6 +91,9 @@
 +
 +#endif /* IOHIDDebug_h */
 +
+diff --git a/iokit/Kernel/arm/hid/IOHIDDeviceKeys.h b/iokit/Kernel/arm/hid/IOHIDDeviceKeys.h
+new file mode 100644
+index 0000000..77030c4
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDDeviceKeys.h
 @@ -0,0 +1,228 @@
@@ -342,6 +325,9 @@
 +#define kIOHIDPhysicalDeviceUniqueIDKey "PhysicalDeviceUniqueID"
 +
 +#endif /* IOHIDDeviceKeys_h */
+diff --git a/iokit/Kernel/arm/hid/IOHIDDeviceTypes.h b/iokit/Kernel/arm/hid/IOHIDDeviceTypes.h
+new file mode 100644
+index 0000000..e1b9a75
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDDeviceTypes.h
 @@ -0,0 +1,311 @@
@@ -656,6 +642,9 @@
 +#define kIOHIDDeviceMaxAsyncRequestTimeout     1200000ULL
 +
 +#endif /* IOHIDDeviceTypes_h */
+diff --git a/iokit/Kernel/arm/hid/IOHIDEvent.cpp b/iokit/Kernel/arm/hid/IOHIDEvent.cpp
+new file mode 100644
+index 0000000..27175f9
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEvent.cpp
 @@ -0,0 +1,1814 @@
@@ -2473,6 +2462,9 @@
 +
 +    return ns / scaleFactor;
 +}
+diff --git a/iokit/Kernel/arm/hid/IOHIDEvent.h b/iokit/Kernel/arm/hid/IOHIDEvent.h
+new file mode 100644
+index 0000000..d518265
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEvent.h
 @@ -0,0 +1,483 @@
@@ -2959,6 +2951,9 @@
 +};
 +
 +#endif /* _IOKIT_IOHIDEVENT_H */
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventData.h b/iokit/Kernel/arm/hid/IOHIDEventData.h
+new file mode 100644
+index 0000000..5c5767d
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventData.h
 @@ -0,0 +1,254 @@
@@ -3216,6 +3211,9 @@
 +#endif
 +
 +#endif /* _IOKIT_HID_IOHIDEVENTDATA_H */
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventFieldDefs.h b/iokit/Kernel/arm/hid/IOHIDEventFieldDefs.h
+new file mode 100644
+index 0000000..8c0feb1
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventFieldDefs.h
 @@ -0,0 +1,324 @@
@@ -3543,6 +3541,9 @@
 +static const IOHIDEventField kIOHIDEventFieldPointerButtonMask                                 =  (kIOHIDEventFieldPointerBase | 3);
 +
 +#endif
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventMacroDefs.h b/iokit/Kernel/arm/hid/IOHIDEventMacroDefs.h
+new file mode 100644
+index 0000000..8db8f73
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventMacroDefs.h
 @@ -0,0 +1,8571 @@
@@ -12117,6 +12118,9 @@
 +
 +
 +#endif
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventService.h b/iokit/Kernel/arm/hid/IOHIDEventService.h
+new file mode 100644
+index 0000000..4e79ad5
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventService.h
 @@ -0,0 +1,75 @@
@@ -12195,6 +12199,9 @@
 +};
 +
 +#endif /* _IOKIT_HID_IOHIDEVENTSERVICE_H */
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventServiceKeys.h b/iokit/Kernel/arm/hid/IOHIDEventServiceKeys.h
+new file mode 100644
+index 0000000..cef50cb
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventServiceKeys.h
 @@ -0,0 +1,144 @@
@@ -12342,6 +12349,9 @@
 +#define kIOHIDEventDriverHandlesReport "IOHIDEventDriverHandlesReport"
 +
 +#endif /* IOHIDDeviceTypes_h */
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventServiceKeys_Private.h b/iokit/Kernel/arm/hid/IOHIDEventServiceKeys_Private.h
+new file mode 100644
+index 0000000..649d160
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventServiceKeys_Private.h
 @@ -0,0 +1,330 @@
@@ -12675,6 +12685,9 @@
 +#define kIOHIDLegacyKeyModifierMapKey "LegacyKeyMaps"
 +
 +#endif /* IOHIDEventServiceKeys_Private_h */
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventServiceQueue.cpp b/iokit/Kernel/arm/hid/IOHIDEventServiceQueue.cpp
+new file mode 100644
+index 0000000..391cca2
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventServiceQueue.cpp
 @@ -0,0 +1,298 @@
@@ -12976,6 +12989,9 @@
 +    }
 +    return ret;
 +}
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventServiceQueue.h b/iokit/Kernel/arm/hid/IOHIDEventServiceQueue.h
+new file mode 100644
+index 0000000..9442710
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventServiceQueue.h
 @@ -0,0 +1,74 @@
@@ -13053,6 +13069,9 @@
 +
 +//---------------------------------------------------------------------------
 +#endif /* !_IOKIT_HID_IOHIDEVENTSERVICEQUEUE_H */
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventServiceTypes.h b/iokit/Kernel/arm/hid/IOHIDEventServiceTypes.h
+new file mode 100644
+index 0000000..94d7ed9
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventServiceTypes.h
 @@ -0,0 +1,74 @@
@@ -13130,6 +13149,9 @@
 +} IOHIDScrollEventOptions;
 +
 +#endif /* IOHIDEventServiceTypes_h */
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventServiceUserClient.cpp b/iokit/Kernel/arm/hid/IOHIDEventServiceUserClient.cpp
+new file mode 100644
+index 0000000..256a977
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventServiceUserClient.cpp
 @@ -0,0 +1,706 @@
@@ -13839,6 +13861,9 @@
 +exit:
 +    return result;
 +}
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventServiceUserClient.h b/iokit/Kernel/arm/hid/IOHIDEventServiceUserClient.h
+new file mode 100644
+index 0000000..06d1f06
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventServiceUserClient.h
 @@ -0,0 +1,148 @@
@@ -13990,6 +14015,9 @@
 +#endif /* KERNEL */
 +
 +#endif /* _IOKIT_IOHIDEVENTSERVICEUSERCLIENT_H */
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventStructDefs.h b/iokit/Kernel/arm/hid/IOHIDEventStructDefs.h
+new file mode 100644
+index 0000000..d500c1b
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventStructDefs.h
 @@ -0,0 +1,811 @@
@@ -14804,6 +14832,9 @@
 +} __IOHIDPointerEventData;
 +
 +#endif
+diff --git a/iokit/Kernel/arm/hid/IOHIDEventTypes.h b/iokit/Kernel/arm/hid/IOHIDEventTypes.h
+new file mode 100644
+index 0000000..af34563
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDEventTypes.h
 @@ -0,0 +1,799 @@
@@ -15606,6 +15637,9 @@
 +};
 +
 +#endif /* _IOKIT_HID_IOHIDEVENTTYPES_H } */
+diff --git a/iokit/Kernel/arm/hid/IOHIDFamilyTrace.h b/iokit/Kernel/arm/hid/IOHIDFamilyTrace.h
+new file mode 100644
+index 0000000..25093de
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDFamilyTrace.h
 @@ -0,0 +1,72 @@
@@ -15681,6 +15715,9 @@
 +};
 +
 +#endif // _IOKIT_HID_IOHIDFAMILYTRACE_H }
+diff --git a/iokit/Kernel/arm/hid/IOHIDKeys.h b/iokit/Kernel/arm/hid/IOHIDKeys.h
+new file mode 100644
+index 0000000..1a6e235
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDKeys.h
 @@ -0,0 +1,466 @@
@@ -16150,6 +16187,9 @@
 +__END_DECLS
 +
 +#endif /* !_IOKIT_HID_IOHIDKEYS_H_ */
+diff --git a/iokit/Kernel/arm/hid/IOHIDParameter.h b/iokit/Kernel/arm/hid/IOHIDParameter.h
+new file mode 100644
+index 0000000..2fcadda
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDParameter.h
 @@ -0,0 +1,350 @@
@@ -16503,6 +16543,9 @@
 +};
 +
 +#endif /* !_DEV_EVSIO_H */
+diff --git a/iokit/Kernel/arm/hid/IOHIDPrivateKeys.h b/iokit/Kernel/arm/hid/IOHIDPrivateKeys.h
+new file mode 100644
+index 0000000..d3635da
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDPrivateKeys.h
 @@ -0,0 +1,212 @@
@@ -16718,6 +16761,9 @@
 +__END_DECLS
 +
 +#endif /* !_IOKIT_HID_IOHIDPRIVATEKEYS_H_ */
+diff --git a/iokit/Kernel/arm/hid/IOHIDProperties.h b/iokit/Kernel/arm/hid/IOHIDProperties.h
+new file mode 100644
+index 0000000..dbaf0b3
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDProperties.h
 @@ -0,0 +1,105 @@
@@ -16826,6 +16872,9 @@
 +#define kIOHIDServiceCapsLockStateKey                "HIDCapsLockState"
 +
 +#endif /* IOHIDProperties_h */
+diff --git a/iokit/Kernel/arm/hid/IOHIDShared.h b/iokit/Kernel/arm/hid/IOHIDShared.h
+new file mode 100644
+index 0000000..d9b5b69
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDShared.h
 @@ -0,0 +1,291 @@
@@ -17120,6 +17169,9 @@
 +
 +
 +#endif /* !_DEV_EVIO_H */
+diff --git a/iokit/Kernel/arm/hid/IOHIDTypes.h b/iokit/Kernel/arm/hid/IOHIDTypes.h
+new file mode 100644
+index 0000000..a06a48a
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDTypes.h
 @@ -0,0 +1,182 @@
@@ -17305,6 +17357,9 @@
 +
 +#endif /* !_DEV_EV_TYPES_H */
 +
+diff --git a/iokit/Kernel/arm/hid/IOHIDUsageTables.h b/iokit/Kernel/arm/hid/IOHIDUsageTables.h
+new file mode 100644
+index 0000000..8033997
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOHIDUsageTables.h
 @@ -0,0 +1,2694 @@
@@ -20002,6 +20057,9 @@
 +};
 +
 +#endif /* _IOHIDUSAGETABLES_H */
+diff --git a/iokit/Kernel/arm/hid/IOLLEvent.h b/iokit/Kernel/arm/hid/IOLLEvent.h
+new file mode 100644
+index 0000000..56a9af7
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/IOLLEvent.h
 @@ -0,0 +1,586 @@
@@ -20591,6 +20649,9 @@
 +
 +#endif /* !_DEV_EVENT_H */
 +
+diff --git a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/SweetHID.cpp
+new file mode 100644
+index 0000000..e52876f
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/SweetHID.cpp
 @@ -0,0 +1,539 @@
@@ -21133,6 +21194,9 @@
 +		gSweetTouch->touch(finger, down != 0, x, y);
 +	}
 +}
+diff --git a/iokit/Kernel/arm/hid/ev_keymap.h b/iokit/Kernel/arm/hid/ev_keymap.h
+new file mode 100644
+index 0000000..e6db930
 --- /dev/null
 +++ b/iokit/Kernel/arm/hid/ev_keymap.h
 @@ -0,0 +1,171 @@
@@ -21307,3 +21371,36 @@
 +} NXParsedKeyMapping;
 +
 +#endif /* !_DEV_EV_KEYMAP_H */
+diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+index 9b2c787..b541c68 100644
+--- a/iokit/KernelConfigTables.cpp
++++ b/iokit/KernelConfigTables.cpp
+@@ -67,6 +67,16 @@ const char * gIOKernelConfigTables =
+     "     'IOProviderClass' = IOPlatformDevice;"
+     "     'IONameMatch'     = 'sweet,display';"
+     "   },"
++    "   {"
++    "     'IOClass'         = SweetHIDButtons;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = SweetHIDButtons;"
++    "   },"
++    "   {"
++    "     'IOClass'         = SweetHIDTouch;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = SweetHIDTouch;"
++    "   },"
+ #endif
+     "   {"
+     "     'IOClass'         = IOPanicPlatform;"
+diff --git a/iokit/conf/files.arm64 b/iokit/conf/files.arm64
+index 05de20f..da6c812 100644
+--- a/iokit/conf/files.arm64
++++ b/iokit/conf/files.arm64
+@@ -15,3 +15,7 @@ iokit/Kernel/arm/SweetKeyStore.cpp                               optional iokitc
+ iokit/Kernel/arm/SweetWatchdog.cpp                               optional iokitcpp
+ iokit/Kernel/arm/SweetSurface.cpp                                optional iokitcpp
+ iokit/Kernel/arm/SweetFramebuffer.cpp                            optional iokitcpp
++iokit/Kernel/arm/hid/SweetHID.cpp                                optional iokitcpp
++iokit/Kernel/arm/hid/IOHIDEvent.cpp                              optional iokitcpp
++iokit/Kernel/arm/hid/IOHIDEventServiceQueue.cpp                  optional iokitcpp
++iokit/Kernel/arm/hid/IOHIDEventServiceUserClient.cpp             optional iokitcpp

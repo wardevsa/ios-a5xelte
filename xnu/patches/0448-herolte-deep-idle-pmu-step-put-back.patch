@@ -1,0 +1,45 @@
+herolte: the PMU power-down step of deep idle, deleted by mistake in 0443, put back (0448)
+
+0441 cleared the core's PMU CONFIGURATION bits (0xf) right before CPU_SUSPEND, as Samsung's exynos_cpu_down does; min71 and min72 woke their cores. 0443, cutting out the 0439 test block (the 2 ms timer) around those lines, took the two PMU lines with it. min73 to min77 ran without the step: resume 0 in every core, the min68-min70 picture (min76 and min77 have the trace: 562 and 543 wake-up SGIs, CPU_ON recovery 0). So the explanations of 0445 and 0447 (SGIs and XNU's own timer do not wake a core) were wrong; the comments are corrected here. The rest stays: the 3 ms residency (0443), the PMU restore on wake (0444), the hand-armed CNTV for the earlier of the pop and 5 ms (0447) as a known-good wake. heroidle only (D-0089).
+
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -528,20 +528,9 @@
+ 		if (pop <= now_t || pop - now_t < 78000ULL) {      /* a timer already due, or less than 3 ms away (26 MHz) */
+ 			return false;
+ 		}
+-		/*
+-		 * 0445: min74 (0444): the UI ran at normal speed but the buttons did not answer and the log thread stopped after 25 s. The
+-		 * core's own timer (CNTV, what XNU arms for rtcPop) is not a wake source of a powered-down core (Samsung's Linux wakes on the
+-		 * always-on MCT; the 2 ms CNTV of 0439 only looked as if it worked, the wake-ups came from IPIs), so every callout, timed
+-		 * sleep and debounce of a sleeping core waited for the next IPI. The pop is published here; a tick on cpu 0 sends the SGI.
+-		 */
++		/* 0445/0447 (corrected in 0448): the pop is published for the (unused) broadcast tick; the sleep is bounded by a hand-armed CNTV below. */
+ 		herolte_idle_pop[c] = pop;
+-		/*
+-		 * 0447: min76 (the log written from cpu 0 every second at last): the six cores entered (enter 1/1/3/13/19/8) and NONE came back
+-		 * (resume 0) with 562 wake-up SGIs: a powered-down core is not woken by an SGI, and XNU's own deadline did not wake it either
+-		 * (every sleep ended only when 0439's explicit CNTV, armed right before the call, rang: min71 and min72). So the wake-up is
+-		 * the architected virtual timer, armed here by hand for the earlier of the core's pop and 5 ms, as in min71/min72 but with
+-		 * the 3 ms residency and no 2 ms storm. The tick of 0445 (SGIs) is not started any more.
+-		 */
++		/* 0447: the hand-armed virtual timer rings for the earlier of the core's pop and 5 ms (the 2 ms of min71/min72 was the same mechanism). */
+ 		sleep_ticks = pop - now_t > 130000ULL ? 130000ULL : pop - now_t;
+ 	}
+ 	herolte_idle_enter[c]++;
+@@ -552,6 +541,15 @@
+ 	__builtin_arm_wsr64("CNTV_CTL_EL0", 1ULL);
+ 	__builtin_arm_isb(ISB_SY);
+ 	__builtin_arm_dsb(DSB_SY);
++	/*
++	 * 0448: THE PMU STEP, put back. 0441 cleared the core's PMU CONFIGURATION bits here before the call (what Samsung's
++	 * exynos_cpu_down does); 0443, removing the 0439 test block around it, deleted those two lines by mistake. min73-min77 therefore
++	 * ran without the step, the failure of min68-min70 (the core powers down and never wakes: resume 0 in every core), and the
++	 * explanations in the comments of 0445 and 0447 (SGIs and XNU's timer do not wake a core) were wrong: they came from a missing
++	 * register write, not from the hardware.
++	 */
++	*pcfg = *pcfg & ~0xfu;
++	__builtin_arm_dsb(DSB_SY);
+ 	register uint64_t x0 __asm__("x0") = 0xC4000001ULL;     /* CPU_SUSPEND (the DTB's cpu_suspend) */
+ 	register uint64_t x1 __asm__("x1") = 0x10000ULL;        /* power state: power down (cpu-sleep) */
+ 	register uint64_t x2 __asm__("x2") = herolte_idle_entry_pa;

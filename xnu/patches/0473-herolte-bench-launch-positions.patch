@@ -1,0 +1,22 @@
+herolte: bench launch scenario uses the icon positions found by the probe (0473)
+
+min106 probe (E-0327): with a 120 ms tap three of every row of the lattice stayed silent except the top row (y 250, all four columns) and the dock (x 180 at y 2230 and x 540 at y 2450, i.e. two icons about y 2340). The launch scenario now taps those six positions. heroscen only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3114,10 +3114,12 @@
+ 		}
+ 		hs_home();
+ 		break;
+-	case 3:         /* launch: the four dock slots, one app at a time */
+-		for (unsigned slot = 0; slot < 4; slot++) {
++	case 3:         /* launch: the six icons, one app at a time. 0473: positions read from the min106 probe (E-0327): the home screen has its four
++		         * icons in the top row (y about 250) and two in the dock (y about 2340, x 180 and 540) */
++		for (unsigned slot = 0; slot < 6; slot++) {
++			static const int ix[6] = { 180, 540, 900, 1260, 180, 540 }, iy[6] = { 250, 250, 250, 250, 2340, 2340 };
+ 			unsigned fr = 0;
+-			hs_tap(180 + 360 * (int)slot, 2385);
++			hs_tap(ix[slot], iy[slot]);
+ 			int ms = hs_settle(&fr);
+ 			printf("HEROLTE SCEN: launch cap %u slot %u settle_ms %d frames %u\n", g2_lv[g2_cap], slot, ms, fr);
+ 			hs_home();

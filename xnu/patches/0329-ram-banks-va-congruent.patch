@@ -1,0 +1,25 @@
+diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
+index 947abe7..0c91ee0 100644
+--- a/osfmk/arm64/arm_vm_init.c
++++ b/osfmk/arm64/arm_vm_init.c
+@@ -1618,11 +1618,18 @@ arm_vm_physmap_init(boot_args *args)
+ 
+ 
+ 	sweet_early_mark(7, "rb: extra banks");
+-	/* Compact virtual aperture; never map the physical holes between banks. */
++	/*
++	 * Compact virtual aperture; never map the physical holes between banks.
++	 * HEROLTE: ALLOW_BLOCK, which makes each entry's VA congruent to its PA modulo a twig. Scion's 0 just put a bank
++	 * after the entry before, and that one ends where topOfKernelData's 4 KiB alignment leaves it (the loader pages
++	 * in 4 KiB): every 16 KiB page of the extra banks straddled two VA pages, the page tables carved from one page
++	 * were never seen together again in pmap_tt_deallocate, and pmap_destroy's tt_entry_free assertion failed.
++	 */
+ 	for (uint32_t i = 1; i < hakios_managed_ram.count; ++i) {
+ 		const struct hakios_ram_bank *bank = &hakios_managed_ram.bank[i];
+ 		vm_map_address_t synthetic_va = gVirtBase + (bank->base - gPhysBase);
+-		arm_vm_physmap_slide(temp_ptov_table, synthetic_va, bank->pages << PAGE_SHIFT, AP_RWNA, 0);
++		arm_vm_physmap_slide(temp_ptov_table, synthetic_va, bank->pages << PAGE_SHIFT, AP_RWNA,
++		    ARM64_GRANULE_ALLOW_BLOCK | ARM64_GRANULE_ALLOW_HINT);
+ 	}
+ 
+ 	sweet_early_mark(7, "rb: extra banks mapped");

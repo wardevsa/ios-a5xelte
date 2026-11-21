@@ -1,3 +1,5 @@
+diff --git a/bsd/dev/sweet_usb.c b/bsd/dev/sweet_usb.c
+index c312ca6..6920f56 100644
 --- a/bsd/dev/sweet_usb.c
 +++ b/bsd/dev/sweet_usb.c
 @@ -13,10 +13,19 @@
@@ -20,7 +22,7 @@
  
  #define GCC_PA                  0x00100000
  #define GCC_SIZE                0x00090000
-@@ -56,6 +65,7 @@
+@@ -56,6 +65,7 @@ sweet_usb_probe(void)
  	uint32_t gdscr, cbcr[sizeof(usb_cbcr) / sizeof(usb_cbcr[0])];
  	bool clocks_on = true;
  
@@ -28,7 +30,7 @@
  	PE_parse_boot_argn("sweetusb", &enabled, sizeof(enabled));
  	if (!enabled) {
  		return;
-@@ -91,6 +101,9 @@
+@@ -91,6 +101,9 @@ sweet_usb_probe(void)
  	printf("SWEET USB: DWC3 GEVNTADR 0x%08x%08x GEVNTSIZ 0x%08x GEVNTCOUNT 0x%08x GHWPARAMS0 0x%08x\n",
  	    usb_rd(dwc, 0xc404), usb_rd(dwc, 0xc400), usb_rd(dwc, 0xc408), usb_rd(dwc, 0xc40c),
  	    usb_rd(dwc, 0xc140));
@@ -38,7 +40,7 @@
  	if (cbcr[5] & CBCR_CLK_OFF) {
  		printf("SWEET USB: ahb2phy clock off; QUSB2 PHY not read\n");
  		return;
-@@ -105,4 +118,386 @@
+@@ -105,4 +118,386 @@ sweet_usb_probe(void)
  	printf("SWEET USB: QUSB2 PLL_STATUS 0x%08x PWR_CTRL1 0x%08x PORT_TUNE1 0x%08x TEST1 0x%08x\n",
  	    usb_rd(phy, 0x1a0), usb_rd(phy, 0x210), usb_rd(phy, 0x240), usb_rd(phy, 0x254));
  }

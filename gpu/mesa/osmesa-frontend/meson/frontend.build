@@ -1,0 +1,18 @@
+# Copyright © 2017-2018 Intel Corporation
+# SPDX-License-Identifier: MIT
+# Galaxy S7 port: Meson de src/gallium/frontends/osmesa/ de Mesa 25.0.7, adaptado a Mesa 26.x por gpu/mesa/osmesa-frontend/integrate.py
+
+osmesa_st_c_args = []
+# 25.0.7 añadía -D_GLAPI_NO_EXPORTS en Windows sin glapi compartido; en 26.x `with_shared_glapi` ya no existe y este puerto no es de Windows
+
+libosmesa_st = static_library(
+  'osmesa_st',
+  'osmesa.c',
+  c_args : osmesa_st_c_args,
+  include_directories : [
+    inc_include, inc_src, inc_gallium, inc_gallium_aux, inc_mesa,
+    # osmesa.c hace #include "glapi/glapi.h": en 25.0.7 estaba en src/mapi/; en 26.x está en src/mesa/glapi/glapi/ (osmesa.c no se modifica)
+    include_directories('../../../mesa/glapi'),
+  ],
+  dependencies : [idep_mesautil],
+)

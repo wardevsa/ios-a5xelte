@@ -1,0 +1,51 @@
+herolte: cluster power-down only while the screen is off, heroidle bit 17 (0453)
+
+min83 (E-0299): CPD works and the screen-off current falls from 514 mA to 460 mA, but the UI ran at 2.5 fps against 6.5 without it, plausibly (not measured) the cluster wake-up latency paid by the cores that draw the UI. Bit 17 of heroidle makes the power thread (already tracking the screen: off for more than 3 s) turn the CPD flag on only while the screen is off; with bit 16 alone the 0451 behaviour stays. The HEROLTE IDLE line now says whether CPD is on or off. heroidle only (D-0089).
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2744,6 +2744,7 @@
+ 	 * the whole thing off and says so.
+ 	 */
+ 	uint32_t idle_mask_want = 0;
++	uint32_t cpd_allowed = 0, cpd_screen_only = 0;      /* 0453 */
+ 	bool idle_armed = false;
+ 	uint64_t idle_t0 = 0, idle_ipis = 0;
+ 	PE_parse_boot_argn("heroidle", &idle_mask_want, sizeof(idle_mask_want));
+@@ -2757,7 +2758,15 @@
+ 		extern volatile uint64_t herolte_idle_cap_ticks;
+ 		extern volatile uint32_t herolte_cpd_enable;
+ 		herolte_idle_cap_ticks = ((idle_mask_want >> 8) & 0xffu) * 26000ull;
+-		herolte_cpd_enable = (idle_mask_want >> 16) & 1u;      /* 0451 */
++		/*
++		 * 0453: min83 (E-0299): the cluster power-down works (460 mA with the screen off against 514), but the UI ran at 2.5 fps
++		 * (6.5 without it). heroidle bit 17: allow the cluster power-down only while the screen is off (the same test as the
++		 * governor's: off for more than 3 s), so the Mongoose cores that run the UI never pay the cluster's wake-up cost with the
++		 * screen on. Bit 16 alone keeps the 0451 behaviour (always).
++		 */
++		cpd_allowed = (idle_mask_want >> 16) & 1u;
++		cpd_screen_only = (idle_mask_want >> 17) & 1u;
++		herolte_cpd_enable = cpd_allowed && !cpd_screen_only;
+ 		idle_mask_want &= 0xffu;
+ 	}
+ 	int gov_on = 0;
+@@ -2773,6 +2782,10 @@
+ 			absolutetime_to_nanoseconds(now - off, &ns);
+ 		}
+ 		bool screen_off = off != 0 && ns > 3ull * NSEC_PER_SEC;
++		if (cpd_allowed && cpd_screen_only) {
++			extern volatile uint32_t herolte_cpd_enable;
++			herolte_cpd_enable = screen_off;       /* 0453 */
++		}
+ 		int c[4] = { -1000, -1000, -1000, -1000 };
+ 		top = -1000;
+ 		for (unsigned i = 0; i < 4; i++) {
+@@ -3037,7 +3050,7 @@
+ 					extern volatile uint32_t herolte_cpd_enable;
+ 					extern volatile uint64_t herolte_cpd_set, herolte_cpd_clear;
+ 					extern volatile uint64_t herolte_idle_pmu_cfg[];
+-					if (herolte_cpd_enable && herolte_idle_pmu_cfg[4]) {
++					if (cpd_allowed && herolte_idle_pmu_cfg[4]) {
+ 						volatile uint32_t *b = (volatile uint32_t *)herolte_idle_pmu_cfg[4];
+ 						printf(" CPD set %llu clear %llu seq %#x noncpu %#x l2 %#x", herolte_cpd_set, herolte_cpd_clear, b[0x488 / 4], b[0x404 / 4], b[0x604 / 4]);
+ 					}

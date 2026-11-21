@@ -1,0 +1,178 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+index 5e1f965..6ede4c8 100644
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -96,6 +96,10 @@ herolte_noexec(const char *path)
+ 	if (strcmp(base, "AegirPoster") == 0) {
+ 		return true;
+ 	}
++	/* The calendar widget sat at two full cores for minutes after every boot (wifi-0314w: 200 %), and the phone heated. */
++	if (strcmp(base, "CalendarWidgetExtension") == 0) {
++		return true;
++	}
+ 	if (hgl_noexec[0] == '\0') {
+ 		return false;
+ 	}
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index c243721..65a82e8 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2890,7 +2890,14 @@ hw_history(vm_offset_t elbi)
+ static void
+ hg_wifi_thread(__unused void *arg, __unused wait_result_t wr)
+ {
+-	hg_msleep(45000);
++	/* the firmware is a file of the drop zone (herolte_drop.c installs it before launchd): as soon as it is there */
++	extern bool herolte_wifi_files_ready(void);
++	unsigned waited = 0;
++	while (!herolte_wifi_files_ready() && waited < 120000) {
++		hg_msleep(250);
++		waited += 250;
++	}
++	printf("HEROLTE WIFI: the firmware's files after %u ms\n", waited);
+ 	vm_offset_t pins = ml_io_map(0x14CC0000u, 0x1000), cmu = ml_io_map(0x156e0000u, 0x1000), pmu = ml_io_map(0x105c0000u, 0x1000);
+ 	vm_offset_t elbi = ml_io_map(0x15660000u, 0x1000), phy = ml_io_map(0x15630000u, 0x1000), sys = ml_io_map(0x15601000u, 0x1000);
+ 	vm_offset_t dbi = ml_io_map(0x157a0000u, 0x1000), pcs = ml_io_map(0x156f0000u, 0x1000), cfg = ml_io_map(0x1c000000u, 0x1000);
+@@ -3014,8 +3021,9 @@ herolte_gpu_probe(void)
+ 	uint32_t twrp = 0;
+ 
+ 	PE_parse_boot_argn("herogpu_flush", &hg_flush_mode, sizeof(hg_flush_mode));
+-	int wifi = 0;
+-	if (PE_parse_boot_argn("herowifi", &wifi, sizeof(wifi)) && wifi &&
++	int wifi = 1;                                           /* herowifi=0: no Wi-Fi */
++	PE_parse_boot_argn("herowifi", &wifi, sizeof(wifi));
++	if (wifi &&
+ 	    kernel_thread_start(hg_wifi_thread, NULL, &thread) == KERN_SUCCESS) {
+ 		thread_deallocate(thread);
+ 	}
+diff --git a/bsd/dev/herolte_wifi.c b/bsd/dev/herolte_wifi.c
+index 6f47e90..fee06e2 100644
+--- a/bsd/dev/herolte_wifi.c
++++ b/bsd/dev/herolte_wifi.c
+@@ -36,6 +36,7 @@ extern void SweetNetworkStackStart(void);       /* iokit/Kernel/arm/SweetNetwork
+ extern void SweetIOKitDaemonStandIn(void);
+ void herolte_wifi_firmware(vm_offset_t cfg);
+ void herolte_wifi_early(void);
++bool herolte_wifi_files_ready(void);
+ 
+ #define HW_BAR0_PA      0x1c100000u
+ #define HW_BAR2_PA      0x1c400000u
+@@ -324,6 +325,7 @@ hw_console(uint32_t console, uint32_t *done)
+ #define WLC_GET_BSSID   23
+ #define WLC_SET_SSID    26
+ #define WLC_DISASSOC    52
++#define WLC_SET_PM      86
+ #define WLC_GET_RSSI    127
+ #define WLC_GET_VAR     262
+ #define WLC_SET_VAR     263
+@@ -1628,6 +1630,9 @@ hw_sta_join(const struct hakios_sta_join *what)
+ 		if (hw_en0) {
+ 			hakios_net_link_state(true);
+ 		}
++		/* PM_FAST, as Android leaves it: the radio sleeps between beacons when nothing moves */
++		uint32_t pm = 2;
++		printf("HEROLTE WIFI: power save: %d\n", hw_ioctl(WLC_SET_PM, NULL, &pm, 4, NULL, 0));
+ 	} else {
+ 		error = hw_mic_bad >= 2 ? EAUTH : ETIMEDOUT;
+ 		printf("HEROLTE WIFI: not connected after %llu ms: link %d, keys %d, join %d, wrong MICs %u\n", ns / 1000000, hw_link, hw_keyed,
+@@ -1696,6 +1701,7 @@ static void
+ hw_service(__unused void *arg, __unused wait_result_t wr)
+ {
+ 	uint64_t down_since = 0;
++	unsigned quiet = 0;
+ 	for (;;) {
+ 		bool lost = false;
+ 		lck_mtx_lock(&hw_lock);
+@@ -1737,11 +1743,14 @@ hw_service(__unused void *arg, __unused wait_result_t wr)
+ 			}
+ 		}
+ 		bool moving = hw_rx_frames + hw_tx_next != before || hw_txq_out != hw_txq_in;
++		bool settled = hw_phase == HAKIOS_STA_JOINED || hw_phase == HAKIOS_STA_IDLE || hw_phase == HAKIOS_STA_OFF;
++		quiet = moving ? 0 : quiet + 1;
+ 		lck_mtx_unlock(&hw_lock);
+ 		if (lost) {
+ 			hakios_sta_lost(ECONNRESET);
+ 		}
+-		IOSleep(moving ? 1 : 5);
++		/* 1 ms while frames move, 5 for a second after, then 20: the chip's PCIe reads cost the CPU too */
++		IOSleep(moving ? 1 : quiet < 200 || !settled ? 5 : 20);
+ 	}
+ }
+ 
+@@ -2083,19 +2092,20 @@ hakios_wifi_tell(const char *format, ...)
+ }
+ 
+ /*
+- * herowifi=1, before launchd (bsd_init.c): en0 and the registry entries iOS looks for, made at once with the link down;
+- * wifid and configd look for them as they start, once, and the radio comes up behind them some 45 s later
+- * (herolte_gpu.c). As on apollo (xnu 0129, 0131): IONetworkStack for configd's interface namer, and the IOKit daemon's
++ * Wi-Fi (on unless herowifi=0), before launchd (bsd_init.c): en0 and the registry entries iOS looks for, made at once with
++ * the link down; wifid and configd look for them as they start, once, and the radio comes up behind them as soon as its
++ * firmware's files are there (herolte_gpu.c). As on apollo (xnu 0129, 0131): IONetworkStack for configd's interface namer, and the IOKit daemon's
+  * arrival stood in for so that the registry goes quiet (herowifiquiet=0 leaves that out).
+  */
+ void
+ herolte_wifi_early(void)
+ {
+-	uint32_t wifi = 0, quiet = 1;
++	uint32_t wifi = 1, quiet = 1;                         /* herowifi=0: no Wi-Fi */
+ 	DTEntry node;
+ 	void const *prop = NULL;
+ 	unsigned int size = 0;
+-	if (!PE_parse_boot_argn("herowifi", &wifi, sizeof(wifi)) || !wifi) {
++	PE_parse_boot_argn("herowifi", &wifi, sizeof(wifi));
++	if (!wifi) {
+ 		return;
+ 	}
+ 	PE_parse_boot_argn("herowifiquiet", &quiet, sizeof(quiet));
+@@ -2116,4 +2126,15 @@ herolte_wifi_early(void)
+ 	hw_en0 = hakios_net_attach(&hw_net_link);
+ 	printf("HEROLTE WIFI: en0 %s, its address %s; the radio comes later\n", hw_en0 ? "made" : "NOT MADE",
+ 	    adt ? "the ADT's mac-address-wifi0" : "a random one");
++}
++/* The firmware's files are in place (hg_wifi_thread waits for them). Before the root is mounted there is nothing to look in. */
++bool
++herolte_wifi_files_ready(void)
++{
++	vnode_t vp = NULLVP;
++	if (rootvnode == NULLVP || vnode_lookup("/private/var/herolte/wifi/fw.bin", 0, &vp, vfs_context_kernel()) != 0) {
++		return false;
++	}
++	vnode_put(vp);
++	return true;
+ }
+\ No newline at end of file
+diff --git a/bsd/kern/kern_mman.c b/bsd/kern/kern_mman.c
+index 56f3d58..a583ee4 100644
+--- a/bsd/kern/kern_mman.c
++++ b/bsd/kern/kern_mman.c
+@@ -435,6 +435,29 @@ mmap(proc_t p, struct mmap_args *uap, user_addr_t *retval)
+ 			return EINVAL;
+ 		}
+ #endif /* MAC */
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		/*
++		 * No JIT on the S7 (boot-arg herojit=1 allows it). WebKit's CSS selector JIT made WebContent jump to address 0
++		 * from Document::resolveStyle on every page, and Safari started it again and again (wifi-0314w: 56 launches,
++		 * sig 11, pc 0, lr in the JIT region). Refused as for an app without dynamic-codesigning, JavaScriptCore and
++		 * WebCore run their interpreters only.
++		 */
++		if (flags & MAP_JIT) {
++			extern boolean_t PE_parse_boot_argn(const char *arg_string, void *arg_ptr, int max_arg);
++			static int herojit = -1;
++			static unsigned herojit_said;
++			if (herojit < 0) {
++				herojit = 0;
++				(void)PE_parse_boot_argn("herojit", &herojit, sizeof(herojit));
++			}
++			if (!herojit) {
++				if (herojit_said++ < 8) {
++					printf("HEROLTE JIT: %s[%d] asks for JIT memory: refused (herojit=0)\n", p->p_comm, proc_getpid(p));
++				}
++				return EINVAL;
++			}
++		}
++#endif
+ 
+ 		/*
+ 		 * Mapping blank space is trivial.  Use positive fds as the alias

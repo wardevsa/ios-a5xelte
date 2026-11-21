@@ -1,0 +1,133 @@
+herolte: breadcrumbs of a core waking from CPU_SUSPEND (0440)
+
+min69: cpu 7 entered deep idle, the 2 ms virtual timer did not wake it, and PSCI CPU_ON on it returned 0 (it was OFF); it still never reached cpu_idle_exit. 0440 finds where it dies: MMU-off stores in start.s (sweet_secondary_entry: context id and CurrentEL; reset_vector: the reset handler found for the core; start_cpu: the CPU data address) to the trampoline page (slot 0x100 + 64 * (Aff0 + 8 * (Aff1 & 1)), cleared by the power thread before the test), and a cleaned counter in arm_init_idle_cpu. The watchdog prints them with the CPU_ON result. heroidle only (D-0089).
+
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -122,6 +122,32 @@
+ 	.align	7
+ 	b		.
+ 
++
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++/*
++ * 0440: breadcrumbs of a core that wakes from PSCI CPU_SUSPEND (min68/min69: CPU_ON returned 0, so it was OFF, and it never
++ * reached cpu_idle_exit). MMU off, plain stores to the CPU_ON trampoline's page (0x8fffe000, written to by nothing else):
++ * slot = 0x100 + 64 * (Aff0 + 8 * (Aff1 & 1)), qword idx. idx0 = the context id at the entry, idx1 = the reset handler found
++ * for the core (reset_vector), idx2 = the CPU data physical address at start_cpu, idx3 = CurrentEL at the entry. The power
++ * thread clears the slot of the core under test and reads it back. Clobbers x16 and x17 only.
++ */
++.macro HEROLTE_CRUMB idx, val
++	mrs		x16, MPIDR_EL1
++	and		x17, x16, #0xff
++	ubfx	x16, x16, #8, #8
++	and		x16, x16, #1
++	lsl		x16, x16, #3
++	add		x17, x17, x16
++	lsl		x17, x17, #6
++	mov		x16, #0xe000
++	movk	x16, #0x8fff, lsl #16
++	add		x16, x16, x17
++	add		x16, x16, #0x100
++	str		\val, [x16, #(8 * \idx)]
++	dsb		sy
++.endmacro
++#endif
++
+ 	.align	7
+ 	.globl EXT(reset_vector)
+ LEXT(reset_vector)
+@@ -165,6 +191,9 @@
+ 	adrp	x20, EXT(const_boot_args)@page
+ 	add		x20, x20, EXT(const_boot_args)@pageoff
+ 	ldr		x0, [x21, CPU_RESET_HANDLER]		// Call CPU reset handler
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	HEROLTE_CRUMB 1, x0
++#endif
+ 	cbz		x0, Lskip_cpu_reset_handler
+ 
+ 	// Validate that our handler is one of the two expected handlers
+@@ -288,6 +317,11 @@
+ 	.align 2
+ 	.globl EXT(sweet_secondary_entry)
+ LEXT(sweet_secondary_entry)
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	HEROLTE_CRUMB 0, x0
++	mrs		x2, CurrentEL
++	HEROLTE_CRUMB 3, x2
++#endif
+ 	msr		DAIFSet, #0xf
+ 	mrs		x1, CurrentEL
+ 	cmp		x1, #0x4
+@@ -348,6 +382,9 @@
+ 
+ 	.align 2
+ start_cpu:
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	HEROLTE_CRUMB 2, x21
++#endif
+ #if defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR)
+ 	// This is done right away in reset vector for pre-KTRR devices
+ 	// Set low reset vector now that we are in the KTRR-free zone
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -492,6 +492,7 @@
+ volatile uint32_t herolte_idle_mask;
+ volatile uint64_t herolte_idle_entry_pa;
+ volatile uint64_t herolte_idle_enter[MAX_CPUS], herolte_idle_resume[MAX_CPUS], herolte_idle_since[MAX_CPUS];
++volatile uint64_t herolte_idle_arm[MAX_CPUS];        /* 0440: arm_init_idle_cpu reached (MMU on) */
+ 
+ static bool
+ herolte_idle_suspend(cpu_data_t *cdp)
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -869,6 +869,15 @@
+ arm_init_idle_cpu(
+ 	cpu_data_t      *cpu_data_ptr)
+ {
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	{
++		/* 0440: a breadcrumb for the deep-idle test, cleaned to memory so that another core sees it even if this one is not coherent yet. */
++		extern volatile uint64_t herolte_idle_arm[];
++		volatile uint64_t *slot = &herolte_idle_arm[cpu_data_ptr->cpu_number];
++		*slot += 1;
++		__asm__ volatile ("dc civac, %0\n\tdsb sy" : : "r"(slot) : "memory");
++	}
++#endif
+ #if __ARM_PAN_AVAILABLE__
+ 	__builtin_arm_wsr("pan", 1);
+ #endif
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2758,6 +2758,16 @@
+ 				idle_armed = true;
+ 				vm_offset_t tr = ml_io_map(0x8fffe000u, 0x1000);
+ 				if (tr && ((volatile uint32_t *)tr)[0] == 0x58000050u && ((volatile uint32_t *)tr)[1] == 0xd61f0200u) {
++					/* 0440: clear the breadcrumb slots (start.s HEROLTE_CRUMB) of the cores under test before they sleep */
++					for (unsigned c = 1; c < 8; c++) {
++						if (idle_mask_want & (1u << c)) {
++							volatile uint64_t *slot = (volatile uint64_t *)(tr + 0x100 + 64 * (c >= 4 ? (c - 4) : (8 + c)));
++							for (unsigned q = 0; q < 8; q++) {
++								slot[q] = 0;
++							}
++						}
++					}
++					__builtin_arm_dsb(0xf);
+ 					herolte_idle_entry_pa = 0x8fffe000ull;
+ 					__builtin_arm_dsb(0xf);      /* DSB SY */
+ 					herolte_idle_mask = idle_mask_want & ~1u;
+@@ -2791,6 +2801,14 @@
+ 						__asm__ volatile ("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : :
+ 						    "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
+ 						printf("HEROLTE IDLE: cpu%u CPU_ON recovery -> %d (0 = it was OFF; -4 ALREADY_ON; -5 ON_PENDING)\n", c, (int)(int32_t)x0);
++						{
++							/* 0440: how far the wake-up got (start.s breadcrumbs: entry context, reset handler, cpu data at start_cpu, EL) */
++							extern volatile uint64_t herolte_idle_arm[];
++							vm_offset_t trp = ml_io_map(0x8fffe000u, 0x1000);
++							volatile uint64_t *slot = trp ? (volatile uint64_t *)(trp + 0x100 + 64 * (c >= 4 ? (c - 4) : (8 + c))) : NULL;
++							printf("HEROLTE IDLE: cpu%u crumbs entry-ctx %#llx handler %#llx start_cpu-cpudata %#llx EL %#llx; arm_init_idle_cpu reached %llu times\n", c,
++							    slot ? slot[0] : 0, slot ? slot[1] : 0, slot ? slot[2] : 0, slot ? slot[3] : 0, herolte_idle_arm[c]);
++						}
+ 					}
+ 				} else if (age > 150ull * NSEC_PER_MSEC) {
+ 					a5xelte_send_ipi(c);

@@ -1,0 +1,61 @@
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index 3c2e832..d56e092 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -74,6 +74,7 @@ extern "C" bool herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, u
+ /* Two panel buffers (herofb2): the Mali draws into the one not shown; the CPU writes only the first, shown first. */
+ extern "C" bool herolte_fb_two_buffers(void);
+ extern "C" void herolte_fb_primary(void);
++extern "C" boolean_t mach_timer_coalescing_enabled;    /* osfmk/kern/timer_call.c, sysctl kern.timer_coalescing_enabled */
+ #endif
+ 
+ enum {
+@@ -321,6 +322,48 @@ AppleCLCD::start(IOService *provider)
+ 		fDecon = no_sync ? 0 : ml_io_map(0x13960000u, 0x1000);
+ #endif
+ 	}
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	{
++		/*
++		 * From Scion's MiniIOMobileFramebuffer (Galaxy S9). CoreAnimation draws when a timer of its own fires
++		 * (CA_FORCE_TIMER=1 here), and with the kernel's timer coalescing on such a timer may fire up to 100 ms late
++		 * for a thread that is not real-time: on the S9 the frames came exactly 100 ms apart. Off (sweetfb_tcoal=1
++		 * leaves it on). And IOMFBDisplayRefresh, which this driver never published: told 120 Hz (sweetfb_cahz=N, 0
++		 * leaves it out) CoreAnimation starts each frame on an 8.3 ms tick and has more of the 16.7 ms of a refresh
++		 * for its render thread and the GPU; on the S9 it cut the refreshes missed while a finger moved from 16-25 to
++		 * 3-9 in some 100 frames. Intervals in 2^-32 s, MachTime in ticks.
++		 */
++		int keep = 0;
++		PE_parse_boot_argn("sweetfb_tcoal", &keep, sizeof(keep));
++		if (!keep && mach_timer_coalescing_enabled) {
++			mach_timer_coalescing_enabled = FALSE;
++		}
++		uint32_t told = 120;
++		PE_parse_boot_argn("sweetfb_cahz", &told, sizeof(told));
++		OSDictionary *refresh = (told >= 30 && told <= 240) ? OSDictionary::withCapacity(4) : NULL;
++		if (refresh != NULL) {
++			uint64_t interval = (1ULL << 32) / told, ticks = 0;
++			nanoseconds_to_absolutetime(NSEC_PER_SEC / told, &ticks);
++			static const char *const keys[] = { "displayMinRefreshInterval", "displayMaxRefreshInterval", "displayRefreshStep" };
++			for (unsigned k = 0; k < 3; k++) {
++				OSNumber *n = OSNumber::withNumber(interval, 64);
++				if (n != NULL) {
++					refresh->setObject(keys[k], n);
++					n->release();
++				}
++			}
++			OSNumber *t = OSNumber::withNumber(ticks, 64);
++			if (t != NULL) {
++				refresh->setObject("displayRefreshStepMachTime", t);
++				t->release();
++			}
++			setProperty("IOMFBDisplayRefresh", refresh);
++			refresh->release();
++		}
++		IOLog("HEROLTE FB: timer coalescing %s; CoreAnimation told %u Hz\n", mach_timer_coalescing_enabled ? "on" : "off",
++		    refresh != NULL ? told : 0);
++	}
++#endif
+ 	uint32_t hz = 10;
+ #if defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 	/* A5's 1080x1920 panel copies 8.29 MB per full frame. Keep the

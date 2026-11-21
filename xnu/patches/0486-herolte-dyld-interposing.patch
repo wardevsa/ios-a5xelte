@@ -1,0 +1,23 @@
+herolte: dyld may interpose in the processes that get libheroapp (AMFI bit 6) (0486)
+
+E-0357: S7GE Lab's gl* calls do not reach the EAGL bridge although libheroapp (inserted) carries dyld interposing tuples for every OpenGLES entry point (E-0356): heroeagl.log shows Mesa alive (Mali-T880 Panfrost) and the application's bound renderbuffer 0. dyld's own check (disassembled /usr/lib/dyld, AMFI flags bit 6) only honours __DATA,__interpose when AMFI answers with that bit, and the answer was 0x23 (bits 0, 1, 5). The answer for every process that gets an inserted library now includes bit 6.
+
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -43,6 +43,7 @@
+ #define AMFI_DYLD_OUTPUT_ALLOW_AT_PATH                  (1ull << 0)
+ #define AMFI_DYLD_OUTPUT_ALLOW_PATH_VARS                (1ull << 1)
+ #define AMFI_DYLD_OUTPUT_ALLOW_PRINT_VARS               (1ull << 4)
++#define AMFI_DYLD_OUTPUT_ALLOW_INTERPOSING              (1ull << 6)
+ #define AMFI_DYLD_OUTPUT_ALLOW_FAILED_LIBRARY_INSERTION (1ull << 5)
+ 
+ static int hgl_mode = -1;
+@@ -81,7 +82,7 @@
+ 		strict = strict || hgl_strict_pids[i] == proc_selfpid();
+ 	}
+ 	return AMFI_DYLD_OUTPUT_ALLOW_AT_PATH | AMFI_DYLD_OUTPUT_ALLOW_PATH_VARS |
+-	       (strict ? 0 : AMFI_DYLD_OUTPUT_ALLOW_FAILED_LIBRARY_INSERTION) | (dyld_print ? AMFI_DYLD_OUTPUT_ALLOW_PRINT_VARS : 0);
++	       (strict ? 0 : AMFI_DYLD_OUTPUT_ALLOW_FAILED_LIBRARY_INSERTION) | (dyld_print ? AMFI_DYLD_OUTPUT_ALLOW_PRINT_VARS : 0) | AMFI_DYLD_OUTPUT_ALLOW_INTERPOSING;
+ }
+ 
+ /*

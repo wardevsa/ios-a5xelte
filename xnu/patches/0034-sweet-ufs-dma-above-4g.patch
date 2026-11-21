@@ -1,6 +1,8 @@
+diff --git a/bsd/dev/sweet_ufs.c b/bsd/dev/sweet_ufs.c
+index a9441d4..8591fb2 100644
 --- a/bsd/dev/sweet_ufs.c
 +++ b/bsd/dev/sweet_ufs.c
-@@ -42,6 +42,7 @@
+@@ -42,6 +42,7 @@ extern ppnum_t pmap_find_phys(pmap_t pmap, addr64_t va);
  /* osfmk/arm/machine_routines.h, not exported to the BSD layer */
  extern vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
  
@@ -8,7 +10,7 @@
  #define REG_IS          0x20
  #define REG_IE          0x24
  #define REG_HCS         0x30
-@@ -54,6 +55,7 @@
+@@ -54,6 +55,7 @@ extern vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
  
  #define HCS_DP          (1u << 0)
  #define HCS_UTRLRDY     (1u << 1)
@@ -16,7 +18,7 @@
  
  #define UFS_BLOCK       4096u
  #define BOUNCE_SIZE     (1u << 20)
-@@ -305,6 +307,12 @@
+@@ -305,6 +307,12 @@ ufs_take_over_host(void)
  		printf("SWEET UFS: requests outstanding from the bootloader\n");
  		return EBUSY;
  	}
@@ -29,7 +31,7 @@
  	ufs_wr(REG_IE, 0);                      /* polled operation */
  	ufs_wr(REG_IS, ufs_rd(REG_IS));
  	ufs_wr(REG_UTRLRSR, 0);
-@@ -580,9 +588,9 @@
+@@ -580,9 +588,9 @@ sweet_ufs_init(void)
  	/* Only now, with the partition bounds known, can writes be allowed. */
  	su.writable = (rw != 0);
  	su.ready = true;

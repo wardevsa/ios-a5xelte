@@ -1,0 +1,46 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 2c02291..6876a77 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -538,6 +538,33 @@ hg_power_cycle(void)
+ 	return true;
+ }
+ 
++/*
++ * The domain cycle alone does not clear them, and they appear only above the
++ * bootloader's rate after minutes of work, at the voltage it left for 260 MHz.
++ * Back to that rate: if the jobs come back, the clock is too much for the voltage.
++ */
++static void
++hg_clock_down(void)
++{
++	static vm_offset_t top;
++
++	if (!top) {
++		top = ml_io_map(0x10570000u, 0x1000);
++	}
++	if (!top) {
++		return;
++	}
++	uint32_t old = hg_rd(top, 0x1e0);
++	hg_wr(top, 0x1e0, (old & ~(0x3ffu << 16)) | (160u << 16));
++	bool locked = false;
++	for (unsigned i = 0; i < 1000 && !locked; i++) {
++		delay(10);
++		locked = (hg_rd(top, 0x1e0) >> 29) & 1;
++	}
++	printf("HEROLTE GPU: clock down to 260 MHz after read faults: G3D_PLL %#x -> %#x, %s\n", old, hg_rd(top, 0x1e0),
++	    locked ? "locked" : "NOT locked");
++}
++
+ static void
+ hg_recover(const char *what)
+ {
+@@ -572,6 +599,7 @@ hg_recover(const char *what)
+ 	}
+ 	if (read_fault && hg_read_faults == 8) {
+ 		hg_power_cycle();
++		hg_clock_down();
+ 	}
+ 	hg_wr(hg_gpu, 0x024, 0xffffffffu);                      /* GPU_IRQ_CLEAR */
+ 	hg_wr(hg_gpu, 0x030, 1);                                /* GPU_COMMAND SOFT_RESET */

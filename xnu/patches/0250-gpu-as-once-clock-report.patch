@@ -1,0 +1,114 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 11b49ba..6a7e6ba 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -289,9 +289,13 @@ hg_zero(vm_offset_t va, size_t bytes)
+  * panel at HG_PANEL_VA (8 level-3 tables of 2 MiB each), and src_n pages
+  * of an iOS surface at HG_SRC_VA.
+  */
++/* AS0 is programmed (hg_run); cleared by hg_tables and hg_recover. */
++static bool hg_as_ok;
++
+ static void
+ hg_tables(bool panel, const uint64_t *src, unsigned src_n)
+ {
++	hg_as_ok = false;
+ 	hg_zero(hg_mem, HG_TEST_BYTES);
+ 	volatile uint64_t *l0 = (volatile uint64_t *)hg_mem;
+ 	volatile uint64_t *l1 = (volatile uint64_t *)(hg_mem + 0x1000);
+@@ -355,6 +359,42 @@ hg_quirks(void)
+ 	hg_wr(hg_gpu, 0xf00, 0x3fu << 3);                               /* JM_JOB_THROTTLE_LIMIT */
+ }
+ 
++/*
++ * The GPU clock, read only (nothing here changes it): G3D_PLL in CMU_TOP and
++ * the G3D muxes and divider in CMU_G3D (Samsung's S5E8890 pwrcal, cmusfr.h),
++ * and the rate measured with the GPU's cycle counter over 20 ms. Samsung's
++ * DVFS runs the G3D between 88 and 650 MHz and raises the voltage with the
++ * clock; we set neither, so the GPU runs at what the bootloader left.
++ */
++static uint64_t hg_us_since(uint64_t start);
++
++static void
++hg_clock_report(void)
++{
++	vm_offset_t top = ml_io_map(0x10570000u, 0x1000);
++	vm_offset_t g3d = ml_io_map(0x14aa0000u, 0x1000);
++	if (top && g3d) {
++		uint32_t con0 = hg_rd(top, 0x1e0);
++		uint32_t m = (con0 >> 16) & 0x3ff, p = (con0 >> 8) & 0x3f, s = con0 & 0x7;
++		uint64_t pll_khz = p ? 26000ull * m / ((uint64_t)p << s) : 0;
++		printf("HEROLTE GPU: clock: G3D_PLL con0=%#x con1=%#x (%s, M %u P %u S %u -> %llu MHz) "
++		    "top mux=%#x | g3d mux_pll_user=%#x mux_bus_user=%#x mux_g3d=%#x div_aclk=%#x\n",
++		    con0, hg_rd(top, 0x1e4), (con0 >> 31) ? "on" : "off", m, p, s, pll_khz / 1000,
++		    hg_rd(top, 0x21c), hg_rd(g3d, 0x200), hg_rd(g3d, 0x204), hg_rd(g3d, 0x20c),
++		    hg_rd(g3d, 0x400));
++	}
++	hg_wr(hg_gpu, 0x030, 5);                                /* GPU_COMMAND CYCLE_COUNT_START */
++	delay(100);
++	uint64_t c0 = hg_rd(hg_gpu, 0x090) | ((uint64_t)hg_rd(hg_gpu, 0x094) << 32);
++	uint64_t t0 = mach_absolute_time();
++	delay(20000);
++	uint64_t c1 = hg_rd(hg_gpu, 0x090) | ((uint64_t)hg_rd(hg_gpu, 0x094) << 32);
++	uint64_t us = hg_us_since(t0);
++	hg_wr(hg_gpu, 0x030, 6);                                /* CYCLE_COUNT_STOP */
++	printf("HEROLTE GPU: clock: %llu GPU cycles in %llu us -> %llu MHz\n",
++	    c1 - c0, us, us ? (c1 - c0) / us : 0);
++}
++
+ /*
+  * After a job that faulted or never finished: hard-stop whatever is still
+  * on a slot (as kbase does), and if a slot stays ACTIVE, soft-reset the GPU
+@@ -377,6 +417,7 @@ hg_recover(const char *what)
+ 	}
+ 	hg_wr(hg_gpu, JOB_IRQ_CLEAR, 0xffffffffu);
+ 	hg_wr(hg_gpu, MMU_IRQ_CLEAR, 0xffffffffu);
++	hg_as_ok = false;                       /* re-UPDATE AS0 after a fault */
+ 	if ((hg_rd(hg_gpu, JS_BASE(0) + 0x24) & 0xff) != 0x08 &&
+ 	    (hg_rd(hg_gpu, JS_BASE(1) + 0x24) & 0xff) != 0x08) {
+ 		return;
+@@ -408,18 +449,24 @@ hg_run(unsigned js, const char *what)
+ 	}
+ 	hg_wr(hg_gpu, MMU_IRQ_CLEAR, 0xffffffffu);
+ 	hg_wr(hg_gpu, JOB_IRQ_CLEAR, 0xffffffffu);
+-	uint64_t transtab = HG_TEST_PA | 0x7;
+-	hg_wr(hg_gpu, AS0 + 0x00, (uint32_t)transtab);
+-	hg_wr(hg_gpu, AS0 + 0x04, (uint32_t)(transtab >> 32));
+-	hg_wr(hg_gpu, AS0 + 0x08, 0x888d88);
+-	hg_wr(hg_gpu, AS0 + 0x0c, 0);
+-	hg_wr(hg_gpu, AS0 + 0x18, 1);           /* AS_COMMAND_UPDATE */
+-	for (unsigned i = 0; i < 10000 && (hg_rd(hg_gpu, AS0 + 0x28) & 1); i++) {
+-		delay(10);
+-	}
+-	if (hg_rd(hg_gpu, AS0 + 0x28) & 1) {
+-		printf("HEROLTE GPU: %s: MMU update timeout\n", what);
+-		return false;
++	/* AS0 keeps its configuration: program it once, again after page
++	 * tables are rebuilt or the GPU recovered (an UPDATE per job cost
++	 * backboardd ~57 MMU round trips a frame). */
++	if (!hg_as_ok) {
++		uint64_t transtab = HG_TEST_PA | 0x7;
++		hg_wr(hg_gpu, AS0 + 0x00, (uint32_t)transtab);
++		hg_wr(hg_gpu, AS0 + 0x04, (uint32_t)(transtab >> 32));
++		hg_wr(hg_gpu, AS0 + 0x08, 0x888d88);
++		hg_wr(hg_gpu, AS0 + 0x0c, 0);
++		hg_wr(hg_gpu, AS0 + 0x18, 1);           /* AS_COMMAND_UPDATE */
++		for (unsigned i = 0; i < 10000 && (hg_rd(hg_gpu, AS0 + 0x28) & 1); i++) {
++			delay(10);
++		}
++		if (hg_rd(hg_gpu, AS0 + 0x28) & 1) {
++			printf("HEROLTE GPU: %s: MMU update timeout\n", what);
++			return false;
++		}
++		hg_as_ok = true;
+ 	}
+ 	/*
+ 	 * Clients write their job chains through write-combined mappings; let
+@@ -1128,6 +1175,7 @@ hg_bringup(void)
+ 		return false;
+ 	}
+ 	hg_quirks();
++	hg_clock_report();
+ 	printf("HEROLTE GPU: config jm=%#x shader=%#x tiler=%#x l2_mmu=%#x\n",
+ 	    hg_rd(hg_gpu, 0xf00), hg_rd(hg_gpu, 0xf04), hg_rd(hg_gpu, 0xf08), hg_rd(hg_gpu, 0xf0c));
+ 

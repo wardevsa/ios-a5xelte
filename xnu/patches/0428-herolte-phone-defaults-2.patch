@@ -1,0 +1,48 @@
+herolte: the phone's known-good switches become defaults, second batch (0428)
+
+min37 needs 597 of the 607 characters of the boot line. herohalt=1 (halt to recovery, restart normal), herogl=1 (the GL shim in backboardd), herosb=1 and sweettop=1 (TOP/TOPMEM lines) have been on since min33-min36 and only restate what this phone needs. They are now the defaults (herohalt=0, herogl=0, herosb=0, sweettop=0 give the old behaviour); the explicit arguments still win. Frees 41 characters for heroaudio=3 and later switches.
+
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -133,14 +133,14 @@
+ 		return -1;
+ 	}
+ 	if (hgl_mode < 0) {
+-		hgl_mode = 0;
++		hgl_mode = 1;           /* 0428: the GL shim in backboardd is on by default (herogl=0 turns it off) */
+ 		PE_parse_boot_argn("herogl", &hgl_mode, sizeof(hgl_mode));
+ 	}
+ 	/*
+ 	 * boot-arg herosb=1: libherosb.dylib in SpringBoard shows the picture of the drop zone behind the home screen,
+ 	 * as PosterBoard has no posters here. Its first two launches only, as with the shim.
+ 	 */
+-	int sb = 0;
++	int sb = 1;             /* 0428: on by default (herosb=0 turns it off) */
+ 	PE_parse_boot_argn("herosb", &sb, sizeof(sb));
+ 	if (sb && path != NULL && strcmp(path, HGL_SB_TARGET) == 0 && max >= 1 && hgl_sb_launches < HGL_MAX_LAUNCHES) {
+ 		vnode_t sbvp = NULLVP;
+--- a/bsd/dev/sweet_sample.c
++++ b/bsd/dev/sweet_sample.c
+@@ -280,8 +280,9 @@
+ 	if (kernel_thread_start(sweet_sample_thread, NULL, &thread) == KERN_SUCCESS) {
+ 		thread_deallocate(thread);
+ 	}
+-	int top = 0;
+-	if (PE_parse_boot_argn("sweettop", &top, sizeof(top)) && top &&
++	int top = 1;            /* 0428: the TOP/TOPMEM lines are on by default (sweettop=0 turns them off) */
++	(void)PE_parse_boot_argn("sweettop", &top, sizeof(top));
++	if (top &&
+ 	    kernel_thread_start(sweet_top_thread, NULL, &thread) == KERN_SUCCESS) {
+ 		thread_deallocate(thread);
+ 	}
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3774,7 +3774,7 @@
+ void
+ herolte_halt_restart(unsigned int type)
+ {
+-	uint32_t mode = 0;
++	uint32_t mode = 1;      /* 0428: halt goes to recovery, restart is normal, by default (herohalt=0 gives the old behaviour) */
+ 	PE_parse_boot_argn("herohalt", &mode, sizeof(mode));
+ 	if (mode == 0 || panic_active()) {
+ 		return;

@@ -1,6 +1,8 @@
+diff --git a/bsd/dev/mem.c b/bsd/dev/mem.c
+index c64e636..291a546 100644
 --- a/bsd/dev/mem.c
 +++ b/bsd/dev/mem.c
-@@ -153,6 +153,44 @@
+@@ -153,6 +153,44 @@ mmioctl(dev_t dev, u_long cmd, __unused caddr_t data,
  	return 0;
  }
  
@@ -45,7 +47,7 @@
  int
  mmrw(dev_t dev, struct uio *uio, enum uio_rw rw)
  {
-@@ -216,6 +254,22 @@
+@@ -216,6 +254,22 @@ mmrw(dev_t dev, struct uio *uio, enum uio_rw rw)
  			if (rw == UIO_READ) {
  				return 0;
  			}

@@ -1,0 +1,119 @@
+diff --git a/bsd/dev/sweet_sample.c b/bsd/dev/sweet_sample.c
+index 96844ba..97613a3 100644
+--- a/bsd/dev/sweet_sample.c
++++ b/bsd/dev/sweet_sample.c
+@@ -17,8 +17,11 @@
+ #include <sys/systm.h>
+ #include <sys/proc.h>
+ #include <sys/proc_internal.h>
++#include <mach/task.h>
++#include <mach/task_info.h>
+ #include <kern/task.h>
+ #include <kern/thread.h>
++#include <kern/clock.h>
+ #include <pexpert/pexpert.h>
+ 
+ extern task_t proc_task(proc_t);
+@@ -79,6 +82,90 @@ sweet_sample_thread(__unused void *arg, __unused wait_result_t wr)
+ 	}
+ }
+ 
++/*
++ * boot-arg sweettop=1: every 5 s, the processes that used the most CPU in
++ * that interval ("TOP 5s: SpringBoard 92% backboardd 40% ..."; 100% is one
++ * core, the S7 has 8). With the GPU path backboardd was idle 71% of the
++ * time while a frame still took ~100 ms: is it waiting for the GPU or for
++ * the apps that draw their layers with the CPU?
++ */
++#define SWEET_TOP_PROCS 512
++static struct { int pid; uint64_t abs; char name[20]; uint64_t delta; } sweet_top[SWEET_TOP_PROCS];
++static unsigned sweet_top_n;
++static uint64_t sweet_top_gen;
++
++static int
++sweet_top_proc(proc_t p, __unused void *arg)
++{
++	task_t task = proc_task(p);
++	if (task == TASK_NULL) {
++		return PROC_RETURNED;
++	}
++	task_absolutetime_info_data_t ti;
++	mach_msg_type_number_t count = TASK_ABSOLUTETIME_INFO_COUNT;
++	if (task_info(task, TASK_ABSOLUTETIME_INFO, (task_info_t)&ti, &count) != KERN_SUCCESS) {
++		return PROC_RETURNED;
++	}
++	uint64_t abs = ti.total_user + ti.total_system + ti.threads_user + ti.threads_system;
++	int pid = proc_pid(p);
++	unsigned i = 0;
++	while (i < sweet_top_n && sweet_top[i].pid != pid) {
++		i++;
++	}
++	if (i == sweet_top_n) {
++		if (sweet_top_n == SWEET_TOP_PROCS) {
++			return PROC_RETURNED;
++		}
++		sweet_top_n++;
++		sweet_top[i].pid = pid;
++		sweet_top[i].abs = abs;         /* first sight: no delta yet */
++		proc_name(pid, sweet_top[i].name, sizeof(sweet_top[i].name));
++	}
++	sweet_top[i].delta = abs > sweet_top[i].abs ? abs - sweet_top[i].abs : 0;
++	sweet_top[i].abs = abs;
++	return PROC_RETURNED;
++}
++
++static void
++sweet_top_thread(__unused void *arg, __unused wait_result_t wr)
++{
++	static int chan;
++	for (;;) {
++		(void)tsleep(&chan, PZERO, "sweettop", 5 * hz);
++		for (unsigned i = 0; i < sweet_top_n; i++) {
++			sweet_top[i].delta = 0;
++		}
++		proc_iterate(PROC_ALLPROCLIST, sweet_top_proc, NULL, NULL, NULL);
++		if (sweet_top_gen++ == 0) {
++			continue;               /* the first pass only takes the baseline */
++		}
++		char line[400];
++		int len = snprintf(line, sizeof(line), "TOP 5s:");
++		uint64_t total = 0;
++		for (unsigned i = 0; i < sweet_top_n; i++) {
++			total += sweet_top[i].delta;
++		}
++		for (int k = 0; k < 10 && len < (int)sizeof(line) - 40; k++) {
++			unsigned best = SWEET_TOP_PROCS;
++			for (unsigned i = 0; i < sweet_top_n; i++) {
++				if (sweet_top[i].delta && (best == SWEET_TOP_PROCS || sweet_top[i].delta > sweet_top[best].delta)) {
++					best = i;
++				}
++			}
++			if (best == SWEET_TOP_PROCS) {
++				break;
++			}
++			uint64_t ns = 0;
++			absolutetime_to_nanoseconds(sweet_top[best].delta, &ns);
++			len += snprintf(line + len, sizeof(line) - len, " %s %llu%%", sweet_top[best].name, ns / 50000000ull);
++			sweet_top[best].delta = 0;
++		}
++		uint64_t tns = 0;
++		absolutetime_to_nanoseconds(total, &tns);
++		printf("%s | all %llu%% of 800%%\n", line, tns / 50000000ull);
++	}
++}
++
+ void
+ sweet_sample_start(void)
+ {
+@@ -86,6 +173,11 @@ sweet_sample_start(void)
+ 	if (kernel_thread_start(sweet_sample_thread, NULL, &thread) == KERN_SUCCESS) {
+ 		thread_deallocate(thread);
+ 	}
++	int top = 0;
++	if (PE_parse_boot_argn("sweettop", &top, sizeof(top)) && top &&
++	    kernel_thread_start(sweet_top_thread, NULL, &thread) == KERN_SUCCESS) {
++		thread_deallocate(thread);
++	}
+ }
+ 
+ #endif /* ARM64_BOARD_CONFIG_SWEET || ARM64_BOARD_CONFIG_HEROLTE */

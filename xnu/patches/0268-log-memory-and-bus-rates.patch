@@ -1,0 +1,28 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 1ef54af..f5c671d 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -1961,6 +1961,23 @@ hg_thread(void *arg, __unused wait_result_t wr)
+ 		uint8_t out = 0;
+ 		bool read = herolte_apm_pmic_read(0x26, &out);
+ 		printf("HEROLTE GPU: PMIC G3D out reg 0x26 = %#x (%s)\n", out, read ? "read" : "read failed");
++		/* Samsung raises memory and bus with the GPU, and nothing here does: what are they at? Nothing is written. */
++		static const struct {
++			uint32_t pa, first, last;
++			const char *name;
++		} plls[] = {
++			{ 0x10570000u, 0x100, 0x1e0, "CMU_TOP" },
++			{ 0x10850000u, 0x100, 0x140, "CMU_MIF0" },
++		};
++		for (unsigned i = 0; i < sizeof(plls) / sizeof(plls[0]); i++) {
++			vm_offset_t cmu = ml_io_map(plls[i].pa, 0x1000);
++			for (uint32_t off = plls[i].first; cmu && off <= plls[i].last; off += 0x20) {
++				uint32_t con0 = hg_rd(cmu, off);
++				uint32_t m = (con0 >> 16) & 0x3ff, p = (con0 >> 8) & 0x3f, s = con0 & 0x7;
++				printf("HEROLTE GPU: %s +%#x con0 %#x: M %u P %u S %u -> %u MHz\n", plls[i].name, off, con0, m, p, s,
++				    p ? 26 * m / (p << s) : 0);
++			}
++		}
+ 	}
+ 	if (mode >= 2) {
+ 		hg_pmic_dump();

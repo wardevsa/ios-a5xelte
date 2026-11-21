@@ -1,0 +1,89 @@
+herolte: bench compares the governor with a fixed rate in one boot (0474)
+
+min105 and min107 (E-0326, E-0328): 1976 MHz is the best cap on three boots, but every measurement ran under governor v2 with a cap, never against a fixed rate. heroscenc digits above 5 now mean FIXED (the governor holds the cap instead of following the load): 8 = fixed 1976. The defaults need no argument: four rounds, paging and spotlight, caps 38 = governed 1976 against fixed 1976, alternating order. Fixed runs are labelled paging_fixed and spotlight_fixed. heroscen only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2799,6 +2799,8 @@
+ static volatile uint32_t g2_hot_c = 60;
+ static const uint32_t g2_lv[] = { 728, 1352, 1664, 1976, 2288 };
+ #define G2_N (sizeof(g2_lv) / sizeof(g2_lv[0]))
++/* 0474: fixed mode for the bench: the governor holds the cap instead of following the load, to compare the governor with a fixed rate in one boot */
++static volatile bool g2_fixed;
+ static volatile unsigned g2_cap = (unsigned)(sizeof(g2_lv) / sizeof(g2_lv[0])) - 1;   /* highest level the governor may use (0468: the scenario bench changes it) */
+ static volatile uint64_t g2_stat_trans, g2_stat_sat, g2_stat_samples;
+ /* 0468: exported for the scenario bench: frames presented, their spacing (ms buckets <20 <40 <70 <120 <250 >=250) and the battery current while discharging */
+@@ -2936,6 +2938,9 @@
+ 			if (touch && want == 0 && lv == 0) {
+ 				want = 2;
+ 			}
++			if (g2_fixed) {
++				want = cap;
++			}
+ 			if (want > cap) {
+ 				want = cap;                            /* the bench's cap (also pulls the cluster down when the cap drops) */
+ 			}
+@@ -3136,7 +3141,7 @@
+ hs_thread(__unused void *arg, __unused wait_result_t wr)
+ {
+ 	static const char *const names[] = { "paging", "spotlight", "idle", "launch" };
+-	uint32_t settle = 0, rounds = 3, mask = 0xB, capsarg = 432, digits[4] = { 0 }, ncap = 0;
++	uint32_t settle = 0, rounds = 4, mask = 3, capsarg = 38, digits[4] = { 0 }, ncap = 0;
+ 	extern volatile uint64_t herolte_screen_off_at;
+ 	extern volatile int herolte_fg_temp_dc;
+ 	PE_parse_boot_argn("heroscen", &settle, sizeof(settle));
+@@ -3145,7 +3150,8 @@
+ 	}
+ 	/* 0471: the bench is configured from the boot line, with defaults that need no argument: heroscenr = rounds (3), heroscens = scenario
+ 	 * mask (bit 0 paging, 1 spotlight, 2 idle, 3 launch; default 11 = paging, spotlight, launch), heroscenc = caps as level digits
+-	 * (4 = 2288, 3 = 1976, 2 = 1664, 1 = 1352; default 432). Round r rotates the list by r, so with three caps each one meets each position. */
++	 * (4 = 2288, 3 = 1976, 2 = 1664, 1 = 1352; 0474: add 5 for FIXED, the governor holding the cap: 8 = fixed 1976). Round r rotates the list by r.
++	 * 0474 defaults (no argument needed): 4 rounds, paging and spotlight, caps 38 = governed 1976 against fixed 1976. */
+ 	PE_parse_boot_argn("heroscenr", &rounds, sizeof(rounds));
+ 	PE_parse_boot_argn("heroscens", &mask, sizeof(mask));
+ 	PE_parse_boot_argn("heroscenc", &capsarg, sizeof(capsarg));
+@@ -3156,7 +3162,8 @@
+ 		uint32_t x = digits[a]; digits[a] = digits[b]; digits[b] = x;      /* the digits were taken from the end */
+ 	}
+ 	for (unsigned a = 0; a < ncap; a++) {
+-		if (digits[a] < 1 || digits[a] >= G2_N) {
++		uint32_t lvl_d = digits[a] > 5 ? digits[a] - 5 : digits[a];
++		if (digits[a] == 5 || digits[a] > 9 || lvl_d < 1 || lvl_d >= G2_N) {
+ 			ncap = 0;
+ 		}
+ 	}
+@@ -3196,7 +3203,8 @@
+ 	}
+ 	for (unsigned r = 0; r < rounds; r++) {
+ 		for (unsigned k = 0; k < ncap; k++) {
+-			unsigned lvl = digits[(k + r) % ncap];
++			unsigned dg = (unsigned)digits[(k + r) % ncap], lvl = dg > 5 ? dg - 5 : dg;
++			g2_fixed = dg > 5;
+ 			g2_cap = lvl;
+ 			hg_msleep(2500);
+ 			for (unsigned s = 0; s < 4; s++) {
+@@ -3206,6 +3214,7 @@
+ 				if (herolte_screen_off_at != 0) {
+ 					printf("HEROLTE SCEN: screen off, bench stops\n");
+ 					g2_cap = (unsigned)G2_N - 1;
++					g2_fixed = false;
+ 					return;
+ 				}
+ 				hs_home();
+@@ -3222,7 +3231,7 @@
+ 				absolutetime_to_nanoseconds(mach_absolute_time() - t0, &ns);
+ 				uint64_t pn = herolte_pwr_n - pn0;
+ 				printf("HEROLTE SCEN: end round %u cap %u MHz scen %s dur_ms %llu mA_mean %llu mA_n %llu frames %llu gaps %llu %llu %llu %llu %llu %llu temp_dc %d changes %llu saturated %llu of %llu\n",
+-				    r, g2_lv[lvl], names[s], ns / 1000000, pn ? (herolte_pwr_sum - ps0) / pn : 0, pn, herolte_fb_presented - fp0,
++				    r, g2_lv[lvl], s == 0 && g2_fixed ? "paging_fixed" : s == 1 && g2_fixed ? "spotlight_fixed" : s == 3 && g2_fixed ? "launch_fixed" : names[s], ns / 1000000, pn ? (herolte_pwr_sum - ps0) / pn : 0, pn, herolte_fb_presented - fp0,
+ 				    herolte_fb_gap_hist[0] - h0[0], herolte_fb_gap_hist[1] - h0[1], herolte_fb_gap_hist[2] - h0[2], herolte_fb_gap_hist[3] - h0[3], herolte_fb_gap_hist[4] - h0[4],
+ 				    herolte_fb_gap_hist[5] - h0[5], herolte_fg_temp_dc, g2_stat_trans - tr0, g2_stat_sat - sa0, g2_stat_samples - sm0);
+ 				hg_msleep(1500);
+@@ -3230,6 +3239,7 @@
+ 		}
+ 	}
+ 	g2_cap = (unsigned)G2_N - 1;
++	g2_fixed = false;
+ 	printf("HEROLTE SCEN: bench finished\n");
+ }
+ 

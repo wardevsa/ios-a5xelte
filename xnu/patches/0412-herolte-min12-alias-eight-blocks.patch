@@ -1,0 +1,35 @@
+diag(min11 fix): map the whole framebuffer in the early alias (8 x 2 MiB blocks)
+
+min11 printed (read from the screen): TCR=0x00000022a5192519 (TG0=0, TG1=2: 4 KiB granule; T0SZ=T1SZ=25), L1e=0x3800000882569003 (valid table), L2e=0x00600000e2a00605 (2 MiB block at PA 0xe2a00000, AttrIndx 1, AF), PAR=0x44000000e2a00000 (F=0, Normal-NC). The alias is valid but only 2 MiB long: this kernel uses 4 KiB translation granules (L2 block = 2 MiB), not the donor's 16 KiB / 32 MiB. The 14.7 MB framebuffer needs A5XELTE_FB_BLOCKS (8) blocks; the AT test passed on the first block, then the probe store at row 1500 (8.6 MB in) took a translation fault, which reached vm_fault with no current thread and panicked on the second fault.
+
+--- a/osfmk/arm64/arm_vm_init.c	2026-11-14 18:24:38.958659571 +0100
++++ b/osfmk/arm64/arm_vm_init.c	2026-11-14 18:24:38.975859362 +0100
+@@ -1876,16 +1876,21 @@
+ 	assert(va + ARM_TT_L2_SIZE <= gVirtBase);
+ 	/* min8 fix: without ARM_LARGE_MEMORY nothing else creates the L1 entry for VM_MIN_KERNEL_ADDRESS (the donor's physmap
+ 	 * did), so allocate its L2 table here; init_ptpages leaves an existing entry alone. */
+-	init_ptpages(cpu_tte, va, va + ARM_TT_L2_SIZE, TRUE, ARM_DYNAMIC_TABLE_XN | ARM_TTE_TABLE_AP(ARM_TTE_TABLE_AP_USER_NA));
++	init_ptpages(cpu_tte, va, va + (A5XELTE_FB_BLOCKS * ARM_TT_L2_SIZE), TRUE, ARM_DYNAMIC_TABLE_XN | ARM_TTE_TABLE_AP(ARM_TTE_TABLE_AP_USER_NA));
+ 	tt_entry_t l1 = cpu_tte[(va & ARM_TT_L1_INDEX_MASK) >> ARM_TT_L1_SHIFT];
+ 	assert((l1 & (ARM_TTE_VALID | ARM_TTE_TYPE_MASK)) == (ARM_TTE_VALID | ARM_TTE_TYPE_TABLE));
+ 	tt_entry_t *l2 = (tt_entry_t *)phystokv(l1 & ARM_TTE_TABLE_MASK);
+-	tt_entry_t *slot = &l2[(va & ARM_TT_L2_INDEX_MASK) >> ARM_TT_L2_SHIFT];
+-	assert(*slot == ARM_TTE_EMPTY);
+-	*slot = (uint64_t)A5_EARLY_FB_BLOCK_PA | ARM_TTE_VALID | ARM_TTE_TYPE_BLOCK |
+-	    ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY) |
+-	    ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_WRITECOMB) |
+-	    ARM_TTE_BLOCK_AF | ARM_TTE_BLOCK_PNX | ARM_TTE_BLOCK_NX;
++	/* min11 fix: this kernel translates with a 4 KiB granule (TCR TG0/TG1 = 4 KiB, T0SZ = T1SZ = 25), so an L2 block is
++	 * 2 MiB, not the donor's 32 MiB: the 14.7 MB scanout buffer needs A5XELTE_FB_BLOCKS (8) consecutive blocks. The first
++	 * version mapped only one, so any draw below row ~364 (and the AT-checked probe at row 1500) took a translation fault. */
++	for (unsigned int k = 0; k < A5XELTE_FB_BLOCKS; k++) {
++		tt_entry_t *slot = &l2[((va & ARM_TT_L2_INDEX_MASK) >> ARM_TT_L2_SHIFT) + k];
++		assert(*slot == ARM_TTE_EMPTY);
++		*slot = ((uint64_t)A5_EARLY_FB_BLOCK_PA + (uint64_t)k * ARM_TT_L2_SIZE) | ARM_TTE_VALID | ARM_TTE_TYPE_BLOCK |
++		    ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY) |
++		    ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_WRITECOMB) |
++		    ARM_TTE_BLOCK_AF | ARM_TTE_BLOCK_PNX | ARM_TTE_BLOCK_NX;
++	}
+ 	__asm__ volatile ("dsb ishst" ::: "memory");
+ }
+ #endif

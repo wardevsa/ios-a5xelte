@@ -1,0 +1,63 @@
+diag: the TOP lines also say how much of each process's CPU time is spent inside the kernel (0360)
+
+min35 (E-0256): backboardd shows 128 % of a core on average and up to 615 %, yet in 809 thread samples (every 2 s) only 13 were outside the kernel's wait calls: the sampler reads the saved context of a thread, which is stale for one that is running, so it cannot profile CPU-bound threads. TOP lines gain a system-time field (' name 128% s90'): if most of backboardd's time is system time it is spent in traps and IOKit calls (the HeroGPU submit polls for the job's end), not in drawing code. sweet_sample.c only; the report tool parses the first number as before.
+
+--- a/bsd/dev/sweet_sample.c
++++ b/bsd/dev/sweet_sample.c
+@@ -96,7 +96,7 @@
+  * the apps that draw their layers with the CPU?
+  */
+ #define SWEET_TOP_PROCS 512
+-static struct { int pid; uint64_t abs; char name[20]; uint64_t delta; } sweet_top[SWEET_TOP_PROCS];
++static struct { int pid; uint64_t abs; char name[20]; uint64_t delta; uint64_t sabs; uint64_t sdelta; } sweet_top[SWEET_TOP_PROCS];
+ static unsigned sweet_top_n;
+ static uint64_t sweet_top_gen;
+ 
+@@ -149,6 +149,7 @@
+ 		return PROC_RETURNED;
+ 	}
+ 	uint64_t abs = ti.total_user + ti.total_system + ti.threads_user + ti.threads_system;
++	uint64_t sys = ti.total_system + ti.threads_system;     /* 0360: the part spent in the kernel */
+ 	int pid = proc_pid(p);
+ 	unsigned i = 0;
+ 	while (i < sweet_top_n && sweet_top[i].pid != pid) {
+@@ -161,6 +162,7 @@
+ 		sweet_top_n++;
+ 		sweet_top[i].pid = pid;
+ 		sweet_top[i].abs = abs;         /* first sight: no delta yet */
++		sweet_top[i].sabs = sys;
+ 		proc_name(pid, sweet_top[i].name, sizeof(sweet_top[i].name));
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ 		sweet_top_cap(task, sweet_top[i].name);
+@@ -168,6 +170,8 @@
+ 	}
+ 	sweet_top[i].delta = abs > sweet_top[i].abs ? abs - sweet_top[i].abs : 0;
+ 	sweet_top[i].abs = abs;
++	sweet_top[i].sdelta = sys > sweet_top[i].sabs ? sys - sweet_top[i].sabs : 0;
++	sweet_top[i].sabs = sys;
+ 	return PROC_RETURNED;
+ }
+ 
+@@ -179,6 +183,7 @@
+ 		(void)tsleep(&chan, PZERO, "sweettop", 5 * hz);
+ 		for (unsigned i = 0; i < sweet_top_n; i++) {
+ 			sweet_top[i].delta = 0;
++			sweet_top[i].sdelta = 0;
+ 		}
+ 		proc_iterate(PROC_ALLPROCLIST, sweet_top_proc, NULL, NULL, NULL);
+ 		if (sweet_top_gen++ == 0) {
+@@ -200,9 +205,12 @@
+ 			if (best == SWEET_TOP_PROCS) {
+ 				break;
+ 			}
+-			uint64_t ns = 0;
++			uint64_t ns = 0, sns = 0;
+ 			absolutetime_to_nanoseconds(sweet_top[best].delta, &ns);
+-			len += snprintf(line + len, sizeof(line) - len, " %s %llu%%", sweet_top[best].name, ns / 50000000ull);
++			absolutetime_to_nanoseconds(sweet_top[best].sdelta, &sns);
++			/* 0360: " name 128% s90" = 128 % of a core, 90 of them inside the kernel (traps, IOKit calls) */
++			len += snprintf(line + len, sizeof(line) - len, " %s %llu%% s%llu", sweet_top[best].name, ns / 50000000ull,
++			    sns / 50000000ull);
+ 			sweet_top[best].delta = 0;
+ 		}
+ 		uint64_t tns = 0;

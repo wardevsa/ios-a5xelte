@@ -1,6 +1,8 @@
+diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+index 95c2429..bb2a2bf 100644
 --- a/bsd/kern/bsd_init.c
 +++ b/bsd/kern/bsd_init.c
-@@ -691,6 +691,12 @@
+@@ -691,6 +691,12 @@ bsd_init(void)
  	bsd_init_kprintf("calling vfsinit\n");
  	vfsinit();
  
@@ -13,6 +15,8 @@
  #if SWEET_HFS
  	/* HFS is built in on SWEET: register it like its kext would, before mounting root. */
  	extern void sweet_hfs_register(void);
+diff --git a/bsd/kern/sweet_amfi.c b/bsd/kern/sweet_amfi.c
+index ac7ae0e..d0336c2 100644
 --- a/bsd/kern/sweet_amfi.c
 +++ b/bsd/kern/sweet_amfi.c
 @@ -5,12 +5,19 @@
@@ -90,7 +94,7 @@
  }
  
  static CEError_t
-@@ -51,10 +84,9 @@
+@@ -51,10 +84,9 @@ sweet_amfi_entitlements_get_transmuted(__unused void *os_entitlements,
  }
  
  static bool
@@ -103,7 +107,7 @@
  }
  
  static bool
-@@ -85,60 +117,100 @@
+@@ -85,60 +117,100 @@ sweet_amfi_adjust_with_monitor(__unused void *os_entitlements,
  	return KERN_NOT_SUPPORTED;
  }
  
@@ -227,7 +231,7 @@
  }
  
  static const amfi_t sweet_amfi = {
-@@ -170,7 +242,52 @@
+@@ -170,7 +242,52 @@ static void
  sweet_amfi_register(void)
  {
  	amfi_interface_register(&sweet_amfi);
@@ -281,13 +285,9 @@
 +	    error ? "NOT registered" : "registered", error);
 +}
  #endif /* ARM64_BOARD_CONFIG_SWEET */
---- a/iokit/conf/files.arm64
-+++ b/iokit/conf/files.arm64
-@@ -10,3 +10,4 @@
- iokit/Kernel/arm/SweetPlatformExpert.cpp                         optional iokitcpp
- 
- iokit/Kernel/arm/SweetCPU.cpp                                    optional iokitcpp
-+iokit/Kernel/arm/SweetEntitlements.cpp                           optional iokitcpp
+diff --git a/iokit/Kernel/arm/SweetEntitlements.cpp b/iokit/Kernel/arm/SweetEntitlements.cpp
+new file mode 100644
+index 0000000..6186541
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetEntitlements.cpp
 @@ -0,0 +1,184 @@
@@ -475,3 +475,12 @@
 +}
 +}
 +#endif /* SWEET */
+diff --git a/iokit/conf/files.arm64 b/iokit/conf/files.arm64
+index 2aec2c0..d4528a3 100644
+--- a/iokit/conf/files.arm64
++++ b/iokit/conf/files.arm64
+@@ -10,3 +10,4 @@ iokit/Kernel/arm/AppleARMSMP.cpp    					optional iokitcpp
+ iokit/Kernel/arm/SweetPlatformExpert.cpp                         optional iokitcpp
+ 
+ iokit/Kernel/arm/SweetCPU.cpp                                    optional iokitcpp
++iokit/Kernel/arm/SweetEntitlements.cpp                           optional iokitcpp

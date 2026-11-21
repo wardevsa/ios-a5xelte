@@ -1,0 +1,36 @@
+herolte: put the PMU local-power bits back on every wake and before any plain WFI (0444)
+
+min73 (0443: no 2 ms timer, 3 ms residency gate): hung at the Apple logo about 25 s after boot, as min67 did. Likely cause: 0441 clears the core's PMU CONFIGURATION bits before CPU_SUSPEND and restored them only when the call returned; after a real power-down and wake they stayed 0, and with the gate the next short idle was a plain WFI, which with CONFIG 0 powers the core down in hardware with no entry and no saved state. 0444: the register is set to 0xf at the start of the idle path of every core of the mask and in cpu_idle_exit(TRUE). heroidle only (D-0089).
+
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -504,6 +504,17 @@
+ 	}
+ 	volatile uint32_t *pcfg = (volatile uint32_t *)herolte_idle_pmu_cfg[c];
+ 	/*
++	 * 0444: min73 hung at the logo. The PMU CONFIGURATION bits are cleared before every CPU_SUSPEND (0441) and were put back only
++	 * when the call RETURNED, never after a real power-down and wake: from then on the register stayed 0, and with the residency
++	 * gate of 0443 the next short idle took the plain WFI below, which with CONFIG 0 powers the core down in hardware, with no entry
++	 * address and no saved state. (min71 and min72 slept on every idle, so no plain WFI ever followed a wake.) So: set to 0xf again
++	 * whenever a core of the mask is about to do anything but the suspend, and on every wake (cpu_idle_exit(TRUE)).
++	 */
++	if ((*pcfg & 0xfu) != 0xfu) {
++		*pcfg = *pcfg | 0xfu;
++		__builtin_arm_dsb(DSB_SY);
++	}
++	/*
+ 	 * 0443: min72 (six cores): every core entered and left deep idle ~60-70 times a second (enter 27382 / resume 23915 in 7
+ 	 * minutes), the UI ran at 3 fps and the screen-off current was the same as with one core: the 2 ms timer of 0439 cut every
+ 	 * sleep short, and short idles are not worth a power cycle. Linux does not go into cpu-sleep unless the next event is farther
+@@ -702,6 +713,11 @@
+ 		if ((unsigned)cpu_data_ptr->cpu_number < MAX_CPUS) {
+ 			herolte_idle_since[cpu_data_ptr->cpu_number] = 0;
+ 			herolte_idle_resume[cpu_data_ptr->cpu_number]++;
++			volatile uint32_t *pcfg = (volatile uint32_t *)herolte_idle_pmu_cfg[cpu_data_ptr->cpu_number];
++			if (pcfg) {
++				*pcfg = *pcfg | 0xfu;      /* 0444: the core is up again: local power on, as exynos_cpu_up */
++				__builtin_arm_dsb(DSB_SY);
++			}
+ 		}
+ #endif
+ 		configure_coresight_registers(cpu_data_ptr);

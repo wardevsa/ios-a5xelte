@@ -1,0 +1,129 @@
+herolte: the panic text goes into the persistent log (0363)
+
+min40-min45 panicked within 10 s of the last 10-second log flush, so the ring never held the text (the screen showed it). herolte_log_panic() appends "HEROLTE PANIC: cpu N caller 0xADDR: <message>" to the console ring and writes the unflushed tail of the ring (at most 256 KiB) plus the header (seq 0x7fff0000) to the log area, polling the UFS command with interrupts off. The mutex is only tried for 200 ms. Needs herolog=1, as before.
+
+--- a/bsd/dev/herolte_ufs.c
++++ b/bsd/dev/herolte_ufs.c
+@@ -634,6 +634,10 @@
+ };
+ 
+ static int herolte_log_chan;
++/* 0430: what the panic hook needs to write the ring tail without the log thread. */
++static volatile uint64_t hl_flushed, hl_first, hl_seq_panic;
++static volatile uint32_t hl_rsize;
++static volatile int hl_in_panic;
+ 
+ static void
+ herolte_log_thread(__unused void *arg, __unused wait_result_t wr)
+@@ -647,6 +651,8 @@
+ 	uint8_t *bounce = (uint8_t *)(su.dma + DMA_BOUNCE);
+ 	printf("HEROLTE LOG: %u KiB ring at partition block %llu\n",
+ 	    rsize >> 10, first - su.first_block);
++	hl_first = first;
++	hl_rsize = rsize;
+ 	for (;;) {
+ 		(void)tsleep(&herolte_log_chan, PZERO, "herolog", hz * 10);
+ 		/* Heartbeat: gaps between these lines show CPU starvation. */
+@@ -692,10 +698,88 @@
+ 			return;
+ 		}
+ 		flushed = total;
++		hl_flushed = total;
+ 	}
+ }
+ 
+ /*
++ * 0430: panic text into the persistent log. The log thread flushes every 10 s, so a panic in between left nothing
++ * (min40-min45: the screen showed the text, the log ended before it). Called from panic_trap_to_debugger with
++ * interrupts off: ufs_scsi then polls. The mutex is only tried (a CPU in the middle of a command owns slot 0 and the
++ * bounce buffer); after 200 ms without it the panic text stays on the screen only.
++ */
++extern int cpu_number(void);
++extern int vsnprintf(char *, size_t, const char *, va_list);
++extern void a5xelte_log_append(const char *c, int size);
++void herolte_log_panic(const char *fmt, va_list *args, unsigned long caller);
++void
++herolte_log_panic(const char *fmt, va_list *args, unsigned long caller)
++{
++	if (hl_in_panic || !hl_rsize || !su.writable) {
++		return;
++	}
++	hl_in_panic = 1;
++	char msg[320];
++	va_list copy;
++	va_copy(copy, *args);
++	int n = vsnprintf(msg, sizeof(msg), fmt, copy);
++	va_end(copy);
++	if (n < 0) {
++		n = 0;
++	}
++	char line[480];
++	int len = snprintf(line, sizeof(line), "\nHEROLTE PANIC: cpu %d caller 0x%lx: %.*s\n", cpu_number(), caller,
++	    n > (int)sizeof(msg) - 1 ? (int)sizeof(msg) - 1 : n, msg);
++	if (len > (int)sizeof(line) - 1) {
++		len = (int)sizeof(line) - 1;
++	}
++	a5xelte_log_append(line, len);
++	const char *ring;
++	uint32_t rsize;
++	uint64_t total;
++	a5xelte_log_snapshot(&ring, &rsize, &total);
++	bool locked = false;
++	for (int i = 0; i < 200 && !(locked = lck_mtx_try_lock(&herolte_ufs_lock)); i++) {
++		delay(1000);
++	}
++	if (!locked) {
++		return;
++	}
++	uint8_t *bounce = (uint8_t *)(su.dma + DMA_BOUNCE);
++	uint64_t from = hl_flushed;
++	if (total - from > (256u << 10)) {
++		from = total - (256u << 10);
++	}
++	uint64_t pos = total - from >= rsize ? total - rsize : from;
++	uint64_t left = total - pos;
++	int error = 0;
++	while (left && !error) {
++		uint32_t blk = (uint32_t)((pos % rsize) / UFS_BLOCK);
++		uint32_t skip = (uint32_t)(pos % UFS_BLOCK);
++		uint32_t c = (uint32_t)MIN((uint64_t)(BOUNCE_SIZE / UFS_BLOCK),
++		    MIN((uint64_t)(rsize / UFS_BLOCK - blk), (left + skip + UFS_BLOCK - 1) / UFS_BLOCK));
++		memcpy(bounce, ring + (size_t)blk * UFS_BLOCK, (size_t)c * UFS_BLOCK);
++		error = ufs_write_blocks(hl_first + 1 + blk, c);
++		uint64_t adv = (uint64_t)c * UFS_BLOCK - skip;
++		pos += adv;
++		left -= MIN(adv, left);
++	}
++	if (!error) {
++		struct herolte_log_header h = {
++			.magic = { 'H', 'E', 'R', 'O', 'L', 'O', 'G', '1' },
++			.version = 1, .size = rsize, .total = total, .seq = 0x7fff0000u,
++		};
++		bzero(bounce, UFS_BLOCK);
++		memcpy(bounce, &h, sizeof(h));
++		error = ufs_write_blocks(hl_first, 1);
++	}
++	if (!error) {
++		(void)ufs_sync_cache();
++	}
++	lck_mtx_unlock(&herolte_ufs_lock);
++}
++
++/*
+  * For bsd/dev/herolte_drop.c: read count blocks of the root partition,
+  * starting `back` blocks before the start of the log area (so back = 1 is
+  * the last block below it), into dst. 0 or an errno.
+--- a/osfmk/kern/debug.c
++++ b/osfmk/kern/debug.c
+@@ -1075,6 +1075,11 @@
+ #if defined(SWEET)
+ 	/* No CPU/thread/debugger state is required for this first panic copy. */
+ 	sweet_early_panic(panic_format_str, panic_args);
++	{
++		/* 0430: the same text into the persistent log (bsd/dev/herolte_ufs.c) */
++		extern void herolte_log_panic(const char *, va_list *, unsigned long);
++		herolte_log_panic(panic_format_str, panic_args, panic_caller);
++	}
+ #endif
+ 
+ #if defined(__x86_64__) && (DEVELOPMENT || DEBUG)

@@ -1,0 +1,70 @@
+herolte: read-only residency per core and the PMU idle-IP words, once a minute (0450)
+
+min78/min79 (E-0294, E-0295): deep idle of cores does not lower the screen-off current (~495 mA with 0, 1 or 6 cores; Linux 25-35 mA). Samsung's Linux gets there by cluster power-down (CPD, non-boot cluster only) and system idle (SICD, entered by a boot-cluster core when every online core is in C2 with an event farther than the residency and the PMU idle-IP words say every non-masked block is idle). 0450 measures the two things the design needs before anything is written: HEROLTE RESIDENCY (busy/idle share of each core in the last minute) and HEROLTE IDLEIP (PMU 0x3e0-0x3ec status and 0x3f0-0x3fc masks). No argument: a line a minute with the other POWER lines. Read only.
+
+--- a/osfmk/kern/processor.c
++++ b/osfmk/kern/processor.c
+@@ -1749,3 +1749,23 @@
+ 	}
+ 	return busy;
+ }
++
++/*
++ * 0450: the busy and idle time of ONE core since boot, in Mach time, for the HEROLTE RESIDENCY line (bsd/dev/herolte_gpu.c).
++ * Read only. recount's idle time includes the interval of an idle that is still going on.
++ */
++void herolte_cpu_times_mach(int cpu, uint64_t *busy, uint64_t *idle);
++void
++herolte_cpu_times_mach(int cpu, uint64_t *busy, uint64_t *idle)
++{
++	*busy = 0;
++	*idle = 0;
++	processor_t p = cpu_to_processor(cpu);
++	if (p != PROCESSOR_NULL) {
++		struct recount_usage usage = { 0 };
++		uint64_t idle_time = 0;
++		recount_processor_usage(&p->pr_recount, &usage, &idle_time);
++		*busy = usage.ru_user_time_mach + usage.ru_system_time_mach;
++		*idle = idle_time;
++	}
++}
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3035,6 +3035,37 @@
+ 			    top, c[0], c[1], c[2], c[3], seen_max, b / 10, (unsigned)(b < 0 ? -b : b) % 10, hc.high ? "up" : "down", off ? "off" : "on");
+ 			seen_max = -1000;
+ 			/*
++			 * 0450: read-only measurements for the system-idle design (docs/S7GE_ENERGIA_SISTEMA_ARQUITECTURA_20261118.md).
++			 * (a) HEROLTE RESIDENCY: per core, busy and idle share of the last minute (recount). (b) HEROLTE IDLEIP: the PMU's
++			 * idle-IP words (PMU 0x3e0-0x3ec: a 0 is a block that is NOT idle) and their masks (0x3f0-0x3fc), which in Samsung's
++			 * Linux (exynos-powermode.c exynos_check_idle_ip_stat) decide whether the system may enter SICD; which bit is which
++			 * block is in the BOOT DTB (the idle-ip property of the power-mode node).
++			 */
++			{
++				extern void herolte_cpu_times_mach(int cpu, uint64_t *busy, uint64_t *idle);
++				static uint64_t prev_busy[8], prev_idle[8];
++				printf("HEROLTE RESIDENCY:");
++				for (int cc = 0; cc < 8; cc++) {
++					uint64_t b, i;
++					herolte_cpu_times_mach(cc, &b, &i);
++					uint64_t db = b - prev_busy[cc], di = i - prev_idle[cc];
++					prev_busy[cc] = b;
++					prev_idle[cc] = i;
++					uint64_t tot = db + di;
++					printf(" cpu%d busy %llu.%llu%% idle %llu.%llu%%", cc, tot ? db * 100 / tot : 0, tot ? (db * 1000 / tot) % 10 : 0,
++					    tot ? di * 100 / tot : 0, tot ? (di * 1000 / tot) % 10 : 0);
++				}
++				printf("\n");
++				static vm_offset_t pmu0;
++				if (!pmu0) {
++					pmu0 = ml_io_map(0x105c0000u, 0x1000);
++				}
++				if (pmu0) {
++					printf("HEROLTE IDLEIP: status %08x %08x %08x %08x mask %08x %08x %08x %08x\n", hg_rd(pmu0, 0x3e0), hg_rd(pmu0, 0x3e4),
++					    hg_rd(pmu0, 0x3e8), hg_rd(pmu0, 0x3ec), hg_rd(pmu0, 0x3f0), hg_rd(pmu0, 0x3f4), hg_rd(pmu0, 0x3f8), hg_rd(pmu0, 0x3fc));
++				}
++			}
++			/*
+ 			 * 0435: which power domains the bootloader left on, and the PMIC's registers (read only), once a minute: the
+ 			 * search for the ~700 mA the phone draws with the screen on and the CPU idle (E-0286). Domain registers of the
+ 			 * BOOT DTB (pd-*@105c4xxx: CONFIG +0, STATUS +4, OPTION +8; on when STATUS & 0xf == 0xf).

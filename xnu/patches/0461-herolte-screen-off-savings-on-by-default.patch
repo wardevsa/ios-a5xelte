@@ -1,0 +1,18 @@
+herolte: the screen-off savings are on by default: DECON stop and domain ladder (0461)
+
+min91/min92c (E-0308, E-0311): with the screen off, stopping the DECON (herodisp=2) and gating the six small domains, audio and G3D (herostep=10) take the current from ~520-535 to ~280 mA, all eight domains come back on every wake, the codec answers across the audio restore and the screen wakes. herodisp and herostep now default to 2 and 10 when the boot line does not carry them; herodisp=0 or herostep=0 turn each off. herodisp has no other effect on this path: its two other readers (the vclk on DISP_PLL, default 1, and an unused step count) behave the same for 1 or 2.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2811,9 +2811,9 @@
+ 	 * restores them (S-Boot sets them up again). One boot thus gives the current with each domain on and then off.
+ 	 */
+ 	uint32_t pd_s = 0;
+-	uint32_t step_s = 0;        /* 0455: herostep=<s> */
++	uint32_t step_s = 10;       /* 0455: herostep=<s>; 0461: on by default (herostep=0 turns it off) */
+ 	unsigned step_i = 0;
+-	uint32_t disp_s = 0;        /* 0456: herodisp=<s> */
++	uint32_t disp_s = 2;        /* 0456: herodisp=<s>; 0461: on by default, one-step mode (herodisp=0 turns it off) */
+ 	unsigned disp_i = 0;
+ 	uint64_t pd_at = 0;
+ 	unsigned pd_i = 0;

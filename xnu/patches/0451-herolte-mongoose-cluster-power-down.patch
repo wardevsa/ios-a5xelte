@@ -1,0 +1,109 @@
+herolte: cluster power-down (CPD) of the Mongoose cluster, heroidle bit 16 (0451)
+
+min78/min79/min80 (E-0294..E-0296): the cores sleep 97-99% of the time and one, three or six of them in CPU_SUSPEND changes nothing (~495 mA): a core in suspend leaves the cluster's L2 and shared logic powered, and cpu4 was never in the mask. Samsung's CPD: the last core of the non-boot cluster to go idle, with every other core of it already in suspend, sets PMU CPUSEQ_OPTION bit 0 (0x2488 + 0x20*cluster) before its own CPU_SUSPEND; the first to wake clears it. 0451 does the same for cpu4-7 (heroidle=<mask 0xf0> | cap<<8 | 1<<16: 91376 = mask 0xf0, 100 ms, CPD) and prints the sequencer bit, the NONCPU and L2 status of the cluster and the set/clear counts in the HEROLTE IDLE line. Whether the monitor flushes the cluster's L2 is unknown: a panic or hang is the stop condition. heroidle only (D-0089).
+
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -494,8 +494,30 @@
+ volatile uint64_t herolte_idle_enter[MAX_CPUS], herolte_idle_resume[MAX_CPUS], herolte_idle_since[MAX_CPUS];
+ volatile uint64_t herolte_idle_arm[MAX_CPUS];        /* 0440: arm_init_idle_cpu reached (MMU on) */
+ volatile uint64_t herolte_idle_cap_ticks;       /* 0449: longest sleep, in 26 MHz ticks (0 = 5 ms); heroidle bits 8-15 are the cap in ms */
+-volatile uint64_t herolte_idle_pop[MAX_CPUS];        /* 0445: the next timer pop of a core when it went to sleep (what the broadcast tick of herolte_gpu.c wakes it for) */
+ volatile uint64_t herolte_idle_pmu_cfg[MAX_CPUS];   /* 0441: VA of each core's PMU CONFIGURATION register (PMU+0x2000+0x80*(Aff1<<2|Aff0)); 0 = not mapped: no deep idle */
++volatile uint32_t herolte_cpd_enable;           /* 0451: heroidle bit 16: cluster power-down of the Mongoose cluster (all of cpu4-7 in the mask) */
++volatile uint32_t herolte_cpd_on;
++volatile uint64_t herolte_cpd_set, herolte_cpd_clear;
++/*
++ * 0451: Samsung's CPD (exynos-powermode.c enter_c2 -> exynos_cpu.cluster_down; exynos-pmu.c exynos_cpu_sequencer_ctrl): the LAST core
++ * of the non-boot cluster to go idle, when every core of the cluster is already in C2 and its next event is at least 3 ms away,
++ * sets bit 0 of PMU CPUSEQ_OPTION (0x2488 + 0x20 * cluster) before its own CPU_SUSPEND; the first core to wake clears it
++ * (wakeup_from_c2 -> cluster_up). Cluster 0 (Aff1 = 0) is the Mongoose cluster; its registers sit at PMU+0x2000+0x488, found
++ * from cpu4's CONFIGURATION register (PMU+0x2000). A core in suspend alone leaves the cluster's L2 and shared logic powered (min78 /
++ * min79: ~495 mA either way), which is the reading of E-0294/E-0295 this tests.
++ */
++static void
++herolte_cpd_release(unsigned c)
++{
++	if (c >= 4 && c < 8 && herolte_cpd_on && herolte_idle_pmu_cfg[4]) {
++		volatile uint32_t *seq = (volatile uint32_t *)(herolte_idle_pmu_cfg[4] + 0x488);
++		*seq = *seq & ~1u;
++		__builtin_arm_dsb(DSB_SY);
++		herolte_cpd_on = 0;
++		herolte_cpd_clear++;
++	}
++}
++volatile uint64_t herolte_idle_pop[MAX_CPUS];        /* 0445: the next timer pop of a core when it went to sleep (what the broadcast tick of herolte_gpu.c wakes it for) */
+ 
+ static bool
+ herolte_idle_suspend(cpu_data_t *cdp)
+@@ -550,6 +572,22 @@
+ 	 * explanations in the comments of 0445 and 0447 (SGIs and XNU's timer do not wake a core) were wrong: they came from a missing
+ 	 * register write, not from the hardware.
+ 	 */
++	if (herolte_cpd_enable && c >= 4 && (herolte_idle_mask & 0xf0u) == 0xf0u && herolte_idle_pmu_cfg[4] && !herolte_cpd_on) {
++		/* 0451: the last of cpu4-7 to idle: every other one is already in suspend (since != 0) */
++		bool others = true;
++		for (unsigned k = 4; k < 8; k++) {
++			if (k != c && herolte_idle_since[k] == 0) {
++				others = false;
++			}
++		}
++		if (others) {
++			volatile uint32_t *seq = (volatile uint32_t *)(herolte_idle_pmu_cfg[4] + 0x488);
++			*seq = *seq | 1u;
++			__builtin_arm_dsb(DSB_SY);
++			herolte_cpd_on = 1;
++			herolte_cpd_set++;
++		}
++	}
+ 	*pcfg = *pcfg & ~0xfu;
+ 	__builtin_arm_dsb(DSB_SY);
+ 	register uint64_t x0 __asm__("x0") = 0xC4000001ULL;     /* CPU_SUSPEND (the DTB's cpu_suspend) */
+@@ -559,6 +597,7 @@
+ 	__asm__ volatile ("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : :
+ 	    "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
+ 	/* Only reached when the call returns: an error, or the core did not power down. */
++	herolte_cpd_release(c);
+ 	timer_resync_deadlines();      /* 0447: XNU's own deadline back in the timer */
+ 	*pcfg = *pcfg | 0xfu;
+ 	__builtin_arm_dsb(DSB_SY);
+@@ -735,6 +774,7 @@
+ 		if ((unsigned)cpu_data_ptr->cpu_number < MAX_CPUS) {
+ 			herolte_idle_since[cpu_data_ptr->cpu_number] = 0;
+ 			herolte_idle_resume[cpu_data_ptr->cpu_number]++;
++			herolte_cpd_release((unsigned)cpu_data_ptr->cpu_number);
+ 			volatile uint32_t *pcfg = (volatile uint32_t *)herolte_idle_pmu_cfg[cpu_data_ptr->cpu_number];
+ 			if (pcfg) {
+ 				*pcfg = *pcfg | 0xfu;      /* 0444: the core is up again: local power on, as exynos_cpu_up */
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2755,7 +2755,9 @@
+ 	 */
+ 	{
+ 		extern volatile uint64_t herolte_idle_cap_ticks;
++		extern volatile uint32_t herolte_cpd_enable;
+ 		herolte_idle_cap_ticks = ((idle_mask_want >> 8) & 0xffu) * 26000ull;
++		herolte_cpd_enable = (idle_mask_want >> 16) & 1u;      /* 0451 */
+ 		idle_mask_want &= 0xffu;
+ 	}
+ 	int gov_on = 0;
+@@ -3029,7 +3031,18 @@
+ 						printf(" cpu%u enter %llu resume %llu", c, herolte_idle_enter[c], herolte_idle_resume[c]);
+ 					}
+ 				}
+-				printf(" wake SGIs %llu\n", idle_ipis);
++				printf(" wake SGIs %llu", idle_ipis);
++				{
++					/* 0451: CPD of the Mongoose cluster: how many times the sequencer bit was set and cleared, and the cluster's NONCPU / L2 status (0xf / 0x7 = powered) */
++					extern volatile uint32_t herolte_cpd_enable;
++					extern volatile uint64_t herolte_cpd_set, herolte_cpd_clear;
++					extern volatile uint64_t herolte_idle_pmu_cfg[];
++					if (herolte_cpd_enable && herolte_idle_pmu_cfg[4]) {
++						volatile uint32_t *b = (volatile uint32_t *)herolte_idle_pmu_cfg[4];
++						printf(" CPD set %llu clear %llu seq %#x noncpu %#x l2 %#x", herolte_cpd_set, herolte_cpd_clear, b[0x488 / 4], b[0x404 / 4], b[0x604 / 4]);
++					}
++				}
++				printf("\n");
+ 			}
+ 			printf("HEROLTE POWER: SoC %d C (big %d, little %d, GPU %d, ISP %d; most %d), battery reg %d.%u C, Mongoose %s, screen %s\n",
+ 			    top, c[0], c[1], c[2], c[3], seen_max, b / 10, (unsigned)(b < 0 ? -b : b) % 10, hc.high ? "up" : "down", off ? "off" : "on");
