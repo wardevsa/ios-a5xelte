@@ -347,4 +347,48 @@ change('setBytes: released at the end of a compute pass', 'hakiosmetal_air.m',
 
 @end''')
 
+# Lifetimes that do not hang on an autorelease pool (boot-18k52: with the pool, 242 small buffers made and 14 reused --
+# the buffers were still not dying, because the command buffers that held them were not). (1) The objects a caller gets
+# from -commandBuffer and the encoder factories go back through objc_autoreleaseReturnValue, as ARC-compiled code returns
+# them: a Swift or ARC caller (MercuryPoster) then takes its reference without the object ever entering a pool its
+# render thread does not drain. (2) Submits are synchronous on this port unless HERO_ASYNC=1 (gpu/mesa/herodrm.c), so
+# when -commit has flushed, the GPU has finished the work: the command buffer lets go of what it recorded there and then
+# (Metal needs it no longer), not when the command buffer itself is freed.
+change('returns: the declaration', 'hakiosmetal_air.m',
+       '#include <pthread.h>   /* B2L (B1L-0109) */\n',
+       '#include <pthread.h>   /* B2L (B1L-0109) */\nextern id objc_autoreleaseReturnValue(id);   /* HEROLTE: libobjc, as ARC returns */\n')
+change('returns: commandBuffer', 'hakiosmetal_air.m',
+       '\treturn [[[HakiosMetalCommandBuffer alloc] initWithHakiosQueue:self] autorelease];\n',
+       '\treturn objc_autoreleaseReturnValue([[HakiosMetalCommandBuffer alloc] initWithHakiosQueue:self]);\n')
+change('returns: computeCommandEncoder', 'hakiosmetal_air.m',
+       '''	return [[[HakiosMetalComputeEncoder alloc] initWithHakiosCommandBuffer:self]
+		   autorelease];''',
+       '''	return objc_autoreleaseReturnValue([[HakiosMetalComputeEncoder alloc] initWithHakiosCommandBuffer:self]);''')
+change('returns: renderCommandEncoder', 'hakiosmetal_air.m',
+       '''	return [[[HakiosMetalRenderEncoder alloc] initWithHakiosCommandBuffer:self
+								    descriptor:descriptor]
+		   autorelease];''',
+       '''	return objc_autoreleaseReturnValue([[HakiosMetalRenderEncoder alloc] initWithHakiosCommandBuffer:self
+								    descriptor:descriptor]);''')
+change('returns: blitCommandEncoder', 'hakiosmetal_air.m',
+       '\treturn [[[HakiosMetalBlitEncoder alloc] initWithCommandBuffer:self] autorelease];\n',
+       '\treturn objc_autoreleaseReturnValue([[HakiosMetalBlitEncoder alloc] initWithCommandBuffer:self]);\n')
+change('work: let go when the synchronous submit returns', 'hakiosmetal_air.m',
+       '''	_status = RW_CB_SCHEDULED;   /* submitted; the fence below is what makes it completed */
+done:''',
+       '''	_status = RW_CB_SCHEDULED;   /* submitted; the fence below is what makes it completed */
+	{   /* HEROLTE: the GPU has finished (synchronous submits): what the work named is needed no longer */
+		static int sync = -1;
+		if (sync < 0) {
+			const char *a = getenv("HERO_ASYNC");
+			sync = !(a && *a == '1');
+		}
+		if (sync) {
+			@synchronized (self) {
+				[_work removeAllObjects];
+			}
+		}
+	}
+done:''')
+
 print('metal-herolte: ' + ', '.join(done))
