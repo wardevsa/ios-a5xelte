@@ -36,6 +36,7 @@ send0(id target, const char *selector)
 static id picture;
 static bool gestures_on;
 static int status_bar_kept, status_bar_asked, status_bar_replaced;
+static const char *provider_name = "_UIStatusBarVisualProvider_Phone";   /* sbmode 3: the iPhone X's, for 375 pt (1125 px) */
 static unsigned rounds;
 
 static void
@@ -76,10 +77,38 @@ dump_view(id view, int depth)
    double alpha = ((double (*)(id, SEL))objc_msgSend)(view, sel_registerName("alpha"));
    herodrm_log("herosb: bar %*s%s frame %.1f,%.1f %.1f x %.1f hidden %d alpha %.2f", depth * 2, "", object_getClassName(view), f.x, f.y, f.w, f.h,
       hidden, alpha);
+   if (strcmp(object_getClassName(view), "_UIStatusBar") == 0) {
+      id provider = send0(view, "visualProvider");
+      herodrm_log("herosb: bar provider of that _UIStatusBar: %s", provider ? object_getClassName(provider) : "(none)");
+   }
    id subs = send0(view, "subviews");
    size_t n = subs ? ((size_t (*)(id, SEL))objc_msgSend)(subs, sel_registerName("count")) : 0;
    for (size_t i = 0; i < n && i < 12; i++)
       dump_view(((id (*)(id, SEL, size_t))objc_msgSend)(subs, sel_registerName("objectAtIndex:"), i), depth + 1);
+}
+
+
+/*
+ * Views that stick out of their window, in window coordinates (E-0348: the lock screen's camera button is partly off the screen with the platform on type 2,
+ * whose layout is the notch phones' while the canvas is 375 x 667 points).
+ */
+static void
+dump_offscreen(id view, id window, rect_t wb, int depth, unsigned *printed)
+{
+   if (!view || depth > 12 || *printed > 60)
+      return;
+   rect_t r = ((rect_t (*)(id, SEL))objc_msgSend)(view, sel_registerName("bounds"));
+   rect_t g = ((rect_t (*)(id, SEL, rect_t, id))objc_msgSend)(view, sel_registerName("convertRect:toView:"), r, nil);
+   BOOL hidden = ((BOOL (*)(id, SEL))objc_msgSend)(view, sel_registerName("isHidden"));
+   bool out = g.x < wb.x - 0.5 || g.y < wb.y - 0.5 || g.x + g.w > wb.x + wb.w + 0.5 || g.y + g.h > wb.y + wb.h + 0.5;
+   if (out && !hidden && g.w > 0 && g.h > 0 && g.w < 400) {
+      herodrm_log("herosb: off %s in %s at %.1f,%.1f %.1f x %.1f (window %.0f x %.0f)", object_getClassName(view), object_getClassName(window), g.x, g.y, g.w, g.h, wb.w, wb.h);
+      (*printed)++;
+   }
+   id subs = send0(view, "subviews");
+   size_t n = subs ? ((size_t (*)(id, SEL))objc_msgSend)(subs, sel_registerName("count")) : 0;
+   for (size_t i = 0; i < n && i < 40; i++)
+      dump_offscreen(((id (*)(id, SEL, size_t))objc_msgSend)(subs, sel_registerName("objectAtIndex:"), i), window, wb, depth + 1, printed);
 }
 
 static void
@@ -110,6 +139,11 @@ look_at_status_bar(id windows, size_t count, unsigned round)
          herodrm_log("herosb: bar round %u window %s bounds %.0f x %.0f safe insets %.1f %.1f %.1f %.1f", round, name, b.w, b.h, s.top, s.left, s.bottom, s.right);
          if (strcmp(name, "SBHomeScreenWindow") != 0 || round == 20)
             dump_view(window, 0);
+      }
+      if (round == 20 && (strstr(name, "CoverSheet") || strcmp(name, "SBHomeScreenWindow") == 0)) {
+         unsigned printed = 0;
+         rect_t wb = ((rect_t (*)(id, SEL))objc_msgSend)(window, sel_registerName("bounds"));
+         dump_offscreen(window, window, wb, 0, &printed);
       }
    }
    if (round == 6) {
@@ -185,7 +219,7 @@ static Class
 phone_takes_it(id self, SEL cmd, id screen, id info)
 {
    status_bar_asked++;
-   return objc_getClass("_UIStatusBarVisualProvider_Phone");
+   return objc_getClass(provider_name);
 }
 
 static void (*set_provider_was)(id, SEL, Class);
@@ -195,7 +229,7 @@ set_provider(id self, SEL cmd, Class provider)
 {
    if (provider == objc_getClass("_UIStatusBarVisualProvider_Fallback")) {
       status_bar_replaced++;
-      provider = objc_getClass("_UIStatusBarVisualProvider_Phone");
+      provider = objc_getClass(provider_name);
    }
    set_provider_was(self, cmd, provider);
 }
@@ -338,7 +372,7 @@ herosb_start(void)
       FILE *mf = fopen(DROP_DIR "sbmode", "r");
       if (mf) {
          int c = fgetc(mf);
-         if (c == '0' || c == '1' || c == '2')
+         if (c >= '0' && c <= '3')
             mode = (char)c;
          fclose(mf);
       }
@@ -351,6 +385,8 @@ herosb_start(void)
             gestures_on = true;
          }
       } else {
+         if (mode == '3')
+            provider_name = "_UIStatusBarVisualProvider_Split1125";
          ask_for_gestures();
          if (mode == '2')
             fix_bar_height();
