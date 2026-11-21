@@ -5619,3 +5619,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Diagnóstico del primer arranque con el Metal de ellos."
+
+[[evidence]]
+id = "E-0381"
+title = "DIAGNÓSTICO DEL CIERRE DE FLAPPY BIRD CON min129 (Director: S7GE Lab 'perfecto', 'Probar Metal' devuelve 'Mali-T880 (Panfrost) (Hakios)'; Flappy Bird cierra al abrir): TRAZA (heroapp-crash.txt, 46 registros de Flappy, todos iguales; el último pid 314): SIGSEGV dirección 0x0 en libc++abi __dynamic_cast (+0x14cb4) <- Jet +0x7590 jet_context_OpenGL::create_program(jet_function*, jet_function*) <- SpriteKit +0xaedbc <- +0xb0e94 <- +0x47e8c <- +0x483c0 <- +0x4ce94 <- Flappy Bird +0xfb44 GameViewController.loadScene <- UIKitCore; registro del kernel: 'CRASH Flappy Bird[314] ... bt ... 0x21fcdd590 0x21fcdd590 0x200251dbc ...' (los mismos marcos); PUNTO EXACTO: create_program hace dynamic_cast de un jet_function NULO: la función anterior (Jet +0x7474, create_function) devuelve NULL cuando su texto fuente es NULL y no llama a ninguna gl*; (E-0369/E-0370/E-0377); LO IMPORTANTE: es la ruta OpenGL de Jet (jet_context_OpenGL), NO la de Metal: ni HeroMetal ni el compilador de AIR intervienen: en el registro del kernel, S7GELab muestra 'hero-metal: bundle loaded in S7GELab (pid 302)', 'asks for a device', 'hakiosmetal[S7GELab]: targetDeviceInfo ...', 'B2L fc: fragment function tri_fragment', MTLCompilerService, mientras que los dos arranques de Flappy Bird del registro (pids 313 y 314) NO tienen NINGUNA línea 'hero-metal' ni 'hakiosmetal', y heroapp.log no tiene ninguna llamada de Flappy a MTLCreateSystemDefaultDevice (libheroapp las anota): SpriteKit eligió OpenGL SIN preguntar a Metal; RESPUESTA A LAS DOS HIPÓTESIS: ni 'SpriteKit pide algo que HeroMetal no cubre' ni 'un shader que el compilador de AIR no maneja': el complemento nunca llega a ser consultado; pistas (cadenas de SpriteKit en la caché local, sin referencias de código halladas): PrefersOpenGL, enableMetal, MetalCompatibility, OpenGLESCompatibility, globalMetalDevice, setGlobalMetalDevice:, precompiledMetalShaderWithFile:, 'com.apple.spritekit.metal'; el Info.plist de Flappy (org.brandonplank.flappybird, 16.0, arm64, CADisableMinimumFrameDuration) NO tiene PrefersOpenGL; metal.allow lleva 'Flappy Bird' (el nombre del proceso coincide con el de libheroapp); CAUSA NO DETERMINADA; ACCIÓN (DROP 49 de 80, sin BOOT): libheroapp de CI 44940041569 que en Flappy Bird anota las claves PrefersOpenGL/enableMetal/MetalCompatibility/OpenGLESCompatibility (defaults e Info.plist) y pide un dispositivo directamente con MTLCreateSystemDefaultDevice (el de Metal, no el desvío) para ver si el complemento acepta a ese proceso; PRUEBA: abrir Flappy Bird una vez; contadores D-0123: BOOT 19 de 80, DROP 49 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n21.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "918ccc22d0874b8da9b9d44a7f3e05558235557e885e7dd87e98f7d4bc8861cf"
+size = 472107
+immutable = true
+note = "Registro del kernel de min129 (scratch)."
