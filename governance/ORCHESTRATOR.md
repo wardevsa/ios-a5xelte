@@ -101,3 +101,42 @@ es más nueva; mi arreglo no cambia el tamaño y el instalado era más reciente.
 edición cayó por error en `install_audio_plugin` y rompió la compilación; lo detectó la CI y lo rehice en la función correcta. Pendiente: otro arranque y
 abrir Flappy una vez. Sugerencia para el orquestador, si ve de nuevo ese código de upstream: su criterio de «instalar» (tamaño y hora) falla con cualquier
 cambio que no varíe el tamaño; conviene decírselo a quien mantiene ese repositorio.
+
+### V.5 Cambio de frente: Flappy aparcado y estado real de funciones (E-0386)
+
+**T-0070 (Flappy Bird / SpriteKit): BLOQUEADA** hasta tener causa raíz confirmada con evidencia. Sin más DROP en ello. Estado: HeroMetal recortaba los nombres con espacio
+(E-0384, confirmado por el código) y `hero-run` no reinstalaba el complemento (E-0385); falta ver un arranque con ambos arreglos; no lo pido.
+
+**Una premisa del briefing que no se cumple:** «verificar qué más funciona del merge upstream (cámara, BT, haptics) en min129 sin tocar BOOT». Esas tres funciones
+viven en los parches de kernel 0339-0345 de upstream, que **no están en min129** (los aparté en E-0379 porque con ellos 62 de nuestros parches dejan de aplicar). Del merge
+solo hay en min129: la pila de Metal (con 0487), el `hero-run` fusionado y las librerías de userland (incluida `libnotefecam`, sin kernel que la sirva). En el registro:
+Bluetooth, cámara y vibración no dan ninguna señal. No es un fallo: no se pueden verificar sin BOOT.
+
+**Estado real (E-0386), resumen:**
+
+| Área | Estado en min129 | Evidencia |
+|---|---|---|
+| Wi-Fi (enlace) | Funciona | conecta en 1937 ms, -46 dBm; 2462 tramas enviadas / 1892 recibidas |
+| Red de las apps (Safari) | No funciona | 32 `connectx() failed necp_set_socket_domain_attributes`; sandbox niega a mDNSResponder/nsurlsessiond/trustd |
+| Audio | Funciona | 24000 tramas, 0 perdidas |
+| Táctil | Funciona | 4179 movimientos, 0 lecturas perdidas |
+| Batería, térmica | Funcionan | 92 %, SoC 33-34 C |
+| Pantalla | Funciona, ritmo variable | 27,8 fps (otro tramo 6,5); VGR0 de upstream apagado (`herovgr=0`) |
+| OpenGL ES de apps | Funciona | triángulo en S7GE Lab (E-0359) |
+| **Metal real (HeroMetal+AIR)** | **Funciona en S7GE Lab** | dispositivo `Mali-T880 (Panfrost) (Hakios)`, 683 cuadros de franja, MSL compilado por el compilador del teléfono |
+| SpriteKit (Flappy) | No funciona, aparcado | T-0070 |
+| Bluetooth, cámara frontal, vibración | No están en min129 | requieren 0339-0345 en el kernel |
+| Memoria | Ajustada | 122 MB libres a los 600 s de uso |
+| Vídeo, YouTube, cámara trasera, módem | No existen | sin motor de decodificación |
+
+**Siguiente hito medible que no depende de Flappy (propuesta, en orden):**
+
+1. **H1: Metal medido, sin BOOT ni parches** (Nivel 2, solo la app de S7GE Lab y DROP). Un banco dentro de S7GE Lab con el Metal real: (a) limpiar la pantalla, (b) un
+   triángulo, (c) 48 triángulos superpuestos, (d) un cuadrado con textura y muestreador, (e) un `compute` que suma dos vectores y se comprueba. Resultado: fotogramas por
+   segundo, milisegundos por envío y suma de comprobación correcta o no, frente a las mismas pruebas por OpenGL ES. Criterio de éxito: las cinco pasan con resultado correcto y
+   se publica la tabla. Aclara también cuánto cuesta el envío síncrono de Metal (hoy GL baja de 119 a 30-44 fps cuando Metal corre a la vez).
+2. **H2: red de Safari** (necesita BOOT, Nivel 3: toca kernel). Causa conocida, sin arreglar: `necp_set_socket_domain_attributes` y la denegación del sandbox. Criterio: Safari
+   carga una página sencilla por Wi-Fi.
+3. **H3: Bluetooth, cámara frontal y vibración** (BOOT y fusión hunk a hunk de 0339-0345, Nivel 3). Criterio: BT lista un dispositivo, la cámara entrega N cuadros, el motor vibra.
+
+Recomiendo H1 ahora (no cuesta BOOT y fija la base de Metal con números), luego H2 por valor de uso, y H3 como proyecto aparte. Espero la decisión de Pioxi.
