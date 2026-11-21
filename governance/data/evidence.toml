@@ -5379,3 +5379,18 @@ sha256 = "777f154ba32e3a8aca11b47f6d974228c0793c5d8257399353ad991f3ca99cd1"
 size = 1157294
 immutable = true
 note = "heroeagl.log (scratch)."
+
+[[evidence]]
+id = "E-0364"
+title = "CAUSA del cierre de Flappy Bird: heroeagl.log (4 intentos): texImageIOSurface source: surface 78 fourcc 42475241 ('BGRA') 878x676 bpr 3520; 'texImageIOSurface target 0xde1 ifmt 0x1908 878x676 fmt 0x80e1 type 0x8367'; 'refused (reason 4)': el puente rechaza type 0x8367 (GL_UNSIGNED_INT_8_8_8_8_REV) porque su tabla de tipos solo conoce UNSIGNED_BYTE, HALF_FLOAT, FLOAT y los empaquetados de 16 bits y 2_10_10_10_REV; SpriteKit/Jet sube sus texturas BGRA con ese tipo y, al recibir NO, llama a err() y aborta; CORRECCIÓN (eagl.m, solo en el puente): type 0x8367 con formato BGRA o RGBA se trata como UNSIGNED_BYTE (los mismos bytes en memoria; el intercambio B/R existente se aplica igual); DROP 36 de 80 (sin BOOT): libheroeagl-app de CI 44922033359; PRUEBA: abrir Flappy Bird: si pasa de ahí, nuevo punto de fallo o juego en pantalla; contadores D-0123: BOOT 18 de 80, DROP 36 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n9-heroeagl.log"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "152cabe0abd643b366ae440b94ec2d782d1db0898bb3142ac707897687b048ab"
+size = 1196269
+immutable = true
+note = "heroeagl.log con los rechazos (scratch)."
