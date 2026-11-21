@@ -8,6 +8,7 @@
 #include <objc/message.h>
 #include <objc/runtime.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -56,6 +57,74 @@ give_picture(id window, bool behind_all)
    herodrm_log("herosb: picture in %s, %.0f x %.0f", object_getClassName(window), bounds.w, bounds.h);
 }
 
+
+/*
+ * min124 (E-0345): the status bar is not visible at the top although libherosb reports gestures 1, two provider hooks, the plain phone provider
+ * asked once and nothing replaced, and the UIStatusBarWindow exists. What the bar's windows hold, the geometry of each view and whether it is
+ * hidden or transparent, is written to the log (rounds 6 and 20), together with the selectors of the status bar classes that mention a provider.
+ */
+typedef struct { double top, left, bottom, right; } insets_t;
+
+static void
+dump_view(id view, int depth)
+{
+   if (!view || depth > 5)
+      return;
+   rect_t f = ((rect_t (*)(id, SEL))objc_msgSend)(view, sel_registerName("frame"));
+   BOOL hidden = ((BOOL (*)(id, SEL))objc_msgSend)(view, sel_registerName("isHidden"));
+   double alpha = ((double (*)(id, SEL))objc_msgSend)(view, sel_registerName("alpha"));
+   herodrm_log("herosb: bar %*s%s frame %.1f,%.1f %.1f x %.1f hidden %d alpha %.2f", depth * 2, "", object_getClassName(view), f.x, f.y, f.w, f.h,
+      hidden, alpha);
+   id subs = send0(view, "subviews");
+   size_t n = subs ? ((size_t (*)(id, SEL))objc_msgSend)(subs, sel_registerName("count")) : 0;
+   for (size_t i = 0; i < n && i < 12; i++)
+      dump_view(((id (*)(id, SEL, size_t))objc_msgSend)(subs, sel_registerName("objectAtIndex:"), i), depth + 1);
+}
+
+static void
+dump_selectors(const char *class_name)
+{
+   Class c = objc_getClass(class_name);
+   for (int meta = 0; c && meta < 2; meta++) {
+      unsigned count = 0;
+      Method *list = class_copyMethodList(meta ? object_getClass((id)c) : c, &count);
+      for (unsigned i = 0; i < count; i++) {
+         const char *s = sel_getName(method_getName(list[i]));
+         if (strcasestr(s, "provider") || strcasestr(s, "hidden") || strcasestr(s, "height") || strcasestr(s, "style") || strcasestr(s, "region"))
+            herodrm_log("herosb: sel %s %s%s", class_name, meta ? "+" : "-", s);
+      }
+      free(list);
+   }
+}
+
+static void
+look_at_status_bar(id windows, size_t count, unsigned round)
+{
+   for (size_t i = 0; i < count; i++) {
+      id window = ((id (*)(id, SEL, size_t))objc_msgSend)(windows, sel_registerName("objectAtIndex:"), i);
+      const char *name = object_getClassName(window);
+      if (strcmp(name, "UIStatusBarWindow") == 0 || strcmp(name, "SBStatusBarReusePoolWindow") == 0 || strcmp(name, "SBHomeScreenWindow") == 0) {
+         rect_t b = ((rect_t (*)(id, SEL))objc_msgSend)(window, sel_registerName("bounds"));
+         insets_t s = ((insets_t (*)(id, SEL))objc_msgSend)(window, sel_registerName("safeAreaInsets"));
+         herodrm_log("herosb: bar round %u window %s bounds %.0f x %.0f safe insets %.1f %.1f %.1f %.1f", round, name, b.w, b.h, s.top, s.left, s.bottom, s.right);
+         if (strcmp(name, "SBHomeScreenWindow") != 0)
+            dump_view(window, 0);
+      }
+   }
+   if (round == 6) {
+      dump_selectors("_UIStatusBar");
+      dump_selectors("UIStatusBar_Modern");
+      unsigned n = 0;
+      Class *all = objc_copyClassList(&n);
+      for (unsigned i = 0; i < n; i++) {
+         const char *cn = class_getName(all[i]);
+         if (strstr(cn, "_UIStatusBarVisualProvider") || strstr(cn, "StatusBarManager"))
+            herodrm_log("herosb: class %s", cn);
+      }
+      free(all);
+   }
+}
+
 static void
 look_at_windows(void *unused)
 {
@@ -73,6 +142,8 @@ look_at_windows(void *unused)
    size_t count = windows ? ((size_t (*)(id, SEL))objc_msgSend)(windows, sel_registerName("count")) : 0;
    if (rounds == 1 || rounds == 6)
       herodrm_log("herosb: round %u, %zu windows, picture %d, gestures %d, status bar hooks %d asked %d replaced %d", rounds, count, picture != nil, gestures_on, status_bar_kept, status_bar_asked, status_bar_replaced);
+   if (windows && (rounds == 6 || rounds == 20))
+      look_at_status_bar(windows, count, rounds);
    for (size_t i = 0; picture && i < count; i++) {
       id window = ((id (*)(id, SEL, size_t))objc_msgSend)(windows, sel_registerName("objectAtIndex:"), i);
       const char *name = object_getClassName(window);
