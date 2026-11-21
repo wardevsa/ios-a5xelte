@@ -53,8 +53,17 @@ allowed(const char *me)
 	if (f == NULL || me == NULL)
 		return false;
 	while (!ok && fgets(line, sizeof(line), f) != NULL) {
-		line[strcspn(line, "\r\n \t#")] = 0;
-		ok = line[0] != 0 && strcmp(line, me) == 0;
+		/*
+		 * E-0384: the name ends at a comment (#) or the end of the line, and only trailing blanks are dropped. It used to end at the first
+		 * space or tab, which cut "Flappy Bird" down to "Flappy": getprogname() (the executable's name, spaces included) never matched,
+		 * the plug-in refused the process without a word, and SpriteKit fell back to OpenGL.
+		 */
+		line[strcspn(line, "\r\n#")] = 0;
+		size_t n = strlen(line);
+		while (n > 0 && (line[n - 1] == ' ' || line[n - 1] == '\t'))
+			line[--n] = 0;
+		const char *name = line + strspn(line, " \t");
+		ok = name[0] != 0 && strcmp(name, me) == 0;
 	}
 	fclose(f);
 	return ok;
