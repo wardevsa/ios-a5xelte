@@ -5634,3 +5634,15 @@ sha256 = "918ccc22d0874b8da9b9d44a7f3e05558235557e885e7dd87e98f7d4bc8861cf"
 size = 472107
 immutable = true
 note = "Registro del kernel de min129 (scratch)."
+
+[[evidence]]
+id = "E-0382"
+title = "SIMBOLIZACIÓN DEL CIERRE DE FLAPPY BIRD (briefing del orquestador, pc 0x1f2d2f198, desliz 0x30718000, backtrace del kernel 0x1be374868 0x10109e37c 0x20221b2f4 0x21fcdd590 0x21fcdd590 0x200251dbc 0x200253e94 0x2001eae8c 0x2001eb3c0 0x2001efe94) contra la caché local de iOS 16.7.16: el pc 0x1c2617198 sin deslizar es libsystem_kernel +0x7198 (__pthread_kill), el lr es libsystem_pthread +0xd5f8 (pthread_kill), 0x1be374868 es libsystem_c +0x1c868 (raise), 0x10109e37c está fuera de la caché (el manejador de cierres de libheroapp) y 0x20221b2f4 es libsystem_platform +0x22f4 (_sigtramp): el PC del registro del kernel NO es el punto de fallo, es el raise() de NUESTRO manejador (libheroapp captura el SIGSEGV, lo anota y lo vuelve a lanzar); el punto real, anotado por libheroapp en heroapp-crash.txt, es SIGSEGV dirección 0x0 en __dynamic_cast (libc++abi +0x14cb4) llamado desde Jet +0x7590 (jet_context_OpenGL::create_program) y los marcos de SpriteKit +0xaedbc, +0xb0e94, +0x47e8c, +0x483c0, +0x4ce94 (0x1cfb39dbc, 0x1cfb3be94, 0x1cfad2e8c, 0x1cfad33c0, 0x1cfad7e94 sin deslizar); consecuencia práctica: el 'far' de la línea del kernel (0x10d7f4000) tampoco es la dirección del fallo original sino la de la pila del manejador; complementa E-0381; contadores D-0123: BOOT 19 de 80, DROP 49 de 80"
+kind = "document"
+path = "governance/ORCHESTRATOR.md"
+location = "git"
+created = "2026-11-21"
+domain = "device"
+level = "L1"
+device = "this-unit"
+note = "Simbolización hecha en local con capstone sobre la caché de iOS 16; el reporte está en la sección V.1."
