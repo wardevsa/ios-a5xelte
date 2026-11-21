@@ -5184,3 +5184,18 @@ sha256 = "80f64a401c7b7a915d5b17efead621898ecf88acfa7d0485e247c2170ca13483"
 size = 617338
 immutable = true
 note = "Imagen min126 8083c944 con libherosb de CI 44899825163 (sbmode 4)."
+
+[[evidence]]
+id = "E-0351"
+title = "S7GE Lab en el teléfono (min127, tercer arranque, base de LaunchServices rehecha: el arranque tardó unos 5 minutos): el Director abre la app y pulsa 'Probar Metal'; EL INFORME de la app (/private/var/tmp/s7ge-lab.txt): iPhone, iOS 16.7.16, pantalla 375.0 x 667.0 pt a 2x, nativa 750 x 1334, margen seguro 44.0 arriba y 29.0 abajo (los márgenes del modo con gestos), 0 fotogramas por segundo, 'GL: EAGLContext(api: .openGLES2) returned nil' y 'Metal: MTLCreateSystemDefaultDevice() = nil'; HALLAZGOS S7GE: (1) Metal NO MUERE, DEVUELVE nil: las apps que comprueban el dispositivo fallan con elegancia, y las que lo suponen (Flappy Bird, señal 6 aborto en el registro) caen; (2) UNA APP NORMAL NO PUEDE CREAR UN CONTEXTO GLES: libheroapp hace que todo -[EAGLContext initWithAPI:] devuelva nil ('no_context', porque la tabla de funciones del renderizador de serie está vacía y salta a 0), y el puente EAGL del proyecto (libheroeagl: EAGLContext sobre OSMesa y Panfrost, con renderbufferStorage:fromDrawable: y presentRenderbuffer: hacia un IOSurface que se pone en layer.contents, gpu/eagl/src/eagl.m) solo se carga en backboardd; (3) la red del Director ya está en el iPhone (la puso en Ajustes, como hizo con 2048.com), no hace falta network.txt; (4) el Wi-Fi arranca: BCM43596, firmware 9.96.17, CLM y dirección MAC leídos (min127); ACCIÓN: libheroapp con DROP_DIR appgl.on (una línea por programa, o 'all'): para esos programas no se instalan los nil y se carga libheroeagl después de OpenGLES; se escribe appgl.on con S7GELab (DROP 25 de 80, sin tocar BOOT); si S7GE Lab dibuja el triángulo, es la primera app de terceros con GLES por el puente; contadores D-0123: BOOT 17 de 80, DROP 25 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min127c-herolog.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "a5aeb748f11468e41b085bdf9e012c520307195fba3208faa26cb908b2bfa3a3"
+size = 408258
+immutable = true
+note = "Imagen min127 61d0c110; informe de la app en /private/var/tmp/s7ge-lab.txt (copia en scratch)."
