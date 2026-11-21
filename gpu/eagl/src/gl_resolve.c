@@ -68,6 +68,20 @@ static void gl_CompileShaderNote(unsigned shader) {
     int ok = 1; gi(shader, 0x8b81, &ok);
     if (!ok && shown++ < 8) { char log[400] = ""; gl(shader, sizeof log, 0, log); gl_note("GL: %s glCompileShader(%u) FAILED: %.400s", getprogname(), shader, log); }
 }
+static const unsigned char *gl_GetStringNote(unsigned name) {
+    static const unsigned char *(*f)(unsigned); static unsigned seen[16]; static int nseen;
+    if (!f) f = (const unsigned char *(*)(unsigned))lookup("glGetString");
+    const unsigned char *s = f(name);
+    int dup = 0;
+    for (int i = 0; i < nseen; i++) if (seen[i] == name) dup = 1;
+    if (!dup && nseen < 16 && notes_wanted()) {
+        seen[nseen++] = name;
+        size_t n = s ? strlen((const char *)s) : 0;
+        if (!s) gl_note("GL: %s glGetString(0x%x) = nil", getprogname(), name);
+        for (size_t o = 0; s && o < n && o < 3000; o += 400) gl_note("GL: %s glGetString(0x%x)[%zu] = %.400s", getprogname(), name, o, (const char *)s + o);
+    }
+    return s;
+}
 static void gl_LinkProgramNote(unsigned program) {
     static void (*f)(unsigned), (*gi)(unsigned, unsigned, int *), (*gl)(unsigned, int, int *, char *); static int shown;
     if (!f) { f = (void (*)(unsigned))lookup("glLinkProgram"); gi = (void (*)(unsigned, unsigned, int *))lookup("glGetProgramiv"); gl = (void (*)(unsigned, int, int *, char *))lookup("glGetProgramInfoLog"); }
@@ -97,7 +111,7 @@ static void gl_FinishFenceAPPLE(GLu fence) { (void)fence; apple_finish(); }
 static const struct { const char *name; void *fn; } apple_fns[] = {
     { "glFinishObjectAPPLE", (void *)gl_FinishObjectAPPLE }, { "glTestObjectAPPLE", (void *)gl_TestObjectAPPLE },
     { "glGenFencesAPPLE", (void *)gl_GenFencesAPPLE }, { "glDeleteFencesAPPLE", (void *)gl_DeleteFencesAPPLE },
-    { "glShaderSource", (void *)gl_ShaderSourceNote }, { "glCompileShader", (void *)gl_CompileShaderNote }, { "glLinkProgram", (void *)gl_LinkProgramNote },
+    { "glGetString", (void *)gl_GetStringNote }, { "glShaderSource", (void *)gl_ShaderSourceNote }, { "glCompileShader", (void *)gl_CompileShaderNote }, { "glLinkProgram", (void *)gl_LinkProgramNote },
     { "glSetFenceAPPLE", (void *)gl_SetFenceAPPLE }, { "glIsFenceAPPLE", (void *)gl_IsFenceAPPLE },
     { "glTestFenceAPPLE", (void *)gl_TestFenceAPPLE }, { "glFinishFenceAPPLE", (void *)gl_FinishFenceAPPLE },
     { 0, 0 } };
