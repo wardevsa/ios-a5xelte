@@ -384,11 +384,76 @@ done:''',
 			sync = !(a && *a == '1');
 		}
 		if (sync) {
+			herolte_look_at_attachments(_work);
 			@synchronized (self) {
 				[_work removeAllObjects];
 			}
 		}
 	}
 done:''')
+# Diagnostic (MercuryPoster's missing shape): what the first command buffers with two or more colour attachments left in
+# each attachment, read back once the synchronous submit has returned -- pixels with anything in them, and each
+# channel's least and greatest value. Says whether fluidity's SDF reaches its RG32Float attachment, and what the second
+# pass makes of it.
+change('diagnostic: attachments read back', 'hakiosmetal_air.m',
+       '@implementation HakiosMetalCommandBuffer {\n',
+       '''/* HEROLTE: the first six command buffers drawing into two or more attachments, each attachment summed up */
+static void
+herolte_look_at_attachments(NSArray *works)
+{
+	static unsigned looked;
+	if (looked >= 6 || mesa.texture_read == NULL)
+		return;
+	HakiosMetalWork *last = nil;
+	for (HakiosMetalWork *w in works)
+		if (w->render != nil && w->colorCount >= 2)
+			last = w;
+	if (last == nil)
+		return;
+	looked++;
+	for (unsigned i = 0; i < last->colorCount; i++) {
+		id t = last->color[i];
+		if (t == nil)
+			continue;
+		unsigned width = (unsigned)[t width], height = (unsigned)[t height], format = (unsigned)[t pixelFormat];
+		unsigned bpp = format == 80 || format == 70 ? 4 : format == 105 || format == 115 ? 8 : format == 125 ? 16 :
+		               format == 55 ? 4 : 0;
+		if (bpp == 0 || width == 0 || height == 0)
+			continue;
+		uint8_t *px = malloc((size_t)width * height * bpp);
+		char why[256] = { 0 };
+		unsigned origin[3] = { 0, 0, 0 }, size[3] = { width, height, 1 };
+		if (px == NULL || mesa.texture_read([t mesaTexture], 0, 0, origin, size, px, 0, why, sizeof(why)) != 0) {
+			rw_print("HEROLTE LOOK %u: attachment %u (%ux%u format %u) not read: %s\\n", looked, i, width, height,
+			         format, why);
+			free(px);
+			continue;
+		}
+		unsigned long nonzero = 0;
+		float lo[4] = { 1e30f, 1e30f, 1e30f, 1e30f }, hi[4] = { -1e30f, -1e30f, -1e30f, -1e30f };
+		unsigned comps = format == 105 ? 2 : 4;
+		for (size_t p = 0; p < (size_t)width * height; p++) {
+			const uint8_t *q = px + p * bpp;
+			int any = 0;
+			for (unsigned b = 0; b < bpp; b++)
+				any |= q[b];
+			nonzero += any != 0;
+			for (unsigned c = 0; c < comps; c++) {
+				float v = bpp == 4 ? q[c] / 255.0f : bpp == 8 && format == 105 ? ((const float *)q)[c] :
+				          bpp == 16 ? ((const float *)q)[c] : 0;
+				if (v < lo[c]) lo[c] = v;
+				if (v > hi[c]) hi[c] = v;
+			}
+		}
+		rw_print("HEROLTE LOOK %u: attachment %u %ux%u format %u: %lu of %lu pixels non-zero; channels "
+		         "[%g %g] [%g %g] [%g %g] [%g %g]\\n", looked, i, width, height, format, nonzero,
+		         (unsigned long)width * height, lo[0], hi[0], lo[1], hi[1], comps > 2 ? lo[2] : 0, comps > 2 ? hi[2] : 0,
+		         comps > 2 ? lo[3] : 0, comps > 2 ? hi[3] : 0);
+		free(px);
+	}
+}
+
+@implementation HakiosMetalCommandBuffer
+''')
 
 print('metal-herolte: ' + ', '.join(done))
