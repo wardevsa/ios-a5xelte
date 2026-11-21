@@ -216,6 +216,31 @@ static HeroLibrary *library_from_source(NSString *src) {
     return l;
 }
 
+
+// A .metallib ("MTLB") lists its functions with tags: NAME (u16 length, a C string) followed by TYPE (u16 length 1, u8: 0 vertex, 1 fragment, 2 kernel). Only the names
+// and kinds are read: there is no AIR interpreter (M3 decides whether there will be one); a pipeline is built from the name through the table.
+static HeroLibrary *library_from_metallib(NSData *data, const char *origin) {
+    const uint8_t *b = data.bytes; NSUInteger n = data.length;
+    NSMutableArray *names = [NSMutableArray array]; NSMutableDictionary *types = [NSMutableDictionary dictionary];
+    if (n < 16 || memcmp(b, "MTLB", 4) != 0) { mtl_note("heromtl: %s: not a metallib (%lu bytes)", origin, (unsigned long)n); return nil; }
+    for (NSUInteger i = 0; i + 8 < n; i++) {
+        if (memcmp(b + i, "NAME", 4) != 0) continue;
+        uint16_t len = (uint16_t)(b[i + 4] | (b[i + 5] << 8));
+        if (len < 2 || len > 200 || i + 6 + len > n || b[i + 6 + len - 1] != 0) continue;
+        NSString *name = [[NSString alloc] initWithBytes:b + i + 6 length:len - 1 encoding:NSUTF8StringEncoding];
+        if (!name) continue;
+        int type = -1;
+        for (NSUInteger k = i + 6 + len; k + 7 < n && k < i + 6 + len + 64; k++)
+            if (memcmp(b + k, "TYPE", 4) == 0) { type = b[k + 6]; break; }
+        if (type < 0 || type > 2) continue;
+        [names addObject:name];
+        types[name] = @(type == 0 ? MTLFunctionTypeVertex : type == 1 ? MTLFunctionTypeFragment : MTLFunctionTypeKernel);
+    }
+    HeroLibrary *l = [HeroLibrary new]; l.names = names; l.types = types;
+    mtl_note("heromtl: metallib %s: %lu bytes, %lu function(s): %s", origin, (unsigned long)n, (unsigned long)names.count, [names componentsJoinedByString:@","].UTF8String);
+    return l;
+}
+
 @interface HeroPipeline : HeroMTLBase <MTLRenderPipelineState>
 @property (nonatomic, assign) const ShaderEntry *entry;
 @property (nonatomic, copy) NSString *label;
@@ -420,11 +445,32 @@ static void run_pass(HeroTexture *tex, MTLClearColor k, BOOL clear, NSArray<NSVa
 }
 - (id<MTLLibrary>)newLibraryWithSource:(NSString *)source options:(MTLCompileOptions *)options error:(NSError **)error { return library_from_source(source); }
 - (void)newLibraryWithSource:(NSString *)source options:(MTLCompileOptions *)options completionHandler:(MTLNewLibraryCompletionHandler)h { HeroLibrary *l = library_from_source(source); if (h) h(l, nil); }
-- (id<MTLLibrary>)newDefaultLibrary { mtl_note("heromtl: newDefaultLibrary: the AIR in the application's default.metallib is not read (M3)"); return nil; }
-- (id<MTLLibrary>)newDefaultLibraryWithBundle:(NSBundle *)b error:(NSError **)error { return [self newDefaultLibrary]; }
+- (id<MTLLibrary>)newDefaultLibrary { return [self newDefaultLibraryWithBundle:[NSBundle mainBundle] error:NULL]; }
+- (id<MTLLibrary>)newDefaultLibraryWithBundle:(NSBundle *)b error:(NSError **)error {
+    NSString *path = [b pathForResource:@"default" ofType:@"metallib"];
+    NSData *d = path ? [NSData dataWithContentsOfFile:path] : nil;
+    if (!d) { mtl_note("heromtl: newDefaultLibraryWithBundle: no default.metallib in %s", b.bundlePath.UTF8String); if (error) *error = [NSError errorWithDomain:@"heromtl" code:2 userInfo:nil]; return nil; }
+    return library_from_metallib(d, path.lastPathComponent.UTF8String);
+}
+- (id<MTLLibrary>)newLibraryWithData:(dispatch_data_t)data error:(NSError **)error { return library_from_metallib((NSData *)data, "data"); }
+- (id<MTLLibrary>)newLibraryWithFile:(NSString *)path error:(NSError **)error { return library_from_metallib([NSData dataWithContentsOfFile:path], path.lastPathComponent.UTF8String); }
+- (id<MTLLibrary>)newLibraryWithURL:(NSURL *)url error:(NSError **)error { return library_from_metallib([NSData dataWithContentsOfURL:url], url.lastPathComponent.UTF8String); }
+- (id<MTLComputePipelineState>)newComputePipelineStateWithFunction:(id<MTLFunction>)f error:(NSError **)error {
+    mtl_note("heromtl: compute pipeline requested for '%s': not supported (M5)", ((HeroFunction *)f).fname.UTF8String);
+    if (error) *error = [NSError errorWithDomain:@"heromtl" code:3 userInfo:nil];
+    return nil;
+}
 - (id<MTLRenderPipelineState>)newRenderPipelineStateWithDescriptor:(MTLRenderPipelineDescriptor *)d error:(NSError **)error {
     HeroFunction *vf = (HeroFunction *)d.vertexFunction;
     const ShaderEntry *e = vf ? shader_for(vf.fname) : NULL;
+    {   // what the application asks for, to build the table from
+        MTLRenderPipelineColorAttachmentDescriptor *c0 = d.colorAttachments[0];
+        mtl_note("heromtl: pipeline request: vertex '%s' fragment '%s' colour0 format %lu blend %d src %ld/%ld dst %ld/%ld vertex attrs %lu layouts %lu samples %lu",
+                 vf ? vf.fname.UTF8String : "(none)", d.fragmentFunction ? ((HeroFunction *)d.fragmentFunction).fname.UTF8String : "(none)", (unsigned long)c0.pixelFormat, c0.blendingEnabled,
+                 (long)c0.sourceRGBBlendFactor, (long)c0.sourceAlphaBlendFactor, (long)c0.destinationRGBBlendFactor, (long)c0.destinationAlphaBlendFactor,
+                 (unsigned long)(d.vertexDescriptor ? [[d.vertexDescriptor valueForKey:@"attributes"] count] : 0), (unsigned long)(d.vertexDescriptor ? [[d.vertexDescriptor valueForKey:@"layouts"] count] : 0),
+                 (unsigned long)d.sampleCount);
+    }
     if (!e) { mtl_note("heromtl: no GLSL for vertex function '%s' (table of M2)", vf ? vf.fname.UTF8String : "(none)"); if (error) *error = [NSError errorWithDomain:@"heromtl" code:1 userInfo:@{ NSLocalizedDescriptionKey: @"no shader of that name in S7GE's table" }]; return nil; }
     HeroPipeline *p = [HeroPipeline new]; p.entry = e; return p;
 }
