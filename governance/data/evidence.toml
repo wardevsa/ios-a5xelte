@@ -5481,3 +5481,18 @@ sha256 = "4ca870b85a185ec3eeb3c854e9cd1fb1e5c45aa77c707b5ab26629b020a4b350"
 size = 338087
 immutable = true
 note = "heroapp.log con la prueba de ficheros de SpriteKit (scratch)."
+
+[[evidence]]
+id = "E-0371"
+title = "CORRECCIÓN DE E-0370 sobre la Wi-Fi (el Director recuerda que funcionaba en la serie min3x y tiene razón): HEROLTE_PROGRESS.md (0308 a 0314) documenta un controlador real del BCM4359 (PCIe, firmware brcmfmac cargado desde wifi/fw.bin, conexión WPA2 e internet en iOS) y el registro de la imagen actual (min128) lo confirma: 'HEROLTE WIFI: joining a network of 19 bytes, WPA2', handshake 1/4 a 4/4, 'CONNECTED in 1886 ms: 44:3b:14:60:0c:27, -61 dBm; en0 link up', y tráfico real 'en0 so far 1105 frames sent (176609 bytes), 855 received (538930 bytes); dropped 0'; las respuestas de apple80211 a wifid vienen del controlador real (sweet_apple80211.c), no son inventadas: mi frase de E-0370 era errónea; entonces 'no hay conexión' en Safari tiene OTRA causa y hay indicios en el mismo registro: 32 líneas 'connectx() - failed necp_set_socket_domain_attributes' (el sistema de políticas de red NECP no acepta que las apps fijen el dominio del socket), 'SWEET Sandbox: mDNSResponder privilege 10001/1002 denied', 'nsurlsessiond privilege 10001 denied', 'trustd privilege 10001 denied'; sin comprobar cuál es la causante; línea de trabajo aparte de S7GE; M1 DE METAL (DROP 41 de 80, sin BOOT): libheroapp de CI 44927153555 interpone MTLCreateSystemDefaultDevice y MTLCopyAllDevices y, para las apps de mtl.on (S7GELab), pide un dispositivo a lib/libheromtl.dylib (dispositivo, cola, buffers, texturas sobre IOSurface, pase de render con limpieza, CAMetalLayer nextDrawable/present); S7GE Lab de CI muestra una franja que cambia de color por Metal y cuenta fotogramas; PRUEBA: abrir S7GE Lab, pulsar 'Probar Metal'; contadores D-0123: BOOT 18 de 80, DROP 41 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n14.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "d657495e7ac580f823f5ce6f7b2da9d3c8f606fb55cb66374b808c0939059543"
+size = 487001
+immutable = true
+note = "Registro del kernel de la imagen min128 (scratch)."
