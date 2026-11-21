@@ -5646,3 +5646,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Simbolización hecha en local con capstone sobre la caché de iOS 16; el reporte está en la sección V.1."
+
+[[evidence]]
+id = "E-0383"
+title = "RESULTADO PARCIAL DE LA SONDA DEL DROP 49 en Flappy Bird (3 aperturas, heroapp.log): (1) las seis claves PrefersOpenGL, enableMetal, MetalCompatibility, OpenGLESCompatibility, SKPrefersOpenGL, SKEnableMetal: 'defaults (none), Info.plist (none)' en las tres: NINGUNA clave fuerza OpenGL (respuesta a la pregunta 3 del orquestador); (2) 'direct MTLCreateSystemDefaultDevice -> nil' en las tres, PERO esa llamada se hizo en el CONSTRUCTOR de libheroapp (antes del main de la app) y el registro del kernel de esos arranques no tiene NINGUNA línea 'hero-metal' ni 'hakiosmetal' de Flappy (en S7GELab sí: 'bundle loaded', 'asks for a device'): Metal respondió nil sin llegar siquiera a cargar el complemento; eso NO es concluyente: en un constructor Metal puede no estar listo (IOKit, colas), y no hay denegación del sandbox de Flappy en el registro; es decir, la pregunta 1 (¿nil o dispositivo para SpriteKit?) y la 2 (¿qué comprobación rechaza?) siguen SIN respuesta; la hipótesis del orquestador (SpriteKit llama a MTLCreateSystemDefaultDevice y, si es nil, cae a OpenGL) encaja con los datos pero no se ha medido que SpriteKit la llame (libheroapp no anota ninguna llamada de Flappy por el desvío); ACCIÓN (DROP 50 de 80, sin BOOT): libheroapp de CI 44941892695 repite la petición cuando UIKit anuncia UIApplicationWillFinishLaunching/DidFinishLaunching (más tarde, con Metal listo) y anota qué notificación llegó; PRUEBA: abrir Flappy una vez; CAUSA RAÍZ: NO CONFIRMADA todavía, por eso NO hay D-0126; contadores D-0123: BOOT 19 de 80, DROP 50 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n22-heroapp.log"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "8b2c0191553d94439ea3288fcdab12a1adaf3231240a49e4bd6b5b4024470c7e"
+size = 403588
+immutable = true
+note = "heroapp.log con las respuestas de la sonda (scratch)."

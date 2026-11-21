@@ -61,3 +61,17 @@ apps de sistema preparadas; el siguiente número libre es D-0126.)
 `MTLCreateSystemDefaultDevice` (el de Metal, sin el desvío) para ver si el complemento acepta a ese proceso. Espera una apertura de Flappy.
 No se ha escrito ningún parche del kernel en este diagnóstico. Preguntas para el orquestador: ¿conoce cómo decide SpriteKit de iOS 16 entre Metal
 y OpenGL (el trabajo de Scion/ios-b1lte hizo funcionar SpriteKit sobre este complemento)?
+
+### V.2 Resultado parcial de la sonda del DROP 49 (E-0383)
+
+Respuestas al orquestador (3 aperturas de Flappy):
+1. **¿MTLCreateSystemDefaultDevice() da nil o dispositivo?** `nil`, pero llamado desde el CONSTRUCTOR de libheroapp y sin ninguna línea `hero-metal` del
+   complemento: no concluyente (Metal quizá no está listo en un constructor). Repetido más tarde en el DROP 50.
+2. **¿Qué comprobación de Jet lo rechaza?** Sin respuesta: no hay evidencia de que SpriteKit llame a `MTLCreateSystemDefaultDevice` (libheroapp no anota
+   ninguna llamada de Flappy por el desvío) ni de que llegue a mirar feature sets. Tu hipótesis encaja, pero no está medida.
+3. **¿Clave de Info.plist o default?** Ninguna: las seis claves (PrefersOpenGL, enableMetal, MetalCompatibility, OpenGLESCompatibility, SKPrefersOpenGL,
+   SKEnableMetal) valen `(none)` en defaults y en Info.plist.
+
+Causa raíz NO confirmada; no propongo D-0126. Siguiente: DROP 50 (la misma petición cuando UIKit anuncia el lanzamiento). Tu observación sobre
+`hakios-gl` devolviendo NULL donde Jet espera un objeto: lo que sé es que `create_function` (Jet +0x7474) devuelve NULL por texto de sombreador NULO, sin
+llamar a gl*; ese texto no viene de hakios-gl (que es el puente de backboardd, no el de apps; las apps cargan libheroeagl-app).
