@@ -29,6 +29,7 @@ done
 # the kernel log line: libdrm.2's herodrm_log (gpu/mesa/herodrm.c), looked up once
 cat > "$T/hero_say.h" <<'H'
 #include <dlfcn.h>
+#include <stddef.h>
 static void hero_say(const char *line)
 {
 	static void (*log)(const char *, ...);
