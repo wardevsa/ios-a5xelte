@@ -5394,3 +5394,18 @@ sha256 = "152cabe0abd643b366ae440b94ec2d782d1db0898bb3142ac707897687b048ab"
 size = 1196269
 immutable = true
 note = "heroeagl.log con los rechazos (scratch)."
+
+[[evidence]]
+id = "E-0365"
+title = "Flappy Bird con type 0x8367 aceptado (E-0364): PASA la textura (heroeagl.log: texImageIOSurface 878x676 ya sin 'refused', contextos y sharegroups creados) y cae en OTRO punto: SIGSEGV dirección 0x0, pc libc++abi +0x14cb4 __dynamic_cast, lr Jet +0x7590 '_ZN18jet_context_OpenGL14create_programEP12jet_functionS1_' <- SpriteKit +0xaedbc ...: Jet hace dynamic_cast de un jet_function (un sombreador) que es nulo al crear un programa, es decir, la creación del sombreador previo falló o devolvió nada; no se sabe por qué (no hay registro de los sombreadores); ACCIÓN (DROP 37 de 80, sin BOOT): libheroeagl-app de CI 44922956645 escribe en heroeagl.log (no en backboardd ni SpringBoard) las primeras 6 fuentes de glShaderSource, los fallos de glCompileShader y glLinkProgram con su registro, y las llamadas gl* no implementadas; PRUEBA: abrir Flappy Bird, leer heroeagl.log; contadores D-0123: BOOT 18 de 80, DROP 37 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n10-heroapp-crash.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "b4e22de1ea578f06b4ae65b63829c7405d60bc23ba7e6f44a6d156c4542aa70f"
+size = 29223
+immutable = true
+note = "heroapp-crash.txt con la pila de create_program (scratch)."
