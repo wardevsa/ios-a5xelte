@@ -145,6 +145,35 @@ install_crash_notes(void)
    sigaction(SIGABRT, &sa, NULL); /* E-0361: Flappy Bird dies with signal 6 and no exception text */
 }
 
+
+/* E-0369: Jet's create_function (disassembled from the dyld cache: Jet +0x7474 gives nothing back when its source text, argument x1, is NULL) probably gets SpriteKit's
+ * shader text from SpriteKit.framework/{sprite,color}.{vsh,fsh}, which are on the phone; what this process can do with them, in heroapp.log */
+static void
+look_at_spritekit(void)
+{
+   static const char *const names[] = { "sprite.vsh", "sprite.fsh", "color.vsh", "color.fsh", "default.metallib" };
+   for (int i = 0; i < 5; i++) {
+      char path[200];
+      snprintf(path, sizeof path, "/System/Library/Frameworks/SpriteKit.framework/%s", names[i]);
+      struct stat st;
+      int rc = stat(path, &st);
+      int err = errno;
+      int fd = rc == 0 ? open(path, O_RDONLY) : -1;
+      int oerr = errno;
+      char first[40] = "";
+      if (fd >= 0) {
+         ssize_t n = read(fd, first, sizeof first - 1);
+         if (n > 0) { for (ssize_t k = 0; k < n; k++) if (first[k] < 32) first[k] = ' '; first[n] = 0; }
+         close(fd);
+      }
+      hero_note("libheroapp: %s: %s stat %d (errno %d) mode %o uid %d size %lld, open %s (errno %d) \"%s\"", getprogname(), names[i], rc, rc ? err : 0,
+                rc ? 0 : (unsigned)st.st_mode, rc ? -1 : (int)st.st_uid, rc ? 0LL : (long long)st.st_size, fd >= 0 ? "ok" : "FAILED", fd >= 0 ? 0 : oerr, first);
+   }
+   id bundle = ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("NSBundle"), sel_registerName("bundleWithPath:"), (id)CFSTR("/System/Library/Frameworks/SpriteKit.framework"));
+   id found = bundle ? ((id (*)(id, SEL, id, id))objc_msgSend)(bundle, sel_registerName("pathForResource:ofType:"), (id)CFSTR("sprite"), (id)CFSTR("vsh")) : nil;
+   hero_note("libheroapp: %s: NSBundle for SpriteKit %s, sprite.vsh resource %s", getprogname(), bundle ? "found" : "NOT found", found ? "found" : "NOT found");
+}
+
 /*
  * min127c (E-0351): S7GE Lab, an ordinary app, got "EAGLContext(api: .openGLES2) returned nil" because the lines below make every initWithAPI: answer nil
  * (the stock renderer's table of functions is empty here and jumps to 0), and the project's EAGL bridge (libheroeagl: EAGLContext on OSMesa and
@@ -448,6 +477,8 @@ install(void)
    }
    NSSetUncaughtExceptionHandler(uncaught);
    install_crash_notes();
+   if (strcmp(getprogname(), "Flappy Bird") == 0)
+      look_at_spritekit();
    hero_note("libheroapp: %s: loaded (pid %d)", getprogname(), (int)getpid());
    dlopen("/System/Library/Frameworks/OpenGLES.framework/OpenGLES", RTLD_LAZY);
    Class context = objc_getClass("EAGLContext");
