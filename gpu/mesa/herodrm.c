@@ -15,6 +15,7 @@
  * every call to the kernel log.
  */
 #include <errno.h>
+#include <execinfo.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <pthread/qos.h>
@@ -273,6 +274,27 @@ create_bo(struct drm_panfrost_create_bo *req)
       herodrm_log("CREATE_BO %llu bytes (flags 0x%x) failed: 0x%x",
                   (unsigned long long)size, req->flags, kr);
       return fail(ENOMEM);
+   }
+   /*
+    * (2026-11-21) Who asks: with /private/var/herolte/herodrm.trace present, creates 300 to 303 of a process
+    * log their size, flags and caller chain. MercuryPoster's Metal made ~430 one-page BOs every 5 s and freed none
+    * (boot-18k50); the chain names the Mesa function that makes them.
+    */
+   {
+      static int trace = -1;
+      static unsigned made;
+      if (trace < 0)
+         trace = access("/private/var/herolte/herodrm.trace", F_OK) == 0;
+      made++;
+      if (trace && made >= 300 && made < 304) {
+         void *frames[16];
+         int n = backtrace(frames, 16);
+         char **names = backtrace_symbols(frames, n);
+         herodrm_log("CREATE_BO trace #%u: %llu bytes, flags 0x%x", made, (unsigned long long)size, req->flags);
+         for (int i = 1; names && i < n; i++)
+            herodrm_log("  %s", names[i]);
+         free(names);
+      }
    }
    req->handle = (uint32_t)out[0];
    req->offset = out[1];
