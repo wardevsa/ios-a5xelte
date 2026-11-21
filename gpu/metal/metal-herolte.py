@@ -445,6 +445,20 @@ herolte_look_at_attachments(NSArray *works)
 				if (v > hi[c]) hi[c] = v;
 			}
 		}
+		if (looked == 4 && i == 0 && bpp == 4) {   /* one frame as it was drawn, for the PC to look at */
+			char path[160];
+			snprintf(path, sizeof(path), "/private/var/herolte/look-%d-%ux%u.bgra", getpid(), width, height);
+			FILE *out = fopen(path, "wb");
+			if (out == NULL) {
+				NSString *tmp = [NSTemporaryDirectory() stringByAppendingPathComponent:@"look.bgra"];
+				snprintf(path, sizeof(path), "%s", [tmp UTF8String]);
+				out = fopen(path, "wb");
+			}
+			size_t wrote = out ? fwrite(px, 1, (size_t)width * height * bpp, out) : 0;
+			if (out)
+				fclose(out);
+			rw_print("HEROLTE LOOK: frame saved to %s (%zu bytes)\\n", path, wrote);
+		}
 		rw_print("HEROLTE LOOK %u: attachment %u %ux%u format %u: %lu of %lu pixels non-zero; channels "
 		         "[%g %g] [%g %g] [%g %g] [%g %g]\\n", looked, i, width, height, format, nonzero,
 		         (unsigned long)width * height, lo[0], hi[0], lo[1], hi[1], comps > 2 ? lo[2] : 0, comps > 2 ? hi[2] : 0,

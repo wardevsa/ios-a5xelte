@@ -1099,4 +1099,34 @@ change('narrow constant-buffer loads: pass', 'air_metal.c',
             NULL);   /* HEROLTE: 8/16-bit constant-buffer loads */
 ''')
 
+# 13. Function constants this device can answer by name. The pipeline is built from the unspecialised module, and
+# Metal keeps no constant values on the function (boot-18k54: _functionConstantDictionary nil for MercuryPoster's), so
+# every constant was 0: fluidity drew as on an iPad (isPhone). A bool constant named ...isPhone or ...isNotSimulator is
+# true here; every other one is still 0.
+change('function constants by name', 'air_to_nir.c',
+       '''         for (unsigned k = 1; k < (node ? node->num_ops : 0); k++) {
+            uint64_t idx;
+            if (md_int(node, k, &idx)) {
+               (*out)[num++].index = idx;
+               break;
+            }
+         }''',
+       '''         const char *fc_name = NULL;   /* HEROLTE: the last string before the index is the name */
+         for (unsigned k = 1; k < (node ? node->num_ops : 0); k++) {
+            uint64_t idx;
+            if (md_str(node, k))
+               fc_name = md_str(node, k);
+            if (md_int(node, k, &idx)) {
+               static const char *const yes[] = { "isPhone", "isNotSimulator" };
+               (*out)[num].index = idx;
+               for (unsigned y = 0; fc_name && y < ARRAY_SIZE(yes); y++) {
+                  size_t n = strlen(fc_name), m = strlen(yes[y]);
+                  if (n >= m && !strcmp(fc_name + n - m, yes[y]))
+                     (*out)[num].bits = 1;
+               }
+               num++;
+               break;
+            }
+         }''')
+
 print('air-herolte: ' + ', '.join(done))
