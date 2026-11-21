@@ -5703,3 +5703,15 @@ sha256 = "678cae49b5ff872fb904e97b03917349c28bd83c92d13b62bae54da2c1374936"
 size = 1413760
 immutable = true
 note = "Registro del kernel de min129 de unos 600 s (scratch, fuera de git)."
+
+[[evidence]]
+id = "E-0387"
+title = "H1 (aprobada por el Director): BANCO DE METAL EN S7GE LAB, solo DROP 53 de 80 (sin BOOT): S7GE Lab de CI 44946650927 (apps/s7ge-lab/bench.swift y GLView.benchOffscreen en main.swift) con un botón 'Banco Metal' que, con el Metal real del teléfono (HeroMetal + libhakiosair, dispositivo 'Mali-T880 (Panfrost) (Hakios)'), hace cinco pruebas en una textura BGRA de 512x512 FUERA DE PANTALLA (la presentación no entra en los números): (a) limpiar, (b) un triángulo, (c) 48 triángulos superpuestos, (d) un cuadrado con textura de 256x256 y muestreador lineal, (e) un kernel de cómputo que suma dos vectores de 4096 flotantes; cada una se COMPRUEBA (píxel central leído, o el vector entero) y se MIDE (commit hasta waitUntilCompleted, 2 s por prueba, al menos 10 iteraciones), más el tiempo de compilar los tres pipelines desde texto MSL; (a)-(c) se repiten por OpenGL ES (FBO de 512x512, glFinish por cuadro) para comparar; mientras corre se pausan las animaciones de la pantalla; el resultado va a la pantalla y a /private/var/tmp/s7ge-bench.txt; CRITERIO DE ÉXITO (del orquestador): las cinco pasan con resultado correcto y se publica la tabla; PRUEBA: abrir S7GE Lab, pulsar 'Probar Metal' y luego 'Banco Metal' (unos 25 s con la pantalla quieta); si algún paso hace que la app muera, heroapp-crash.txt dirá en cuál; contadores D-0123: BOOT 19 de 80, DROP 53 de 80"
+kind = "document"
+path = "apps/s7ge-lab/bench.swift"
+location = "git"
+created = "2026-11-21"
+domain = "device"
+level = "L1"
+device = "this-unit"
+note = "Código del banco; los resultados llegan con la prueba."
