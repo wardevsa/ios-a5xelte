@@ -57,8 +57,12 @@ $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libherosb.dylib" "$HERE/src/herosb.c" -in
 
 python3 "$HERE/tools/gen_app_interpose.py" > "$OBJ/app_interpose.c"
 $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroapp.dylib" "$HERE/src/heroapp.c" "$OBJ/app_interpose.c" -install_name @rpath/libheroapp.dylib \
-  -framework OpenGLES -framework Foundation -framework UIKit -framework CoreGraphics -framework ImageIO -framework IOSurface \
+  -framework Metal -framework OpenGLES -framework Foundation -framework UIKit -framework CoreGraphics -framework ImageIO -framework IOSurface \
   -lobjc -L "$OUT/lib" -ldrm.2 -Wl,-rpath,/private/var/herolte/lib
+
+# S7GE Metal provider (M1), loaded by libheroapp for the applications of mtl.on.
+$CC -O2 -fobjc-arc -Wall -Wno-protocol -Wno-incomplete-implementation -Wno-unused-function -dynamiclib -o "$OUT/lib/libheromtl.dylib" "$HERE/src/heromtl.m" \
+  -install_name @rpath/libheromtl.dylib -framework Foundation -framework Metal -framework QuartzCore -framework IOSurface -framework CoreGraphics -lobjc
 
 # The smallest inserted library: dyld/insertion bisect (E-0336), dropped as lib/libheroapp.dylib for one boot.
 $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroprobe.dylib" "$HERE/src/heroprobe.c" -install_name @rpath/libheroprobe.dylib
@@ -70,7 +74,7 @@ $CC -O2 -w -bundle -I"$HERE/../hakios-audio" -o "$OUT/audio/HakiosAudio" "$HERE/
 cp "$HERE/../hakios-audio/audio_plugin.plist" "$OUT/audio/Info.plist"
 codesign -s - -f "$OUT/audio/HakiosAudio"
 
-for f in "$OUT/lib/libheroeagl.dylib" "$OUT/lib/libhakiosgl.dylib" "$OUT/lib/libherosb.dylib" "$OUT/lib/libheroapp.dylib" "$OUT/lib/libheroprobe.dylib" "$OUT/eagl_ca_test" "$OUT/hero-run"; do
+for f in "$OUT/lib/libheroeagl.dylib" "$OUT/lib/libhakiosgl.dylib" "$OUT/lib/libherosb.dylib" "$OUT/lib/libheroapp.dylib" "$OUT/lib/libheromtl.dylib" "$OUT/lib/libheroprobe.dylib" "$OUT/eagl_ca_test" "$OUT/hero-run"; do
   codesign -s - -f "$f"
   otool -L "$f"
 done

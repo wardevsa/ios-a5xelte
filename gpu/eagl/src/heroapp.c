@@ -174,6 +174,68 @@ look_at_spritekit(void)
    hero_note("libheroapp: %s: NSBundle for SpriteKit %s, sprite.vsh resource %s", getprogname(), bundle ? "found" : "NOT found", found ? "found" : "NOT found");
 }
 
+
+/*
+ * S7GE M1 (docs/S7GE_METAL_DESIGN.md): MTLCreateSystemDefaultDevice answers nil on this phone. For the applications named in the drop file mtl.on
+ * ("all" or one name per line) these interposed entry points ask lib/libheromtl.dylib for a device; for every other application they call Metal's own.
+ */
+extern id MTLCreateSystemDefaultDevice(void);
+extern id MTLCopyAllDevices(void);
+static bool
+listed(const char *file)
+{
+   FILE *f = fopen(file, "r");
+   char line[128];
+   bool want = false;
+   while (f && fgets(line, sizeof line, f)) {
+      size_t n = strlen(line);
+      while (n && (line[n - 1] == '\n' || line[n - 1] == '\r' || line[n - 1] == ' '))
+         line[--n] = 0;
+      if (strcmp(line, "all") == 0 || strcmp(line, getprogname()) == 0)
+         want = true;
+   }
+   if (f)
+      fclose(f);
+   return want;
+}
+static id (*mtl_device_fn)(void);
+static id
+hero_mtl_pick(void)
+{
+   static int state; /* 0 unknown, 1 ours, 2 not ours */
+   if (state == 0) {
+      state = 2;
+      if (listed(DROP_DIR "mtl.on")) {
+         void *handle = dlopen(DROP_DIR "lib/libheromtl.dylib", RTLD_NOW);
+         if (handle)
+            mtl_device_fn = (id (*)(void))dlsym(handle, "hero_mtl_device");
+         hero_note("libheroapp: %s: Metal provider %s", getprogname(), mtl_device_fn ? "loaded" : "NOT loaded");
+         if (mtl_device_fn)
+            state = 1;
+      }
+   }
+   return state == 1 ? mtl_device_fn() : nil;
+}
+static id
+hero_MTLCreateSystemDefaultDevice(void)
+{
+   id ours = hero_mtl_pick();
+   return ours ? ours : MTLCreateSystemDefaultDevice();
+}
+static id
+hero_MTLCopyAllDevices(void)
+{
+   id ours = hero_mtl_pick();
+   if (!ours)
+      return MTLCopyAllDevices();
+   return ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("NSArray"), sel_registerName("arrayWithObject:"), ours);
+}
+struct hero_interpose { const void *replacement, *replacee; };
+__attribute__((used, section("__DATA,__interpose"))) static const struct hero_interpose hero_mtl_interpose[] = {
+   { (const void *)hero_MTLCreateSystemDefaultDevice, (const void *)MTLCreateSystemDefaultDevice },
+   { (const void *)hero_MTLCopyAllDevices, (const void *)MTLCopyAllDevices },
+};
+
 /*
  * min127c (E-0351): S7GE Lab, an ordinary app, got "EAGLContext(api: .openGLES2) returned nil" because the lines below make every initWithAPI: answer nil
  * (the stock renderer's table of functions is empty here and jumps to 0), and the project's EAGL bridge (libheroeagl: EAGLContext on OSMesa and
