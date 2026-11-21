@@ -9,6 +9,7 @@
 #include <objc/runtime.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -300,8 +301,35 @@ herosb_start(void)
       raise_frame_rates();
       dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW, 120 * NSEC_PER_SEC), dispatch_get_main_queue(), NULL, report_ranges);
    }
-   if (access(DROP_DIR "gestures.off", F_OK) != 0)
-      ask_for_gestures();
+   /*
+    * min125 (E-0346): in SpringBoard the status bar was found with height 0 and hidden (UIStatusBar_Modern 375 x 0) after the platform was told
+    * home-button-type 2, although the Phone provider class exists in this iOS. DROP_DIR sbmode, one character, chooses how the gestures are asked for:
+    *   0 (or no file): the platform says type 2 and the status bar providers are hooked (as before);
+    *   1: only SBHomeGestureSettings isHomeGestureEnabled says yes; the platform keeps saying home button (type 1), whose status bar is the one that
+    *      showed in min100-min117, and no provider is touched.
+    * What the bar looks like in each mode is in the round 6 and 20 lines of the log.
+    */
+   if (access(DROP_DIR "gestures.off", F_OK) != 0) {
+      char mode = '0';
+      FILE *mf = fopen(DROP_DIR "sbmode", "r");
+      if (mf) {
+         int c = fgetc(mf);
+         if (c == '0' || c == '1')
+            mode = (char)c;
+         fclose(mf);
+      }
+      herodrm_log("herosb: sbmode %c", mode);
+      if (mode == '1') {
+         Class settings = objc_getClass("SBHomeGestureSettings");
+         Method enabled = settings ? class_getInstanceMethod(settings, sel_registerName("isHomeGestureEnabled")) : NULL;
+         if (enabled) {
+            method_setImplementation(enabled, (IMP)says_yes);
+            gestures_on = true;
+         }
+      } else {
+         ask_for_gestures();
+      }
+   }
    if (access(DROP_DIR "wallpaper.off", F_OK) == 0)
       return;
    dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC), dispatch_get_main_queue(), NULL, look_at_windows);
