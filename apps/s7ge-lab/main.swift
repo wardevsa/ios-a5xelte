@@ -1,7 +1,7 @@
 // S7GE Lab: what the graphics stack of this phone does, shown on its own screen, and a first OpenGL ES app through the project's EAGL bridge
 // (EAGLContext -> OSMesa -> Panfrost -> the Mali-T880, docs/S7GE_EAGL_BRIDGES.md). UIKit only, no async, plain arm64.
 //  - top half: a GLES2 triangle that turns, drawn by a CADisplayLink; the lines below say what the context and the renderer are, and the frames per second;
-//  - the button "Probar Metal" calls MTLCreateSystemDefaultDevice() and MTLCopyAllDevices() and shows what they return (if the app dies there, that is the result);
+//  - the button "Probar Metal" calls MTLCreateSystemDefaultDevice() and shows what they return (if the app dies there, that is the result);
 //  - the same text is appended to Documents/s7ge-lab.txt and to /private/var/tmp/s7ge-lab.txt for the PC.
 import UIKit
 import Metal
@@ -76,11 +76,11 @@ final class GLView: UIView {
         glGetProgramiv(program, GLenum(GL_LINK_STATUS), &linked)
         report += "\nprogram linked \(linked)"
         angleLocation = glGetUniformLocation(program, "a")
-        link = CADisplayLink(target: self, selector: #selector(draw))
+        link = CADisplayLink(target: self, selector: #selector(drawFrame))
         link?.add(to: .main, forMode: .common)
     }
 
-    @objc private func draw() {
+    @objc private func drawFrame() {
         guard let ctx = context else { return }
         EAGLContext.setCurrent(ctx)
         angle += 0.03
@@ -144,11 +144,10 @@ final class LabController: UIViewController {
         metal = "Metal: calling MTLCreateSystemDefaultDevice()..."
         refresh()
         if let device = MTLCreateSystemDefaultDevice() {
-            metal = "Metal: device \(device.name), low power \(device.isLowPower), max threads \(device.maxThreadsPerThreadgroup)"
+            metal = "Metal: device \(device.name), max threads \(device.maxThreadsPerThreadgroup), unified memory \(device.hasUnifiedMemory)"
         } else {
             metal = "Metal: MTLCreateSystemDefaultDevice() = nil"
         }
-        metal += "\nMTLCopyAllDevices() = \(MTLCopyAllDevices().count) devices"
         refresh()
     }
 
