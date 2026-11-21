@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include "osm.h"
 #include "gl_tab.h"
