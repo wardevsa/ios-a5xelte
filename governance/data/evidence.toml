@@ -5784,3 +5784,18 @@ sha256 = "f1996f7dd0665b222fd2ff027450c0b98353d34e1f39ea0209e379c57b9a7a7a"
 size = 369727
 immutable = true
 note = "Registro del kernel con el fallo de LSRegisterURL (scratch)."
+
+[[evidence]]
+id = "E-0393"
+title = "RESULTADO DE H2a (S7GE Net, dos ejecuciones, min129): LA RED DE LAS APPS FUNCIONA EN TODAS LAS CAPAS, y refuta mis sospechas de E-0371 y de E-0386 ('Safari/red de apps: no funciona'): interfaz en0 192.168.1.67 UP RUNNING; DNS del sistema: getaddrinfo(example.com) 27-31 ms (172.66.147.243, 104.20.23.154), neverssl.com 52-58 ms (34.223.124.45); TCP a 1.1.1.1:80, 8.8.8.8:53 y 9.9.9.9:443: conecta en 11-26 ms; DNS por UDP directo a 8.8.8.8 y 1.1.1.1: respuesta de 61 bytes en 14-22 ms, rcode 0, 2 respuestas; URLSession: SEGUNDA EJECUCIÓN: 'GET http://1.1.1.1/ HTTP 200, 56614 bytes in 346 ms' y 'GET https://example.com/ HTTP 200, 577 bytes in 218 ms' (TLS y trustd funcionan); PRIMERA EJECUCIÓN (a los 4 min 41 s del arranque; la hora del teléfono era '1970-01-01 00:04:41'): http://1.1.1.1/ dio NSURLErrorDomain -1202 (certificado no válido) y https://example.com/ dio -1200 (error SSL): con la fecha en 1970 todo certificado está 'aún no válido'; en la segunda ejecución la hora ya era la real ('2026-11-21 21:21:31'), puesta por la red; neverssl.com por HTTP da -1022 en las dos: es la política App Transport Security de la propia app de prueba (sin excepción), no de la red; CONCLUSIONES: (1) el 'no hay conexión' de Safari que vio el Director al principio era de la RED (de su operador o de la ruta a Cloudflare, como él dijo), no del teléfono; (2) los 32 avisos 'connectx() failed necp_set_socket_domain_attributes' y las denegaciones del sandbox a mDNSResponder/nsurlsessiond/trustd (E-0371) NO impiden el DNS, la conexión ni TLS: son ruido, al menos para este tipo de tráfico; mi inferencia de E-0371 era INCORRECTA; (3) hay un efecto real distinto: durante los primeros minutos tras arrancar la hora es 1970 y el TLS falla; aparece sola cuando la red da la hora; (4) lo de Safari que sigue sin comprobarse es WebKit (WebContent, JIT, memoria: 122 MB libres a los 600 s en E-0386), no la red; contadores D-0123: BOOT 19 de 80, DROP 55 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n27-s7ge-net.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "e0b6080396008d95aded3a3b4624c75d01e8fb38ce255f9600b3ee09fcd430a7"
+size = 2085
+immutable = true
+note = "s7ge-net.txt con las dos ejecuciones (scratch)."

@@ -196,3 +196,29 @@ conclusión de fondo (Metal funciona con carga, es ~2x GL en latencia por envío
 
 **Siguiente: H2 (red de Safari).** Antes de tocar el kernel, una sonda de solo DROP: una app `S7GENet` que prueba por separado DNS (`getaddrinfo`), conexión TCP a direcciones numéricas, DNS por UDP
 directo a un servidor, `URLSession` por HTTP y por HTTPS, con el `errno` de cada paso. Así se sabe QUÉ falla (DNS, conexión, TLS) antes de decidir si hace falta un parche (Nivel 3).
+
+### V.8 H2a: la red de las apps funciona (E-0391, E-0392, E-0393). H2 cambia de objeto.
+
+Sonda `S7GE Net` (solo DROP 55), dos ejecuciones:
+
+| Capa | Resultado |
+|---|---|
+| Interfaz `en0` | 192.168.1.67 UP RUNNING |
+| DNS del sistema (`getaddrinfo`) | example.com 27-31 ms, neverssl.com 52-58 ms: **ok** |
+| TCP numérico (1.1.1.1:80, 8.8.8.8:53, 9.9.9.9:443) | **conecta** en 11-26 ms |
+| DNS por UDP directo (8.8.8.8, 1.1.1.1) | respuesta 61 bytes, rcode 0, 2 respuestas, 14-22 ms: **ok** |
+| `URLSession` HTTP a 1.1.1.1 | **HTTP 200, 56614 bytes, 346 ms** (2.ª ejecución) |
+| `URLSession` HTTPS a example.com (TLS, trustd) | **HTTP 200, 577 bytes, 218 ms** (2.ª ejecución) |
+| 1.ª ejecución (a los 4 min 41 s del arranque) | errores -1200/-1202 de certificado: **la hora era 1970-01-01** |
+| neverssl.com por HTTP | -1022 = App Transport Security de la app de prueba, no de la red |
+
+**Consecuencias, y una corrección mía:**
+1. Las hipótesis de E-0371 y E-0386 («Safari/red de apps no funciona por `necp_set_socket_domain_attributes` y la sandbox») eran **incorrectas**: esos 32 avisos y las denegaciones del sandbox
+   no impiden DNS, TCP ni TLS. Son ruido para este tráfico. El «no hay conexión» que Pioxi vio al principio era de su red/operador (lo dijo él; los datos no lo contradicen).
+2. **H2 queda cerrada como «no hay problema de red en el teléfono»**; no necesita parche de kernel ni BOOT.
+3. Hallazgo real y distinto: **la hora es 1970 en los primeros minutos tras arrancar** y el TLS falla hasta que la red da la hora. Candidato a mejora (sembrar la hora del arranque con la
+   fecha de compilación del kernel, o una hora guardada); baja prioridad, Nivel 3 si toca el kernel.
+4. **Lo que sigue sin comprobar de Safari es WebKit**, no la red: WebContent, JIT (upstream: `herojit`), y la memoria (122 MB libres a los 600 s, E-0386). Propongo H4: abrir
+   Safari de verdad en una página sencilla y registrar qué hace WebContent (cierres, memoria), solo con DROP y lectura de registros.
+
+Pioxi decide: H4 (Safari/WebContent), o H3 (BT/cámara/vibración, condicionado a medir el consumo en reposo), o corregir la hora del arranque.
