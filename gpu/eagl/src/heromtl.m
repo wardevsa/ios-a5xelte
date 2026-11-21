@@ -465,11 +465,10 @@ static void run_pass(HeroTexture *tex, MTLClearColor k, BOOL clear, NSArray<NSVa
     const ShaderEntry *e = vf ? shader_for(vf.fname) : NULL;
     {   // what the application asks for, to build the table from
         MTLRenderPipelineColorAttachmentDescriptor *c0 = d.colorAttachments[0];
-        mtl_note("heromtl: pipeline request: vertex '%s' fragment '%s' colour0 format %lu blend %d src %ld/%ld dst %ld/%ld vertex attrs %lu layouts %lu samples %lu",
+        mtl_note("heromtl: pipeline request: vertex '%s' fragment '%s' colour0 format %lu blend %d src %ld/%ld dst %ld/%ld vertex descriptor %lu (unused %lu) samples %lu",
                  vf ? vf.fname.UTF8String : "(none)", d.fragmentFunction ? ((HeroFunction *)d.fragmentFunction).fname.UTF8String : "(none)", (unsigned long)c0.pixelFormat, c0.blendingEnabled,
                  (long)c0.sourceRGBBlendFactor, (long)c0.sourceAlphaBlendFactor, (long)c0.destinationRGBBlendFactor, (long)c0.destinationAlphaBlendFactor,
-                 (unsigned long)(d.vertexDescriptor ? [[d.vertexDescriptor valueForKey:@"attributes"] count] : 0), (unsigned long)(d.vertexDescriptor ? [[d.vertexDescriptor valueForKey:@"layouts"] count] : 0),
-                 (unsigned long)d.sampleCount);
+                 (unsigned long)(d.vertexDescriptor ? 1 : 0), (unsigned long)0, (unsigned long)d.sampleCount);
     }
     if (!e) { mtl_note("heromtl: no GLSL for vertex function '%s' (table of M2)", vf ? vf.fname.UTF8String : "(none)"); if (error) *error = [NSError errorWithDomain:@"heromtl" code:1 userInfo:@{ NSLocalizedDescriptionKey: @"no shader of that name in S7GE's table" }]; return nil; }
     HeroPipeline *p = [HeroPipeline new]; p.entry = e; return p;
@@ -511,6 +510,7 @@ static void swz_setDevice(CAMetalLayer *self, SEL _cmd, id dev) { objc_setAssoci
 
 id hero_mtl_device(void) {
     static dispatch_once_t once;
+    mtl_note("heromtl: %s: hero_mtl_device: once %ld, g_device %p", getprogname(), (long)once, (__bridge void *)g_device);   // E-0377: a garbage g_device crashed twice
     dispatch_once(&once, ^{
         g_device = [HeroDevice new];
         Class c = objc_getClass("CAMetalLayer");

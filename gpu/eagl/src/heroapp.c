@@ -218,6 +218,9 @@ hero_mtl_pick(void)
 static id
 hero_MTLCreateSystemDefaultDevice(void)
 {
+   static int shown;
+   if (shown++ < 3)
+      hero_note("libheroapp: %s: MTLCreateSystemDefaultDevice called (%d)", getprogname(), shown);
    id ours = hero_mtl_pick();
    return ours ? ours : MTLCreateSystemDefaultDevice();
 }
