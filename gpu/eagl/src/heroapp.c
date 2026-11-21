@@ -272,11 +272,15 @@ metal_at_will_finish(void)
 static void
 metal_probe_later(void)
 {
+   /* names as strings: UIApplicationWillFinishLaunchingNotification is not an exported UIKit symbol on iOS (link error); it is posted on iOS all the same, or not */
+   static const char *const names[] = { "UIApplicationWillFinishLaunchingNotification", "UIApplicationDidFinishLaunchingNotification" };
    id center = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("NSNotificationCenter"), sel_registerName("defaultCenter"));
-   extern id UIApplicationWillFinishLaunchingNotification __attribute__((weak_import));
-   void (^block)(id) = ^(id note) { (void)note; metal_at_will_finish(); };
-   ((id (*)(id, SEL, id, id, id, void (^)(id)))objc_msgSend)(center, sel_registerName("addObserverForName:object:queue:usingBlock:"),
-                                                          (id)UIApplicationWillFinishLaunchingNotification, nil, nil, block);
+   for (int i = 0; i < 2; i++) {
+      id name = ((id (*)(id, SEL, const char *))objc_msgSend)((id)objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), names[i]);
+      const char *label = names[i];
+      void (^block)(id) = ^(id note) { (void)note; hero_note("libheroapp: %s: notification %s", getprogname(), label); metal_at_will_finish(); };
+      ((id (*)(id, SEL, id, id, id, void (^)(id)))objc_msgSend)(center, sel_registerName("addObserverForName:object:queue:usingBlock:"), name, nil, nil, block);
+   }
 }
 
 /*
