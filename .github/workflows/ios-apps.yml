@@ -8,7 +8,7 @@ name: ios-apps
 on:
   workflow_dispatch:
   push:
-    branches: [herolte]
+    branches: [herolte, herolte-drop-v2]   # herolte-drop-v2: temporal, quitar al fusionar
     paths:
       - "apps/**"
       - ".github/workflows/ios-apps.yml"
