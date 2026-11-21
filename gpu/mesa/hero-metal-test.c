@@ -30,7 +30,39 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <dlfcn.h>
+#include <stdarg.h>
+
 #include "air_metal.h"
+
+/* Every line also goes to the kernel log as it is printed (libdrm.2's herodrm_log, there once libhakiosair is
+ * loaded): a test that takes the phone down still leaves what it had printed (hero-run copies stdout only at the end). */
+static int
+hero_printf(const char *fmt, ...)
+{
+   static void (*hlog)(const char *, ...);
+   static int looked;
+   char line[700];
+   va_list ap;
+   va_start(ap, fmt);
+   int n = vsnprintf(line, sizeof(line), fmt, ap);
+   va_end(ap);
+   fputs(line, stdout);
+   if (!looked) {
+      void *drm = dlopen("/private/var/herolte/lib/libdrm.2.dylib", RTLD_NOW | RTLD_NOLOAD);
+      if (drm)
+         *(void **)&hlog = dlsym(drm, "herodrm_log");
+      looked = hlog != NULL;
+   }
+   if (hlog) {
+      size_t len = strlen(line);
+      while (len && line[len - 1] == '\n')
+         line[--len] = 0;
+      hlog("%s", line);
+   }
+   return n;
+}
+#define printf hero_printf
 
 #define BUF_BYTES (64 * 1024)
 #define STREAM_INDEX 30
@@ -156,8 +188,43 @@ find(const struct lib *l, const char *want, const uint8_t **bc, size_t *size)
 static unsigned W = 32, H = 32;
 static bool float_fill;
 
+/* -V N=a,b,... / -F N=... / -C N=...: the first words of buffer N of the vertex, fragment or compute stage, each a
+ * float or, written iK, the integer K (a bool or a char reads its low byte) */
+static struct { char stage; unsigned index, count; uint32_t words[64]; } fills[16];
+static unsigned nfills;
+
+static bool
+parse_fill(char stage, const char *arg)
+{
+   if (nfills == 16)
+      return false;
+   char *end;
+   unsigned long index = strtoul(arg, &end, 10);
+   if (*end != '=')
+      return false;
+   fills[nfills].stage = stage;
+   fills[nfills].index = (unsigned)index;
+   fills[nfills].count = 0;
+   for (const char *p = end + 1; *p && fills[nfills].count < 64;) {
+      uint32_t w;
+      if (*p == 'i') {
+         long v = strtol(p + 1, &end, 0);
+         w = (uint32_t)v;
+      } else {
+         float f = strtof(p, &end);
+         memcpy(&w, &f, 4);
+      }
+      if (end == p)
+         return false;
+      fills[nfills].words[fills[nfills].count++] = w;
+      p = *end == ',' ? end + 1 : end;
+   }
+   nfills++;
+   return true;
+}
+
 static struct rwa_buffer *
-make_buffer(struct rwa_device *dev)
+make_buffer(struct rwa_device *dev, char stage, unsigned index)
 {
    struct rwa_buffer *b = rwa_buffer_create(dev, BUF_BYTES, why, sizeof(why));
    if (!b) {
@@ -171,6 +238,11 @@ make_buffer(struct rwa_device *dev)
       if (float_fill)
          memcpy(&w[i], &f, 4);
    }
+   for (unsigned k = 0; k < nfills; k++)
+      if (fills[k].stage == stage && fills[k].index == index) {
+         memcpy(w, fills[k].words, fills[k].count * 4);
+         printf("hero_metal_test: %c buffer %u: %u words set\n", stage, index, fills[k].count);
+      }
    return b;
 }
 
@@ -278,9 +350,18 @@ static void
 report_pixels(unsigned att, unsigned fmt, const uint8_t *px, const float clear[4])
 {
    unsigned bpp = pixel_bytes(fmt), differ = 0, nans = 0;
+   unsigned x0 = W, y0 = H, x1 = 0, y1 = 0;
+   float rmax = 0, gmax = 0;
    for (unsigned i = 0; i < W * H; i++) {
       const uint8_t *p = px + i * bpp;
-      if (fmt == 125) {
+      unsigned before = differ;
+      if (fmt == 105) {   /* RG32Float: against the clear colour's R and G */
+         float f[2];
+         memcpy(f, p, 8);
+         differ += f[0] != clear[0] || f[1] != clear[1];
+         if (f[0] > rmax) rmax = f[0];
+         if (f[1] > gmax) gmax = f[1];
+      } else if (fmt == 125) {
          float f[4];
          memcpy(f, p, 16);
          for (int c = 0; c < 4; c++)
@@ -303,9 +384,20 @@ report_pixels(unsigned att, unsigned fmt, const uint8_t *px, const float clear[4
             zero &= p[b] == 0;
          differ += !zero;
       }
+      if (differ != before) {
+         unsigned x = i % W, y = i / W;
+         if (x < x0) x0 = x;
+         if (x > x1) x1 = x;
+         if (y < y0) y0 = y;
+         if (y > y1) y1 = y;
+      }
    }
    printf("hero_metal_test: attachment %u: %u of %u pixels differ from the clear colour, %u NaN components\n", att,
           differ, W * H, nans);
+   if (differ)
+      printf("hero_metal_test:   drawn within x %u..%u, y %u..%u\n", x0, x1, y0, y1);
+   if (fmt == 105)
+      printf("hero_metal_test:   R up to %g, G up to %g\n", rmax, gmax);
    unsigned at[4][2] = { { 0, 0 }, { W / 2, H / 2 }, { W / 4, 3 * H / 4 }, { W - 1, H - 1 } };
    for (int k = 0; k < 4; k++) {
       const uint8_t *p = px + (at[k][1] * W + at[k][0]) * bpp;
@@ -380,9 +472,9 @@ render(struct rwa_device *dev, const struct lib *l, const char *vname, const cha
       return 1;
    struct rwa_buffer *vbuf[MAX_BUF] = { 0 }, *fbuf[MAX_BUF] = { 0 };
    for (unsigned i = 0; i < info.vertex_buffers && i < MAX_BUF; i++)
-      vbuf[i] = make_buffer(dev);
+      vbuf[i] = make_buffer(dev, 'V', i);
    for (unsigned i = 0; i < info.fragment_buffers && i < MAX_BUF; i++)
-      fbuf[i] = make_buffer(dev);
+      fbuf[i] = make_buffer(dev, 'F', i);
    struct rwa_sampler *smp[MAX_TEX] = { 0 };
    for (unsigned i = 0; i < info.fragment_samplers && i < MAX_TEX; i++)
       smp[i] = make_sampler(dev);
@@ -497,7 +589,7 @@ compute(struct rwa_device *dev, const struct lib *l, const char *kname, const un
    }
    struct rwa_buffer *buf[MAX_BUF] = { 0 };
    for (unsigned i = 0; i < info.buffers && i < MAX_BUF; i++)
-      buf[i] = make_buffer(dev);
+      buf[i] = make_buffer(dev, 'C', i);
    struct rwa_sampler *smp[MAX_TEX] = { 0 };
    for (unsigned i = 0; i < info.samplers && i < MAX_TEX; i++)
       smp[i] = make_sampler(dev);
@@ -572,7 +664,13 @@ main(int argc, char **argv)
          primitive = atoi(argv[++i]);
       else if (!strcmp(argv[i], "-v") && i + 1 < argc)
          vertices = atoi(argv[++i]);
-      else if (!strcmp(argv[i], "-z"))
+      else if ((!strcmp(argv[i], "-V") || !strcmp(argv[i], "-F") || !strcmp(argv[i], "-C")) && i + 1 < argc) {
+         if (!parse_fill(argv[i][1], argv[i + 1])) {
+            fprintf(stderr, "hero_metal_test: %s %s: not N=word,word,...\n", argv[i], argv[i + 1]);
+            return 2;
+         }
+         i++;
+      } else if (!strcmp(argv[i], "-z"))
          float_fill = true;
       else
          break;
