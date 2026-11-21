@@ -5304,3 +5304,18 @@ sha256 = "68f95f671b1cb14baf912b18f31109bdfeb7af25f3f842cfcdfd9bee0c9e0d63"
 size = 426
 immutable = true
 note = "heroeagl.log del teléfono (scratch, fuera de git)."
+
+[[evidence]]
+id = "E-0359"
+title = "HITO: PRIMER OPENGL ES DE UNA APP DE iOS SOBRE LA GPU DEL S7: con min128 (bit 6 de interposición, parche 0486) S7GE Lab muestra un triángulo RGB girando (observación del Director: 'a la tercera de crashear entro y veo un triangulo con colores rgb girando'); informe de la app: 'GL: context ok, storage true, 375 x 281, framebuffer status 0x8cd5 (completo)', GL_RENDERER 'Mali-T880 (Panfrost)', GL_VERSION 'OpenGL ES 3.1 Mesa 25.0.7', GL_VENDOR Mesa, program linked 1, Metal nil; esto confirma la causa de E-0358 (el kernel respondía sin el bit 6); lo que NO está medido: fotogramas por segundo reales del triángulo (el 'frames 118.5 per second' del informe es del temporizador de la pantalla del informe, no del GL), si dibuja la GPU o llvmpipe/softpipe de Mesa (el nombre dice Panfrost); PROBLEMA ABIERTO: de 9 arranques de la app, 6 se cierran con SIGSEGV (dirección 0xf940c908f0000080, un valor que parece basura, no un puntero) en libdispatch +0x5800 llamado desde RunningBoardServices +0xd3d8 (aserciones de ciclo de vida de UIKit/AssertionServices), ANTES del GL, y hasta ahora sin relación con él; hipótesis (sin probar): condición de carrera de RunningBoard sin runningboardd real; contadores D-0123: BOOT 18 de 80, DROP 31 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n5-s7ge-lab.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "c72e8612ed45399c2bbe5c8837033add0ced5639a9272b9ec5b9ef7cb930d381"
+size = 77791
+immutable = true
+note = "Informe de S7GE Lab con el triángulo (scratch)."
