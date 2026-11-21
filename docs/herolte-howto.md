@@ -8,11 +8,15 @@ hardware.
 
 What works (November 2026): the iPhone X iOS 16.7.16 userland to the home
 screen and apps, **GPU acceleration** (Mali-T880 through OpenGL ES, double
-buffered display), all 8 cores, touch, buttons, battery, **Wi-Fi (WPA2)**,
-**the loudspeaker** (ringtones, keyboard clicks, media) and 2 GiB of RAM
-(about 3 GiB with the RAM banks, patches 0326-0329). Not working: modem, Bluetooth,
-cameras, sensors, sleep, Metal (the Today view and Control Center blurs are
-black), the stock iOS 16 wallpaper (others work).
+buffered display scaled by the display's VGR0), all 8 cores with a thermal
+limit, touch, buttons, battery, **Wi-Fi (WPA2)**, **Bluetooth**, the **front
+camera**, **the loudspeaker** (ringtones, keyboard clicks, media), the stock
+iOS 16 wallpaper and the Control Center blur, and 2 GiB of RAM (about 3 GiB
+with the RAM banks, patches 0326-0329). Not working: modem, rear camera,
+sensors, deep sleep, Metal (the Today view and App Library blurs are black),
+vibration from iOS (the motor itself works), the wallpaper gallery's
+thumbnails. Start iOS from TWRP, not by rebooting iOS: otherwise the touch
+panel has no power.
 
 Nothing of Apple's, Samsung's or Broadcom's is in this repository, and none
 of it may be uploaded publicly:
@@ -53,7 +57,8 @@ the SpringBoard and app helpers, the audio plug-in and `hero-run`.
 cd shim/herolte && CROSS=aarch64-none-elf- sh build.sh && cd ../..
 
 # Apple device tree with the S7 hardware: 2 GiB of the second DRAM bank,
-# iOS drawing an iPhone 8 screen (750x1334, scaled to the panel by the GPU).
+# iOS drawing an iPhone 8 screen (750x1334, scaled to the panel by the
+# display's VGR0, or by the GPU with herovgr=0).
 # Needs research/ipsw-x/d22ap.adt.
 python3 tools/mkadt_herolte.py herolte.adt --bank2 --bank2-mb 2048 --iphone8
 
@@ -71,17 +76,18 @@ ignition_level=1 launchd_unsecure_cache=1 wdt=-1 -wdt_no_pmu wdt_test=no_user_ch
 a5fb_keep_on=1 a5fb_noconsole=1 a5fb_perf=1 a5fb_hz=60 sweetfb_native=1 sweetfb_scale=1 \
 sweetfb_lw=750 sweetfb_lh=1334 sweetfb_gpu=1 cpus=8 herogl=1 sweettop=1 \
 vm_compression_limit=98304 vm_compressor=2 \
-heronoexec=vmd,bluetoothd,searchd,ReportCrash,aggregated,analyticsd,cloudd,homed,driverkitd \
-glsb3=1 herogpu_mhz=650 herocpu_mhz=2288 herosb=1 sweetsample=-"
+heronoexec=vmd,searchd,ReportCrash,aggregated,analyticsd,cloudd,homed,driverkitd \
+glsb3=1 herogpu_mhz=650 herocpu_mhz=2288 herosb=1 sweetsample=- herocap=coreduetd:20"
 
 python3 tools/mkpayload.py kernel.development.herolte herolte.adt payload.bin --cmdline "$CMDLINE"
 ```
 
 Keep `-noprogress`: a boot line without it panicked early (not yet understood).
 
-With patch 0330 the Mongoose cores go back to the bootloader's 728 MHz while
-the screen is off (Power) and while the battery is at 42 C or more
-(`herohot=N` changes it); `heropower=0` turns that off.
+With patches 0330-0331 the Mongoose cores go back to the bootloader's 728 MHz
+while the screen is off (Power) and while the SoC's TMU sensors read 80 C or
+more, until they are below 70 C again (`herohot=N` changes the limit);
+`heropower=0` turns that off.
 
 In TWRP, save your current BOOT first (keep it: it is your way back to
 Android), then build the XNU BOOT image from it (the Samsung header and DTBs

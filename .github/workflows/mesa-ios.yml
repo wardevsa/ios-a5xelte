@@ -11,6 +11,7 @@ on:
     branches: [herolte, herolte-drop-v2]   # herolte-drop-v2: temporal, quitar al fusionar
     paths:
       - "gpu/mesa/**"
+      - "gpu/metal/**"
       - "gpu/eagl/**"
       - "gpu/hakios-gl/**"
       - ".github/workflows/mesa-ios.yml"
@@ -50,7 +51,7 @@ jobs:
             bash gpu/mesa/build-mesa.sh "$RUNNER_TEMP/mesa-work" out 2>&1 | tee -a build.log
           fi
           MESA_INC="$RUNNER_TEMP/mesa-work/mesa/include" bash gpu/eagl/build-eagl.sh out 2>&1 | tee -a build.log
-          shasum -a 256 out/osmesa-test out/eagl_ca_test out/hero-run out/lib/* | tee out/SHA256SUMS
+          shasum -a 256 out/osmesa-test out/air_metal_test out/hero_metal_test out/hero_mtl_test out/metal/HeroMetal out/metal/Info.plist out/eagl_ca_test out/hero-run out/lib/* | tee out/SHA256SUMS
       # Logs need a GitHub sign-in to read; check-run annotations are public.
       - name: Report build errors as annotations
         if: failure()

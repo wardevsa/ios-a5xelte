@@ -19,8 +19,12 @@ fi
 made=0 kept=0 n=0
 while IFS= read -r -d '' heic; do
     tmp="$heic.png.tmp"
-    if /usr/bin/sips -s format png "$heic" --out "$tmp" >/dev/null 2>&1 && [ -s "$tmp" ]; then
-        mv -f "$tmp" "$heic"
+    # (2026-11-14) widths padded to a multiple of 8 pixels: CoreAnimation reads image rows rounded to 32 bytes, and a
+    # 1105-pixel picture with tight rows took backboardd down reading past its end (boot-walls)
+    if /usr/bin/sips -s format png "$heic" --out "$tmp" >/dev/null 2>&1 && [ -s "$tmp" ] &&
+       /usr/bin/python3 "$(dirname "$0")/herolte-png-pad8.py" --file "$tmp" "$tmp.8" >/dev/null && [ -s "$tmp.8" ]; then
+        rm -f "$tmp"
+        mv -f "$tmp.8" "$heic"
         chmod 644 "$heic"
         made=$((made + 1))
         rel=${heic#"$root"}
@@ -30,7 +34,7 @@ while IFS= read -r -d '' heic; do
             echo "$n $rel" >> "$out/walls/list"
         fi
     else
-        rm -f "$tmp"
+        rm -f "$tmp" "$tmp.8"
         kept=$((kept + 1))
         echo "kept as HEIC: ${heic#"$root"}"
     fi

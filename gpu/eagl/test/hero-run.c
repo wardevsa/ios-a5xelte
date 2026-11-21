@@ -280,6 +280,15 @@ ask_for_old_wallpaper(void)
    static const char *const image_path =
       "/Library/Wallpaper/Collections/Clownfish~iphone.wallpaperCollection/Wallpapers/"
       "7420.Clownfish-375w-812h@3x~iphone.wallpaper/7420.Clownfish_Background-375w-812h@3x~iphone.ca/assets/Background.HEIC";
+   /*
+    * (2026-11-14) Off unless DROP_DIR oldwallpaper.on: with the pictures made PNG (walls/) the poster shows the original
+    * wallpaper itself, and this old way, once the picture has pixels, took backboardd down (SIGSEGV in QuartzCore's
+    * memmove, past the end of a 5128192-byte image) right after it was asked, every boot (boot-walls, boot-walls8).
+    */
+   if (access(DROP_DIR "oldwallpaper.on", F_OK) != 0) {
+      dprintf(census_fd, "old wallpaper: not asked (no oldwallpaper.on)\n");
+      return;
+   }
    dlopen("/System/Library/Frameworks/UIKit.framework/UIKit", RTLD_NOW);
    dlopen("/System/Library/PrivateFrameworks/SpringBoardUIServices.framework/SpringBoardUIServices", RTLD_NOW);
    int (*set_images)(id, id, int, int) = (int (*)(id, id, int, int))dlsym(RTLD_DEFAULT, "SBSUIWallpaperSetImages");
@@ -586,7 +595,7 @@ reduce_transparency(void)
 
 /* The plug-in of the sound (gpu/hakios-audio) where mediaserverd looks: it loads plug-ins as it starts, so from the next boot on. */
 static void
-copy_audio_file(const char *from, const char *to, mode_t mode)
+copy_plugin_file(const char *what, const char *from, const char *to, mode_t mode)
 {
    char buffer[65536];
    ssize_t n;
@@ -601,7 +610,7 @@ copy_audio_file(const char *from, const char *to, mode_t mode)
    }
    if (in >= 0)
       close(in);
-   herodrm_log("hero-run: audio plug-in: %s: %s", to, out >= 0 ? "put" : "not put");
+   herodrm_log("hero-run: %s plug-in: %s: %s", what, to, out >= 0 ? "put" : "not put");
 }
 
 /*
@@ -679,8 +688,32 @@ install_audio_plugin(void)
    if (!have || (there && to.st_size == from.st_size && to.st_mtime >= from.st_mtime))
       return;
    mkdir("/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver", 0755);
-   copy_audio_file(DROP_DIR "audio/HakiosAudio", driver, 0755);
-   copy_audio_file(DROP_DIR "audio/Info.plist", "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/Info.plist", 0644);
+   copy_plugin_file("audio", DROP_DIR "audio/HakiosAudio", driver, 0755);
+   copy_plugin_file("audio", DROP_DIR "audio/Info.plist", "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/Info.plist",
+                    0644);
+}
+
+/*
+ * The Metal plug-in (gpu/metal, docs/herolte-metal.md M3) where Metal.framework looks for the kernel's IOAcceleratorES
+ * (MetalPluginName HeroMetal): /System/Library/Extensions/HeroMetal.bundle. It gives a device only to the processes named
+ * in DROP_DIR metal.allow, and loads the driver (DROP_DIR lib/libhakiosmetal.dylib) only for them. Installed when the
+ * drop zone's executable differs from the one there; Metal reads the bundle in each process that asks, so the next
+ * process to ask sees it.
+ */
+static void
+install_metal_plugin(void)
+{
+   struct stat from, to;
+   const char *bundle = "/System/Library/Extensions/HeroMetal.bundle";
+   const char *exe = "/System/Library/Extensions/HeroMetal.bundle/HeroMetal";
+   int have = stat(DROP_DIR "metal/HeroMetal", &from) == 0, there = stat(exe, &to) == 0;
+   herodrm_log("hero-run: Metal plug-in: drop zone %lld bytes, Extensions %lld bytes", have ? (long long)from.st_size : -1,
+               there ? (long long)to.st_size : -1);
+   if (!have || (there && to.st_size == from.st_size && to.st_mtime >= from.st_mtime))
+      return;
+   mkdir(bundle, 0755);
+   copy_plugin_file("Metal", DROP_DIR "metal/HeroMetal", exe, 0755);
+   copy_plugin_file("Metal", DROP_DIR "metal/Info.plist", "/System/Library/Extensions/HeroMetal.bundle/Info.plist", 0644);
 }
 
 /*
@@ -1194,6 +1227,189 @@ assetsd_err_watch(void *arg)
    return NULL;
 }
 
+/*
+ * With DROP_DIR haptics.probe: 60 s after the start, what MobileGestalt answers about the haptics (the ADT's
+ * /product/haptics closed-loop, boot-0339), then the system's vibration (kSystemSoundID_Vibrate, 4095) three times:
+ * whether Darwin plays it on the audio plug-in's Actuator says itself in the log ("the actuator plays").
+ */
+/*
+ * Bluetooth and the front camera for every boot, as the Note FE port's test program (gracerlte/bot/bot.m, its 0432-0461)
+ * starts them; the kernel side is in 0342 (kern.notefe_bt, kern.notefe_bt_fw, kern.notefe_cam). From the drop zone:
+ *   bt.level   8: the chip patch (bt-murata.hcd: the phone's own bcm4359C0_*.hcd from VENDOR) into the kernel, the HCI
+ *              bridge up, what BlueTool and bluetoothd look for (/dev links, stand-in patch files, MobileGestalt's
+ *              WifiVendor), bluetoothd restarted. Other values: kern.notefe_bt=N alone (1-2 read only). None: nothing.
+ *   cam.level  8: /dev/hakios-camera (kern.notefe_cam=7), mediaserverd restarted (libheroapp loads libnotefecam with
+ *              cam.media = 1), the cameras in MobileGestalt's cache. 1-7: kern.notefe_cam=N alone. None: nothing.
+ */
+#include <CommonCrypto/CommonDigest.h>
+#define MG_CACHE_FILE "/private/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/com.apple.MobileGestalt.plist"
+
+static int
+drop_level(const char *name)
+{
+   char path[256], text[16] = "";
+   snprintf(path, sizeof(path), DROP_DIR "%s", name);
+   int fd = open(path, O_RDONLY);
+   if (fd < 0)
+      return -1;
+   ssize_t n = read(fd, text, sizeof(text) - 1);
+   close(fd);
+   text[n > 0 ? n : 0] = 0;
+   return atoi(text);
+}
+
+static int
+kill_by_name(const char *name, int sig)
+{
+   int mib[3] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL }, killed = 0;
+   size_t size = 0;
+   sysctl(mib, 3, NULL, &size, NULL, 0);
+   struct kinfo_proc *procs = malloc(size);
+   if (procs && sysctl(mib, 3, procs, &size, NULL, 0) == 0)
+      for (size_t i = 0; i < size / sizeof(*procs); i++)
+         if (strcmp(procs[i].kp_proc.p_comm, name) == 0)
+            killed += kill(procs[i].kp_proc.p_pid, sig) == 0;
+   free(procs);
+   return killed;
+}
+
+/* MobileGestalt's CacheExtra: the key is base64(MD5("MGCopyAnswer" + name)) cut to 22 characters (as the Note FE bot) */
+static void
+mg_cache_set(const char *name, CFTypeRef value)
+{
+   char in[128];
+   unsigned char md[CC_MD5_DIGEST_LENGTH];
+   snprintf(in, sizeof(in), "MGCopyAnswer%s", name);
+   CC_MD5(in, (CC_LONG)strlen(in), md);
+   static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+   char key[25] = "";
+   for (int i = 0, o = 0; i < 16; i += 3) {
+      uint32_t v = (uint32_t)md[i] << 16 | (i + 1 < 16 ? (uint32_t)md[i + 1] << 8 : 0) | (i + 2 < 16 ? md[i + 2] : 0);
+      key[o++] = b64[(v >> 18) & 63];
+      key[o++] = b64[(v >> 12) & 63];
+      key[o++] = b64[(v >> 6) & 63];
+      key[o++] = b64[v & 63];
+   }
+   key[22] = 0;
+   FILE *f = fopen(MG_CACHE_FILE, "rb");
+   if (!f) {
+      herodrm_log("hero-run: devices: no MobileGestalt cache, %s not set", name);
+      return;
+   }
+   CFMutableDataRef data = CFDataCreateMutable(NULL, 0);
+   UInt8 chunk[16384];
+   size_t got;
+   while ((got = fread(chunk, 1, sizeof(chunk), f)) > 0)
+      CFDataAppendBytes(data, chunk, (CFIndex)got);
+   fclose(f);
+   CFPropertyListFormat format = kCFPropertyListBinaryFormat_v1_0;
+   CFMutableDictionaryRef cache = (CFMutableDictionaryRef)CFPropertyListCreateWithData(NULL, data,
+       kCFPropertyListMutableContainersAndLeaves, &format, NULL);
+   CFRelease(data);
+   if (!cache || CFGetTypeID(cache) != CFDictionaryGetTypeID()) {
+      herodrm_log("hero-run: devices: the MobileGestalt cache does not parse, %s not set", name);
+      if (cache)
+         CFRelease(cache);
+      return;
+   }
+   CFMutableDictionaryRef extra = (CFMutableDictionaryRef)CFDictionaryGetValue(cache, CFSTR("CacheExtra"));
+   if (!extra || CFGetTypeID(extra) != CFDictionaryGetTypeID()) {
+      extra = CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+      CFDictionarySetValue(cache, CFSTR("CacheExtra"), extra);
+      CFRelease(extra);
+   }
+   CFStringRef k = CFStringCreateWithCString(NULL, key, kCFStringEncodingUTF8);
+   CFTypeRef old = CFDictionaryGetValue(extra, k);
+   if (old && CFEqual(old, value)) {
+      herodrm_log("hero-run: devices: MobileGestalt %s already set", name);
+   } else {
+      CFDictionarySetValue(extra, k, value);
+      CFDataRef out = CFPropertyListCreateData(NULL, cache, format, 0, NULL);
+      struct stat st;
+      int have = stat(MG_CACHE_FILE, &st) == 0;
+      char tmp[] = MG_CACHE_FILE ".hero";
+      FILE *w = out ? fopen(tmp, "wb") : NULL;
+      int ok = w && fwrite(CFDataGetBytePtr(out), 1, (size_t)CFDataGetLength(out), w) == (size_t)CFDataGetLength(out);
+      if (w)
+         fclose(w);
+      if (ok && have) {
+         chown(tmp, st.st_uid, st.st_gid);
+         chmod(tmp, st.st_mode & 07777);
+      }
+      ok = ok && rename(tmp, MG_CACHE_FILE) == 0;
+      herodrm_log("hero-run: devices: MobileGestalt %s (key %s): %s", name, key, ok ? "written" : "NOT written");
+      if (out)
+         CFRelease(out);
+   }
+   CFRelease(k);
+   CFRelease(cache);
+}
+
+static void *
+devices_start(__unused void *unused)
+{
+   int bt = drop_level("bt.level"), cam = drop_level("cam.level");
+   if (bt <= 0 && cam <= 0)
+      return NULL;
+   sleep(20);
+   if (bt == 8) {
+      symlink("/dev/null", "/dev/cu.bluetooth");      /* bluetoothd: "No valid serial port found" without one */
+      symlink("/dev/null", "/dev/uart.bluetooth");
+      mkdir("/usr/share/firmware/bluetooth", 0755);
+      static const unsigned char standin[] = { 0x4e, 0xfc, 0x04, 0xff, 0xff, 0xff, 0xff };   /* one Launch_RAM record */
+      static const char *names[] = { "Apollo_OS_MUR", "Apollo_OS_USI", "Pegasus_OS_MUR", "Pegasus_OS_USI", "Hercules_OS_MUR",
+                                     "Hercules_OS_USI", "Yoda_OS_MUR", "Yoda_OS_USI", "Tuborg_OS_MUR", "Tuborg_OS_USI" };
+      static const char *builds[] = { "5146", "5147", "5157", "5158", "5153", "5154", "5167", "5168", "5161", "5162" };
+      int made = 0;
+      for (int i = 0; i < 10; i++) {
+         char path[160];
+         snprintf(path, sizeof(path), "/usr/share/firmware/bluetooth/BCM4357B1_19.1.282.%s_%s_20210524.hcd", builds[i], names[i]);
+         if (access(path, F_OK) == 0) {
+            made++;
+            continue;
+         }
+         FILE *f = fopen(path, "wb");
+         if (f) {
+            fwrite(standin, 1, sizeof(standin), f);
+            fclose(f);
+            made++;
+         }
+      }
+      herodrm_log("hero-run: devices: bluetooth: /dev links, %d stand-in BlueTool patch files", made);
+      mg_cache_set("WifiVendor", CFSTR("Murata"));
+      FILE *f = fopen(DROP_DIR "bt-murata.hcd", "rb");
+      if (f) {
+         static unsigned char fw[256 * 1024];
+         size_t n = fread(fw, 1, sizeof(fw), f);
+         fclose(f);
+         herodrm_log("hero-run: devices: bluetooth patch %zu bytes: %s", n,
+             n && sysctlbyname("kern.notefe_bt_fw", NULL, NULL, fw, n) == 0 ? "loaded" : "NOT loaded");
+      } else {
+         herodrm_log("hero-run: devices: bluetooth: no bt-murata.hcd in the drop");
+      }
+   }
+   if (bt > 0) {
+      herodrm_log("hero-run: devices: bluetooth level %d: %s", bt,
+          sysctlbyname("kern.notefe_bt", NULL, NULL, &bt, sizeof(bt)) == 0 ? "set" : "refused");
+      if (bt == 8)
+         herodrm_log("hero-run: devices: bluetooth: bluetoothd restarted (%d)", kill_by_name("bluetoothd", SIGKILL));
+   }
+   if (cam == 8) {
+      int seven = 7;
+      herodrm_log("hero-run: devices: camera device: %s",
+          sysctlbyname("kern.notefe_cam", NULL, NULL, &seven, sizeof(seven)) == 0 ? "made" : "refused");
+      /* mediaserverd lists its capture sources once, at its start: again, now that /dev/hakios-camera is there */
+      herodrm_log("hero-run: devices: camera: mediaserverd restarted (%d)", kill_by_name("mediaserverd", SIGKILL));
+      sleep(8);
+      mg_cache_set("still-camera", kCFBooleanTrue);
+      mg_cache_set("front-facing-camera", kCFBooleanTrue);
+      mg_cache_set("rear-facing-camera", kCFBooleanTrue);
+   } else if (cam > 0) {
+      herodrm_log("hero-run: devices: camera level %d: %s", cam,
+          sysctlbyname("kern.notefe_cam", NULL, NULL, &cam, sizeof(cam)) == 0 ? "set" : "refused");
+   }
+   return NULL;
+}
 /* What is in the drop zone's lib/ (min52: libheroapp never spoke; is it there, and how big?). */
 static void
 log_lib_dir(void)
@@ -1215,6 +1431,135 @@ log_lib_dir(void)
    closedir(d);
 }
 
+static id
+hr_send(id object, const char *selector)
+{
+   return object ? ((id (*)(id, SEL))objc_msgSend)(object, sel_registerName(selector)) : NULL;
+}
+
+static const char *
+hr_text(id string)
+{
+   const char *utf8 = string ? ((const char *(*)(id, SEL))objc_msgSend)(string, sel_registerName("UTF8String")) : NULL;
+   return utf8 ? utf8 : "(none)";
+}
+
+static id
+hr_haptics_constant(const char *name)
+{
+   static void *framework;
+   if (!framework)
+      framework = dlopen("/System/Library/Frameworks/CoreHaptics.framework/CoreHaptics", RTLD_NOW);
+   id *constant = framework ? (id *)dlsym(framework, name) : NULL;
+   return constant ? *constant : NULL;
+}
+
+static id
+hr_haptic_event(double at, double duration, float intensity, float sharpness)
+{
+   id p1 = ((id (*)(id, SEL, id, float))objc_msgSend)(hr_send((id)objc_getClass("CHHapticEventParameter"), "alloc"),
+       sel_registerName("initWithParameterID:value:"), hr_haptics_constant("CHHapticEventParameterIDHapticIntensity"), intensity);
+   id p2 = ((id (*)(id, SEL, id, float))objc_msgSend)(hr_send((id)objc_getClass("CHHapticEventParameter"), "alloc"),
+       sel_registerName("initWithParameterID:value:"), hr_haptics_constant("CHHapticEventParameterIDHapticSharpness"), sharpness);
+   const void *parameters[2] = { p1, p2 };
+   CFArrayRef list = CFArrayCreate(NULL, parameters, 2, &kCFTypeArrayCallBacks);
+   id event = hr_send((id)objc_getClass("CHHapticEvent"), "alloc");
+   if (duration > 0)
+      event = ((id (*)(id, SEL, id, id, double, double))objc_msgSend)(event,
+          sel_registerName("initWithEventType:parameters:relativeTime:duration:"),
+          hr_haptics_constant("CHHapticEventTypeHapticContinuous"), (id)list, at, duration);
+   else
+      event = ((id (*)(id, SEL, id, id, double))objc_msgSend)(event, sel_registerName("initWithEventType:parameters:relativeTime:"),
+          hr_haptics_constant("CHHapticEventTypeHapticTransient"), (id)list, at);
+   CFRelease(list);
+   return event;
+}
+
+/*
+ * CoreHaptics, as an application (and UIKit's feedback generators) plays haptics: what the hardware is said to support,
+ * whether an engine starts, and a pattern (a tap, half a second at half strength, a tap); each failure with CoreHaptics'
+ * own error. The way Scion's sound_test (S9) asks it.
+ */
+static void
+haptics_engine_probe(void)
+{
+   if (!hr_haptics_constant("CHHapticEventTypeHapticTransient")) {
+      herodrm_log("hero-run: haptics: no CoreHaptics");
+      return;
+   }
+   id capabilities = hr_send((id)objc_getClass("CHHapticEngine"), "capabilitiesForHardware");
+   BOOL supports = capabilities && ((BOOL (*)(id, SEL))objc_msgSend)(capabilities, sel_registerName("supportsHaptics"));
+   SEL first = sel_registerName("supports1stPartyHaptics");
+   BOOL answers = capabilities && ((BOOL (*)(id, SEL, SEL))objc_msgSend)(capabilities, sel_registerName("respondsToSelector:"), first);
+   herodrm_log("hero-run: haptics: CoreHaptics: the hardware %s haptics%s", supports ? "supports" : "DOES NOT SUPPORT",
+       !answers ? "" : ((BOOL (*)(id, SEL))objc_msgSend)(capabilities, first) ? " (and the system's own)" : " (NOT the system's own)");
+   id error = NULL;
+   id engine = ((id (*)(id, SEL, id *))objc_msgSend)(hr_send((id)objc_getClass("CHHapticEngine"), "alloc"),
+       sel_registerName("initAndReturnError:"), &error);
+   if (!engine) {
+      herodrm_log("hero-run: haptics: CoreHaptics: no engine: %s", hr_text(hr_send(error, "description")));
+      return;
+   }
+   BOOL started = ((BOOL (*)(id, SEL, id *))objc_msgSend)(engine, sel_registerName("startAndReturnError:"), &error);
+   herodrm_log("hero-run: haptics: CoreHaptics: the engine %s%s", started ? "has started" : "DOES NOT START: ",
+       started ? "" : hr_text(hr_send(error, "description")));
+   if (!started)
+      return;
+   const void *events[3] = { hr_haptic_event(0, 0, 1.0f, 0.5f), hr_haptic_event(0.3, 0.5, 0.5f, 0.3f),
+       hr_haptic_event(1.0, 0, 1.0f, 0.8f) };
+   CFArrayRef list = CFArrayCreate(NULL, events, 3, &kCFTypeArrayCallBacks);
+   CFArrayRef none = CFArrayCreate(NULL, NULL, 0, &kCFTypeArrayCallBacks);
+   id pattern = ((id (*)(id, SEL, id, id, id *))objc_msgSend)(hr_send((id)objc_getClass("CHHapticPattern"), "alloc"),
+       sel_registerName("initWithEvents:parameters:error:"), (id)list, (id)none, &error);
+   id player = pattern ? ((id (*)(id, SEL, id, id *))objc_msgSend)(engine, sel_registerName("createPlayerWithPattern:error:"),
+       pattern, &error) : NULL;
+   if (!player || !((BOOL (*)(id, SEL, double, id *))objc_msgSend)(player, sel_registerName("startAtTime:error:"), 0.0, &error)) {
+      herodrm_log("hero-run: haptics: CoreHaptics: the pattern does not play: %s", hr_text(hr_send(error, "description")));
+   } else {
+      herodrm_log("hero-run: haptics: CoreHaptics: playing a tap, half a second, a tap");
+      sleep(2);
+   }
+   ((void (*)(id, SEL, id))objc_msgSend)(engine, sel_registerName("stopWithCompletionHandler:"), NULL);
+}
+
+static void *
+haptics_probe(__unused void *unused)
+{
+   if (access(DROP_DIR "haptics.probe", F_OK) != 0)
+      return NULL;
+   sleep(60);
+   void *mg = dlopen("/usr/lib/libMobileGestalt.dylib", RTLD_NOW);
+   CFTypeRef (*copy_answer)(CFStringRef, CFDictionaryRef) = mg ? (CFTypeRef (*)(CFStringRef, CFDictionaryRef))dlsym(mg, "MGCopyAnswer") : NULL;
+   static const char *keys[] = {
+      "DeviceSupportsClosedLoopHaptics", "DeviceSupportsHaptics", "HapticsCapability", "DeviceSupportsHapticKeyboard",
+      "ProductType", "HWModelStr",
+   };
+   for (unsigned i = 0; copy_answer && i < sizeof(keys) / sizeof(keys[0]); i++) {
+      CFStringRef key = CFStringCreateWithCString(NULL, keys[i], kCFStringEncodingUTF8);
+      CFTypeRef v = copy_answer(key, NULL);
+      char text[160] = "(none)";
+      if (v) {
+         CFStringRef d = CFCopyDescription(v);
+         CFStringGetCString(d, text, sizeof(text), kCFStringEncodingUTF8);
+         CFRelease(d);
+         CFRelease(v);
+      }
+      CFRelease(key);
+      herodrm_log("hero-run: haptics: MobileGestalt %s = %s", keys[i], text);
+   }
+   haptics_engine_probe();
+   void *at = dlopen("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", RTLD_NOW);
+   void (*play)(uint32_t) = at ? (void (*)(uint32_t))dlsym(at, "AudioServicesPlaySystemSound") : NULL;
+   for (int i = 0; play && i < 3; i++) {
+      herodrm_log("hero-run: haptics: the system's vibration (4095), %d of 3", i + 1);
+      play(4095);
+      sleep(3);
+   }
+   if (!play)
+      herodrm_log("hero-run: haptics: no AudioServicesPlaySystemSound");
+   return NULL;
+}
+
 int
 main(int main_argc, char **main_argv)
 {
@@ -1234,6 +1579,7 @@ main(int main_argc, char **main_argv)
    install_audio_plugin();
    assetsd_stderr_to_file();
    log_lib_dir();
+   install_metal_plugin();
    reduce_transparency();
    remove_listed_apps();
    remove_ls_db_once();
@@ -1260,6 +1606,12 @@ main(int main_argc, char **main_argv)
    pthread_t apps;
    if (pthread_create(&apps, NULL, install_apps, NULL) == 0)
       pthread_detach(apps);
+   pthread_t haptics;
+   if (pthread_create(&haptics, NULL, haptics_probe, NULL) == 0)
+      pthread_detach(haptics);
+   pthread_t devices;
+   if (pthread_create(&devices, NULL, devices_start, NULL) == 0)
+      pthread_detach(devices);
    sleep(20);
    load_env();
    posix_spawn_file_actions_t fa;

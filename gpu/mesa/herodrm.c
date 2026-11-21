@@ -15,6 +15,7 @@
  * every call to the kernel log.
  */
 #include <errno.h>
+#include <execinfo.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <pthread/qos.h>
@@ -73,7 +74,9 @@ static uint64_t submits, faults;
  * kernel zeroes, cleans and maps every new buffer). */
 static struct {
    uint64_t start_ns, submits, gpu_us, submit_ns, creates, create_bytes, create_ns, frees;
+   uint64_t sel_calls[8], sel_ns[8];    /* (2026-11-14) every kernel call, by selector: where mach_msg2_trap's time goes */
 } st;
+static const char *const sel_names[8] = { "param", "create", "free", "map", "submit", "log", "surfacebo", "syncbo" };
 
 EXPORT void herodrm_log(const char *fmt, ...);
 
@@ -99,6 +102,15 @@ stats_tick(uint64_t t)
                100.0 * st.gpu_us * 1e3 / wall, st.submit_ns / 1e6,
                (unsigned long long)st.creates, st.create_bytes / 1048576.0, st.create_ns / 1e6,
                (unsigned long long)st.frees);
+   char by[512];
+   int used = 0;
+   for (int i = 0; i < 8 && used < (int)sizeof(by) - 48; i++) {
+      if (st.sel_calls[i] && i != 5)
+         used += snprintf(by + used, sizeof(by) - used, " %s %llu/%.1fms", sel_names[i],
+                          (unsigned long long)st.sel_calls[i], st.sel_ns[i] / 1e6);
+   }
+   if (used)
+      herodrm_log("kernel calls %.1f s:%s", wall / 1e9, by);
    memset(&st, 0, sizeof(st));
    st.start_ns = t;
 }
@@ -107,7 +119,12 @@ static uint32_t
 call(uint32_t sel, const uint64_t *in, uint32_t nin, uint64_t *out, uint32_t nout)
 {
    uint32_t n = nout;
+   uint64_t t0 = now_ns();
    kern_return_t kr = IOConnectCallMethod(conn, sel, in, nin, NULL, 0, out, &n, NULL, NULL);
+   if (sel < 8) {
+      st.sel_calls[sel]++;
+      st.sel_ns[sel] += now_ns() - t0;
+   }
    return kr;
 }
 
@@ -257,6 +274,27 @@ create_bo(struct drm_panfrost_create_bo *req)
       herodrm_log("CREATE_BO %llu bytes (flags 0x%x) failed: 0x%x",
                   (unsigned long long)size, req->flags, kr);
       return fail(ENOMEM);
+   }
+   /*
+    * (2026-11-21) Who asks: with /private/var/herolte/herodrm.trace present, creates 300 to 303 of a process
+    * log their size, flags and caller chain. MercuryPoster's Metal made ~430 one-page BOs every 5 s and freed none
+    * (boot-18k50); the chain names the Mesa function that makes them.
+    */
+   {
+      static int trace = -1;
+      static unsigned made;
+      if (trace < 0)
+         trace = access("/private/var/herolte/herodrm.trace", F_OK) == 0;
+      made++;
+      if (trace && made >= 300 && made < 304) {
+         void *frames[16];
+         int n = backtrace(frames, 16);
+         char **names = backtrace_symbols(frames, n);
+         herodrm_log("CREATE_BO trace #%u: %llu bytes, flags 0x%x", made, (unsigned long long)size, req->flags);
+         for (int i = 1; names && i < n; i++)
+            herodrm_log("  %s", names[i]);
+         free(names);
+      }
    }
    req->handle = (uint32_t)out[0];
    req->offset = out[1];

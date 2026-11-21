@@ -39,7 +39,10 @@ python3 "$HG/mkeagl.py" "$HG/src/eagl_slots.txt" "$MESA_INC/../src/mapi/glapi/re
 $CC -O2 -g -w -I"$OBJ" -I"$HG/src" -I"$HG/include" -c "$HG/src/eagl.c" -o "$OBJ/hg_eagl.o"
 $CC -O2 -g -Wall -I"$HG/src" -c "$HG/src/gl_hero.c" -o "$OBJ/hg_gl_hero.o"
 $CC -O2 -g -Wall -c "$HG/src/ca_hooks.c" -o "$OBJ/hg_ca_hooks.o"
-$CC -dynamiclib -o "$OUT/lib/libhakiosgl.dylib" "$OBJ"/{hg_eagl,hg_gl_hero,hg_ca_hooks,hero_log,hero_backboardd,hero_prof}.o \
+# iOS 18: the render server's GLES renderer (ca_server_hook.c, after Bergamota's); it does nothing on iOS 16's QuartzCore.
+$CC -O2 -g -Wall -c "$HG/src/ca_server_hook.c" -o "$OBJ/hg_ca_server_hook.o"
+# hero_log first: its constructor sends stderr to the kernel log before eagl.c and the hooks write to it.
+$CC -dynamiclib -o "$OUT/lib/libhakiosgl.dylib" "$OBJ"/{hero_log,hg_eagl,hg_gl_hero,hg_ca_hooks,hg_ca_server_hook,hero_backboardd,hero_prof}.o \
   -install_name @rpath/libhakiosgl.dylib \
   -framework CoreFoundation -framework IOKit -framework IOSurface -lobjc \
   -L "$OUT/lib" -lOSMesa.8 -Wl,-rpath,/private/var/herolte/lib -Wl,-undefined,error
@@ -67,6 +70,14 @@ $CC -O2 -fobjc-arc -Wall -Wno-protocol -Wno-incomplete-implementation -Wno-unuse
 # The smallest inserted library: dyld/insertion bisect (E-0336), dropped as lib/libheroapp.dylib for one boot.
 $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroprobe.dylib" "$HERE/src/heroprobe.c" -install_name @rpath/libheroprobe.dylib
 
+# The front camera's capture device in mediaserverd (gpu/camera, from the Note FE port's gracerlte/camera, after the S9
+# port's camera_device.c/camera_isp.c, MIT: LICENSE.HakiOS), loaded by libheroapp with the drop zone's cam.media = 1.
+$CC -O2 -fblocks -Wall -Wno-unused-function -Wno-deprecated-declarations -dynamiclib -o "$OUT/lib/libnotefecam.dylib" \
+  "$HERE/../camera/inject.c" "$HERE/../camera/camera_device.c" "$HERE/../camera/camera_isp.c" \
+  -install_name @rpath/libnotefecam.dylib -framework CoreFoundation -framework CoreMedia -framework CoreVideo \
+  -framework IOSurface -lobjc
+codesign -s - -f "$OUT/lib/libnotefecam.dylib"
+
 # The audio plug-in of mediaserverd, for hero-run to put in /System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver.
 mkdir -p "$OUT/audio"
 $CC -O2 -w -bundle -I"$HERE/../hakios-audio" -o "$OUT/audio/HakiosAudio" "$HERE/../hakios-audio/audio_plugin.c" \
@@ -80,3 +91,7 @@ for f in "$OUT/lib/libheroeagl.dylib" "$OUT/lib/libhakiosgl.dylib" "$OUT/lib/lib
 done
 # hero-run asks LaunchServices and installd to register the system bundles and the staged apps.
 codesign -s - -f --entitlements "$HERE/test/hero-run.entitlements" "$OUT/hero-run"
+
+# hero-oslog (dropped as hero-run's test): iOS's own log, read from logd's store, into the kernel's log.
+$CC -O2 -Wall -fobjc-arc -o "$OUT/hero-oslog" "$HERE/test/hero-oslog.m" -framework Foundation
+codesign -s - -f --entitlements "$HERE/test/hero-oslog.entitlements" "$OUT/hero-oslog"

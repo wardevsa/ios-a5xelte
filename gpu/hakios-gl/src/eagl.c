@@ -39,7 +39,7 @@
  * "gl:"; with each draw what it is made of -- the texture, the first corners -- and after it a
  * pixel or two of the framebuffer; gltrace_lit=1: and how much of the framebuffer is not black);
  * gltrace_at=SECONDS does so for the first frame that long after the window server started,
- * gltrace_draws=N for the first frame after one of N draws, gltrace_function=N[,K] for the frame
+ * gltrace_draws=N for the first frame after one of N draws or more, gltrace_function=N[,K] for the frame
  * after the Kth draw CoreAnimation makes of its function N with no program, gltrace_frames=N for
  * N frames from any of them on; gltrace_place=X0,Y0,X1,Y1 writes down, of those frames, only the draws whose corners
  * reach into that rectangle, a line each (lines "gl-at:"; writing everything down is slow, and a
@@ -249,8 +249,14 @@ struct eagl {
 	id object;                      /* the EAGLContext */
 	struct hakios_gl *gl;
 	unsigned long api;
-	struct image images[256];
+	/*
+	 * (Galaxy S7 port, iOS 18) 256 were full three minutes into boot-18k25 ("more textures with IOSurfaces than there
+	 * is room for", 50 times): every texture after that was refused and its text drawn as a solid block. iOS 18 keeps
+	 * many more surfaces alive (widgets, glyph atlases). image_index finds a texture's image without a search.
+	 */
+	struct image images[4096];
 	unsigned image_count;
+	uint16_t image_index[65536];    /* texture name -> its image + 1 (0: none), for names under 65536 */
 	GLuint framebuffer;             /* the one bound */
 	GLuint colour;                  /* ... and the texture that is its colour attachment (0: none, or no texture) */
 	GLuint reader;                  /* a framebuffer of ours, to read a texture back */
@@ -550,6 +556,11 @@ summary(struct eagl *e)
 static struct image *
 image_of(struct eagl *e, GLuint texture)
 {
+	if (texture < 65536) {
+		unsigned at = e->image_index[texture];
+
+		return at != 0 && at <= e->image_count && e->images[at - 1].texture == texture ? &e->images[at - 1] : NULL;
+	}
 	for (unsigned i = 0; i < e->image_count; i++) {
 		if (e->images[i].texture == texture) {
 			return &e->images[i];
@@ -569,6 +580,9 @@ image_new(struct eagl *e, GLuint texture, IOSurfaceRef surface)
 			return NULL;
 		}
 		image = &e->images[e->image_count++];
+		if (texture < 65536) {
+			e->image_index[texture] = (uint16_t)e->image_count;
+		}
 	} else {
 		if (image->mirror != 0) {
 			glDeleteTextures(1, &image->mirror);
@@ -591,7 +605,14 @@ image_forget(struct eagl *e, GLuint texture)
 			glDeleteTextures(1, &image->mirror);
 		}
 		CFRelease(image->surface);
+		if (texture < 65536) {
+			e->image_index[texture] = 0;
+		}
 		*image = e->images[--e->image_count];
+		/* the last one moved into this slot: its index follows it */
+		if (image != &e->images[e->image_count] && image->texture < 65536) {
+			e->image_index[image->texture] = (uint16_t)(image - e->images + 1);
+		}
 	}
 }
 
@@ -1158,7 +1179,7 @@ frame_begin(struct eagl *e)
 	e->in_frame = true;
 	e->began = now_us();
 	eagl_tracing = e->frames + 1 >= trace_first && e->frames + 1 <= trace_last;
-	if ((trace_at != 0 && e->began >= trace_at) || (trace_draws != 0 && e->last_draws == trace_draws) || trace_function_met) {
+	if ((trace_at != 0 && e->began >= trace_at) || (trace_draws != 0 && e->last_draws >= trace_draws) || trace_function_met) {
 		trace_left = trace_frames;      /* (once) */
 		trace_at = 0;
 		trace_draws = 0;
@@ -1940,12 +1961,28 @@ static const char table_fragment[] =
  *   digits pass through one that keeps nothing but red as alpha ("colorToAlphaMask") before they
  *   are that mask; drawn as they were, they stayed white.
  */
-#define FUNCTION_MATRIX_PREMULTIPLIED   20
-#define FUNCTION_DOWNSAMPLE_8           28
-#define FUNCTION_VARIABLE_DOWNSAMPLE    38
-#define FUNCTION_VARIABLE_BLUR          39
-#define FUNCTION_SHADOW_BLUR            40
-#define FUNCTION_VIBRANT_MATRIX         45
+/*
+ * (Galaxy S7 port) The numbers are iOS 16's; iOS 18 (22H352) put functions in between (by the table of their names in
+ * QuartzCore, 0x1e7311c60: c4p 22, ds8 29, vrd 39, vrb 40, sb3 42, vcm 48), and ca_hooks.c switches these to them when it
+ * finds that QuartzCore (hakios_gl_ios18_functions()).
+ */
+static unsigned hakios_functions[6] = { 20, 28, 38, 39, 40, 45 };
+#define FUNCTION_MATRIX_PREMULTIPLIED   hakios_functions[0]
+#define FUNCTION_DOWNSAMPLE_8           hakios_functions[1]
+#define FUNCTION_VARIABLE_DOWNSAMPLE    hakios_functions[2]
+#define FUNCTION_VARIABLE_BLUR          hakios_functions[3]
+#define FUNCTION_SHADOW_BLUR            hakios_functions[4]
+#define FUNCTION_VIBRANT_MATRIX         hakios_functions[5]
+
+void hakios_gl_ios18_functions(void);
+
+void
+hakios_gl_ios18_functions(void)
+{
+	static const unsigned ios18[6] = { 22, 29, 39, 40, 42, 48 };
+
+	memcpy(hakios_functions, ios18, sizeof(hakios_functions));
+}
 
 static const char vibrant_fragment[] =
     "#version 300 es\n"
@@ -2077,6 +2114,16 @@ number_text(const float *values, size_t from, size_t count)
 }
 
 static void *ca_context;                /* CoreAnimation's GLContext */
+
+/* (Galaxy S7 port, iOS 18) ca_server_hook.c hands the context over as soon as it makes it: iOS 18's renderer does not call
+ * function_uniform() for every function the way 16's did, and without the context no draw says which function it is. */
+void hakios_gl_set_ca_context(void *context);
+
+void
+hakios_gl_set_ca_context(void *context)
+{
+	ca_context = context;
+}
 static GLfloat function_values[90][20];
 static uint8_t function_given[90];
 
@@ -2498,10 +2545,10 @@ static uint64_t census_told;
 static const char *
 census_name(unsigned function)
 {
-	static const char names[] = HAKIOS_CA_FUNCTIONS;
+	static const char names[] = HAKIOS_CA_FUNCTIONS, names18[] = HAKIOS_CA_FUNCTIONS_18;
 	static char name[4];
 
-	memcpy(name, function < 90 ? names + 4 * function : "?  ", 3);
+	memcpy(name, function < 90 ? (FUNCTION_VIBRANT_MATRIX == 48 ? names18 : names) + 4 * function : "?  ", 3);
 	return name;
 }
 

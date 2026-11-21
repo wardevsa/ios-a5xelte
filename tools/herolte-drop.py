@@ -371,6 +371,17 @@ def pack(items, generation=None):
     directories = set()
     occupied = {}
     for dest, data, mode in files:
+        if dest.startswith('/'):
+            # an absolute destination, only where the kernel takes one (Note FE 0404, in 0342): the launchd plist and the TCC folder
+            parts_abs = dest.split('/')
+            ok = dest == '/System/Library/xpc/launchd.plist' or (
+                dest.startswith('/private/var/mobile/Library/TCC/') and all(part not in ('', '.', '..') for part in parts_abs[1:]))
+            if not ok or '\x00' in dest or '\\' in dest:
+                fail(f'absolute path is not allowed: {dest!r}')
+            if mode not in (0o644, 0o755):
+                fail(f'invalid file mode for {dest!r}')
+            entries.append((dest, mode, data))
+            continue
         dest = validate_relpath(dest)
         if mode not in (0o644, 0o755):
             fail(f'invalid file mode for {dest!r}')

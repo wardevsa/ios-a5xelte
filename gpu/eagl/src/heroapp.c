@@ -11,6 +11,7 @@
 #include <dlfcn.h>
 #include <CoreGraphics/CoreGraphics.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
 #include <stdarg.h>
@@ -416,9 +417,29 @@ preview_for_view(id self, SEL command, id view)
    UIGraphicsBeginImageContextWithOptions((hero_size){ bounds.w, bounds.h }, false, 2.0);
    void *context = UIGraphicsGetCurrentContext();
    if (context != NULL) {
-      CGContextTranslateCTM((CGContextRef)context, -bounds.x, -bounds.y);
-      id layer = ((id (*)(id, SEL))objc_msgSend)(view, sel_registerName("layer"));
-      ((void (*)(id, SEL, void *))objc_msgSend)(layer, sel_registerName("renderInContext:"), context);
+      /*
+       * (2026-11-14) -renderInContext: draws only this process's layers: the posters are drawn by their extensions
+       * (remote layers), so the gallery's previews came out black. -drawViewHierarchyInRect:afterScreenUpdates: asks
+       * the render server (backboardd, which has OpenGL ES) for the picture, remote layers included; if it says no,
+       * the old way. DROP_DIR preview.cpu keeps the old way only.
+       */
+      static int cpu_only = -1;
+      if (cpu_only < 0)
+         cpu_only = access("/private/var/herolte/preview.cpu", F_OK) == 0;
+      signed char drawn = 0;
+      if (!cpu_only) {
+         drawn = ((signed char (*)(id, SEL, hero_rect, signed char))objc_msgSend)(view,
+            sel_registerName("drawViewHierarchyInRect:afterScreenUpdates:"), (hero_rect){ 0, 0, bounds.w, bounds.h }, 1);
+      }
+      static unsigned told;
+      if (told++ < 6)
+         herodrm_log("PosterBoard: preview %.0fx%.0f %s", bounds.w, bounds.h,
+            drawn ? "from the render server" : "drawn here (renderInContext)");
+      if (!drawn) {
+         CGContextTranslateCTM((CGContextRef)context, -bounds.x, -bounds.y);
+         id layer = ((id (*)(id, SEL))objc_msgSend)(view, sel_registerName("layer"));
+         ((void (*)(id, SEL, void *))objc_msgSend)(layer, sel_registerName("renderInContext:"), context);
+      }
    }
    id image = UIGraphicsGetImageFromCurrentImageContext();
    UIGraphicsEndImageContext();
@@ -517,6 +538,31 @@ heic_census_thread(void *unused)
 __attribute__((constructor)) static void
 install(void)
 {
+   /*
+    * (Galaxy S7, iOS 18) DROP_DIR heroapp.off: nothing at all. The kernel copies the drop zone's files but never removes
+    * one, so once this library is there every application keeps getting it. On iOS 18 its PosterBoard preview and its
+    * CoreImage/EAGL changes in the poster extensions left the wallpaper gallery white (boot-18k21 on; it was fine in
+    * boot-18k20, before the library), and it did not bring Settings' icons back.
+    */
+   if (access("/private/var/herolte/heroapp.off", F_OK) == 0) {
+      return;
+   }
+   /*
+    * The front camera's capture device (gpu/camera, libnotefecam.dylib; the Note FE port's 0458) in mediaserverd only,
+    * with the drop zone's cam.media = 1. hero-run makes /dev/hakios-camera (kern.notefe_cam=7) and restarts mediaserverd.
+    */
+   if (strcmp(getprogname(), "mediaserverd") == 0) {
+      char flag = '0';
+      int ff = open("/private/var/herolte/cam.media", O_RDONLY);
+      if (ff >= 0) {
+         (void)read(ff, &flag, 1);
+         close(ff);
+      }
+      if (flag == '1' && access("/private/var/herolte/lib/libnotefecam.dylib", F_OK) == 0) {
+         void *cam = dlopen("/private/var/herolte/lib/libnotefecam.dylib", RTLD_NOW);
+         herodrm_log("mediaserverd: libnotefecam %s", cam ? "loaded" : dlerror());
+      }
+   }
    if (strcmp(getprogname(), "CollectionsPoster") == 0) {
       pthread_t census;
       if (pthread_create(&census, NULL, heic_census_thread, NULL) == 0)
