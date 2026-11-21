@@ -5139,3 +5139,18 @@ sha256 = "12c5528aa3974d8cd9acad205a2f668a04f9c8b8ef73c513b18f06e56858f9c6"
 size = 395241
 immutable = true
 note = "Imagen min125 72d3360e con sbmode 1 (libherosb de CI 44892229557)."
+
+[[evidence]]
+id = "E-0348"
+title = "min125 con sbmode 2 (gestos con tipo 2 y la altura de la barra de estado forzada a 20 puntos): el Director informa de que YA ESTÁN LOS GESTOS y de que la barra de arriba no muestra lo que suele poner (hora, batería...), y de que el botón de la cámara de la pantalla de bloqueo está fuera de la pantalla y solo se le ve un poco; EL VOLCADO: UIStatusBar_Modern, _UIStatusBar y _UIStatusBarForegroundView miden ahora 375 x 20 y no están ocultos, pero _UIStatusBarForegroundView NO TIENE VISTAS HIJAS (con sbmode 1 tenía la hora, la batería y los textos): la altura estaba bien y faltan los ELEMENTOS, es decir, el proveedor que se eligió (_UIStatusBarVisualProvider_Phone, impuesto por el anzuelo) no crea elementos con el tipo 2; SBHomeScreenWindow sigue con márgenes seguros 38,0,29,0 (los de gestos), de ahí que la maquetación de la pantalla de bloqueo (el botón de la cámara) sea la de un teléfono con muesca puesta sobre un lienzo de 667 puntos de alto; HIPÓTESIS: con tipo 2 UIKit espera el proveedor del iPhone X para 375 puntos (_UIStatusBarVisualProvider_Split1125: izquierda hora, derecha iconos), que existe en iOS 16.7.16; PRUEBA (DROP 22 de 80, sin tocar BOOT): sbmode 3 = modo 0 pero el anzuelo devuelve _UIStatusBarVisualProvider_Split1125, sin forzar la altura; además se registran el proveedor que usa cada _UIStatusBar y, a la ronda 20, las vistas de la pantalla de bloqueo (SBCoverSheetWindow) y de la de inicio que sobresalen de su ventana, con sus marcos en coordenadas de ventana (el botón de la cámara debería salir ahí): conviene dejar el teléfono en la pantalla de bloqueo sin desbloquear unos 2 minutos; contadores D-0123: BOOT 15 de 80, DROP 22 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min125c-herolog.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "65e5e7fdab7f9623f2a945a29eec7e698812e4b23376c34dd750fb8c47534941"
+size = 454362
+immutable = true
+note = "Imagen min125 72d3360e con sbmode 2 (libherosb de CI 44898050420)."
