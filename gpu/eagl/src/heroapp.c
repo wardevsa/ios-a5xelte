@@ -71,6 +71,77 @@ uncaught(id exception)
 }
 
 
+
+/*
+ * min127d (E-0352): the kernel's crash line has only addresses, and with the EAGL bridge loaded S7GE Lab dies with SIGSEGV at address 8 in a system library
+ * (pc 0x209de1a78) while it calls renderbufferStorage:fromDrawable:, without saying which library. A handler for SIGSEGV, SIGBUS, SIGILL and SIGTRAP writes, to
+ * /private/var/tmp/heroapp-crash.txt, the signal, the fault address and, for the pc, the link register and up to twelve frames of the frame-pointer chain, the
+ * image (its path), the address inside it and the nearest exported symbol, from dladdr; then it lets the default action go on (the kernel's crash line and the
+ * report stay as they were). Every program that loads libheroapp gets it. DROP_DIR crash.off turns it off.
+ */
+#include <signal.h>
+#include <ucontext.h>
+
+static void
+note_address(int fd, const char *label, uint64_t pc)
+{
+   Dl_info info;
+   char line[420];
+   if (pc != 0 && dladdr((void *)pc, &info) && info.dli_fname) {
+      const char *base = strrchr(info.dli_fname, '/');
+      int n = snprintf(line, sizeof line, "  %s %#llx  %s +%#llx  %s\n", label, (unsigned long long)pc, base ? base + 1 : info.dli_fname,
+                       (unsigned long long)(pc - (uint64_t)info.dli_fbase), info.dli_sname ? info.dli_sname : "(no symbol)");
+      (void)!write(fd, line, (size_t)n);
+   } else {
+      int n = snprintf(line, sizeof line, "  %s %#llx  (no image)\n", label, (unsigned long long)pc);
+      (void)!write(fd, line, (size_t)n);
+   }
+}
+
+static void
+on_crash(int sig, siginfo_t *si, void *ctx)
+{
+   int fd = open("/private/var/tmp/heroapp-crash.txt", O_WRONLY | O_CREAT | O_APPEND, 0666);
+   if (fd >= 0) {
+      char head[200];
+      ucontext_t *uc = (ucontext_t *)ctx;
+      int n = snprintf(head, sizeof head, "crash in %s pid %d: signal %d, fault address %p\n", getprogname(), (int)getpid(), sig, si ? si->si_addr : NULL);
+      (void)!write(fd, head, (size_t)n);
+      if (uc && uc->uc_mcontext) {
+         uint64_t *fp = (uint64_t *)uc->uc_mcontext->__ss.__fp;
+         note_address(fd, "pc", uc->uc_mcontext->__ss.__pc);
+         note_address(fd, "lr", uc->uc_mcontext->__ss.__lr);
+         for (int i = 0; i < 12 && fp && ((uint64_t)fp & 7) == 0 && (uint64_t)fp > 0x1000; i++) {
+            note_address(fd, "bt", fp[1]);
+            uint64_t *next = (uint64_t *)fp[0];
+            if (next <= fp)
+               break;
+            fp = next;
+         }
+      }
+      fchmod(fd, 0666);
+      close(fd);
+   }
+   signal(sig, SIG_DFL);
+   raise(sig);
+}
+
+static void
+install_crash_notes(void)
+{
+   if (access(DROP_DIR "crash.off", F_OK) == 0)
+      return;
+   struct sigaction sa;
+   memset(&sa, 0, sizeof sa);
+   sa.sa_sigaction = on_crash;
+   sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+   sigemptyset(&sa.sa_mask);
+   sigaction(SIGSEGV, &sa, NULL);
+   sigaction(SIGBUS, &sa, NULL);
+   sigaction(SIGILL, &sa, NULL);
+   sigaction(SIGTRAP, &sa, NULL);
+}
+
 /*
  * min127c (E-0351): S7GE Lab, an ordinary app, got "EAGLContext(api: .openGLES2) returned nil" because the lines below make every initWithAPI: answer nil
  * (the stock renderer's table of functions is empty here and jumps to 0), and the project's EAGL bridge (libheroeagl: EAGLContext on OSMesa and
@@ -373,6 +444,7 @@ install(void)
       herodrm_log("PosterBoard: home preview in a bitmap: %d", preview != NULL);
    }
    NSSetUncaughtExceptionHandler(uncaught);
+   install_crash_notes();
    hero_note("libheroapp: %s: loaded (pid %d)", getprogname(), (int)getpid());
    dlopen("/System/Library/Frameworks/OpenGLES.framework/OpenGLES", RTLD_LAZY);
    Class context = objc_getClass("EAGLContext");
