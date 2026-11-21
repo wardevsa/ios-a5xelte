@@ -116,10 +116,51 @@ final class GLView: UIView {
     }
 }
 
+
+/// S7GE M1: a strip whose colour is cleared and presented through Metal (a CAMetalLayer, a command queue, a render pass that clears), at the display's rate.
+final class MetalStrip: UIView {
+    override class var layerClass: AnyClass { return CAMetalLayer.self }
+    private let queue: MTLCommandQueue
+    private var link: CADisplayLink?
+    private(set) var frames = 0
+    private var phase: Double = 0
+    init?(device: MTLDevice) {
+        guard let q = device.makeCommandQueue() else { return nil }
+        queue = q
+        super.init(frame: .zero)
+        let metal = layer as! CAMetalLayer
+        metal.device = device
+        metal.pixelFormat = .bgra8Unorm
+        metal.framebufferOnly = false
+        link = CADisplayLink(target: self, selector: #selector(tick))
+        link?.add(to: .main, forMode: .common)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        (layer as! CAMetalLayer).drawableSize = CGSize(width: bounds.width * contentScaleFactor, height: bounds.height * contentScaleFactor)
+    }
+    @objc private func tick() {
+        let metal = layer as! CAMetalLayer
+        guard let drawable = metal.nextDrawable(), let buffer = queue.makeCommandBuffer() else { return }
+        phase += 0.04
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = drawable.texture
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].storeAction = .store
+        pass.colorAttachments[0].clearColor = MTLClearColor(red: 0.5 + 0.5 * sin(phase), green: 0.5 + 0.5 * sin(phase + 2.1), blue: 0.5 + 0.5 * sin(phase + 4.2), alpha: 1)
+        buffer.makeRenderCommandEncoder(descriptor: pass)?.endEncoding()
+        buffer.present(drawable)
+        buffer.commit()
+        frames += 1
+    }
+}
+
 final class LabController: UIViewController {
     private let gl = GLView()
     private let text = UITextView()
     private var metal = "Metal: not tried (press the button)"
+    private var strip: MetalStrip?
     private var timer: Timer?
 
     override func viewDidLoad() {
@@ -150,6 +191,11 @@ final class LabController: UIViewController {
         refresh()
         if let device = MTLCreateSystemDefaultDevice() {
             metal = "Metal: device \(device.name), max threads \(device.maxThreadsPerThreadgroup), unified memory \(device.hasUnifiedMemory)"
+            if strip == nil, let s = MetalStrip(device: device) {
+                s.frame = CGRect(x: 180, y: gl.frame.maxY + 2, width: 150, height: 40)
+                view.addSubview(s)
+                strip = s
+            }
         } else {
             metal = "Metal: MTLCreateSystemDefaultDevice() = nil"
         }
@@ -161,6 +207,7 @@ final class LabController: UIViewController {
         var lines = ["\(UIDevice.current.model), iOS \(UIDevice.current.systemVersion)",
                      "screen \(s.bounds.width) x \(s.bounds.height) pt @\(s.scale), native \(s.nativeBounds.width) x \(s.nativeBounds.height)",
                      "safe area \(view.safeAreaInsets.top) \(view.safeAreaInsets.bottom)",
+                     "Metal strip frames \(strip?.frames ?? -1)",
                      String(format: "frames %.1f per second (1 triangle %.1f, 48 overdrawn triangles %.1f)", gl.fps, gl.fpsLight, gl.fpsHeavy), "", gl.report, "", metal]
         lines.append("")
         text.text = lines.joined(separator: "\n")
