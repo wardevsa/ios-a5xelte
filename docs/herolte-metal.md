@@ -77,8 +77,18 @@ Panfrost on the T880 for OpenGL, over `gpu/mesa/herodrm.c`. PanVK (Scion's other
      `b2i8` (Panfrost's algebraic pass makes it again from the frontend's `u2u8(b2i32)`, so Midgard lowers it after
      its boolean lowering: 9). `shippou::one::compute` then compiles further but stays more than 90 s in Midgard's
      register allocator (`mir_ra`): its NIR is about 73K instructions, its four materials inlined and selected.
-3. **M3: the Metal device.** Scion's `hakiosmetal_air.m` as a Metal plug-in for iOS 18's Metal.framework, and the
-   kernel service that makes `MTLCreateSystemDefaultDevice` find it.
+3. **M3: the Metal device.** Done on boot-18k47 (2026-11-21).
+   - Kernel (xnu 9198): the `IOAcceleratorES` HeroGPU already published (9100) names `MetalPluginName HeroMetal`,
+     `MetalPluginClassName HeroMetalDevice`; `herometal=0` empties it again.
+   - `gpu/metal/hero-metal-plugin.m`: `/System/Library/Extensions/HeroMetal.bundle`, installed by hero-run from the
+     drop zone. Metal checks the class with `isSubclassOfClass:` (boot-18k46: an NSObject subclass got no call), so
+     it is a `_MTLDevice`; it gives a device only to the processes named in `/private/var/herolte/metal.allow`, loads
+     the driver only for them, and is never released when it declines (ios-b1lte B1L-0085..0087).
+   - `gpu/metal/build-metal.sh`: the driver, `libhakiosmetal.dylib`, is ios-b1lte's Panfrost version of Scion's
+     device (userspace/metal/scion at B2L_REF), its paths in the drop zone and its log in ours (`herodrm_log`).
+   - boot-18k47, `hero_mtl_test`: `MTLCreateSystemDefaultDevice()` = "Mali-T880 (Panfrost) (Hakios)" in 0.16 s, a
+     buffer written and read back, MercuryPoster's library (22 functions), the post pipeline in 0.04 s, two command
+     buffers at status 4 (completed) in 3 and 1 ms, and **the four pixels identical to hero_metal_test's**.
 4. **M4: MercuryPoster** draws.
 
 Core Animation stays on OpenGL until Metal is proven faster on this GPU.
