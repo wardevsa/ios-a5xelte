@@ -5289,3 +5289,18 @@ sha256 = "f05a3e77341ee09b75daa12399022439b26652c0d23d27aa1472d468f128015f"
 size = 56188
 immutable = true
 note = "Informe de S7GE Lab (copia en scratch, fuera de git)."
+
+[[evidence]]
+id = "E-0358"
+title = "heroeagl.log de S7GE Lab (E-0357): setCurrentContext: make_current 1 y Mesa da por su cuenta GL_RENDERER 'Mali-T880 (Panfrost)' (la GPU del S7 está detrás del puente); renderbufferStorage: el contexto actual ES el propio, target 0x8d41, renderbuffer enlazado 0 y límites del drawable 375x280.14 (válidos): las llamadas glGenRenderbuffers/glBindRenderbuffer de la app NO llegan a Mesa, el desvío por interposición (E-0356) no actúa; causa probable (disensamblado de dyld, sin comprobar en el teléfono): dyld solo respeta __DATA,__interpose con el bit 6 de la respuesta de AMFI y el kernel responde 0x23 (bits 0, 1, 5); ACCIÓN: parche xnu 0486 (CI 44913986407) añade el bit 6 a la respuesta (AMFI_DYLD_OUTPUT_ALLOW_INTERPOSING) para los procesos con biblioteca insertada; BOOT 18 de 80 = min128 (sha 612c7a1be580f83164f1e46b4cb1414862def9d27c655f969724c1811bab6490), línea de min127 (603 caracteres, ADT original), verificador 36 PASS 0 FAIL, escrito y leído de vuelta, EFS intacto; PRUEBA: abrir S7GE Lab: GL_RENDERER con texto y storage true = el bit 6 era la causa; además hay un cierre aparte de S7GELab en RunningBoardServices (heroapp-crash.txt, pid 285) sin analizar; contadores D-0123: BOOT 18 de 80, DROP 31 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n4-heroeagl.log"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "68f95f671b1cb14baf912b18f31109bdfeb7af25f3f842cfcdfd9bee0c9e0d63"
+size = 426
+immutable = true
+note = "heroeagl.log del teléfono (scratch, fuera de git)."
