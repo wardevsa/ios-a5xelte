@@ -5526,3 +5526,18 @@ sha256 = "7172e623c41f5288cca70e72bb5e2ac7a6dee7572ffcd0a2d2d99a825cb7d1b5"
 size = 312762
 immutable = true
 note = "Registro del kernel con el aborto de dyld (scratch)."
+
+[[evidence]]
+id = "E-0374"
+title = "HITO S7GE M1: PRIMER Metal EN EL TELÉFONO: informe de S7GE Lab (min128 + libheroapp E-0373 + libheromtl + libheroeagl-app E-0372): 'Metal: device S7GE Mali-T880 (Metal on OpenGL ES), max threads MTLSize(width: 256, height: 256, depth: 64), unified memory true' y 'Metal strip frames 2355' (la franja que limpia y presenta por CAMetalLayer, nextDrawable, pase de render y presentDrawable ha presentado 2355 fotogramas) mientras el triángulo GLES sigue ('53.6 per second' con 1 triángulo, '115.0' con 48: el ritmo cambia por la competencia con la franja y por el reloj de pantalla; sin interpretar aún); heromtl.log: 'device made, CAMetalLayer patched'; el Director: 'ya va'; E-0372 (hueco TSD 20) confirmado en la práctica: en esta tanda no aparece ningún cierre de libdispatch; queda UN cierre nuevo (heroapp-crash.txt, pid 257): SIGSEGV dirección 0xafcf8ca20 en objc_retainAutoreleaseReturnValue llamado desde hero_MTLCreateSystemDefaultDevice (libheroapp +0x41b4) desde LabController.tryMetal, intermitente (otros arranques pasan); sin causa: ¿el device nil de la ruta del sistema o la ruta nuestra?; contadores D-0123: BOOT 18 de 80, DROP 43 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n17-s7ge-lab.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "f8c090a5b52bc9256cee92501a0b45e37da09bc11749b383afea7f848e6d4781"
+size = 132867
+immutable = true
+note = "Informe de S7GE Lab con Metal M1 (scratch)."
