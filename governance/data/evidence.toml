@@ -5319,3 +5319,18 @@ sha256 = "c72e8612ed45399c2bbe5c8837033add0ced5639a9272b9ec5b9ef7cb930d381"
 size = 77791
 immutable = true
 note = "Informe de S7GE Lab con el triángulo (scratch)."
+
+[[evidence]]
+id = "E-0360"
+title = "CORRECCIÓN a E-0359: el 'frames 118.5 per second' del informe de S7GE Lab SÍ es de GL (GLView.fps cuenta las llamadas de drawFrame, que incluyen presentRenderbuffer); mi frase de que era del temporizador de la pantalla del informe era errónea; lo que sigue sin saberse es cuánto de eso es la GPU: el triángulo es trivial; ACCIÓN (DROP 32 de 80, sin BOOT): S7GE Lab de CI 44919648383 alterna cada 2 s entre 1 triángulo y 48 triángulos superpuestos (relleno) y el informe da los dos ritmos; LECTURA: si 48 triángulos van muchísimo más lento que 1 el cuello es el relleno (GPU o copia), si van igual el cuello es la presentación; cierres de arranque de la app (6 de 9, RunningBoardServices): solo se registran en S7GELab entre todas las apps con libheroapp, así que parecen propios de esta app o de su arranque y no del sistema; sin causa; contadores D-0123: BOOT 18 de 80, DROP 32 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n5-heroapp-crash.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "75462c7c266d71b9e6f2e1d398c6ae92501e66daf50e8aecfb6b6a70db0a8c72"
+size = 16242
+immutable = true
+note = "heroapp-crash.txt (scratch)."
