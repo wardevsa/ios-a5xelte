@@ -124,14 +124,37 @@ final class MetalStrip: UIView {
     private var link: CADisplayLink?
     private(set) var frames = 0
     private var phase: Double = 0
+    private let device: MTLDevice
+    private var pipeline: MTLRenderPipelineState?
+    private(set) var triangle = "Metal triangle: not set up"
+    private static let source = """
+    #include <metal_stdlib>
+    using namespace metal;
+    struct VIn { packed_float2 position; packed_float4 color; };
+    struct VOut { float4 position [[position]]; float4 color; };
+    vertex VOut tri_vertex(const device VIn *v [[buffer(0)]], uint id [[vertex_id]]) { VOut o; o.position = float4(v[id].position, 0, 1); o.color = v[id].color; return o; }
+    fragment float4 tri_fragment(VOut in [[stage_in]]) { return in.color; }
+    """
     init?(device: MTLDevice) {
         guard let q = device.makeCommandQueue() else { return nil }
         queue = q
+        self.device = device
         super.init(frame: .zero)
         let metal = layer as! CAMetalLayer
         metal.device = device
         metal.pixelFormat = .bgra8Unorm
         metal.framebufferOnly = false
+        do {
+            let library = try device.makeLibrary(source: MetalStrip.source, options: nil)
+            let d = MTLRenderPipelineDescriptor()
+            d.vertexFunction = library.makeFunction(name: "tri_vertex")
+            d.fragmentFunction = library.makeFunction(name: "tri_fragment")
+            d.colorAttachments[0].pixelFormat = .bgra8Unorm
+            pipeline = try device.makeRenderPipelineState(descriptor: d)
+            triangle = "Metal triangle: pipeline ok"
+        } catch {
+            triangle = "Metal triangle: \(error.localizedDescription)"
+        }
         link = CADisplayLink(target: self, selector: #selector(tick))
         link?.add(to: .main, forMode: .common)
     }
@@ -149,7 +172,19 @@ final class MetalStrip: UIView {
         pass.colorAttachments[0].loadAction = .clear
         pass.colorAttachments[0].storeAction = .store
         pass.colorAttachments[0].clearColor = MTLClearColor(red: 0.5 + 0.5 * sin(phase), green: 0.5 + 0.5 * sin(phase + 2.1), blue: 0.5 + 0.5 * sin(phase + 4.2), alpha: 1)
-        buffer.makeRenderCommandEncoder(descriptor: pass)?.endEncoding()
+        let encoder = buffer.makeRenderCommandEncoder(descriptor: pass)
+        if let pipeline = pipeline, let encoder = encoder {
+            let a = Float(phase)
+            func vertex(_ k: Float, _ r: Float, _ g: Float, _ b: Float) -> [Float] {
+                let angle = a + k * 2.0944
+                return [0.8 * cos(angle + 1.5708), 0.8 * sin(angle + 1.5708), r, g, b, 1]
+            }
+            let vertices = vertex(0, 1, 0.1, 0.1) + vertex(1, 0.1, 1, 0.1) + vertex(2, 0.1, 0.3, 1)
+            encoder.setRenderPipelineState(pipeline)
+            encoder.setVertexBytes(vertices, length: vertices.count * 4, index: 0)
+            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        }
+        encoder?.endEncoding()
         buffer.present(drawable)
         buffer.commit()
         frames += 1
@@ -192,7 +227,7 @@ final class LabController: UIViewController {
         if let device = MTLCreateSystemDefaultDevice() {
             metal = "Metal: device \(device.name), max threads \(device.maxThreadsPerThreadgroup), unified memory \(device.hasUnifiedMemory)"
             if strip == nil, let s = MetalStrip(device: device) {
-                s.frame = CGRect(x: 180, y: gl.frame.maxY + 2, width: 150, height: 40)
+                s.frame = CGRect(x: 180, y: gl.frame.maxY + 2, width: 150, height: 70)
                 view.addSubview(s)
                 strip = s
             }
@@ -207,7 +242,7 @@ final class LabController: UIViewController {
         var lines = ["\(UIDevice.current.model), iOS \(UIDevice.current.systemVersion)",
                      "screen \(s.bounds.width) x \(s.bounds.height) pt @\(s.scale), native \(s.nativeBounds.width) x \(s.nativeBounds.height)",
                      "safe area \(view.safeAreaInsets.top) \(view.safeAreaInsets.bottom)",
-                     "Metal strip frames \(strip?.frames ?? -1)",
+                     "Metal strip frames \(strip?.frames ?? -1); \(strip?.triangle ?? "no strip")",
                      String(format: "frames %.1f per second (1 triangle %.1f, 48 overdrawn triangles %.1f)", gl.fps, gl.fpsLight, gl.fpsHeavy), "", gl.report, "", metal]
         lines.append("")
         text.text = lines.joined(separator: "\n")
