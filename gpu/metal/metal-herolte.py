@@ -456,4 +456,15 @@ herolte_look_at_attachments(NSArray *works)
 @implementation HakiosMetalCommandBuffer {
 ''')
 
+# Diagnostic: where Metal keeps a function's constant values (ios-b1lte's B1L-0085 survey, muted since B1L-0110).
+# MercuryPoster's fluidity::fragmentShader declares isPhone, isBlending and isSimulator; the pipeline is built from the
+# unspecialised module, so all three are 0 here and the poster draws as on an iPad. The survey names the class and
+# the instance variables that hold the values, for the first six render pipelines of a process.
+change('diagnostic: function constants surveyed', 'hakiosmetal_air.m',
+       '''	if (!B2L_QUIET) rw_print("B2L fc: %s function %s, class %s\\n", stage, [[fn name] UTF8String] ?: "?",''',
+       '''	rw_print("B2L fc: %s function %s, class %s\\n", stage, [[fn name] UTF8String] ?: "?",''')
+change('diagnostic: function constants surveyed (ivars)', 'hakiosmetal_air.m',
+       '''			if (!B2L_QUIET) rw_print("B2L fc:   %s.%s %s = %.300s\\n",''',
+       '''			rw_print("B2L fc:   %s.%s %s = %.300s\\n",''')
+
 print('metal-herolte: ' + ', '.join(done))

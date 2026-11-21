@@ -1061,4 +1061,42 @@ rwa_render_draw(struct rwa_render *render, const struct rwa_draw *draw,
       draw = &herolte_draw;
    }''')
 
+# 12. 8- and 16-bit loads from constant buffers, made as a 32-bit load of the aligned word, shifted and narrowed.
+# fluidity::sdfFragmentShader picks the channel of its SDF from a `bool` of its uniforms (an 8-bit load_ubo at offset
+# 8): on the T880 every draw went to R and G stayed 0 (boot-18k53, the RG32Float attachment read back), so the second
+# pass, which reads G, drew no shape. Midgard reads the whole word for such a load, and the bytes beside the bool made
+# the comparison with 0 fail. Every `bool`, `uchar`, `short` of a constant buffer goes through here.
+change('narrow constant-buffer loads: callback', 'air_metal.c',
+       '''/* HEROLTE: a fragment shader's 16-bit store_output made a 32-bit one, of the same base type. */''',
+       '''/* HEROLTE: an 8- or 16-bit load_ubo as 32-bit loads of the words that hold it, each byte or half shifted out. */
+static bool
+herolte_widen_ubo_load(nir_builder *b, nir_intrinsic_instr *intr, void *data)
+{
+   (void)data;
+   if (intr->intrinsic != nir_intrinsic_load_ubo || intr->def.bit_size >= 32)
+      return false;
+   unsigned bits = intr->def.bit_size, bytes = bits / 8;
+   b->cursor = nir_before_instr(&intr->instr);
+   nir_def *block = intr->src[0].ssa, *offset = intr->src[1].ssa;
+   nir_def *comps[NIR_MAX_VEC_COMPONENTS];
+   for (unsigned i = 0; i < intr->def.num_components; i++) {
+      nir_def *at = nir_iadd_imm(b, offset, i * bytes);
+      nir_def *word = nir_load_ubo(b, 1, 32, block, nir_iand_imm(b, at, ~3u), .access = nir_intrinsic_access(intr),
+                                   .align_mul = 4, .align_offset = 0, .range_base = 0, .range = ~0u);
+      nir_def *shift = nir_ishl_imm(b, nir_iand_imm(b, at, 3), 3);
+      comps[i] = nir_u2uN(b, nir_ushr(b, word, shift), bits);
+   }
+   nir_def_replace(&intr->def, nir_vec(b, comps, intr->def.num_components));
+   return true;
+}
+
+/* HEROLTE: a fragment shader's 16-bit store_output made a 32-bit one, of the same base type. */''')
+change('narrow constant-buffer loads: pass', 'air_metal.c',
+       '''   NIR_PASS(_, nir, nir_lower_bit_size, herolte_widen_bit_size, NULL);   /* HEROLTE: b2i8 */
+''',
+       '''   NIR_PASS(_, nir, nir_lower_bit_size, herolte_widen_bit_size, NULL);   /* HEROLTE: b2i8 */
+   NIR_PASS(_, nir, nir_shader_intrinsics_pass, herolte_widen_ubo_load, nir_metadata_control_flow,
+            NULL);   /* HEROLTE: 8/16-bit constant-buffer loads */
+''')
+
 print('air-herolte: ' + ', '.join(done))
