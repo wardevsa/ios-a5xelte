@@ -80,7 +80,7 @@ uncaught(id exception)
  * report stay as they were). Every program that loads libheroapp gets it. DROP_DIR crash.off turns it off.
  */
 #include <signal.h>
-#include <ucontext.h>
+#include <sys/ucontext.h>
 
 static void
 note_address(int fd, const char *label, uint64_t pc)
