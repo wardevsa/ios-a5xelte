@@ -19,6 +19,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#define DROP_DIR "/private/var/herolte/"
 extern void herodrm_log(const char *format, ...);
 /* min112c (E-0335): stderr of assetsd did not reach assetsd.err (launchd's redirection does not seem to apply, DYLD_PRINT_LIBRARIES printed nothing
  * either), so the library also appends its lines to a world-writable file of its own: if /private/var/tmp/heroapp.log exists, the library loads. */
@@ -67,6 +68,32 @@ uncaught(id exception)
     * reached stderr either (libc++abi writes to os_log). stderr is the file launchd opened for the job (assetsd.err), so writing
     * to it directly bypasses the sandbox. */
    hero_note("libheroapp: %s: uncaught %s: %s", getprogname(), text_of(name), text_of(reason));
+}
+
+
+/*
+ * min127c (E-0351): S7GE Lab, an ordinary app, got "EAGLContext(api: .openGLES2) returned nil" because the lines below make every initWithAPI: answer nil
+ * (the stock renderer's table of functions is empty here and jumps to 0), and the project's EAGL bridge (libheroeagl: EAGLContext on OSMesa and
+ * Panfrost, renderbufferStorage:fromDrawable: and presentRenderbuffer: into an IOSurface) is only loaded in backboardd. DROP_DIR appgl.on, one program name a
+ * line (or "all"), lets those programs load the bridge instead: the nil answers are not installed for them and libheroeagl, whose constructor puts its methods
+ * into the real EAGLContext, is loaded after OpenGLES.
+ */
+static bool
+appgl_wanted(void)
+{
+   FILE *f = fopen(DROP_DIR "appgl.on", "r");
+   char line[128];
+   bool want = false;
+   while (f && fgets(line, sizeof line, f)) {
+      size_t n = strlen(line);
+      while (n && (line[n - 1] == '\n' || line[n - 1] == '\r' || line[n - 1] == ' '))
+         line[--n] = 0;
+      if (strcmp(line, "all") == 0 || strcmp(line, getprogname()) == 0)
+         want = true;
+   }
+   if (f)
+      fclose(f);
+   return want;
 }
 
 static id
@@ -349,12 +376,18 @@ install(void)
    hero_note("libheroapp: %s: loaded (pid %d)", getprogname(), (int)getpid());
    dlopen("/System/Library/Frameworks/OpenGLES.framework/OpenGLES", RTLD_LAZY);
    Class context = objc_getClass("EAGLContext");
-   if (context != Nil) {
+   bool bridge = false;
+   if (appgl_wanted()) {
+      void *handle = dlopen(DROP_DIR "lib/libheroeagl.dylib", RTLD_NOW);
+      bridge = handle != NULL;
+      hero_note("libheroapp: %s: EAGL bridge %s%s", getprogname(), bridge ? "loaded" : "NOT loaded: ", bridge ? "" : (dlerror() ? dlerror() : "?"));
+   }
+   if (context != Nil && !bridge) {
       method_setImplementation(class_getInstanceMethod(context, sel_registerName("initWithAPI:")), (IMP)no_context);
       method_setImplementation(class_getInstanceMethod(context, sel_registerName("initWithAPI:sharegroup:")),
                                (IMP)no_shared_context);
    }
-   Method properties = context != Nil ? class_getInstanceMethod(context, sel_registerName("initWithAPI:properties:")) : NULL;
+   Method properties = context != Nil && !bridge ? class_getInstanceMethod(context, sel_registerName("initWithAPI:properties:")) : NULL;
    if (properties != NULL) {
       method_setImplementation(properties, (IMP)no_shared_context);
    }
