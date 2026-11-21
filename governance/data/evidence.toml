@@ -5409,3 +5409,18 @@ sha256 = "b4e22de1ea578f06b4ae65b63829c7405d60bc23ba7e6f44a6d156c4542aa70f"
 size = 29223
 immutable = true
 note = "heroapp-crash.txt con la pila de create_program (scratch)."
+
+[[evidence]]
+id = "E-0366"
+title = "Flappy Bird con el registro de sombreadores (E-0365): MISMO cierre (dynamic_cast nulo en Jet create_program) y NINGUNA línea 'GL:' en heroeagl.log: la app no llamó a glShaderSource, glCompileShader, glLinkProgram ni a ninguna gl* no implementada por el camino interpuesto, o esas llamadas no pasan por nuestras gl* (las de Jet, dentro de la caché de dyld, quizá no se desvían); sin evidencia de cuál; ACCIÓN (DROP 38 de 80, sin BOOT): libheroeagl-app de CI 44924272774 registra también las respuestas de glGetString (versión, extensiones) de la app: si aparecen, el desvío llega a Jet y se compara con lo que Jet necesita; si NO aparece ni glGetString, las llamadas de Jet no pasan por el puente; contadores D-0123: BOOT 18 de 80, DROP 38 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n11-heroeagl.log"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "96243b74d4401fad60037cc961b68534e137a0592926df36106104228f7530df"
+size = 1204809
+immutable = true
+note = "heroeagl.log sin lineas GL (scratch)."
