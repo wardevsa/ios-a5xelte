@@ -1585,6 +1585,63 @@ haptics_probe(__unused void *unused)
    return NULL;
 }
 
+
+/*
+ * E-0395: memory per process. The kernel log's "alive N s, MB free ..." says the phone gets down to 33 MB free after 7 minutes (E-0394) and that extensions are killed with
+ * signal 9, but not who holds the memory. Every 30 s (for as long as hero-run lives; DROP file mem.off stops it): the free memory, and the ten largest processes by physical
+ * footprint (proc_pid_rusage, root sees all) with their name, pid and MB, as one or two kernel log lines.
+ */
+#include <libproc.h>
+#include <mach/mach.h>
+static void *
+memory_sampler(void *unused)
+{
+   (void)unused;
+   for (int round = 0;; round++) {
+      sleep(30);
+      if (access(DROP_DIR "mem.off", F_OK) == 0)
+         continue;
+      struct { pid_t pid; uint64_t mb100; char name[24]; } top[10];
+      int ntop = 0;
+      static pid_t pids[1024];
+      int n = proc_listallpids(pids, sizeof(pids));
+      uint64_t total = 0;
+      for (int i = 0; i < n; i++) {
+         struct rusage_info_v2 ri;
+         if (pids[i] <= 0 || proc_pid_rusage(pids[i], RUSAGE_INFO_V2, (rusage_info_t *)&ri) != 0)
+            continue;
+         uint64_t mb100 = ri.ri_phys_footprint / (1024 * 1024 / 100);
+         total += ri.ri_phys_footprint;
+         int at = ntop < 10 ? ntop++ : 9;
+         if (at == 9 && ntop == 10 && top[9].mb100 >= mb100 && i >= 10)
+            continue;
+         top[at].pid = pids[i];
+         top[at].mb100 = mb100;
+         proc_name(pids[i], top[at].name, sizeof(top[at].name));
+         for (int k = at; k > 0 && top[k].mb100 > top[k - 1].mb100; k--) {
+            __typeof__(top[0]) tmp = top[k - 1];
+            top[k - 1] = top[k];
+            top[k] = tmp;
+         }
+      }
+      vm_statistics64_data_t vm;
+      mach_msg_type_number_t cnt = HOST_VM_INFO64_COUNT;
+      unsigned long free_mb = 0, comp_mb = 0;
+      if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&vm, &cnt) == KERN_SUCCESS) {
+         free_mb = (unsigned long)((uint64_t)vm.free_count * vm_page_size / (1024 * 1024));
+         comp_mb = (unsigned long)((uint64_t)vm.compressor_page_count * vm_page_size / (1024 * 1024));
+      }
+      char line[400];
+      int off = snprintf(line, sizeof(line), "hero-run: memory: free %lu MB, compressor %lu MB, %d processes, footprints %llu MB; top:", free_mb, comp_mb, n,
+                         (unsigned long long)(total / (1024 * 1024)));
+      for (int k = 0; k < ntop && off < (int)sizeof(line) - 50; k++)
+         off += snprintf(line + off, sizeof(line) - (size_t)off, " %s[%d] %llu.%02llu", top[k].name, (int)top[k].pid, (unsigned long long)(top[k].mb100 / 100),
+                         (unsigned long long)(top[k].mb100 % 100));
+      herodrm_log("%s", line);
+   }
+   return NULL;
+}
+
 int
 main(int main_argc, char **main_argv)
 {
@@ -1637,6 +1694,9 @@ main(int main_argc, char **main_argv)
    pthread_t devices;
    if (pthread_create(&devices, NULL, devices_start, NULL) == 0)
       pthread_detach(devices);
+   pthread_t memory;
+   if (pthread_create(&memory, NULL, memory_sampler, NULL) == 0)
+      pthread_detach(memory);
    sleep(20);
    load_env();
    posix_spawn_file_actions_t fa;
