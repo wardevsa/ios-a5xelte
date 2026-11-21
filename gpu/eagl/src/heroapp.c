@@ -255,8 +255,28 @@ look_at_metal_choice(void)
    }
    id device = MTLCreateSystemDefaultDevice();   /* heroapp's own reference is not interposed: Metal's own function, the plug-in decides */
    id name = device ? ((id (*)(id, SEL))objc_msgSend)(device, sel_registerName("name")) : nil;
-   hero_note("libheroapp: %s: direct MTLCreateSystemDefaultDevice -> %s", getprogname(),
+   hero_note("libheroapp: %s: direct MTLCreateSystemDefaultDevice (in the constructor) -> %s", getprogname(),
              name ? ((const char *(*)(id, SEL))objc_msgSend)(name, sel_registerName("UTF8String")) : "nil");
+}
+
+/* E-0383: the same call, later: when UIKit says the application is about to finish launching (before its delegate and before any SpriteKit scene). In the
+ * constructor of an inserted library Metal may not be ready, and the first answer (nil, with no line from the plug-in) proves nothing about SpriteKit's time. */
+static void
+metal_at_will_finish(void)
+{
+   id device = MTLCreateSystemDefaultDevice();
+   id name = device ? ((id (*)(id, SEL))objc_msgSend)(device, sel_registerName("name")) : nil;
+   hero_note("libheroapp: %s: MTLCreateSystemDefaultDevice at UIApplicationWillFinishLaunching -> %s", getprogname(),
+             name ? ((const char *(*)(id, SEL))objc_msgSend)(name, sel_registerName("UTF8String")) : "nil");
+}
+static void
+metal_probe_later(void)
+{
+   id center = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("NSNotificationCenter"), sel_registerName("defaultCenter"));
+   extern id UIApplicationWillFinishLaunchingNotification __attribute__((weak_import));
+   void (^block)(id) = ^(id note) { (void)note; metal_at_will_finish(); };
+   ((id (*)(id, SEL, id, id, id, void (^)(id)))objc_msgSend)(center, sel_registerName("addObserverForName:object:queue:usingBlock:"),
+                                                          (id)UIApplicationWillFinishLaunchingNotification, nil, nil, block);
 }
 
 /*
@@ -610,6 +630,7 @@ install(void)
    if (strcmp(getprogname(), "Flappy Bird") == 0) {
       look_at_spritekit();
       look_at_metal_choice();
+      metal_probe_later();
    }
    hero_note("libheroapp: %s: loaded (pid %d)", getprogname(), (int)getpid());
    dlopen("/System/Library/Frameworks/OpenGLES.framework/OpenGLES", RTLD_LAZY);
