@@ -5496,3 +5496,18 @@ sha256 = "d657495e7ac580f823f5ce6f7b2da9d3c8f606fb55cb66374b808c0939059543"
 size = 487001
 immutable = true
 note = "Registro del kernel de la imagen min128 (scratch)."
+
+[[evidence]]
+id = "E-0372"
+title = "CAUSA DEL CIERRE INTERMITENTE DE S7GE LAB AL ARRANCAR (6 de 9, E-0359) Y DE LOS DEL RunningBoardServices, un error PROPIO: pila de heroapp-crash.txt: SIGSEGV, dirección de fallo 0xf940c908f0000080, pc libdispatch +0x5800, desde RunningBoardServices +0xd3d8 <- AssertionServices <- UIKitCore; el desensamblado de libdispatch en la caché local (0x18db39800) es el recorrido de la pila de colas del hilo: 'mrs x8, tpidrro_el0; ldr x10, [x8, #0xa0]; ... ldr x9, [x10, #0x18]': lee el hueco TSD 20 (offset 0xa0 = 20*8) como puntero a la cola actual; ese hueco es __PTK_LIBDISPATCH_KEY0 de libdispatch, y mi cambio de E-0355 hacía pthread_setspecific(20, tabla_de_macros) en cada setCurrentContext del puente, pisándolo (E-0355 lo creyó la clave de OpenGL, que es otra); la pila de colas dejaba de ser válida y libdispatch caía al azar según qué código la recorriera; la interposición (E-0356) hizo innecesario aquel cambio y nunca se quitó; el cierre solo aparecía en S7GELab porque es la única app con el puente cargado a la vez que usa colas; CORRECCIÓN: se quita la escritura del hueco 20 de eagl.m; DROP 42 de 80 (sin BOOT): libheroeagl-app de CI 44927996195; PRUEBA: abrir S7GE Lab varias veces: ya no debe caer en libdispatch; además aún sin probar M1: en la última prueba no hay heromtl.log, porque la app murió antes de pulsar el botón; contadores D-0123: BOOT 18 de 80, DROP 42 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n15-heroapp-crash.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "afd4a1ff207f4e8712fc43cf7e053725e82f148f80954ad067dee32a19876405"
+size = 46823
+immutable = true
+note = "heroapp-crash.txt con la pila de libdispatch (scratch)."
