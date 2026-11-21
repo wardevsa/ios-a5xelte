@@ -75,3 +75,20 @@ Respuestas al orquestador (3 aperturas de Flappy):
 Causa raíz NO confirmada; no propongo D-0126. Siguiente: DROP 50 (la misma petición cuando UIKit anuncia el lanzamiento). Tu observación sobre
 `hakios-gl` devolviendo NULL donde Jet espera un objeto: lo que sé es que `create_function` (Jet +0x7474) devuelve NULL por texto de sombreador NULO, sin
 llamar a gl*; ese texto no viene de hakios-gl (que es el puente de backboardd, no el de apps; las apps cargan libheroeagl-app).
+
+### V.3 Causa raíz de que Flappy no reciba dispositivo (E-0384)
+
+Matiz primero: tu mensaje dice «E-0383 confirmada: nil para Flappy»; no lo estaba: E-0383 solo mostraba que ninguna clave fuerza OpenGL y que una
+llamada hecha desde el constructor daba nil sin línea del complemento. La confirmación llega ahora, por el código, no por la sonda.
+
+1. `metal.allow` en el teléfono: `S7GELab` y `Flappy Bird`, una por línea (cat -A: `Flappy Bird$`).
+2. HeroMetal compara `getprogname()` (nombre de ejecutable; no bundle ID ni nombre visible ni ruta). El Mach-O es `Flappy Bird`, con espacio.
+3. **El fallo:** `allowed()` cortaba la línea en el primer espacio o tabulador (`strcspn(line, "\r\n \t#")`), de modo que `Flappy Bird` quedaba en `Flappy` y
+   nunca coincidía. HeroMetal rechaza en silencio (sus líneas de registro solo salen para procesos permitidos), SpriteKit recibe nil y cae a OpenGL/Jet.
+4. **Corrección de mi E-0381:** no puedo afirmar que Flappy «nunca consulta a Metal»; la ausencia de líneas `hero-metal` se explica por el filtro. Tu
+   hipótesis (SpriteKit pide dispositivo, recibe nil, cae a OpenGL) es la que encaja.
+5. **Arreglo:** no era corregir `metal.allow` (el fichero estaba bien: ningún nombre con espacio puede escribirse de forma que esa versión lo acepte),
+   sino `gpu/metal/hero-metal-plugin.m`: la línea acaba en `#` o fin de línea y solo se quitan blancos finales. CI de userland verde; DROP 51 de 80:
+   `metal/HeroMetal` y `metal/Info.plist`; hero-run los instala al arrancar. Es un cambio en código de userland, no un parche del kernel (Nivel 2).
+   Pido a Pioxi: arrancar y abrir Flappy una vez. Esperado en el registro: `hero-metal: bundle loaded in Flappy Bird` y `asks for a device`.
+   No propongo D-0126 todavía: el arreglo está dentro de D-0123 (DROP); si funciona basta con la evidencia.

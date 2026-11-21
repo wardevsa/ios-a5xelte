@@ -5661,3 +5661,15 @@ sha256 = "8b2c0191553d94439ea3288fcdab12a1adaf3231240a49e4bd6b5b4024470c7e"
 size = 403588
 immutable = true
 note = "heroapp.log con las respuestas de la sonda (scratch)."
+
+[[evidence]]
+id = "E-0384"
+title = "CAUSA RAÍZ CONFIRMADA POR EL CÓDIGO Y LOS DATOS (el orquestador pidió comprobar cómo identifica HeroMetal al proceso): (1) metal.allow en el teléfono es 'S7GELab' y 'Flappy Bird' (una línea cada una, comprobado byte a byte con cat -A: 'S7GELab$' y 'Flappy Bird$'); (2) HeroMetal (gpu/metal/hero-metal-plugin.m) compara el NOMBRE DE EJECUTABLE: getprogname() (no el bundle ID, ni el nombre visible, ni la ruta); el Mach-O de Flappy se llama 'Flappy Bird' (con el espacio; CFBundleExecutable = Flappy Bird; libheroapp ve el mismo getprogname) ; (3) EL ERROR: allowed() recortaba cada línea de metal.allow con line[strcspn(line, \"\\r\\n \\t#\")] = 0, es decir, en el PRIMER ESPACIO O TABULADOR: 'Flappy Bird' se quedaba en 'Flappy' y strcmp con 'Flappy Bird' nunca coincidía; consecuencia: el complemento rechaza a Flappy EN SILENCIO (devuelve nil sin escribir nada: su única línea 'bundle loaded in ...' del constructor y 'asks for a device' solo salen si el nombre está permitido), SpriteKit recibe nil de Metal y cae a OpenGL (Jet), donde muere por el texto nulo (E-0369); CORRECCIÓN A MI E-0381: allí concluí que 'Flappy nunca consulta a Metal' por no ver líneas hero-metal; era una inferencia errónea: la ausencia de líneas se explica por el filtro, y SpriteKit SÍ pudo preguntar y recibir nil; lo que sigue sin medirse es QUIÉN llamó (libheroapp no anota llamadas de dentro de la caché); lo que explica 'direct ... -> nil' de E-0383 (rechazo silencioso) sin necesidad de que Metal no estuviera listo; ARREGLO (código de gpu/metal, no parche del kernel): se acaba la línea en '#' o fin de línea y solo se quitan espacios finales, de modo que 'Flappy Bird' coincide; CI de userland 44942568712: success; DROP 51 de 80 (sin BOOT): metal/HeroMetal y metal/Info.plist; hero-run (autorun) los instala en /System/Library/Extensions al ARRANCAR (sustituye al instalado si el de la zona es más nuevo): hace falta ARRANCAR iOS una vez; PRUEBA: arrancar y abrir Flappy: deben salir 'hero-metal: bundle loaded in Flappy Bird' y 'asks for a device'; contadores D-0123: BOOT 19 de 80, DROP 51 de 80"
+kind = "document"
+path = "gpu/metal/hero-metal-plugin.m"
+location = "git"
+created = "2026-11-21"
+domain = "device"
+level = "L1"
+device = "this-unit"
+note = "Causa por lectura del código y del contenido de metal.allow en el teléfono; la prueba en el teléfono viene después."
