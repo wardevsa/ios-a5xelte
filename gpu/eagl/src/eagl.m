@@ -1009,6 +1009,8 @@ static DrawBind *find_bind(struct _EAGLContextPrivate *p, GLuint rb) {
     case 0x1908: case GL_BGRA_EXT: comps = 4; break;                         // RGBA, BGRA
     default: do { EAGL_DEBUG("texImageIOSurface: refused (reason 3) surface %u fourcc %08x planes %zu\n", ioSurface ? IOSurfaceGetID(ioSurface) : 0, ioSurface ? (unsigned)IOSurfaceGetPixelFormat(ioSurface) : 0, ioSurface ? IOSurfaceGetPlaneCount(ioSurface) : (size_t)0); return NO; } while (0);
     }
+    /* E-0364: SpriteKit (Jet) uploads BGRA surfaces as format 0x80e1 with type GL_UNSIGNED_INT_8_8_8_8_REV (0x8367): the bytes of a BGRA/UNSIGNED_BYTE texel in memory */
+    if (type == 0x8367 && (format == GL_BGRA_EXT || format == 0x1908)) type = 0x1401;
     switch (type) {
     case 0x1401: csz = 1; break;                                             // UNSIGNED_BYTE
     case 0x140b: case 0x8d61: csz = 2; break;                                // HALF_FLOAT(_OES)
