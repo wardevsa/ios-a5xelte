@@ -5568,3 +5568,18 @@ sha256 = "26099fb54da757a33a9bc59ba187f0f57f9f5a0df5e3f2d62591a28dc76ba120"
 size = 177509
 immutable = true
 note = "Informe de S7GE Lab con el triángulo de Metal (scratch)."
+
+[[evidence]]
+id = "E-0377"
+title = "Tanda con Flappy Bird en mtl.on (E-0376): (1) Flappy Bird sigue cerrándose IGUAL (SIGSEGV 0x0, dynamic_cast <- Jet create_program <- SpriteKit; 5 veces) y heromtl.log NO tiene ninguna línea de Flappy Bird: SpriteKit no pidió dispositivo a MTLCreateSystemDefaultDevice a través del desvío (o no lo pidió); su elección Jet-OpenGL no pasa por ahí; (2) 'al pulsar Probar Metal crashea': SIGABRT de S7GELab (pids 276, 278, 279), heroapp.log: 'uncaught NSInvalidArgumentException: -[MTLVertexAttributeDescriptorArrayInternal count]: unrecognized selector': ERROR MÍO, mi registro detallado de pipelines llamaba a count sobre un descriptor de Metal que no lo tiene (quitado); (3) dos cierres SIGSEGV más de S7GELab en objc_retainAutoreleaseReturnValue llamado desde hero_MTLCreateSystemDefaultDevice con direcciones basura (0xafcf8ca20, 0x313c380d0; pids 257 y 242, los dos con PIDs bajos, es decir, de los primeros procesos tras arrancar), el objeto g_device que devuelve el proveedor parece no ser válido en esos arranques; sin causa; ACCIÓN (DROP 46 de 80, sin BOOT): libheromtl y libheroapp de CI 44934258235: libheromtl anota en cada llamada a hero_mtl_device el estado de dispatch_once y el puntero g_device, libheroapp anota las tres primeras llamadas a MTLCreateSystemDefaultDevice de cada proceso, sea de la lista o no (para saber si SpriteKit la llama); PRUEBA: abrir Flappy Bird y S7GE Lab (y pulsar Probar Metal una vez); contadores D-0123: BOOT 18 de 80, DROP 46 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n19-heroapp-crash.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "b5b4890505194a650a43abbf63eda370292ad8273600896a5bf8c7ae9add1605"
+size = 55946
+immutable = true
+note = "heroapp-crash.txt (scratch)."
