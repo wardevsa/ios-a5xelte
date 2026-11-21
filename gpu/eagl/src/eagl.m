@@ -46,7 +46,14 @@
 #define GL_BGRA_EXT 0x80E1
 #endif
 
+#ifdef EAGL_INJECT
+/* E-0363: an app's stderr goes nowhere; the first 400 messages go to /private/var/tmp/heroeagl.log (shim_note below) */
+static void shim_note(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static int g_dbg_notes;
+#define EAGL_DEBUG(...) do { if (g_debug) fprintf(stderr, "EAGL(shim): " __VA_ARGS__); else if (g_dbg_notes < 400) { g_dbg_notes++; shim_note("EAGL: " __VA_ARGS__); } } while (0)
+#else
 #define EAGL_DEBUG(...) do { if (g_debug) fprintf(stderr, "EAGL(shim): " __VA_ARGS__); } while (0)
+#endif
 // Live IOSurface textures: iOS binds an IOSurface as texture storage, so a producer that writes the surface after the bind (glyph renderers, snapshot
 // decoders, Control Center material) is seen at once. The shim copies at bind time; to keep the same behaviour every uploaded surface is remembered with its
 // IOSurface seed and the texture is re-uploaded when it is bound again (glBindTexture) after the seed changed.
