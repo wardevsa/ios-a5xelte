@@ -53,7 +53,7 @@ grep -c '/private/var/herolte/lib/libhakiosair.dylib' "$T/hakiosmetal_air.m" "$T
 $CC -dynamiclib -install_name /private/var/herolte/lib/libhakiosmetal.dylib -I"$T" \
   -framework Foundation -framework IOKit -framework Metal -framework IOSurface -lobjc -Wl,-rpath,/private/var/herolte/lib \
   -o "$OUT/lib/libhakiosmetal.dylib" "$T/hakiosmetal_air.m" "$T/hakiosdrawable.m"
-$CC -bundle -o "$T/HeroMetal" "$HERE/hero-metal-plugin.m" -framework Foundation -framework IOKit -lobjc -Wl,-rpath,/private/var/herolte/lib
+$CC -bundle -o "$T/HeroMetal" "$HERE/hero-metal-plugin.m" -framework Foundation -framework IOKit -framework Metal -lobjc -Wl,-rpath,/private/var/herolte/lib
 cat > "$OUT/metal/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -70,7 +70,7 @@ cat > "$OUT/metal/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
-$CC -o "$OUT/hero_mtl_test" "$HERE/hero-mtl-test.m" -framework Foundation -framework Metal -lobjc -Wl,-rpath,/private/var/herolte/lib
+$CC -o "$OUT/hero_mtl_test" "$HERE/hero-mtl-test.m" -framework Foundation -framework Metal -framework IOKit -lobjc -Wl,-rpath,/private/var/herolte/lib
 # signed on its own: next to its Info.plist codesign would take out/metal for a bundle (and add _CodeSignature/)
 codesign -s - -f "$T/HeroMetal"
 cp "$T/HeroMetal" "$OUT/metal/HeroMetal"

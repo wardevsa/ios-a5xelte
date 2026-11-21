@@ -60,7 +60,18 @@ allowed(const char *me)
 	return ok;
 }
 
-@interface HeroMetalDevice : NSObject
+/*
+ * A subclass of Metal's private _MTLDevice, because Metal checks the plug-in class with isSubclassOfClass: before it
+ * sends it anything (ios-b1lte B1L-0044; boot-18k46: an NSObject subclass was passed over without a call). Only the name
+ * is declared; the class comes from Metal.framework at link time, as for Scion's HakiosMetalDevice.
+ *
+ * The object Metal allocated is never initialised by _MTLDevice and never released: -[_MTLDevice dealloc] on such an
+ * object crashed SpringBoard (ios-b1lte B1L-0085..0087). One leaked allocation a process that asks.
+ */
+@interface _MTLDevice : NSObject
+@end
+
+@interface HeroMetalDevice : _MTLDevice
 - (instancetype)initWithAcceleratorPort:(io_service_t)port;
 @end
 
@@ -69,20 +80,31 @@ allowed(const char *me)
 {
 	const char *me = getprogname();
 
-	if (!allowed(me)) {
-		[self release];
+	if (!allowed(me))
 		return nil;     /* no device, as before the plug-in */
-	}
 	say("%s (pid %d) asks for a device: the T880's", me, getpid());
 	if (dlopen(DRIVER, RTLD_NOW) == NULL) {
 		say("driver not loaded: %s", dlerror());
-		[self release];
 		return nil;
 	}
 	Class driver = objc_getClass("HakiosMetalDevice");
 	id device = driver != Nil ? [[driver alloc] initWithAcceleratorPort:port] : nil;
 	say("device %s", device != nil ? "made" : "NOT made");
-	[self release];
 	return device;
 }
+
+/* iOS 26's Metal sends this one (ios-b1lte B1L-0044); the class it names is ours either way */
+- (instancetype)initWithAcceleratorPort:(io_service_t)port deviceClass:(Class)cls
+{
+	(void)cls;
+	return [self initWithAcceleratorPort:port];
+}
 @end
+
+/* Seen in the log once per process that loads the bundle, allowed or not: whether Metal got this far. */
+__attribute__((constructor)) static void
+loaded(void)
+{
+	if (allowed(getprogname()))
+		say("bundle loaded in %s (pid %d)", getprogname(), getpid());
+}

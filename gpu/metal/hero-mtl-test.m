@@ -12,6 +12,7 @@
  */
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
+#include <IOKit/IOKitLib.h>
 #include <objc/runtime.h>
 #include <stdio.h>
 #include <time.h>
@@ -62,8 +63,38 @@ main(int argc, char **argv)
 		id<MTLDevice> dev = MTLCreateSystemDefaultDevice();
 		printf("hero_mtl_test: MTLCreateSystemDefaultDevice: %s (%s) in %.2f s\n",
 		       dev ? [[dev name] UTF8String] : "nil", dev ? object_getClassName(dev) : "-", now() - t0);
-		if (dev == nil)
+		if (dev == nil) {
+			/* how far discovery got: the service, its two properties, the bundle's class, Metal's list */
+			io_iterator_t it = IO_OBJECT_NULL;
+			unsigned found = 0;
+			if (IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOAcceleratorES"), &it) ==
+			    KERN_SUCCESS) {
+				io_service_t s;
+				while ((s = IOIteratorNext(it)) != IO_OBJECT_NULL) {
+					found++;
+					CFTypeRef n = IORegistryEntryCreateCFProperty(s, CFSTR("MetalPluginName"), NULL, 0);
+					CFTypeRef c = IORegistryEntryCreateCFProperty(s, CFSTR("MetalPluginClassName"), NULL, 0);
+					printf("hero_mtl_test: IOAcceleratorES %u: MetalPluginName %s, MetalPluginClassName %s\n",
+					       found, n ? [[(id)n description] UTF8String] : "(none)",
+					       c ? [[(id)c description] UTF8String] : "(none)");
+					if (n)
+						CFRelease(n);
+					if (c)
+						CFRelease(c);
+					IOObjectRelease(s);
+				}
+				IOObjectRelease(it);
+			}
+			printf("hero_mtl_test: %u IOAcceleratorES; class HeroMetalDevice %s\n", found,
+			       objc_getClass("HeroMetalDevice") ? "loaded (the bundle is in)" : "not loaded");
+			NSBundle *b = [NSBundle bundleWithPath:@"/System/Library/Extensions/HeroMetal.bundle"];
+			NSError *le = nil;
+			BOOL ok = [b loadAndReturnError:&le];
+			printf("hero_mtl_test: loading the bundle by hand: %s%s; class %s\n", ok ? "loaded" : "FAILED ",
+			       ok ? "" : [[le description] UTF8String],
+			       objc_getClass("HeroMetalDevice") ? "there" : "missing");
 			return 1;
+		}
 
 		/* a buffer the processor writes and reads back */
 		id<MTLBuffer> buf = [dev newBufferWithLength:4096 options:MTLResourceStorageModeShared];
