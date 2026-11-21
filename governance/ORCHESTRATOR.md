@@ -222,3 +222,28 @@ Sonda `S7GE Net` (solo DROP 55), dos ejecuciones:
    Safari de verdad en una página sencilla y registrar qué hace WebContent (cierres, memoria), solo con DROP y lectura de registros.
 
 Pioxi decide: H4 (Safari/WebContent), o H3 (BT/cámara/vibración, condicionado a medir el consumo en reposo), o corregir la hora del arranque.
+
+### V.9 H4: Safari y WebKit en min129 (E-0394)
+
+El Director abrió apple.com en este arranque. Del registro del kernel (unos 1140 s de uso):
+
+| Cosa | Evidencia |
+|---|---|
+| MobileSafari + procesos de WebKit arrancan | 2 MobileSafari; WebContent x7, Networking x2, GPU x2 |
+| WebKit sin JIT, estable | `asks for JIT memory: refused (herojit=0)`; WebContent y segundos Networking/GPU salen con `xstat 0`; ningún cierre de WebContent ni de Safari |
+| Dibujo | WebKit.GPU crea superficies de 750x990; lo que se vio, solo lo dice el Director |
+| CPU | MobileSafari 79-115 %, WebKit 69-123 % y 37-38 % (de 800 %) |
+| **Memoria** | MB libres: 708 (60 s), 201 (240 s), **33 (420 s)**, 163 (600 s), 176 (960 s): casi agotada a los 7 minutos |
+| **backboardd cae (sig 11) y se reinicia** | `pc` = libsystem_platform +0xeac (copia de memoria); `far` = **final exacto de un mapa de solo lectura** de 4,8 MB (lectura que se pasa); justo antes: `icon: texture 227 filled from surface 169` |
+| Matadas | `CollectionsPoster sig9`, `pkreporter sig9`, con la memoria casi agotada (no hay mensaje de jetsam) |
+| Otras | `mediaserverd sig6`, `PhotosFileProvider sig6` (conocido) |
+
+**Safari no es el problema.** Cumple lo que se pedía de H4: WebKit arranca y se mantiene sin JIT. Lo que sí aparece es **más serio que Safari**: (1) **backboardd se cae** (la pantalla se reinicia) por
+una lectura que se pasa del final de un mapa, ocurrida durante el relleno de una textura de icono desde una IOSurface, con la CPU saturada; (2) **la memoria llega a 33 MB libres** y
+el sistema empieza a matar extensiones.
+
+**Causa de (1): no confirmada.** El registro no nombra las bibliotecas de los marcos. Propongo (Nivel 2 o 3, que decida Pioxi, porque toca la biblioteca de `backboardd` y un fallo suyo
+dejaría sin pantalla hasta restaurarla desde TWRP): añadir a `libhakiosgl` un manejador de cierres como el de `libheroapp` (imagen, desplazamiento y símbolo de cada marco) para que la
+próxima vez el cierre se nombre solo. **Causa de (2): no medida**: faltaría un registro de la memoria por proceso (`TOP` lo da para CPU, no para memoria).
+
+Opciones para Pioxi: (a) el manejador en backboardd (diagnóstico del respring), (b) un registro de memoria por proceso (diagnóstico de la matada), (c) H3 (BT/cámara/vibración) con la condición de consumo, (d) dejar estas dos cosas y seguir con otra línea.

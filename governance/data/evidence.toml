@@ -5799,3 +5799,18 @@ sha256 = "e0b6080396008d95aded3a3b4624c75d01e8fb38ce255f9600b3ee09fcd430a7"
 size = 2085
 immutable = true
 note = "s7ge-net.txt con las dos ejecuciones (scratch)."
+
+[[evidence]]
+id = "E-0394"
+title = "H4: SAFARI Y WEBKIT EN min129 (el Director abrió apple.com en este arranque; el registro del kernel de 1,3 MB, unos 1140 s de uso): LO QUE FUNCIONA: MobileSafari arranca (2 'exec MobileSafari'), con los procesos de WebKit: 'exec com.apple.WebKit.WebContent' 7 veces, 'com.apple.WebKit.Networking' 2 y 'com.apple.WebKit.GPU' 2; los WebContent y los segundos Networking/GPU salen con 'xstat 0' (salida normal), ningún cierre de WebContent ni de MobileSafari en este registro (en el progreso de 2026-11-02 WebContent se relanzaba 56 veces muriendo con pc 0x0): la línea 'HEROLTE JIT: com.apple.WebKit[368] asks for JIT memory: refused (herojit=0)' dice que WebKit corre SIN JIT (intérprete de JavaScript, más lento pero estable); WebKit.GPU crea superficies ('SWEET SURF: com.apple.WebKit.GPU create id 319 750x990 fmt 0x42475241'); consumo: 'TOP 5s': MobileSafari 79-115 %, com.apple.WebKit 69-123 % y 37-38 %, de 800 % posibles; MEMORIA: 'alive 60 s MB free 708', 240 s 201, 420 s 33 (!), 600 s 163, 780 s 200, 960 s 176, 1140 s 170: bajó a 33 MB libres a los 7 minutos; LO QUE FALLA EN ESTE ARRANQUE: (a) backboardd (el servidor de ventanas): 'CRASH backboardd[55] sig 11 ... pc 0x1f0331eac lr 0x101ff8e70 ... far 0x10e498000', EXIT xstat 0xb, y launchd lo relanzó como pid 274 ('HEROLTE GL: backboardd launch 2 (pid 274): EAGL shim inserted'): una reiniciada de la pantalla; simbolizado con la caché local y el desliz 0x1e830000: pc = libsystem_platform +0xeac (una copia de memoria, memcpy o similar), lr y los marcos siguientes en bibliotecas insertadas o del propio backboardd (desplazamientos +0x169ce70, +0x188cf50, +0x14b3424, +0x143ec78, +0x226710 respecto a mh 0x10095c000: sin biblioteca identificada, el registro no da los nombres de imagen) y tres marcos de QuartzCore (+0x184178, +0x182298, +0xa3448); 'far' es EXACTAMENTE el final de un mapa de solo lectura ('map before far 0x10dfb4000-0x10e498000 prot 1/1 tag 51'): una lectura que se pasa del final de un mapa de 4,8 MB; lo último que registró hakios-gl antes del cierre: 'icon: texture 227 filled from surface 169 (seed 1, format 0x1908/0x1401, 720 bytes a row): 31092 of 32400 pixels lit' y, justo antes, 'CPU busy per mille 999-1000 en todos los núcleos' (el arranque con los widgets saturando la CPU, E-0343); ocurrió UNA vez en el registro; (b) 'mediaserverd sig6', 'PhotosFileProvider sig6' (conocido, op 4 del sandbox), 'CollectionsPoster sig9' (extensión del fondo de pantalla, señal 9 = matada) y 'pkreporter sig9': las matadas coinciden con la memoria casi agotada; CAUSA: de (a) NO CONFIRMADA (hace falta el nombre de la función que lee de más); de las matadas, no medida (no hay mensaje de jetsam); QUÉ NO SE SABE: qué mostró Safari (el Director dice que entró en apple.com: no medí el dibujo ni el tiempo de carga ni si el JavaScript va; no hay prueba de ello en el registro), y cuánta de la memoria baja es de las extensiones y widgets y cuánta de WebKit; contadores D-0123: BOOT 19 de 80, DROP 55 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n28.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "e6b6c31c0c02e6f1a0f81efb8d33d8e0a477aa5a20690629687edec8af780b4f"
+size = 1332475
+immutable = true
+note = "Registro del kernel con Safari y el cierre de backboardd (scratch)."
