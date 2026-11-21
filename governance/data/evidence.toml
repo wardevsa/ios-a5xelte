@@ -5439,3 +5439,18 @@ sha256 = "291585d257d5adf901b2219bd1e20a91f240435127aaec28024b510284bda641"
 size = 1211219
 immutable = true
 note = "heroeagl.log con glGetString (scratch)."
+
+[[evidence]]
+id = "E-0368"
+title = "La hipótesis del nombre de la GPU (E-0367) queda REFUTADA: con 'Apple A9 GPU' respondido a GL_RENDERER (40 líneas 'answered as' en heroeagl.log) Flappy Bird (5 aperturas, el Director) se cierra IGUAL: SIGSEGV 0x0, __dynamic_cast <- Jet create_program <- SpriteKit; no hay otras gl* registradas (ni glShaderSource ni no implementadas), así que la función de sombreado nula nace antes de llegar a GL: probablemente Jet carga sus sombreadores de otra fuente (biblioteca de funciones, Metal-like) que falla; causa NO conocida; siguiente paso razonable: desensamblar Jet create_function/create_program desde la caché de dyld del teléfono; el nombre falso sigue activo (renderer.real lo apaga); contadores D-0123: BOOT 18 de 80, DROP 39 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n13-heroeagl.log"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ad9fca93e8a8b276094bd5aa2c95bc6f3e87a7c8024ebd6ba1d5b764621c96bb"
+size = 1220879
+immutable = true
+note = "heroeagl.log (scratch)."
