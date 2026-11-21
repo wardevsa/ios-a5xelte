@@ -453,6 +453,19 @@ install(void)
       void *handle = dlopen(DROP_DIR "lib/libheroeagl.dylib", RTLD_NOW);
       bridge = handle != NULL;
       hero_note("libheroapp: %s: EAGL bridge %s%s", getprogname(), bridge ? "loaded" : "NOT loaded: ", bridge ? "" : (dlerror() ? dlerror() : "?"));
+      if (bridge) {
+         /* E-0352: which image each EAGLContext method comes from now: libheroeagl means the bridge's, OpenGLES the stock one */
+         static const char *const names[] = { "initWithAPI:", "initWithAPI:sharegroup:", "renderbufferStorage:fromDrawable:", "presentRenderbuffer:" };
+         Class real = objc_getClass("EAGLContext");
+         hero_note("libheroapp: %s: BGEAGLContext %s, EAGLSharegroup %s, EAGLContext %s", getprogname(), objc_getClass("BGEAGLContext") ? "exists" : "MISSING",
+                   objc_getClass("EAGLSharegroup") ? "exists" : "MISSING", real ? "exists" : "MISSING");
+         for (int k = 0; real && k < 4; k++) {
+            IMP imp = class_getMethodImplementation(real, sel_registerName(names[k]));
+            Dl_info info;
+            const char *where = (dladdr((void *)imp, &info) && info.dli_fname) ? strrchr(info.dli_fname, '/') : NULL;
+            hero_note("libheroapp: %s: EAGLContext %s is in %s", getprogname(), names[k], where ? where + 1 : "(unknown)");
+         }
+      }
    }
    if (context != Nil && !bridge) {
       method_setImplementation(class_getInstanceMethod(context, sel_registerName("initWithAPI:")), (IMP)no_context);
