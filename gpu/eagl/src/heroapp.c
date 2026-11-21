@@ -450,7 +450,10 @@ install(void)
    Class context = objc_getClass("EAGLContext");
    bool bridge = false;
    if (appgl_wanted()) {
-      void *handle = dlopen(DROP_DIR "lib/libheroeagl.dylib", RTLD_NOW);
+      /* E-0354: lib/libheroeagl.dylib on the phone is libhakiosgl (642272 bytes, the HakiOS bridge: it replaces only the six methods CoreAnimation's renderer
+       * calls, no drawable path for apps); the bridge with renderbufferStorage:fromDrawable: and presentRenderbuffer: (gpu/eagl/src/eagl.m, 498928 bytes) is dropped as
+       * lib/libheroeagl-app.dylib so that backboardd keeps the one it has */
+      void *handle = dlopen(DROP_DIR "lib/libheroeagl-app.dylib", RTLD_NOW);
       bridge = handle != NULL;
       hero_note("libheroapp: %s: EAGL bridge %s%s", getprogname(), bridge ? "loaded" : "NOT loaded: ", bridge ? "" : (dlerror() ? dlerror() : "?"));
       if (bridge) {
