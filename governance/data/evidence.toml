@@ -5109,3 +5109,18 @@ sha256 = "1762477e4e26f69bdd746e9862c41c81214f57d983f63707dcef2ef6f726799d"
 size = 411048
 immutable = true
 note = "Imagen min124 71aa9172."
+
+[[evidence]]
+id = "E-0346"
+title = "min125 (volcado de la barra de estado en SpringBoard, hsnap=200): el Director informa de que 'petó como antes' y de que quiere el iPhone 8 con los gestos y la navegación que ya hay, y arreglar la barra de arriba; EL VOLCADO DE LA BARRA, de libherosb (rondas 6): SBHomeScreenWindow y SBStatusBarReusePoolWindow de 375 x 667 puntos con márgenes seguros 38,0,29,0 (arriba, izquierda, abajo, derecha); SBStatusBarReusePoolWindow con su vista raíz OCULTA; UIStatusBarWindow de 375 x 667 sin margen seguro y con UIStatusBar_Modern en 0,0 de 375 x 0 puntos y OCULTA, y dentro _UIStatusBar y _UIStatusBarForegroundView también de 375 x 0: la barra tiene ALTURA CERO y no se pinta; las clases de proveedor de iOS 16.7.16 existen todas (_UIStatusBarVisualProvider_Phone, _LegacyPhone, _iOS, _Fallback, _Pad, _DynamicSplit, _FixedSplit, _Split, _Split828, _Split1080, _Split1125, _Split1170, _Split1242, _Split1284 y variantes _Wide), así que el parche no devolvía nil: el proveedor Phone existe; los márgenes seguros de 38 arriba y 29 abajo en SpringBoard son los de una pantalla con gestos y no los de un iPhone 8 de botón (0 arriba, 0 abajo); el registro de este arranque termina a los ~190 s con 'backboardd notifications type 5 off' (la pantalla se apagó), antes de que empezara el laboratorio de capturas (200 s), así que NO hay ninguna captura: el anillo del registro solo guarda lo que llega a vaciarse antes de reiniciar; el anfitrión de widgets sigue saturando la CPU (61 % cada extensión) durante los primeros ~100 s; HIPÓTESIS (a comprobar): con homeButtonType 2 solo en SpringBoard, UIKit calcula una altura de barra de 0 porque su método de altura (+[UIStatusBar_Modern _heightForStyle:orientation:forStatusBarFrame:inWindow:isAzulBLinked:]) no tiene valor para el proveedor/pantalla; PRUEBA (DROP 20 de 80, sin escribir BOOT): libherosb con DROP_DIR sbmode: '1' pide SOLO SBHomeGestureSettings isHomeGestureEnabled = sí y deja la plataforma en tipo 1 (la barra que se veía en min100-min117) sin tocar los proveedores; el Director dirá si hay barra y si funcionan los gestos; contadores D-0123: BOOT 15 de 80, DROP 20 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min125-herolog.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "7324e3ffdf2ba6d18d36fd10f54ed416ea97dd9cac7c95770f862e7955fb3007"
+size = 636257
+immutable = true
+note = "Imagen min125 72d3360e; volcado de la barra de estado en libherosb de CI 44891084655."
