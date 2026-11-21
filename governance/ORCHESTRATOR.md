@@ -140,3 +140,30 @@ Bluetooth, cámara y vibración no dan ninguna señal. No es un fallo: no se pue
 3. **H3: Bluetooth, cámara frontal y vibración** (BOOT y fusión hunk a hunk de 0339-0345, Nivel 3). Criterio: BT lista un dispositivo, la cámara entrega N cuadros, el motor vibra.
 
 Recomiendo H1 ahora (no cuesta BOOT y fija la base de Metal con números), luego H2 por valor de uso, y H3 como proyecto aparte. Espero la decisión de Pioxi.
+
+### V.6 H1: banco de Metal medido (E-0387, E-0388)
+
+Banco en S7GE Lab (`apps/s7ge-lab/bench.swift`), Metal real (HeroMetal + libhakiosair, `Mali-T880 (Panfrost) (Hakios)`), textura BGRA 512x512 fuera de pantalla, 2 s por
+prueba (mínimo 10), tiempo = `commit` hasta `waitUntilCompleted`; GLES = mismo FBO con `glFinish`. Una sola ejecución. **Todas las pruebas pasan.**
+
+| Prueba | API | Resultado | Iter. | ms/it | /s | Comprobación |
+|---|---|---|---|---|---|---|
+| a limpiar | Metal | PASS | 3046 | 0,66 | 1522,7 | centro BGRA [191,128,64,255] = esperado |
+| a limpiar | GLES | PASS | 5097 | 0,39 | 2548,0 | centro RGBA [64,128,191,255] |
+| compilar 3 pipelines | Metal | PASS | 1 | 20,76 total | 48,2 | los tres existen (no incluye `makeLibrary`) |
+| b 1 triángulo | Metal | PASS | 2338 | 0,86 | 1168,6 | centro [0,0,255,255] = rojo |
+| b 1 triángulo | GLES | PASS | 3980 | 0,50 | 1989,7 | centro [255,0,0,255] |
+| c 48 triángulos superpuestos | Metal | PASS | 793 | 2,52 | 396,1 | centro [0,0,255,255] |
+| c 48 triángulos superpuestos | GLES | PASS | 1314 | 1,52 | 656,9 | centro [255,0,0,255] |
+| d cuadrado con textura y muestreador | Metal | PASS | 2379 | 0,84 | 1189,5 | centro [127,0,128,255] = esperado |
+| e cómputo: suma de 4096 flotantes | Metal | PASS | 3577 | 0,56 | 1788,4 | 0 erróneos de 4096 |
+
+**Lectura:** Metal cuesta de 1,66 a 1,72 veces lo que OpenGL ES en lo comparable; el coste fijo por command buffer síncrono es de 0,27-0,36 ms; el coste por triángulo extra
+es 0,035 ms (Metal) frente a 0,022 ms (GL). Metal real en el S7 funciona de verdad: render, textura con muestreador, y cómputo con resultado exacto. **Cumplido el criterio de éxito.**
+
+**Límites (no dice el banco):** una sola ejecución (sin varianza); no mide presentación ni pantalla; escenas triviales (upstream midió ~14,5 ms/cuadro con MercuryPoster de iOS 18);
+no mide el tiempo de compilar el MSL (`makeLibrary`); no mide Metal y GL a la vez ni el consumo.
+
+**Siguiente (propuesta, sin BOOT):** H1b, repetir tres veces para tener varianza y añadir: (i) tiempo de `makeLibrary(source:)`, (ii) presentación a pantalla completa por
+`CAMetalLayer` (750x1334) con fps reales y coste por cuadro, (iii) un fragment shader pesado (bucle) para ver si el compilador de AIR de upstream se comporta con
+carga, no solo con escenas triviales. Después, H2 (red de Safari) cuando Pioxi lo decida; H3 queda condicionado a medir el consumo en reposo, como pidió.

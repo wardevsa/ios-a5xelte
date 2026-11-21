@@ -5715,3 +5715,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Código del banco; los resultados llegan con la prueba."
+
+[[evidence]]
+id = "E-0388"
+title = "RESULTADO DE H1: BANCO DE METAL EN EL TELÉFONO (min129, S7GE Lab de CI 44946650927, una sola ejecución del Director, textura BGRA 512x512 fuera de pantalla, 2 s por prueba): TODAS LAS PRUEBAS PASAN (9 de 9 filas): Metal a clear PASS 3046 it 0,66 ms/it 1522,7/s centro BGRA [191,128,64,255] (esperado 191,128,64,255); Metal pipelines (3) compile PASS 20,76 ms en total (solo la creación de los tres pipelines: NO incluye el tiempo de makeLibrary(source:), que no se midió); Metal b 1 triángulo PASS 2338 it 0,86 ms/it 1168,6/s centro [0,0,255,255]; Metal c 48 triángulos superpuestos PASS 793 it 2,52 ms/it 396,1/s centro [0,0,255,255]; Metal d cuadrado con textura y muestreador lineal PASS 2379 it 0,84 ms/it 1189,5/s centro [127,0,128,255] (esperado 127,0,128,255 con una textura degradada de 256x256); Metal e cómputo suma de 4096 flotantes PASS 3577 it 0,56 ms/it 1788,4/s 0 erróneos de 4096; OpenGL ES (el mismo FBO de 512x512, glFinish por cuadro): a clear 5097 it 0,39 ms/it 2548,0/s; b 1 triángulo 3980 it 0,50 ms/it 1989,7/s; c 48 triángulos 1314 it 1,52 ms/it 656,9/s, todas PASS; LECTURA (mía, con los números anteriores): Metal cuesta de 1,66 a 1,72 veces lo que OpenGL ES en las tres comparables (0,66/0,39, 0,86/0,50, 2,52/1,52); la diferencia fija por envío es de 0,27 a 0,36 ms (clear y 1 triángulo) y por triángulo extra (48 menos 1, entre 47) 0,035 ms en Metal frente a 0,022 en GL; el coste fijo de cada command buffer síncrono es de unos 0,3 ms, razonable para un cuadro de 33 ms pero visible a 120 fps; LO QUE ESTE BANCO NO DICE: (1) una sola ejecución, sin variación entre ejecuciones; (2) no mide la presentación (CAMetalLayer, importación de la superficie) ni la pantalla; (3) escenas triviales, no sombreadores pesados (upstream midió unos 14,5 ms por cuadro con MercuryPoster iOS 18); (4) el tiempo de compilar el MSL a AIR en el teléfono; (5) un Metal en uso a la vez que OpenGL (el banco pausó las animaciones); (6) cortes en energía; los cierres anteriores de S7GELab en heroapp-crash.txt (pids 278 y 279, SIGABRT) son de la prueba de E-0377, no del banco (el banco no cerró la app); CRITERIO DE ÉXITO DEL ORQUESTADOR: las cinco pruebas pasan con resultado correcto y se publica la tabla: CUMPLIDO; contadores D-0123: BOOT 19 de 80, DROP 53 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n24-s7ge-bench.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "5e25cf243d5a93f3b70345d14e492e76d5eaa4d32782fb9a778a80592e33d1b7"
+size = 986
+immutable = true
+note = "s7ge-bench.txt de la ejecución (scratch)."
