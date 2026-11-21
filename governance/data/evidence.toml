@@ -5244,3 +5244,18 @@ sha256 = "048b65b31dbc31912b9048762b6936771ccd6323c1ef7bf4b4960c649828d200"
 size = 241039
 immutable = true
 note = "heroapp.log del teléfono (copia en scratch, fuera de git)."
+
+[[evidence]]
+id = "E-0355"
+title = "S7GE Lab con libheroeagl-app cargado (E-0354): sin cierre; heroapp.log: BGEAGLContext/EAGLSharegroup/EAGLContext existen y los cuatro métodos (initWithAPI:, initWithAPI:sharegroup:, renderbufferStorage:fromDrawable:, presentRenderbuffer:) están en libheroeagl-app.dylib, es decir, el parche entra; el informe de la app dice 'GL: context ok, storage false, 0 x 0, framebuffer status 0x0', GL_RENDERER/VERSION/VENDOR nil, 'program linked 0', Metal nil; setCurrent no falló, así que el contexto es el del puente pero las llamadas gl* de la app no llegan a Mesa; HIPÓTESIS (de la lectura de código, sin medir): las llamadas gl* de la app van a los stubs del OpenGLES del sistema, que leen la tabla de macros del hueco pthread-specific __PTK_FRAMEWORK_OPENGL_KEY (20) y llaman entry(table[0], args); +setCurrentContext: de serie rellena ese hueco, el del puente lo sustituye y no lo hace; backboardd no lo necesita porque CoreAnimation llama por getMacroContextPrivate; ACCIÓN (DROP 29 de 80, sin BOOT): libheroeagl-app de CI 44911492826 hace pthread_setspecific(20, macro) en setCurrentContext (solo en la compilación EAGL_INJECT); PRUEBA: abrir S7GE Lab: si GL_RENDERER sale con texto y storage true, la hipótesis queda confirmada; si se cierra, heroapp-crash.txt; contadores D-0123: BOOT 17 de 80, DROP 29 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/new-s7ge-lab.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "91cc81b39244b781b045d1c17728d29ac5c98e330e7891e904a9da03d7e76605"
+size = 30339
+immutable = true
+note = "Informe de S7GE Lab (copia en scratch, fuera de git)."
