@@ -960,4 +960,105 @@ change('fragment outputs at 32 bits: pass', 'air_metal.c',
    /*
     * B2L (B1L-0058)''')
 
+# 11. A texture the fragment shader declares and the application left unbound reads zeros, as it does on Apple's GPUs,
+# instead of refusing the draw. iOS 18's default wallpaper (MercuryPoster's fluidity style) binds texture 0 alone to
+# fluidity::fragmentShader, which declares two: every frame of its second pass was refused ("reads texture 1 and 1
+# texture was bound", boot-18k49) and only the first pass reached the screen. A 1x1 texture of zeros of the declared
+# kind and element type goes in each such slot (ios-b1lte did the same for SpringBoard, B1L-0228/0229).
+change('unbound textures read zeros: helpers', 'air_metal.c',
+       '''int
+rwa_render_draw(struct rwa_render *render, const struct rwa_draw *draw,
+                char *why, size_t why_size)
+{''',
+       '''/* HEROLTE: a 1x1 texture of zeros of one kind and element type, made once per device. */
+static struct rwa_texture *
+herolte_zero_texture(struct rwa_device *device, unsigned type, nir_alu_type element, bool shadow)
+{
+   static struct { struct rwa_device *device; unsigned type, format; struct rwa_texture *t; } made[24];
+   static unsigned nmade;
+   /* RGBA8Unorm, RGBA8Uint, RGBA8Sint; Depth32Float for a depth2d a comparison reads */
+   unsigned format = shadow ? 252 : element == nir_type_uint ? 73 : element == nir_type_int ? 74 : 70;
+   for (unsigned i = 0; i < nmade; i++)
+      if (made[i].device == device && made[i].type == type && made[i].format == format)
+         return made[i].t;
+   if (nmade == ARRAY_SIZE(made))
+      return NULL;
+   bool cube = type == RWA_TYPE_CUBE || type == RWA_TYPE_CUBE_ARRAY;
+   bool ms = type == RWA_TYPE_2D_MULTISAMPLE || type == RWA_TYPE_2D_MULTISAMPLE_ARRAY;
+   struct rwa_texture_shape shape = {
+      .pixel_format = format, .type = type, .width = 1, .height = 1, .depth = 1, .array_length = 1,
+      .mip_levels = 1, .sample_count = ms ? 4 : 1, .usage = 1,   /* MTLTextureUsageShaderRead */
+   };
+   char why[256];
+   struct rwa_texture *t = rwa_texture_create(device, &shape, why, sizeof(why));
+   if (!t) {
+      fprintf(stderr, "herolte: no zero texture of type %u, format %u: %s\\n", type, format, why);
+      return NULL;
+   }
+   if (!shadow && !ms) {
+      static const uint32_t zero[4];
+      const unsigned origin[3] = { 0, 0, 0 }, size[3] = { 1, 1, 1 };
+      for (unsigned layer = 0; layer < (cube ? 6u : 1u); layer++)
+         rwa_texture_write(t, 0, layer, origin, size, zero, 0, why, sizeof(why));
+   }
+   made[nmade].device = device;
+   made[nmade].type = type;
+   made[nmade].format = format;
+   made[nmade].t = t;
+   nmade++;
+   return t;
+}
+
+/* HEROLTE: *out is *in, with a zero texture in every declared, unbound texture slot. */
+static void
+herolte_fill_unbound(struct rwa_device *device, const struct air_shader_info *info,
+                     const struct rwa_slot *slots, const struct rwa_bindings *in,
+                     struct rwa_bindings *out, struct rwa_texture **storage)
+{
+   bool changed = false;
+   unsigned count = in->texture_count;
+   *out = *in;
+   for (unsigned i = 0; i < info->num_resources; i++) {
+      const struct air_resource *r = &info->resources[i];
+      if (r->kind != AIR_RESOURCE_TEXTURE || r->argbuf_set != ~0u || r->index >= RWA_MAX_TEXTURES)
+         continue;
+      if (r->index < in->texture_count && in->textures[r->index])
+         continue;
+      if (!changed) {
+         memset(storage, 0, RWA_MAX_TEXTURES * sizeof(*storage));
+         for (unsigned k = 0; k < in->texture_count && k < RWA_MAX_TEXTURES; k++)
+            storage[k] = in->textures[k];
+         changed = true;
+      }
+      const struct rwa_slot *s = &slots[r->index];
+      unsigned type = RWA_TYPE_2D;
+      if (s->shape_known && !metal_texture_type(s->dim, s->is_array, &type))
+         type = RWA_TYPE_2D;
+      nir_alu_type element = nir_type_float;
+      const char *word;
+      if (!slot_element(s, &element, &word, NULL))
+         element = nir_type_float;
+      storage[r->index] = herolte_zero_texture(device, type, element, s->shadow);
+      count = MAX2(count, r->index + 1);
+   }
+   if (changed) {
+      out->textures = storage;
+      out->texture_count = count;
+   }
+}
+
+int
+rwa_render_draw(struct rwa_render *render, const struct rwa_draw *draw,
+                char *why, size_t why_size)
+{
+   /* HEROLTE: the fragment stage's unbound textures read zeros (herolte_fill_unbound) */
+   struct rwa_draw herolte_draw;
+   struct rwa_texture *herolte_ftex[RWA_MAX_TEXTURES];
+   if (draw) {
+      herolte_draw = *draw;
+      herolte_fill_unbound(render->device, &render->finfo, render->frag_slots, &draw->fragment,
+                           &herolte_draw.fragment, herolte_ftex);
+      draw = &herolte_draw;
+   }''')
+
 print('air-herolte: ' + ', '.join(done))
