@@ -72,6 +72,13 @@ static const unsigned char *gl_GetStringNote(unsigned name) {
     static const unsigned char *(*f)(unsigned); static unsigned seen[16]; static int nseen;
     if (!f) f = (const unsigned char *(*)(unsigned))lookup("glGetString");
     const unsigned char *s = f(name);
+    /* E-0367: the only string SpriteKit's Jet asks for before create_program fails is GL_RENDERER; it probably picks its shader set by the GPU's name. An app that
+     * is not the Lab (which shows the real one) is told the name of the GPU of the iPhone 6s. DROP file renderer.real turns it off. */
+    if (name == 0x1f01 && notes_wanted() && strcmp(getprogname(), "S7GELab") != 0 && access("/private/var/herolte/renderer.real", F_OK) != 0) {
+        static const unsigned char apple[] = "Apple A9 GPU";
+        gl_note("GL: %s glGetString(GL_RENDERER) answered as Apple A9 GPU (Mesa's: %s)", getprogname(), s ? (const char *)s : "nil");
+        return apple;
+    }
     int dup = 0;
     for (int i = 0; i < nseen; i++) if (seen[i] == name) dup = 1;
     if (!dup && nseen < 16 && notes_wanted()) {
