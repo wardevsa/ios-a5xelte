@@ -5769,3 +5769,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Código de la sonda; los resultados llegan con la prueba."
+
+[[evidence]]
+id = "E-0392"
+title = "S7GE Net (E-0391) no sale en la pantalla de inicio tras el primer arranque: registro del kernel: 'hero-run: app S7GENet.app: put in /Applications' (bien: el binario, Info.plist y .herolte-app están en /Applications/S7GENet.app, comprobado con ls), pero 'hero-run: app /Applications/S7GENet.app: LSRegisterURL -1, registerApplication 0' y 'hero-run: apps: 1 given to LaunchServices by pid 277, spawn 0, status 0x100' / 'apps: not registered now; the next boot makes LaunchServices database anew': el registro en caliente de LaunchServices falla (mismo patrón que en el primer arranque de otras apps, E-0340: el LSRegisterURL de hero-run da -1 mientras la base de LS sigue en marcha) y el propio hero-run deja pedida la reconstrucción de la base de LaunchServices en el PRÓXIMO arranque (borra lsdb3.gone, que remove_ls_db_once usa); no hace falta otro DROP: basta ARRANCAR otra vez; el arranque con reconstrucción tarda varios minutos (unos 5 a 10 en los anteriores, E-0340); contadores D-0123: BOOT 19 de 80, DROP 55 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n26.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "f1996f7dd0665b222fd2ff027450c0b98353d34e1f39ea0209e379c57b9a7a7a"
+size = 369727
+immutable = true
+note = "Registro del kernel con el fallo de LSRegisterURL (scratch)."
