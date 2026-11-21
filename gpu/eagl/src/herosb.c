@@ -198,10 +198,12 @@ look_at_windows(void *unused)
  * gets the red rdar:45025538 one. SpringBoard alone is told type 2, which is where the home gestures are decided, as
  * the old home-gesture tweaks did. DROP_DIR gestures.off turns it off.
  */
+static volatile int force_type1;     /* sbmode 4: while UIKit's own choice of status bar provider runs, the platform says home button */
+
 static long
 says_gestures(id self, SEL cmd)
 {
-   return 2;
+   return force_type1 ? 1 : 2;
 }
 
 static BOOL
@@ -234,6 +236,36 @@ set_provider(id self, SEL cmd, Class provider)
    set_provider_was(self, cmd, provider);
 }
 
+
+/*
+ * min125d (E-0349): sbmode 3 (the iPhone X's Split1125 provider) shows the time and the battery in two ears with a gap in the middle, which looks odd without a
+ * notch; the Director asks for the iPhone 8's bar with the iPhone X's gestures. sbmode 4 asks UIKit for the provider IT WOULD CHOOSE for the home-button
+ * platform (the platform says type 1 for the duration of that call) and gives that class to the type 2 status bar; what it chose is logged.
+ */
+static int natural_mode;
+static IMP natural_original[3];
+static const char *const natural_classes[3] = { "_UIStatusBarVisualProvider_iOS", "_UIStatusBarVisualProvider_Phone", "_UIStatusBarVisualProvider_Fallback" };
+
+static Class
+natural_choice(id self, SEL cmd, id screen, id info)
+{
+   status_bar_asked++;
+   for (int i = 0; i < 3; i++) {
+      if ((Class)self == objc_getClass(natural_classes[i]) && natural_original[i]) {
+         force_type1 = 1;
+         Class picked = ((Class (*)(id, SEL, id, id))natural_original[i])(self, cmd, screen, info);
+         force_type1 = 0;
+         static int logged;
+         if (logged++ < 6)
+            herodrm_log("herosb: natural provider asked of %s: %s", natural_classes[i], picked ? class_getName(picked) : "(nil)");
+         if (picked && picked != objc_getClass("_UIStatusBarVisualProvider_Fallback"))
+            return picked;
+         break;
+      }
+   }
+   return objc_getClass("_UIStatusBarVisualProvider_Phone");
+}
+
 static void
 keep_status_bar(void)
 {
@@ -244,7 +276,13 @@ keep_status_bar(void)
       Class provider = objc_getClass(providers[i]);
       Method method = provider ? class_getClassMethod(provider, pick) : NULL;
       if (method) {
-         method_setImplementation(method, (IMP)phone_takes_it);
+         if (natural_mode) {
+            for (int k = 0; k < 3; k++)
+               if (strcmp(providers[i], natural_classes[k]) == 0)
+                  natural_original[k] = method_setImplementation(method, (IMP)natural_choice);
+         } else {
+            method_setImplementation(method, (IMP)phone_takes_it);
+         }
          status_bar_kept++;
       }
    }
@@ -372,7 +410,7 @@ herosb_start(void)
       FILE *mf = fopen(DROP_DIR "sbmode", "r");
       if (mf) {
          int c = fgetc(mf);
-         if (c >= '0' && c <= '3')
+         if (c >= '0' && c <= '4')
             mode = (char)c;
          fclose(mf);
       }
@@ -387,6 +425,8 @@ herosb_start(void)
       } else {
          if (mode == '3')
             provider_name = "_UIStatusBarVisualProvider_Split1125";
+         if (mode == '4')
+            natural_mode = 1;
          ask_for_gestures();
          if (mode == '2')
             fix_bar_height();
