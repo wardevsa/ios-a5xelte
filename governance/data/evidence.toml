@@ -5214,3 +5214,18 @@ sha256 = "622baaf5f1e51e1a43b8cb9ac4691dca5a55e3b1b158c37ab89d1b1ecd7fa7c0"
 size = 299145
 immutable = true
 note = "Imagen min127 con S7GE Lab y appgl.on='S7GELab'."
+
+[[evidence]]
+id = "E-0353"
+title = "El detector de cierres de libheroapp (E-0352) dice dónde muere S7GE Lab: SIGSEGV, dirección de fallo 0x8, pc 0x1f25e9a78 = OpenGLES +0x6a78 y lr = OpenGLES +0x69a8 (símbolos no públicos), con el primer marco de la pila en S7GELab +0x4670 = GLView.start() (dirección de retorno tras la llamada a renderbufferStorage:fromDrawable:), después LabController.viewDidLoad, UIKitCore y AppDelegate.application:didFinishLaunching...: la app llama a objc_msgSend y el método que se ejecuta está en la biblioteca OpenGLES del SISTEMA, no en libheroeagl (si el método del puente estuviera en medio habría un marco de libheroeagl); es decir, el parche de libheroeagl, que copia sus métodos de BGEAGLContext en la clase real EAGLContext al cargarse (eagl.m, eagl_inject_patch, solo si existen EAGLContext y EAGLSharegroup en ese momento), NO ha sustituido renderbufferStorage:fromDrawable: (y quizá tampoco initWithAPI:, que no devolvió nil porque el de serie crea un contexto vacío); la biblioteca sí tiene la clase BGEAGLContext (40 apariciones en sus cadenas); el detector es general: escribe /private/var/tmp/heroapp-crash.txt con imagen, desplazamiento y símbolo de pc, lr y 12 marcos; PARA CONFIRMAR EL PARCHE (DROP 27 de 80, sin tocar BOOT): libheroapp de CI 44907325491 registra, tras cargar el puente, si existen BGEAGLContext, EAGLSharegroup y EAGLContext, y en qué imagen (libheroeagl u OpenGLES) está la implementación de initWithAPI:, initWithAPI:sharegroup:, renderbufferStorage:fromDrawable: y presentRenderbuffer:; contadores D-0123: BOOT 17 de 80, DROP 27 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/heroapp-crash.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ad8012d22fa7de96fbabdc2a44a7905135926c9e38dd344a6b2380b02e866b65"
+size = 7238
+immutable = true
+note = "Contenido de heroapp-crash.txt del teléfono (Apple y direcciones; fuera de git)."
