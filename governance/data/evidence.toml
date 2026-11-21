@@ -5814,3 +5814,15 @@ sha256 = "e6b6c31c0c02e6f1a0f81efb8d33d8e0a477aa5a20690629687edec8af780b4f"
 size = 1332475
 immutable = true
 note = "Registro del kernel con Safari y el cierre de backboardd (scratch)."
+
+[[evidence]]
+id = "E-0395"
+title = "MEMORIA POR PROCESO (opción (b) de V.9, elegida por mi recomendación al decir el Director 'como quieras'), DROP 56 de 80 (sin BOOT): hero-run (autorun) de CI 44953219403 lleva un hilo que cada 30 s escribe en el registro del kernel una línea 'hero-run: memory: free N MB, compressor N MB, N processes, footprints N MB; top: nombre[pid] MB ...' con los diez procesos de mayor huella física (proc_pid_rusage RUSAGE_INFO_V2, ri_phys_footprint; hero-run corre como root y ve todos); un fichero mem.off en la zona de drop lo detiene; libproc.h no está en el SDK de iPhoneOS, por eso proc_pid_rusage se busca con dlsym; PRUEBA: arrancar, usar el teléfono unos 10 minutos (con Safari si se quiere) y volver a TWRP; la lectura dirá quién tiene la memoria cuando baja a unos 30 MB libres; DEJO DICHO: tres veces seguidas esta tanda un 'str.replace' mío cayó en la primera aparición equivocada de un texto (la función del audio en E-0385, el 'proc_listallpids' que el propio hero-run ya usaba aquí): desde ahora, anclas con la función completa y una comprobación de que el texto es único; contadores D-0123: BOOT 19 de 80, DROP 56 de 80"
+kind = "document"
+path = "gpu/eagl/test/hero-run.c"
+location = "git"
+created = "2026-11-21"
+domain = "device"
+level = "L1"
+device = "this-unit"
+note = "Código del muestreador de memoria; los resultados llegan con la prueba."
