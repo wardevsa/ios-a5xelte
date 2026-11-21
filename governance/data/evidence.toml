@@ -5424,3 +5424,18 @@ sha256 = "96243b74d4401fad60037cc961b68534e137a0592926df36106104228f7530df"
 size = 1204809
 immutable = true
 note = "heroeagl.log sin lineas GL (scratch)."
+
+[[evidence]]
+id = "E-0367"
+title = "heroeagl.log con glGetString (E-0366), 5 cierres de Flappy Bird: en cada proceso la ÚNICA cadena que se pide es glGetString(0x1f01 = GL_RENDERER) = 'Mali-T880 (Panfrost)' (5 líneas, una por proceso; nunca VERSION ni EXTENSIONS), antes del cierre de Jet create_program: dos hechos: (1) las llamadas gl* de Jet SÍ pasan por nuestro desvío (la caché de dyld sí se interpone), (2) Jet mira el nombre de la GPU y después su función de sombreado es nula; HIPÓTESIS (sin comprobar): Jet elige su conjunto de sombreadores por el nombre del renderer ('Apple ...', 'PowerVR ...'); EXPERIMENTO (DROP 39 de 80, sin BOOT): libheroeagl-app de CI 44924926586 responde 'Apple A9 GPU' a GL_RENDERER en toda app que no sea S7GELab (que sigue mostrando el real), y lo anota en heroeagl.log con el nombre de Mesa; se desactiva con el fichero /private/var/herolte/renderer.real; contadores D-0123: BOOT 18 de 80, DROP 39 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n12-heroeagl.log"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "291585d257d5adf901b2219bd1e20a91f240435127aaec28024b510284bda641"
+size = 1211219
+immutable = true
+note = "heroeagl.log con glGetString (scratch)."
