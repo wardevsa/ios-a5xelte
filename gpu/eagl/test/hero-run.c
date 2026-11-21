@@ -783,7 +783,7 @@ widgets_to_background(void *unused)
       return NULL;
    for (;;) {
       int pids[2048];
-      int n = proc_listallpids(pids, sizeof(pids));
+      int n = proc_listallpids_p(pids, sizeof(pids));
       for (int i = 0; i < n && i < 2048; i++) {
          char name[64] = "";
          int seen = 0;
@@ -1591,12 +1591,22 @@ haptics_probe(__unused void *unused)
  * signal 9, but not who holds the memory. Every 30 s (for as long as hero-run lives; DROP file mem.off stops it): the free memory, and the ten largest processes by physical
  * footprint (proc_pid_rusage, root sees all) with their name, pid and MB, as one or two kernel log lines.
  */
-#include <libproc.h>
 #include <mach/mach.h>
+/* libproc.h is not in the iPhoneOS SDK; the three functions are in libSystem and are looked up by name (a missing one only turns the sampler off) */
+typedef int (*proc_listallpids_fn)(void *, int);
+typedef int (*proc_pid_rusage_fn)(int, int, void *);
+typedef int (*proc_name_fn)(int, void *, uint32_t);
 static void *
 memory_sampler(void *unused)
 {
    (void)unused;
+   proc_listallpids_fn proc_listallpids_p = (proc_listallpids_fn)dlsym(RTLD_DEFAULT, "proc_listallpids");
+   proc_pid_rusage_fn proc_pid_rusage_p = (proc_pid_rusage_fn)dlsym(RTLD_DEFAULT, "proc_pid_rusage");
+   proc_name_fn proc_name_p = (proc_name_fn)dlsym(RTLD_DEFAULT, "proc_name");
+   if (!proc_listallpids_p || !proc_pid_rusage_p || !proc_name_p) {
+      herodrm_log("hero-run: memory: libproc functions not found (%d %d %d): sampler off", proc_listallpids_p != NULL, proc_pid_rusage_p != NULL, proc_name_p != NULL);
+      return NULL;
+   }
    for (int round = 0;; round++) {
       sleep(30);
       if (access(DROP_DIR "mem.off", F_OK) == 0)
@@ -1608,7 +1618,7 @@ memory_sampler(void *unused)
       uint64_t total = 0;
       for (int i = 0; i < n; i++) {
          struct rusage_info_v2 ri;
-         if (pids[i] <= 0 || proc_pid_rusage(pids[i], RUSAGE_INFO_V2, (rusage_info_t *)&ri) != 0)
+         if (pids[i] <= 0 || proc_pid_rusage_p(pids[i], RUSAGE_INFO_V2, &ri) != 0)
             continue;
          uint64_t mb100 = ri.ri_phys_footprint / (1024 * 1024 / 100);
          total += ri.ri_phys_footprint;
@@ -1617,7 +1627,7 @@ memory_sampler(void *unused)
             continue;
          top[at].pid = pids[i];
          top[at].mb100 = mb100;
-         proc_name(pids[i], top[at].name, sizeof(top[at].name));
+         proc_name_p(pids[i], top[at].name, sizeof(top[at].name));
          for (int k = at; k > 0 && top[k].mb100 > top[k - 1].mb100; k--) {
             __typeof__(top[0]) tmp = top[k - 1];
             top[k - 1] = top[k];
