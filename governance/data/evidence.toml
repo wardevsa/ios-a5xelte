@@ -5730,3 +5730,15 @@ sha256 = "5e25cf243d5a93f3b70345d14e492e76d5eaa4d32782fb9a778a80592e33d1b7"
 size = 986
 immutable = true
 note = "s7ge-bench.txt de la ejecución (scratch)."
+
+[[evidence]]
+id = "E-0389"
+title = "H1b (aprobada por el Director con 'si'): BANCO DE METAL, SEGUNDA VERSIÓN, DROP 54 de 80 (sin BOOT): S7GE Lab de CI 44948618314: (i) TRES PASADAS completas con mínimo/media/máximo de ms por iteración (la varianza que faltaba en E-0388); (ii) tiempo de makeLibrary(source:) medido aparte (el texto MSL de 2 vértices, 4 fragmentos y 1 kernel; el primer arranque de la app lo compila con el compilador del teléfono y puede quedar en caché en las pasadas siguientes: se anota la lista de las tres); (iii) dos pruebas de sombreador pesado: f) un bucle de 128 pasos por píxel y g) uno de 1024 pasos sobre los 512x512 píxeles, con el centro comprobado contra el mismo bucle en la CPU (a = a*0,999+0,001, salida B=0, G=a/2, R=a); (iv) h) PRESENTACIÓN a pantalla completa: una CAMetalLayer del tamaño en píxeles del panel de iOS (750x1334), nextDrawable + un triángulo + present + commit + waitUntilCompleted por cuadro, 4 s, fps y ms por cuadro; el resultado va a la pantalla y a /private/var/tmp/s7ge-bench.txt; PRUEBA: abrir S7GE Lab, 'Probar Metal' y 'Banco Metal' (unos 70 s con la pantalla quieta, la presentación llena la pantalla durante 4 s); contadores D-0123: BOOT 19 de 80, DROP 54 de 80"
+kind = "document"
+path = "apps/s7ge-lab/bench.swift"
+location = "git"
+created = "2026-11-21"
+domain = "device"
+level = "L1"
+device = "this-unit"
+note = "Código del banco H1b; los resultados llegan con la prueba."
