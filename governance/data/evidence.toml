@@ -5364,3 +5364,18 @@ sha256 = "0ce584765da2ab6b4ac0d6e7e32aedfe1f0b9c4bfb49756b768a82c91e720252"
 size = 20540
 immutable = true
 note = "heroapp-crash.txt con la pila de Flappy Bird (scratch)."
+
+[[evidence]]
+id = "E-0363"
+title = "Flappy Bird con appgl.on (E-0362): SIGUE cerrándose con la MISMA pila (abort <- err <- Jet create_texture_from_IOSurface <- SpriteKit); heroapp.log: el puente se cargó y los cuatro métodos de EAGLContext están en libheroeagl-app; heroeagl.log: setCurrentContext con make_current 1 y 'Mali-T880 (Panfrost)' (el contexto SÍ se crea y se hace actual), pero sin más líneas: no sabemos qué pide Jet ni por qué falla; lectura del código (eagl.m texImageIOSurface): devuelve NO por razones numeradas (1 contexto no actual o superficie nula, 2 tamaño 0, 3 formato no soportado, 4 tipo no soportado, 5 fila corta, 6 sin memoria, 7 sin mapeo de CPU) y esos mensajes solo salían con EAGL_SHIM_DEBUG; ACCIÓN (DROP 35 de 80, sin BOOT): libheroeagl-app de CI 44921356671 lleva los primeros 400 mensajes de depuración a heroeagl.log; PRUEBA: abrir Flappy Bird otra vez (se cerrará) y leer la razón; contadores D-0123: BOOT 18 de 80, DROP 35 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n8-heroeagl.log"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "777f154ba32e3a8aca11b47f6d974228c0793c5d8257399353ad991f3ca99cd1"
+size = 1157294
+immutable = true
+note = "heroeagl.log (scratch)."
