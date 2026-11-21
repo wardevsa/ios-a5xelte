@@ -83,6 +83,50 @@ final class GLView: UIView {
         link?.add(to: .main, forMode: .common)
     }
 
+
+    /// H1: pause or resume the on-screen GL animation, so that the bench is alone on the GPU.
+    func setPaused(_ paused: Bool) { link?.isPaused = paused }
+
+    /// H1: the same (a) clear, (b) one triangle, (c) 48 overdrawn triangles as the Metal bench, off screen at 512x512, each frame ended by glFinish.
+    /// kind 0 = clear, 1 = one triangle, 48 = that many. Returns (iterations, ms, centre RGBA) or nil when there is no context.
+    func benchOffscreen(kind: Int, seconds: Double) -> (Int, Double, [UInt8])? {
+        guard let ctx = context else { return nil }
+        EAGLContext.setCurrent(ctx)
+        var fbo: GLuint = 0, rb: GLuint = 0
+        glGenFramebuffers(1, &fbo); glGenRenderbuffers(1, &rb)
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), fbo); glBindRenderbuffer(GLenum(GL_RENDERBUFFER), rb)
+        glRenderbufferStorage(GLenum(GL_RENDERBUFFER), GLenum(GL_RGBA8_OES), 512, 512)
+        glFramebufferRenderbuffer(GLenum(GL_FRAMEBUFFER), GLenum(GL_COLOR_ATTACHMENT0), GLenum(GL_RENDERBUFFER), rb)
+        glViewport(0, 0, 512, 512)
+        glUseProgram(program)
+        glUniform1f(angleLocation, 0)
+        let vertices: [Float] = [0, 0.9, 1, 0, 0, -0.9, -0.9, 1, 0, 0, 0.9, -0.9, 1, 0, 0]
+        var n = 0
+        let start = CACurrentMediaTime()
+        var now = start
+        while n < 10 || now - start < seconds {
+            if kind == 0 { glClearColor(0.25, 0.5, 0.75, 1) } else { glClearColor(0, 0, 0, 1) }
+            glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
+            if kind > 0 {
+                vertices.withUnsafeBufferPointer { buffer in
+                    let base = UnsafeRawPointer(buffer.baseAddress!)
+                    glVertexAttribPointer(0, 2, GLenum(GL_FLOAT), GLboolean(GL_FALSE), 20, base)
+                    glVertexAttribPointer(1, 3, GLenum(GL_FLOAT), GLboolean(GL_FALSE), 20, base.advanced(by: 8))
+                    glEnableVertexAttribArray(0); glEnableVertexAttribArray(1)
+                    for _ in 0..<kind { glDrawArrays(GLenum(GL_TRIANGLES), 0, 3) }
+                }
+            }
+            glFinish()
+            n += 1
+            now = CACurrentMediaTime()
+        }
+        var px = [UInt8](repeating: 0, count: 4)
+        glReadPixels(256, 256, 1, 1, GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), &px)
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), 0); glBindRenderbuffer(GLenum(GL_RENDERBUFFER), 0)
+        glDeleteFramebuffers(1, &fbo); glDeleteRenderbuffers(1, &rb)
+        return (n, (now - start) * 1000, px)
+    }
+
     @objc private func drawFrame() {
         guard let ctx = context else { return }
         EAGLContext.setCurrent(ctx)
@@ -123,6 +167,7 @@ final class MetalStrip: UIView {
     private let queue: MTLCommandQueue
     private var link: CADisplayLink?
     private(set) var frames = 0
+    func setPaused(_ paused: Bool) { link?.isPaused = paused }
     private var phase: Double = 0
     private let device: MTLDevice
     private var pipeline: MTLRenderPipelineState?
@@ -209,7 +254,12 @@ final class LabController: UIViewController {
         button.frame = CGRect(x: 12, y: gl.frame.maxY + 4, width: 160, height: 36)
         button.addTarget(self, action: #selector(tryMetal), for: .touchUpInside)
         view.addSubview(button)
-        text.frame = CGRect(x: 8, y: button.frame.maxY + 4, width: view.bounds.width - 16, height: view.bounds.height - button.frame.maxY - 8)
+        let benchButton = UIButton(type: .system)
+        benchButton.setTitle("Banco Metal", for: .normal)
+        benchButton.frame = CGRect(x: 12, y: button.frame.maxY + 2, width: 160, height: 36)
+        benchButton.addTarget(self, action: #selector(runBench), for: .touchUpInside)
+        view.addSubview(benchButton)
+        text.frame = CGRect(x: 8, y: benchButton.frame.maxY + 4, width: view.bounds.width - 16, height: view.bounds.height - benchButton.frame.maxY - 8)
         text.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         text.backgroundColor = .black
         text.textColor = .green
@@ -237,13 +287,49 @@ final class LabController: UIViewController {
         refresh()
     }
 
+    private var benchText = ""
+
+    @objc private func runBench() {
+        guard let device = MTLCreateSystemDefaultDevice(), let bench = MetalBench(device: device) else { benchText = "Banco Metal: no hay dispositivo"; refresh(); return }
+        benchText = "Banco Metal: en marcha (unos 25 s, la pantalla se queda quieta)..."
+        refresh()
+        gl.setPaused(true); strip?.setPaused(true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self = self else { return }
+            let seconds = 2.0
+            bench.run(seconds: seconds)
+            var rows = bench.rows
+            // the same (a)-(c) through OpenGL ES
+            for (kind, name) in [(0, "a clear"), (1, "b 1 triangle"), (48, "c 48 overdrawn triangles")] {
+                if let (n, ms, px) = self.gl.benchOffscreen(kind: kind, seconds: seconds) {
+                    let expect: [UInt8] = kind == 0 ? [64, 128, 191, 255] : [255, 0, 0, 255]   // RGBA
+                    let ok = zip(px, expect).allSatisfy { abs(Int($0) - Int($1)) <= 3 }
+                    rows.append(BenchRow(api: "GLES", name: name, ok: ok, iterations: n, totalMs: ms, note: "centre RGBA \(px)"))
+                } else {
+                    rows.append(BenchRow(api: "GLES", name: name, ok: false, iterations: 0, totalMs: 0, note: "no context"))
+                }
+            }
+            var lines = ["Banco Metal (512x512 fuera de pantalla, \(Int(seconds)) s por prueba; ms/it = commit hasta waitUntilCompleted, o glFinish)", "device \(device.name)"]
+            lines += rows.map { $0.line }
+            lines.append("PASS \(rows.filter { $0.ok }.count) de \(rows.count)")
+            self.benchText = lines.joined(separator: "\n")
+            if let data = (self.benchText + "\n---\n").data(using: .utf8) {
+                let path = "/private/var/tmp/s7ge-bench.txt"
+                if let handle = FileHandle(forWritingAtPath: path) { handle.seekToEndOfFile(); handle.write(data); handle.closeFile() }
+                else { FileManager.default.createFile(atPath: path, contents: data, attributes: [.posixPermissions: 0o666]) }
+            }
+            self.gl.setPaused(false); self.strip?.setPaused(false)
+            self.refresh()
+        }
+    }
+
     private func refresh() {
         let s = UIScreen.main
         var lines = ["\(UIDevice.current.model), iOS \(UIDevice.current.systemVersion)",
                      "screen \(s.bounds.width) x \(s.bounds.height) pt @\(s.scale), native \(s.nativeBounds.width) x \(s.nativeBounds.height)",
                      "safe area \(view.safeAreaInsets.top) \(view.safeAreaInsets.bottom)",
                      "Metal strip frames \(strip?.frames ?? -1); \(strip?.triangle ?? "no strip")",
-                     String(format: "frames %.1f per second (1 triangle %.1f, 48 overdrawn triangles %.1f)", gl.fps, gl.fpsLight, gl.fpsHeavy), "", gl.report, "", metal]
+                     String(format: "frames %.1f per second (1 triangle %.1f, 48 overdrawn triangles %.1f)", gl.fps, gl.fpsLight, gl.fpsHeavy), "", gl.report, "", metal, "", benchText]
         lines.append("")
         text.text = lines.joined(separator: "\n")
         let shown = text.text ?? ""
