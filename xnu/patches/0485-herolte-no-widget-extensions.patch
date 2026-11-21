@@ -4,7 +4,26 @@ E-0343 and E-0350: after every change of the screen or of the apps chronod start
 
 --- a/bsd/dev/herolte_gl.c
 +++ b/bsd/dev/herolte_gl.c
-@@ -120,6 +120,22 @@
+@@ -95,6 +95,18 @@
+ static int hgl_noexec_init;
+ 
+ static bool
++hgl_has(const char *hay, const char *needle)
++{
++	size_t n = strlen(needle);
++	for (; *hay; hay++) {
++		if (strncmp(hay, needle, n) == 0) {
++			return true;
++		}
++	}
++	return false;
++}
++
++static bool
+ herolte_noexec(const char *path)
+ {
+ 	if (!hgl_noexec_init) {
+@@ -120,6 +132,22 @@
  	    strcmp(base, "MacinTalkAUSP") == 0) {
  		return true;
  	}
@@ -20,7 +39,7 @@ E-0343 and E-0350: after every change of the screen or of the apps chronod start
 +			widgets = 0;
 +			PE_parse_boot_argn("herowidgets", &widgets, sizeof(widgets));
 +		}
-+		if (!widgets && strstr(path, ".appex/") != NULL && strstr(base, "Widget") != NULL) {
++		if (!widgets && hgl_has(path, ".appex/") && hgl_has(base, "Widget")) {
 +			return true;
 +		}
 +	}
