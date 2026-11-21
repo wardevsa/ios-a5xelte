@@ -89,6 +89,28 @@ Panfrost on the T880 for OpenGL, over `gpu/mesa/herodrm.c`. PanVK (Scion's other
    - boot-18k47, `hero_mtl_test`: `MTLCreateSystemDefaultDevice()` = "Mali-T880 (Panfrost) (Hakios)" in 0.16 s, a
      buffer written and read back, MercuryPoster's library (22 functions), the post pipeline in 0.04 s, two command
      buffers at status 4 (completed) in 3 and 1 ms, and **the four pixels identical to hero_metal_test's**.
-4. **M4: MercuryPoster** draws.
+4. **M4: MercuryPoster** draws. In progress (2026-11-21, boot-18k48..53).
+   - **Drawables (M4a).** `gpu/metal/metal-herolte.py` patches ios-b1lte's driver copy: `hakiosdrawable.m` imports a
+     surface through HeroGPU's own SurfaceBO (`herodrm_surface_import`, as `hero_hw.c` does for OpenGL) instead of
+     HakiOS's request 0x7e, and a completed command buffer syncs the imported surfaces (`herodrm_bo_sync`).
+     boot-18k48: the post draw into an IOSurface (read back through the CPU's mapping) and into a `CAMetalLayer`
+     drawable (presented) equal a plain texture's, 4096 of 4096 pixels.
+   - **MercuryPosterExtension in `metal.allow` (M4b).** iOS 18's default wallpaper is the fluidity style: an SDF
+     pass (`sdfFragmentShader` into an RG32Float attachment) and a colour pass (`fragmentShader`, which reads that
+     attachment by framebuffer fetch, `[[color(1)]]`, and a colour ramp, `mapTexture`). Fixed on the way:
+     - the colour pass declares a second texture (`sdfTexture`, the simulator's road) the app never binds: unbound
+       fragment textures read zeros (air-herolte.py 11), as on Apple's GPUs;
+     - a leak of ~430 one-page BOs every 5 s, until HeroGPU refused the drawables: `-setVertexBytes:` and
+       `-setFragmentBytes:` made a Mesa buffer each, autoreleased, and the driver's command buffers and encoders were
+       autoreleased too, on a render thread that drains no pool. Objects now go back through
+       `objc_autoreleaseReturnValue`, `-setBytes:` buffers are kept by the encoder until `-endEncoding`, small buffers
+       (up to 64 KB) are pooled, and a command buffer lets go of its work when the synchronous submit returns.
+       boot-18k53: 0 new BOs in 5 s, the pool reused 505 of 512;
+     - the missing shape: `sdfFragmentShader` writes its value into R or G after a `bool` of its uniforms, an 8-bit
+       `load_ubo`; Midgard reads a pushed uniform as a whole word, so every draw went to R, and the colour pass, which
+       reads G, drew a flat gradient (boot-18k53: the RG32Float attachment read back, G 0 everywhere). 8- and 16-bit
+       constant-buffer loads are 32-bit loads of the aligned word, shifted (air-herolte.py 12).
+   - Open: fluidity's function constants (`isPhone`, `isBlending`, `isSimulator`) are all 0, because the pipeline is
+     built from the unspecialised module; each frame costs ~14.5 ms of synchronous submit (the GPU 38% busy).
 
 Core Animation stays on OpenGL until Metal is proven faster on this GPU.
