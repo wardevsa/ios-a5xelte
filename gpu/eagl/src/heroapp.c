@@ -230,6 +230,35 @@ __attribute__((used, section("__DATA,__interpose"))) static const struct hero_in
    { (const void *)hero_MTLCreateSystemDefaultDevice, (const void *)MTLCreateSystemDefaultDevice },
 };
 
+
+/*
+ * E-0381: Flappy Bird dies in Jet's OpenGL path (jet_context_OpenGL::create_program) although the Metal plug-in is installed and gives S7GELab a device. The kernel log has
+ * no "hero-metal: bundle loaded in Flappy Bird" and no MTLCreateSystemDefaultDevice call by it, so SpriteKit picked OpenGL without asking Metal. SpriteKit's strings include
+ * PrefersOpenGL, enableMetal, MetalCompatibility, OpenGLESCompatibility, globalMetalDevice. This asks: what do the defaults and the Info.plist say for those keys, and does
+ * the plug-in give THIS process (named "Flappy Bird" in metal.allow) a device when it is asked directly?
+ */
+static void
+look_at_metal_choice(void)
+{
+   static const char *const keys[] = { "PrefersOpenGL", "enableMetal", "MetalCompatibility", "OpenGLESCompatibility", "SKPrefersOpenGL", "SKEnableMetal" };
+   id defaults = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("NSUserDefaults"), sel_registerName("standardUserDefaults"));
+   id bundle = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("NSBundle"), sel_registerName("mainBundle"));
+   for (int i = 0; i < 6; i++) {
+      id key = ((id (*)(id, SEL, const char *))objc_msgSend)((id)objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), keys[i]);
+      id dv = ((id (*)(id, SEL, id))objc_msgSend)(defaults, sel_registerName("objectForKey:"), key);
+      id iv = ((id (*)(id, SEL, id))objc_msgSend)(bundle, sel_registerName("objectForInfoDictionaryKey:"), key);
+      id dd = dv ? ((id (*)(id, SEL))objc_msgSend)(dv, sel_registerName("description")) : nil;
+      id idd = iv ? ((id (*)(id, SEL))objc_msgSend)(iv, sel_registerName("description")) : nil;
+      hero_note("libheroapp: %s: choice key %s: defaults %s, Info.plist %s", getprogname(), keys[i],
+                dd ? ((const char *(*)(id, SEL))objc_msgSend)(dd, sel_registerName("UTF8String")) : "(none)",
+                idd ? ((const char *(*)(id, SEL))objc_msgSend)(idd, sel_registerName("UTF8String")) : "(none)");
+   }
+   id device = MTLCreateSystemDefaultDevice();   /* heroapp's own reference is not interposed: Metal's own function, the plug-in decides */
+   id name = device ? ((id (*)(id, SEL))objc_msgSend)(device, sel_registerName("name")) : nil;
+   hero_note("libheroapp: %s: direct MTLCreateSystemDefaultDevice -> %s", getprogname(),
+             name ? ((const char *(*)(id, SEL))objc_msgSend)(name, sel_registerName("UTF8String")) : "nil");
+}
+
 /*
  * min127c (E-0351): S7GE Lab, an ordinary app, got "EAGLContext(api: .openGLES2) returned nil" because the lines below make every initWithAPI: answer nil
  * (the stock renderer's table of functions is empty here and jumps to 0), and the project's EAGL bridge (libheroeagl: EAGLContext on OSMesa and
@@ -578,8 +607,10 @@ install(void)
    }
    NSSetUncaughtExceptionHandler(uncaught);
    install_crash_notes();
-   if (strcmp(getprogname(), "Flappy Bird") == 0)
+   if (strcmp(getprogname(), "Flappy Bird") == 0) {
       look_at_spritekit();
+      look_at_metal_choice();
+   }
    hero_note("libheroapp: %s: loaded (pid %d)", getprogname(), (int)getpid());
    dlopen("/System/Library/Frameworks/OpenGLES.framework/OpenGLES", RTLD_LAZY);
    Class context = objc_getClass("EAGLContext");
