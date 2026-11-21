@@ -753,6 +753,12 @@ static void eagl_install_hooks(void) {
     }
     pthread_setspecific(g_tls, ctx);
     g_macro_cur = ctx ? ctx->_private : NULL;
+#ifdef EAGL_INJECT
+    /* E-0355: an app's gl* calls go to the system OpenGLES stubs, which read the macro table from the thread's pthread-specific slot
+     * __PTK_FRAMEWORK_OPENGL_KEY (20) and call entry(table[0], args...). The system's own +setCurrentContext: fills that slot, ours replaced it, so
+     * glGetString answered nil. backboardd never needs it: CoreAnimation calls through getMacroContextPrivate directly. */
+    pthread_setspecific(20, ctx ? ctx->_private->macro : NULL);
+#endif
     [old release];
     return YES;
 }
