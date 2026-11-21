@@ -98,6 +98,8 @@ note_address(int fd, const char *label, uint64_t pc)
    }
 }
 
+extern void app_gl_bind(void *handle);
+
 static void
 on_crash(int sig, siginfo_t *si, void *ctx)
 {
@@ -455,6 +457,8 @@ install(void)
        * lib/libheroeagl-app.dylib so that backboardd keeps the one it has */
       void *handle = dlopen(DROP_DIR "lib/libheroeagl-app.dylib", RTLD_NOW);
       bridge = handle != NULL;
+      if (bridge)
+         app_gl_bind(handle); /* E-0356: the interposed gl* calls of the application now go to the bridge */
       hero_note("libheroapp: %s: EAGL bridge %s%s", getprogname(), bridge ? "loaded" : "NOT loaded: ", bridge ? "" : (dlerror() ? dlerror() : "?"));
       if (bridge) {
          /* E-0352: which image each EAGLContext method comes from now: libheroeagl means the bridge's, OpenGLES the stock one */

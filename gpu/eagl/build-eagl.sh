@@ -55,8 +55,9 @@ $CC -O2 -Wall -o "$OUT/hero-run" "$HERE/test/hero-run.c" -L "$OUT/lib" -ldrm.2 -
 $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libherosb.dylib" "$HERE/src/herosb.c" -install_name @rpath/libherosb.dylib \
   -framework CoreFoundation -lobjc -L "$OUT/lib" -ldrm.2 -Wl,-rpath,/private/var/herolte/lib
 
-$CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroapp.dylib" "$HERE/src/heroapp.c" -install_name @rpath/libheroapp.dylib \
-  -framework Foundation -framework UIKit -framework CoreGraphics -framework ImageIO -framework IOSurface \
+python3 "$HERE/tools/gen_app_interpose.py" > "$OBJ/app_interpose.c"
+$CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroapp.dylib" "$HERE/src/heroapp.c" "$OBJ/app_interpose.c" -install_name @rpath/libheroapp.dylib \
+  -framework OpenGLES -framework Foundation -framework UIKit -framework CoreGraphics -framework ImageIO -framework IOSurface \
   -lobjc -L "$OUT/lib" -ldrm.2 -Wl,-rpath,/private/var/herolte/lib
 
 # The smallest inserted library: dyld/insertion bisect (E-0336), dropped as lib/libheroapp.dylib for one boot.
