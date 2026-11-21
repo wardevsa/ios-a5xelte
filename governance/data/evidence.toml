@@ -5511,3 +5511,18 @@ sha256 = "afd4a1ff207f4e8712fc43cf7e053725e82f148f80954ad067dee32a19876405"
 size = 46823
 immutable = true
 note = "heroapp-crash.txt con la pila de libdispatch (scratch)."
+
+[[evidence]]
+id = "E-0373"
+title = "S7GE Lab con M1 (E-0371/E-0372) se cierra al ARRANCAR, sin heroapp-crash nuevo ni heromtl.log: registro del kernel: 'CRASH S7GELab[305] sig 6 ... reason ns 6 code 0x4: Symbol not found: _MTLCopyAllDevices' (dos veces, pids 305 y 306): dyld aborta el proceso porque libheroapp, que yo enlacé contra Metal y que referenciaba MTLCopyAllDevices, pide un símbolo que NO existe en iOS (es una función solo de macOS); mi error: lo declaré 'extern' a mano sin comprobarlo en el SDK de iPhoneOS, y el enlazador lo aceptó; consecuencia: con esa libheroapp el S7GE Lab de la prueba anterior no pudo ni abrirse (y el resto de apps habrían perdido libheroapp si dyld perdona la inserción fallida; no medido); el arreglo anterior de libdispatch (E-0372) por tanto NO se ha podido probar aún; CORRECCIÓN: libheroapp solo interpone MTLCreateSystemDefaultDevice; comprobado con llvm-nm -u que los símbolos MTL sin resolver de libheroapp son solo _MTLCreateSystemDefaultDevice y los de libheromtl no incluyen ninguno de macOS; DROP 43 de 80 (sin BOOT): libheroapp de CI 44932021826, escrita y verificada; PRUEBA: abrir S7GE Lab varias veces y pulsar 'Probar Metal'; contadores D-0123: BOOT 18 de 80, DROP 43 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n16.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "7172e623c41f5288cca70e72bb5e2ac7a6dee7572ffcd0a2d2d99a825cb7d1b5"
+size = 312762
+immutable = true
+note = "Registro del kernel con el aborto de dyld (scratch)."
