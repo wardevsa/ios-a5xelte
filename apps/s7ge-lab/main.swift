@@ -22,6 +22,9 @@ final class GLView: UIView {
     private var angle: Float = 0
     private(set) var report = "GL: not started"
     private(set) var fps = 0.0
+    private var heavy = false
+    private(set) var fpsLight = 0.0
+    private(set) var fpsHeavy = 0.0
 
     private func compile(_ type: GLenum, _ source: String) -> GLuint {
         let shader = glCreateShader(type)
@@ -97,7 +100,7 @@ final class GLView: UIView {
             glVertexAttribPointer(1, 3, GLenum(GL_FLOAT), GLboolean(GL_FALSE), 20, base.advanced(by: 8))
             glEnableVertexAttribArray(0)
             glEnableVertexAttribArray(1)
-            glDrawArrays(GLenum(GL_TRIANGLES), 0, 3)
+            for _ in 0..<(heavy ? 48 : 1) { glDrawArrays(GLenum(GL_TRIANGLES), 0, 3) }
         }
         glBindRenderbuffer(GLenum(GL_RENDERBUFFER), renderbuffer)
         ctx.presentRenderbuffer(Int(GL_RENDERBUFFER))
@@ -105,6 +108,8 @@ final class GLView: UIView {
         let now = CACurrentMediaTime()
         if now - clock >= 2 {
             fps = Double(frames) / (now - clock)
+            if heavy { fpsHeavy = fps } else { fpsLight = fps }
+            heavy.toggle()
             frames = 0
             clock = now
         }
@@ -156,7 +161,7 @@ final class LabController: UIViewController {
         var lines = ["\(UIDevice.current.model), iOS \(UIDevice.current.systemVersion)",
                      "screen \(s.bounds.width) x \(s.bounds.height) pt @\(s.scale), native \(s.nativeBounds.width) x \(s.nativeBounds.height)",
                      "safe area \(view.safeAreaInsets.top) \(view.safeAreaInsets.bottom)",
-                     String(format: "frames %.1f per second", gl.fps), "", gl.report, "", metal]
+                     String(format: "frames %.1f per second (1 triangle %.1f, 48 overdrawn triangles %.1f)", gl.fps, gl.fpsLight, gl.fpsHeavy), "", gl.report, "", metal]
         lines.append("")
         text.text = lines.joined(separator: "\n")
         let shown = text.text ?? ""
