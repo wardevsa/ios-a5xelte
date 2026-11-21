@@ -142,6 +142,7 @@ install_crash_notes(void)
    sigaction(SIGBUS, &sa, NULL);
    sigaction(SIGILL, &sa, NULL);
    sigaction(SIGTRAP, &sa, NULL);
+   sigaction(SIGABRT, &sa, NULL); /* E-0361: Flappy Bird dies with signal 6 and no exception text */
 }
 
 /*
