@@ -5229,3 +5229,18 @@ sha256 = "ad8012d22fa7de96fbabdc2a44a7905135926c9e38dd344a6b2380b02e866b65"
 size = 7238
 immutable = true
 note = "Contenido de heroapp-crash.txt del teléfono (Apple y direcciones; fuera de git)."
+
+[[evidence]]
+id = "E-0354"
+title = "POR QUÉ EL PUENTE NO PARCHEABA EAGLContext EN S7GE LAB: heroapp.log del teléfono: 'EAGL bridge loaded', 'BGEAGLContext MISSING, EAGLSharegroup exists, EAGLContext exists' y las cuatro implementaciones (initWithAPI:, initWithAPI:sharegroup:, renderbufferStorage:fromDrawable:, presentRenderbuffer:) 'is in OpenGLES' (de serie); la causa, comparando el fichero del teléfono con los de CI: lib/libheroeagl.dylib del teléfono mide 642272 bytes y NO tiene la sección __objc_classname (ninguna clase BGEAGLContext): es libhakiosgl.dylib, el puente de HakiOS (gpu/hakios-gl/src/eagl.c), que solo sustituye los SEIS métodos que usa el renderizador de CoreAnimation en backboardd (initWithAPI:properties:, API, setParameter:to:, getMacroContextPrivate, texImageIOSurface:..., attachImage:...) y no trae ruta de drawable para apps; el puente con renderbufferStorage:fromDrawable: y presentRenderbuffer: es el libheroeagl de CI (gpu/eagl/src/eagl.m con -DEAGL_INJECT, 498928 bytes, clases BGEAGLContext y BGEAGLSharegroup en __objc_classlist y __objc_classname), que nunca se había escrito en el teléfono; los nombres chocan porque docs/S7GE_EAGL_BRIDGES.md aconseja copiar libhakiosgl con el nombre libheroeagl.dylib; ACCIÓN (DROP 28 de 80, sin tocar BOOT): el libheroeagl de CI como lib/libheroeagl-app.dylib (backboardd sigue con el suyo) y libheroapp de CI 44910471036 que lo carga para los programas de appgl.on; libOSMesa.8.dylib es del mismo tamaño en CI y en el teléfono (16135936); PRUEBA: abrir S7GE Lab: si el parche entra, 'EAGLContext ... is in libheroeagl-app' o 'libheroeagl' y el triángulo; contadores D-0123: BOOT 17 de 80, DROP 28 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/heroapp5.log"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "048b65b31dbc31912b9048762b6936771ccd6323c1ef7bf4b4960c649828d200"
+size = 241039
+immutable = true
+note = "heroapp.log del teléfono (copia en scratch, fuera de git)."
