@@ -247,3 +247,19 @@ dejaría sin pantalla hasta restaurarla desde TWRP): añadir a `libhakiosgl` un 
 próxima vez el cierre se nombre solo. **Causa de (2): no medida**: faltaría un registro de la memoria por proceso (`TOP` lo da para CPU, no para memoria).
 
 Opciones para Pioxi: (a) el manejador en backboardd (diagnóstico del respring), (b) un registro de memoria por proceso (diagnóstico de la matada), (c) H3 (BT/cámara/vibración) con la condición de consumo, (d) dejar estas dos cosas y seguir con otra línea.
+
+### V.10 H3 (BT, cámara, vibración + brillo): lo que dice el código antes de medir (E-0396)
+
+Elegida (b) (memoria por proceso, DROP 56): en espera de un arranque con 10 min de uso. Mientras, el análisis de H3 que pidió Pioxi **antes de proponerlo**. Es lectura de código, no medición.
+
+| Función | Qué hace en reposo (según el código) | Riesgo de consumo | Medido |
+|---|---|---|---|
+| Vibración (0339-0341) | Al iniciar enciende VDD_MOT_3.3V (LDO34 del PMIC) y pone el MFD en modo motor; **no hay orden de apagarlo después** | **Probable**: alimentación del motor encendida en reposo | No |
+| Bluetooth (0342) | Solo con `kern.notefe_bt` (modos 4 encender, 6 apagar...) o `bt.level` de hero-run; sin eso, apagado | Bajo si no se pide | No |
+| Cámara frontal (0342) | Secuencia de encendido y la inversa; solo al pedirla (`kern.notefe_cam`, `cam.media`) | Bajo si no se pide; un censo de lectura al iniciar | No |
+| **Brillo mínimo (0343)** | Suelo de 64/255 (`herobrightmin`, 12-255); evita la pantalla negra por el auto-brillo a 0 lux | **Sí, a propósito**: no baja del 25 % | No |
+
+**Propuesta (Nivel 3, necesita BOOT y decisión de Pioxi):** `min130` = nuestra serie + 0487 + 0339-0341 + 0343 fusionados (0343 sin conflicto; 0339 tiene 2 trozos rechazados), **sin el 0342**.
+Medir 10 min de corriente en reposo con la pantalla apagada (`SWEET BATTERY ... mA`, ya en el registro) de `min129` frente a `min130`. Límite honesto: el calibrador da mA enteros y si el motor gasta decenas de
+microamperios la medida dirá «no detectable» y habrá que decidir por el código. El 0342 (4514 líneas: Bluetooth, cámara, cargador, otro gobernador) se parte después, solo con Bluetooth y cámara, según ese resultado.
+Pioxi ya pidió que se incluya el brillo; el suelo por defecto (64) queda como decisión suya: a oscuras gasta más que 12, pero 12 deja la pantalla negra.
