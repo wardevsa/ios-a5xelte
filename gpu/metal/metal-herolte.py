@@ -177,4 +177,174 @@ change('command buffer: surfaces synced when finished', 'hakiosmetal_air.m',
        '\t_status = RW_CB_COMPLETED;   /* the fence has been paid, and only now */\n',
        '\thero_sync_surfaces();   /* HEROLTE */\n\t_status = RW_CB_COMPLETED;   /* the fence has been paid, and only now */\n')
 
+# Small buffers, reused (boot-18k50/51). -setVertexBytes: and -setFragmentBytes: made a whole Mesa buffer -- a 4 KB
+# kernel BO, ~4 ms each -- per call and autoreleased it; MercuryPoster's render thread drains no pool, so ~430 BOs every
+# 5 s were made and none given back, until HeroGPU refused the drawables' surfaces (no picture, white widgets, stutters).
+# Now: (1) the encoder keeps those buffers until -endEncoding (the recorded work retains its own, B1L-0112), with no
+# autorelease; (2) a buffer of 64 KB or less goes back to a pool when it dies -- its command buffer has run by then:
+# submits are synchronous on this port -- and the next buffer of that size class takes it, zeroed, with no kernel call.
+change('small buffers: the pool', 'hakiosmetal_air.m',
+       '@implementation HakiosMetalBuffer\n',
+       '''/* HEROLTE: Mesa buffers of the size classes 256 B .. 64 KB, kept when their HakiosMetalBuffer dies */
+#define HEROLTE_CLASSES 9
+static struct {
+	pthread_mutex_t lock;
+	struct rwa_device *device;
+	struct rwa_buffer *free[HEROLTE_CLASSES][64];
+	unsigned count[HEROLTE_CLASSES];
+	unsigned long made, reused;
+} herolte_pool = { .lock = PTHREAD_MUTEX_INITIALIZER };
+
+/* 1 + the class of a length (256 << class bytes), or 0 for a length that is not pooled */
+static unsigned
+herolte_class_of(NSUInteger length)
+{
+	for (unsigned c = 0; c < HEROLTE_CLASSES; c++)
+		if (length <= (256u << c))
+			return c + 1;
+	return 0;
+}
+
+static struct rwa_buffer *
+herolte_pool_take(struct rwa_device *device, unsigned cls)
+{
+	struct rwa_buffer *b = NULL;
+	pthread_mutex_lock(&herolte_pool.lock);
+	if (cls && herolte_pool.device == device && herolte_pool.count[cls - 1] > 0)
+		b = herolte_pool.free[cls - 1][--herolte_pool.count[cls - 1]];
+	if (b != NULL)
+		herolte_pool.reused++;
+	else if (cls)
+		herolte_pool.made++;
+	unsigned long made = herolte_pool.made, reused = herolte_pool.reused;
+	pthread_mutex_unlock(&herolte_pool.lock);
+	if (cls && ((made + reused) & (made + reused - 1)) == 0)
+		rw_print("HEROLTE POOL: %lu small buffers made, %lu reused\\n", made, reused);
+	return b;
+}
+
+/* true when the pool took the buffer (it is then not to be destroyed) */
+static BOOL
+herolte_pool_give(struct rwa_device *device, struct rwa_buffer *b, unsigned cls)
+{
+	BOOL kept = NO;
+	if (!cls || device == NULL)
+		return NO;
+	pthread_mutex_lock(&herolte_pool.lock);
+	if (herolte_pool.device == NULL)
+		herolte_pool.device = device;
+	if (herolte_pool.device == device && herolte_pool.count[cls - 1] < 64) {
+		herolte_pool.free[cls - 1][herolte_pool.count[cls - 1]++] = b;
+		kept = YES;
+	}
+	pthread_mutex_unlock(&herolte_pool.lock);
+	return kept;
+}
+
+/* the encoders' -setBytes: buffers, kept until -endEncoding (HEROLTE) */
+static char herolte_bytes_key;
+static void
+herolte_keep(id encoder, id buffer)
+{
+	NSMutableArray *kept = objc_getAssociatedObject(encoder, &herolte_bytes_key);
+	if (kept == nil) {
+		kept = [[NSMutableArray alloc] init];
+		objc_setAssociatedObject(encoder, &herolte_bytes_key, kept, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		[kept release];
+	}
+	[kept addObject:buffer];
+	[buffer release];
+}
+
+@implementation HakiosMetalBuffer
+''')
+change('small buffers: a class per buffer', 'hakiosmetal_air.m',
+       '''	struct rwa_buffer *_mesa; /* set instead when the memory came from Mesa */
+	int _responsibleProcess;  /* what <MTLResourceSPI> calls the owner, for accounting */
+}''',
+       '''	struct rwa_buffer *_mesa; /* set instead when the memory came from Mesa */
+	int _responsibleProcess;  /* what <MTLResourceSPI> calls the owner, for accounting */
+	unsigned _herolteClass;   /* HEROLTE: 1 + its pool size class, 0 when not pooled */
+	struct rwa_device *_herolteDevice;
+}''')
+change('small buffers: taken from the pool', 'hakiosmetal_air.m',
+       '''		char why[256] = { 0 };
+
+		_mesa = mesa.buffer_create([device mesaDevice], length, why, sizeof(why));
+		if (_mesa == NULL) {''',
+       '''		char why[256] = { 0 };
+
+		_herolteClass = herolte_class_of(length);
+		_herolteDevice = [device mesaDevice];
+		_mesa = herolte_pool_take(_herolteDevice, _herolteClass);
+		if (_mesa != NULL) {
+			_owner = device;
+			_length = length;
+			_contents = mesa.buffer_map(_mesa);
+			if (_contents != NULL)
+				memset(_contents, 0, 256u << (_herolteClass - 1));   /* new memory reads zero */
+			return self;
+		}
+		_mesa = mesa.buffer_create(_herolteDevice,
+		    _herolteClass ? (NSUInteger)(256u << (_herolteClass - 1)) : length, why, sizeof(why));
+		if (_mesa == NULL) {''')
+change('small buffers: given back', 'hakiosmetal_air.m',
+       '''	if (_mesa != NULL) {
+		mesa.buffer_destroy(_mesa);
+		[super dealloc];
+		return;
+	}''',
+       '''	if (_mesa != NULL) {
+		if (!herolte_pool_give(_herolteDevice, _mesa, _herolteClass))   /* HEROLTE */
+			mesa.buffer_destroy(_mesa);
+		[super dealloc];
+		return;
+	}''')
+change('setBytes: kept by the encoder (render)', 'hakiosmetal_air.m',
+       '''	if (buffer != nil) {
+		[self setVertexBuffer:[buffer autorelease] offset:0 atIndex:index];
+	}''',
+       '''	if (buffer != nil) {
+		[self setVertexBuffer:buffer offset:0 atIndex:index];
+		herolte_keep(self, buffer);   /* HEROLTE: no autorelease */
+	}''')
+change('setBytes: kept by the encoder (fragment)', 'hakiosmetal_air.m',
+       '''	if (buffer != nil) {
+		[self setFragmentBuffer:[buffer autorelease] offset:0 atIndex:index];
+	}''',
+       '''	if (buffer != nil) {
+		[self setFragmentBuffer:buffer offset:0 atIndex:index];
+		herolte_keep(self, buffer);   /* HEROLTE: no autorelease */
+	}''')
+change('setBytes: kept by the encoder (compute)', 'hakiosmetal_air.m',
+       '''	if (buffer != nil) {
+		[self setBuffer:[buffer autorelease] offset:0 atIndex:index];
+	}''',
+       '''	if (buffer != nil) {
+		[self setBuffer:buffer offset:0 atIndex:index];
+		herolte_keep(self, buffer);   /* HEROLTE: no autorelease */
+	}''')
+change('setBytes: released at the end of a render pass', 'hakiosmetal_air.m',
+       '''- (void)endEncoding
+{
+	/* B2L (B1L-0070): a pass that clears and draws nothing still clears (Metal's load action is the pass's) */''',
+       '''- (void)endEncoding
+{
+	objc_setAssociatedObject(self, &herolte_bytes_key, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);   /* HEROLTE */
+	/* B2L (B1L-0070): a pass that clears and draws nothing still clears (Metal's load action is the pass's) */''')
+change('setBytes: released at the end of a compute pass', 'hakiosmetal_air.m',
+       '''- (void)endEncoding
+{
+	[super endEncoding];
+}
+
+@end''',
+       '''- (void)endEncoding
+{
+	objc_setAssociatedObject(self, &herolte_bytes_key, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);   /* HEROLTE */
+	[super endEncoding];
+}
+
+@end''')
+
 print('metal-herolte: ' + ', '.join(done))
