@@ -5274,3 +5274,18 @@ sha256 = "7bc61f5770b6f156747631d147baadfaae14990d42fb902fe653c97332e92f3b"
 size = 39518
 immutable = true
 note = "Informe de S7GE Lab (copia en scratch, fuera de git)."
+
+[[evidence]]
+id = "E-0357"
+title = "S7GE Lab con libheroapp que interpone las gl* (E-0356): MISMO informe (storage false, GL_RENDERER nil), sin cierre, sin heroapp-crash nuevo; no se sabe si el desvío actúa ni si el contexto de Mesa llega a existir: el puente no deja rastro propio (el stderr de las apps no va a ninguna parte); ACCIÓN (DROP 31 de 80, sin BOOT): libheroeagl-app de CI 44912856048 escribe /private/var/tmp/heroeagl.log con: setCurrentContext (resultado de OSMesaMakeCurrent y el GL_RENDERER que Mesa da por su cuenta) y renderbufferStorage (si el contexto actual es el propio, el renderbuffer enlazado y los límites del drawable); LECTURA: renderer de Mesa con texto + renderbuffer 0 = las llamadas de la app no llegan a Mesa (el desvío no actúa); renderbuffer distinto de 0 y límites 0 = problema de tamaño; contadores D-0123: BOOT 17 de 80, DROP 31 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n3-s7ge-lab.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "f05a3e77341ee09b75daa12399022439b26652c0d23d27aa1472d468f128015f"
+size = 56188
+immutable = true
+note = "Informe de S7GE Lab (copia en scratch, fuera de git)."
