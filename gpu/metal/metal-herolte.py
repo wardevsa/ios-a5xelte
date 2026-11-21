@@ -445,12 +445,14 @@ herolte_look_at_attachments(NSArray *works)
 				if (v > hi[c]) hi[c] = v;
 			}
 		}
-		if (looked == 4 && i == 0 && bpp == 4) {   /* one frame as it was drawn, for the PC to look at */
+		if (looked == 1) {   /* the first frame as it was drawn, every attachment, for the PC to look at */
 			char path[160];
-			snprintf(path, sizeof(path), "/private/var/herolte/look-%d-%ux%u.bgra", getpid(), width, height);
+			snprintf(path, sizeof(path), "/private/var/herolte/look-%d-a%u-%ux%u-f%u.raw", getpid(), i, width, height,
+			         format);
 			FILE *out = fopen(path, "wb");
 			if (out == NULL) {
-				NSString *tmp = [NSTemporaryDirectory() stringByAppendingPathComponent:@"look.bgra"];
+				NSString *tmp = [NSTemporaryDirectory() stringByAppendingPathComponent:
+				    [NSString stringWithFormat:@"look-a%u.raw", i]];
 				snprintf(path, sizeof(path), "%s", [tmp UTF8String]);
 				out = fopen(path, "wb");
 			}
