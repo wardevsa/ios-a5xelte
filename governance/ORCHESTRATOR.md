@@ -167,3 +167,32 @@ no mide el tiempo de compilar el MSL (`makeLibrary`); no mide Metal y GL a la ve
 **Siguiente (propuesta, sin BOOT):** H1b, repetir tres veces para tener varianza y añadir: (i) tiempo de `makeLibrary(source:)`, (ii) presentación a pantalla completa por
 `CAMetalLayer` (750x1334) con fps reales y coste por cuadro, (iii) un fragment shader pesado (bucle) para ver si el compilador de AIR de upstream se comporta con
 carga, no solo con escenas triviales. Después, H2 (red de Safari) cuando Pioxi lo decida; H3 queda condicionado a medir el consumo en reposo, como pidió.
+
+### V.7 H1b: banco de Metal con variación, sombreador pesado y presentación (E-0389, E-0390)
+
+Tres pasadas, 1,5 s por prueba, 512x512 fuera de pantalla, mismo dispositivo que V.6. **13 de 13 filas PASS, sin cierres.** ms/it (mín / media / máx):
+
+| Prueba | Metal | GLES | Metal/GLES | Comprobación |
+|---|---|---|---|---|
+| a limpiar | 0,84 / 0,87 / 0,92 | 0,39 / 0,39 / 0,39 | 2,2 | centro correcto |
+| b 1 triángulo | 1,04 / 1,08 / 1,15 | 0,49 / 0,49 / 0,50 | 2,2 | rojo |
+| c 48 triángulos | 2,64 / 2,74 / 2,91 | 1,50 / 1,51 / 1,52 | 1,8 | rojo |
+| d textura + muestreador | 0,99 / 1,02 / 1,07 | n/d | | [127,0,128] |
+| e cómputo (4096 flotantes) | 0,66 / 0,70 / 0,73 | n/d | | 0 erróneos |
+| **f bucle de 128 pasos/píxel** | **4,12 / 4,13 / 4,14** | n/d | | = CPU |
+| **g bucle de 1024 pasos/píxel** | **25,46 / 25,59 / 25,72** | n/d | | = CPU |
+| `makeLibrary(source)` MSL | 0,34 / 259,98 / 779,25 | | | primera ~779 ms, siguientes ~0,35 ms (caché) |
+| 3 pipelines | 7,87 / 9,74 / 13,31 | | | |
+| h presentación | 1,54 ms/cuadro | | | **drawable 375x667, no 750x1334** (ver abajo) |
+
+**Lectura:** (1) el compilador de AIR de upstream aguanta carga y calcula bien: 1024 pasos por píxel en 25,6 ms (unos 10,5 millardos de iteraciones/s; estimación mía); el
+coste crece casi linealmente (8x pasos = 6,2x tiempo). (2) La dispersión dentro de una sesión es pequeña (<10 %), pero entre sesiones es mayor (+30 % en el coste fijo respecto a
+V.6): **el banco de V.6, con una sola ejecución, subestimaba**; la razón Metal/GL pasa de ~1,7 a ~2,0. Hipótesis sin medir: el gobernador de CPU. (3) La primera compilación de MSL cuesta ~0,8 s
+en el teléfono (el compilador de Apple), con caché después: importante para el arranque de apps reales.
+
+**Defecto de mi prueba h:** el drawable salió de 375x667 (leí `contentScaleFactor` antes de que la vista estuviera en pantalla); no mide el tamaño del panel, y los 650 fps no son visibles
+(iOS entrega ~27 fps según E-0386): es el coste de codificar, presentar y esperar sin sincronía con la pantalla. Corregirlo exige otra versión del banco; propongo no hacerlo ahora: la
+conclusión de fondo (Metal funciona con carga, es ~2x GL en latencia por envío) ya está.
+
+**Siguiente: H2 (red de Safari).** Antes de tocar el kernel, una sonda de solo DROP: una app `S7GENet` que prueba por separado DNS (`getaddrinfo`), conexión TCP a direcciones numéricas, DNS por UDP
+directo a un servidor, `URLSession` por HTTP y por HTTPS, con el `errno` de cada paso. Así se sabe QUÉ falla (DNS, conexión, TLS) antes de decidir si hace falta un parche (Nivel 3).

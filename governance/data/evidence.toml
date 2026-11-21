@@ -5742,3 +5742,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Código del banco H1b; los resultados llegan con la prueba."
+
+[[evidence]]
+id = "E-0390"
+title = "RESULTADO DE H1b: BANCO DE METAL, TRES PASADAS (min129, S7GE Lab de CI 44948618314, una sesión del Director, 13 de 13 filas PASS, sin cierres nuevos): VARIACIÓN dentro de la sesión pequeña: a clear Metal 0,84/0,87/0,92 ms (mín/media/máx), b 1 triángulo 1,04/1,08/1,15, c 48 triángulos 2,64/2,74/2,91, d textura 0,99/1,02/1,07, e cómputo 0,66/0,70/0,73, GLES a 0,39/0,39/0,39, b 0,49/0,49/0,50, c 1,50/1,51/1,52 (menos de un 10 % de dispersión); PERO la variación ENTRE sesiones es mayor: en E-0388 (otra sesión) Metal valía 0,66/0,86/2,52 y ahora 0,87/1,08/2,74 (hasta +30 %): el banco de una sola ejecución de E-0388 subestimaba; razón entre Metal y GL ahora 2,2 (clear), 2,2 (1 triángulo), 1,8 (48 triángulos), antes 1,7; el coste por triángulo extra se mantiene: (2,74-1,08)/47 = 0,035 ms; hipótesis, sin medir: el gobernador de CPU (728 o 1976 MHz) entra en el coste del envío síncrono; makeLibrary(source) MSL->biblioteca: mín 0,34 ms, media 259,98 ms, máx 779,25 ms con tres pasadas: la primera compilación en el teléfono cuesta unos 779 ms y las siguientes unos 0,35 ms (caché), según la media y el mínimo; los tres pipelines: 7,87 a 13,31 ms; SOMBREADOR PESADO (el compilador de AIR de upstream bajo carga, 512x512 píxeles): bucle de 128 pasos por píxel 4,13 ms/it (4,12/4,13/4,14) y bucle de 1024 pasos 25,59 ms/it (25,46/25,59/25,72), ambos PASS con el centro igual al de la CPU (centro BGRA [0,72,143,255] y [0,105,209,255]); 8 veces más pasos cuestan 6,2 veces más: casi lineal con un coste fijo de unos 0,7 ms; 1024 pasos x 262144 píxeles = 268 millones de iteraciones de mul-add en 25,6 ms = unos 10,5 millardos de iteraciones por segundo (unos 21 GFLOPS contando 2 por iteración; estimación mía, depende de si el compilador desenrolla el bucle); PRESENTACIÓN: 'h present full screen PASS 1,54 ms/cuadro (650/s), drawable 375x667, 0 failed': ATENCIÓN, ese drawable es de 375x667 y no de 750x1334: mi prueba pidió el factor de escala de la vista antes de estar en pantalla y salió 1; por tanto NO mide el tamaño del panel; y los 650 cuadros por segundo no son lo que se ve (la pantalla de iOS entrega unos 27 fps en el registro, E-0386): es el coste de codificar, presentar y esperar sin sincronizar con la pantalla; el banco, en cambio, NO mide la sincronización con la pantalla ni el consumo; contadores D-0123: BOOT 19 de 80, DROP 54 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n25-s7ge-bench.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "c37683db6867c011f7d5fb712a5d8a353d46175c67c5743b455b83e338a12e8f"
+size = 2579
+immutable = true
+note = "s7ge-bench.txt de H1b (scratch)."
