@@ -783,7 +783,7 @@ widgets_to_background(void *unused)
       return NULL;
    for (;;) {
       int pids[2048];
-      int n = proc_listallpids_p(pids, sizeof(pids));
+      int n = proc_listallpids(pids, sizeof(pids));
       for (int i = 0; i < n && i < 2048; i++) {
          char name[64] = "";
          int seen = 0;
@@ -1614,7 +1614,7 @@ memory_sampler(void *unused)
       struct { pid_t pid; uint64_t mb100; char name[24]; } top[10];
       int ntop = 0;
       static pid_t pids[1024];
-      int n = proc_listallpids(pids, sizeof(pids));
+      int n = proc_listallpids_p(pids, sizeof(pids));
       uint64_t total = 0;
       for (int i = 0; i < n; i++) {
          struct rusage_info_v2 ri;
