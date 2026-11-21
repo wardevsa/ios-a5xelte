@@ -5541,3 +5541,15 @@ sha256 = "f8c090a5b52bc9256cee92501a0b45e37da09bc11749b383afea7f848e6d4781"
 size = 132867
 immutable = true
 note = "Informe de S7GE Lab con Metal M1 (scratch)."
+
+[[evidence]]
+id = "E-0375"
+title = "S7GE M2 (DROP 44 de 80, sin BOOT): libheromtl de CI 44932778203 añade MTLLibrary desde texto MSL (reconoce vertex/fragment/kernel por expresión regular), MTLFunction, MTLRenderPipelineState por NOMBRE de función con una tabla de GLSL ES (hoy una entrada: tri_vertex/tri_fragment, vértices packed_float2+packed_float4 de 24 bytes), y un codificador de render que graba setRenderPipelineState/setVertexBytes/setVertexBuffer/drawPrimitives y, al terminar el pase, lo repite en el EAGLContext del puente (FBO, glClear, glDrawArrays) y lo lee con glReadPixels hacia el IOSurface del drawable (filas invertidas, B/R permutados para BGRA); lo que no se reconoce se anota en heromtl.log (newDefaultLibrary con .metallib de AIR: NO leído; M3); el puente de apps tiene que estar en appgl.on (S7GELab); S7GE Lab de CI 44932778203: la franja de Metal muestra un triángulo RGB girando y el informe dice 'Metal triangle: pipeline ok' o el error; PRUEBA: abrir S7GE Lab, 'Probar Metal'; cierre intermitente de E-0374 (hero_MTLCreateSystemDefaultDevice, dirección basura): hipótesis sin comprobar: corrupción de memoria en el puente GL; contadores D-0123: BOOT 18 de 80, DROP 44 de 80"
+kind = "document"
+path = "docs/S7GE_METAL_DESIGN.md"
+location = "git"
+created = "2026-11-21"
+domain = "device"
+level = "L1"
+device = "this-unit"
+note = "Diseño de Metal; la prueba en el teléfono viene después."
