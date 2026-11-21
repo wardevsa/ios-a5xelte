@@ -5154,3 +5154,18 @@ sha256 = "65e5e7fdab7f9623f2a945a29eec7e698812e4b23376c34dd750fb8c47534941"
 size = 454362
 immutable = true
 note = "Imagen min125 72d3360e con sbmode 2 (libherosb de CI 44898050420)."
+
+[[evidence]]
+id = "E-0349"
+title = "min125 con sbmode 3 (gestos, proveedor de barra _UIStatusBarVisualProvider_Split1125 del iPhone X): el Director informa de que ya se ven la hora y la batería pero 'parece raro' (por la muesca: dos orejas con hueco en el centro y sin muesca real), propone una mezcla entre la barra de arriba del iPhone 8 y los gestos del iPhone X, nota otra vez el logo de Apple algo aplastado y dice que luego se deje como el iPhone 8, y que 'se ha vuelto a petar'; el volcado confirma 'provider of that _UIStatusBar: _UIStatusBarVisualProvider_Split1125' y da las vistas que sobresalen de su ventana (en coordenadas de ventana, ventana 375 x 667): en SBHomeScreenWindow las de las páginas vecinas del paginado (x negativas, normal) y SBFFeatherBlurView 375 x 44 (la altura de la barra del X: 44), y en SBCoverSheetWindow la vista SBFTouchPassThroughView en 0,667 de 375 x 667 y NCNotificationListView en 10,655,5 de 355 x 100 (la lista de notificaciones, por debajo del borde: normal, aún sin desplegar); NO se ve en la lista el botón de la cámara porque el Director desbloqueó al empezar (el volcado se hizo con la pantalla ya en la de inicio); los cierres de este arranque son solo MailWidgetExtension (x2) y PassbookWidgetsExtension, sin pánico ni cierre de SpringBoard: 'petar' no tiene causa registrada; el registro termina a los ~115 s (el anillo solo guarda lo que se vacía antes de reiniciar) y el TOP de los primeros ~100 s sigue con las extensiones de widgets al 61 %: lo más probable es que lo que el Director llama 'petar' sea esa ventana en la que el teléfono no responde, que ya se vio en min122 (E-0343); no hay prueba directa; ACCIONES: (1) parche 0485: las extensiones de widgets (los programas de dentro de un .appex con 'Widget' en el nombre) no se ejecutan, chronod sigue (herowidgets=1 las deja arrancar); (2) libherosb sbmode 4: al proveedor de la barra de estado en tipo 2 se le da la clase que UIKit escogería para la plataforma con botón de inicio (la plataforma dice tipo 1 mientras dura esa llamada), y se registra cuál eligió: la barra del iPhone 8 con los gestos del iPhone X; (3) esta imagen no lleva hsnap (el laboratorio de capturas hace gestos solo y vuelca 400 KB por captura: se quita de la imagen de uso); BOOT = min126 (kernel CI 44901325155 con 0485, línea de min112, 592 caracteres); DROP 23 de 80 (libherosb de CI 44899825163 y sbmode=4); contadores D-0123: BOOT 16 de 80, DROP 23 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min125d-herolog.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "3efabb232f922152f1126d4591e1664d664b815cd7d2f0f956b4e2e150464360"
+size = 571617
+immutable = true
+note = "Imagen min125 con sbmode 3 (libherosb de CI 44898839953)."
