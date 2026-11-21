@@ -108,7 +108,7 @@ look_at_status_bar(id windows, size_t count, unsigned round)
          rect_t b = ((rect_t (*)(id, SEL))objc_msgSend)(window, sel_registerName("bounds"));
          insets_t s = ((insets_t (*)(id, SEL))objc_msgSend)(window, sel_registerName("safeAreaInsets"));
          herodrm_log("herosb: bar round %u window %s bounds %.0f x %.0f safe insets %.1f %.1f %.1f %.1f", round, name, b.w, b.h, s.top, s.left, s.bottom, s.right);
-         if (strcmp(name, "SBHomeScreenWindow") != 0)
+         if (strcmp(name, "SBHomeScreenWindow") != 0 || round == 20)
             dump_view(window, 0);
       }
    }
@@ -294,6 +294,30 @@ report_ranges(void *unused)
    herodrm_log("herosb: %u frame rate ranges raised to 60 so far", ranges_raised);
 }
 
+
+/*
+ * min125b (E-0347): sbmode 1 (the platform on home-button type 1) shows the bar, UIStatusBar_Modern 375 x 20 with the clock, the carrier and the battery,
+ * but the home gestures are not there; sbmode 0 (platform type 2, which makes the gestures) leaves UIStatusBar_Modern at 375 x 0 and hidden. Mode 2 is
+ * mode 0 with the class method that sizes the bar answering 20 points (what mode 1 measured): +[UIStatusBar_Modern
+ * _heightForStyle:orientation:forStatusBarFrame:inWindow:isAzulBLinked:].
+ */
+static double
+bar_is_twenty(id self, SEL cmd, long style, long orientation, BOOL for_frame, id window, BOOL azul)
+{
+   return 20.0;
+}
+
+static void
+fix_bar_height(void)
+{
+   Class bar = objc_getClass("UIStatusBar_Modern");
+   SEL height = sel_registerName("_heightForStyle:orientation:forStatusBarFrame:inWindow:isAzulBLinked:");
+   Method m = bar ? class_getClassMethod(bar, height) : NULL;
+   if (m)
+      method_setImplementation(m, (IMP)bar_is_twenty);
+   herodrm_log("herosb: status bar height class method %s", m ? "answers 20" : "NOT found");
+}
+
 __attribute__((constructor)) static void
 herosb_start(void)
 {
@@ -314,7 +338,7 @@ herosb_start(void)
       FILE *mf = fopen(DROP_DIR "sbmode", "r");
       if (mf) {
          int c = fgetc(mf);
-         if (c == '0' || c == '1')
+         if (c == '0' || c == '1' || c == '2')
             mode = (char)c;
          fclose(mf);
       }
@@ -328,6 +352,8 @@ herosb_start(void)
          }
       } else {
          ask_for_gestures();
+         if (mode == '2')
+            fix_bar_height();
       }
    }
    if (access(DROP_DIR "wallpaper.off", F_OK) == 0)
