@@ -685,8 +685,33 @@ install_audio_plugin(void)
       return;
    }
    herodrm_log("hero-run: audio plug-in: drop zone %lld bytes, HAL %lld bytes", have ? (long long)from.st_size : -1, there ? (long long)to.st_size : -1);
-   if (!have || (there && to.st_size == from.st_size && to.st_mtime >= from.st_mtime))
+   /*
+    * E-0385: the check was "same size and the installed file is not older than the drop zone's". The fix of E-0384 changed HeroMetal's bytes but not its size
+    * (86304 both), and the installed copy's time was later than the dropped file's, so the old plug-in stayed. Now: same size and same bytes, or install.
+    */
+   if (!have)
       return;
+   if (there && to.st_size == from.st_size) {
+      FILE *a = fopen(DROP_DIR "metal/HeroMetal", "rb"), *b = fopen(exe, "rb");
+      int same = a != NULL && b != NULL;
+      while (same) {
+         char x[4096], y[4096];
+         size_t nx = fread(x, 1, sizeof(x), a), ny = fread(y, 1, sizeof(y), b);
+         if (nx != ny || memcmp(x, y, nx) != 0)
+            same = 0;
+         else if (nx == 0)
+            break;
+      }
+      if (a)
+         fclose(a);
+      if (b)
+         fclose(b);
+      if (same) {
+         herodrm_log("hero-run: Metal plug-in: the installed one has the same bytes");
+         return;
+      }
+      herodrm_log("hero-run: Metal plug-in: same size, different bytes: installing");
+   }
    mkdir("/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver", 0755);
    copy_plugin_file("audio", DROP_DIR "audio/HakiosAudio", driver, 0755);
    copy_plugin_file("audio", DROP_DIR "audio/Info.plist", "/System/Library/Audio/Plug-Ins/HAL/HakiosAudio.driver/Info.plist",
