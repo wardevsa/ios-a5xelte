@@ -10,6 +10,8 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
 #import <IOSurface/IOSurfaceRef.h>
+#import <OpenGLES/EAGL.h>
+#import <OpenGLES/ES2/gl.h>
 #import <objc/runtime.h>
 #import <fcntl.h>
 #import <stdarg.h>
@@ -158,6 +160,138 @@ static HeroDevice *g_device;
 }
 @end
 
+
+// ---- M2: libraries, functions, pipelines and draws -------------------------------------------------------------------------------------------------
+// An application hands Metal either MSL text (newLibraryWithSource:) or a .metallib of AIR bitcode. There is no compiler here: a function is recognised by its
+// NAME and the GLSL ES source of that name is taken from this table (docs/S7GE_METAL_DESIGN.md, way (b)). Each entry also says how its vertex buffer 0 is laid out.
+typedef struct { const char *name; const char *vs, *fs; int stride; int pos_off; int pos_n; int col_off; int col_n; } ShaderEntry;
+static const ShaderEntry kShaders[] = {
+    // tri_vertex / tri_fragment: S7GE Lab's triangle: vertices of packed_float2 position + packed_float4 colour (24 bytes), colour passed through
+    { "tri_vertex",
+      "attribute vec2 pos; attribute vec4 col; varying vec4 c; void main() { gl_Position = vec4(pos, 0.0, 1.0); c = col; }",
+      "precision mediump float; varying vec4 c; void main() { gl_FragColor = c; }",
+      24, 0, 2, 8, 4 },
+};
+static const ShaderEntry *shader_for(NSString *vertexName) {
+    for (size_t i = 0; i < sizeof kShaders / sizeof kShaders[0]; i++) if ([vertexName isEqualToString:@(kShaders[i].name)]) return &kShaders[i];
+    return NULL;
+}
+
+@interface HeroFunction : HeroMTLBase <MTLFunction>
+@property (nonatomic, copy) NSString *fname;
+@property (nonatomic, assign) MTLFunctionType ftype;
+@property (nonatomic, copy) NSString *label;
+@end
+@implementation HeroFunction
+- (NSString *)name { return _fname; }
+- (MTLFunctionType)functionType { return _ftype; }
+- (id<MTLDevice>)device { return (id)g_device; }
+@end
+
+@interface HeroLibrary : HeroMTLBase <MTLLibrary>
+@property (nonatomic, strong) NSArray<NSString *> *names;
+@property (nonatomic, strong) NSDictionary<NSString *, NSNumber *> *types;
+@property (nonatomic, copy) NSString *label;
+@end
+@implementation HeroLibrary
+- (id<MTLDevice>)device { return (id)g_device; }
+- (NSArray<NSString *> *)functionNames { return _names; }
+- (id<MTLFunction>)newFunctionWithName:(NSString *)name {
+    NSNumber *ty = _types[name];
+    if (!ty) { mtl_note("heromtl: newFunctionWithName: %s is not in the library", name.UTF8String); return nil; }
+    HeroFunction *f = [HeroFunction new]; f.fname = name; f.ftype = (MTLFunctionType)ty.integerValue; return f;
+}
+@end
+
+static HeroLibrary *library_from_source(NSString *src) {
+    NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"\\b(vertex|fragment|kernel)\\s+[\\w:<>]+\\s+(\\w+)\\s*\\(" options:0 error:nil];
+    NSMutableArray *names = [NSMutableArray array]; NSMutableDictionary *types = [NSMutableDictionary dictionary];
+    for (NSTextCheckingResult *m in [re matchesInString:src options:0 range:NSMakeRange(0, src.length)]) {
+        NSString *kind = [src substringWithRange:[m rangeAtIndex:1]], *name = [src substringWithRange:[m rangeAtIndex:2]];
+        [names addObject:name]; types[name] = @([kind isEqualToString:@"vertex"] ? MTLFunctionTypeVertex : [kind isEqualToString:@"fragment"] ? MTLFunctionTypeFragment : MTLFunctionTypeKernel);
+    }
+    HeroLibrary *l = [HeroLibrary new]; l.names = names; l.types = types;
+    mtl_note("heromtl: library from source: %lu function(s): %s", (unsigned long)names.count, [names componentsJoinedByString:@","].UTF8String);
+    return l;
+}
+
+@interface HeroPipeline : HeroMTLBase <MTLRenderPipelineState>
+@property (nonatomic, assign) const ShaderEntry *entry;
+@property (nonatomic, copy) NSString *label;
+@end
+@implementation HeroPipeline
+- (id<MTLDevice>)device { return (id)g_device; }
+@end
+
+static EAGLContext *g_gl;
+static GLuint compile_shader(GLenum type, const char *src) {
+    GLuint s = glCreateShader(type);
+    glShaderSource(s, 1, &src, NULL);
+    glCompileShader(s);
+    GLint ok = 0; glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
+    if (!ok) { char log[300] = ""; glGetShaderInfoLog(s, sizeof log, NULL, log); mtl_note("heromtl: GLSL %s failed: %s", type == GL_VERTEX_SHADER ? "vertex" : "fragment", log); }
+    return s;
+}
+static GLuint program_for(const ShaderEntry *e) {
+    static GLuint progs[8]; static const ShaderEntry *keys[8]; static int n;
+    for (int i = 0; i < n; i++) if (keys[i] == e) return progs[i];
+    GLuint p = glCreateProgram();
+    glAttachShader(p, compile_shader(GL_VERTEX_SHADER, e->vs)); glAttachShader(p, compile_shader(GL_FRAGMENT_SHADER, e->fs));
+    glBindAttribLocation(p, 0, "pos"); glBindAttribLocation(p, 1, "col");
+    glLinkProgram(p);
+    GLint ok = 0; glGetProgramiv(p, GL_LINK_STATUS, &ok);
+    if (!ok) mtl_note("heromtl: GLSL link of %s failed", e->name);
+    if (n < 8) { keys[n] = e; progs[n++] = p; }
+    return p;
+}
+
+typedef struct { const ShaderEntry *entry; const void *vbytes; NSUInteger vlen; GLenum mode; NSUInteger start, count; } DrawCall;
+
+// Replays one render pass on the GLES context of the EAGL bridge: clear, draws, then read the pixels back into the target's IOSurface (rows flipped: GL's origin is
+// bottom-left, Metal's top-left). The application's own current context is restored afterwards.
+static void run_pass(HeroTexture *tex, MTLClearColor k, BOOL clear, NSArray<NSValue *> *draws) {
+    if (!g_gl) g_gl = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
+    if (!g_gl) { mtl_note("heromtl: no EAGLContext (is the application in appgl.on?)"); return; }
+    EAGLContext *saved = [EAGLContext currentContext];
+    [EAGLContext setCurrentContext:g_gl];
+    GLuint fbo = 0, rb = 0;
+    glGenFramebuffers(1, &fbo); glGenRenderbuffers(1, &rb);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo); glBindRenderbuffer(GL_RENDERBUFFER, rb);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8_OES, (GLsizei)tex.w, (GLsizei)tex.h);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rb);
+    GLenum st = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (st != GL_FRAMEBUFFER_COMPLETE) { mtl_note("heromtl: framebuffer status 0x%x", st); }
+    else {
+        glViewport(0, 0, (GLsizei)tex.w, (GLsizei)tex.h);
+        glClearColor(clear ? k.red : 0, clear ? k.green : 0, clear ? k.blue : 0, clear ? k.alpha : 0); glClear(GL_COLOR_BUFFER_BIT);
+        for (NSValue *v in draws) {
+            DrawCall d; [v getValue:&d];
+            if (!d.entry || !d.vbytes) continue;
+            glUseProgram(program_for(d.entry));
+            glVertexAttribPointer(0, d.entry->pos_n, GL_FLOAT, GL_FALSE, d.entry->stride, (const uint8_t *)d.vbytes + d.entry->pos_off);
+            glVertexAttribPointer(1, d.entry->col_n, GL_FLOAT, GL_FALSE, d.entry->stride, (const uint8_t *)d.vbytes + d.entry->col_off);
+            glEnableVertexAttribArray(0); glEnableVertexAttribArray(1);
+            glDrawArrays(d.mode, (GLint)d.start, (GLsizei)d.count);
+        }
+        size_t w = tex.w, h = tex.h;
+        uint8_t *px = malloc(w * h * 4);
+        glReadPixels(0, 0, (GLsizei)w, (GLsizei)h, GL_RGBA, GL_UNSIGNED_BYTE, px);
+        IOSurfaceLock(tex.surface, 0, NULL);
+        uint8_t *base = IOSurfaceGetBaseAddress(tex.surface); size_t bpr = IOSurfaceGetBytesPerRow(tex.surface);
+        BOOL swap = is_bgra(tex.fmt);
+        for (size_t y = 0; y < h; y++) {
+            const uint8_t *s = px + (h - 1 - y) * w * 4; uint8_t *dst = base + y * bpr;
+            if (swap) for (size_t x = 0; x < w; x++) { dst[x*4] = s[x*4+2]; dst[x*4+1] = s[x*4+1]; dst[x*4+2] = s[x*4]; dst[x*4+3] = s[x*4+3]; }
+            else memcpy(dst, s, w * 4);
+        }
+        IOSurfaceUnlock(tex.surface, 0, NULL);
+        free(px);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0); glBindRenderbuffer(GL_RENDERBUFFER, 0);
+    glDeleteFramebuffers(1, &fbo); glDeleteRenderbuffers(1, &rb);
+    [EAGLContext setCurrentContext:saved];
+}
+
 @interface HeroDrawable : HeroMTLBase <CAMetalDrawable>
 @property (nonatomic, strong) HeroTexture *tex;
 @property (nonatomic, weak) CAMetalLayer *owner;
@@ -180,18 +314,40 @@ static HeroDevice *g_device;
 @interface HeroRenderEncoder : HeroMTLBase <MTLRenderCommandEncoder>
 @property (nonatomic, strong) MTLRenderPassDescriptor *pass;
 @property (nonatomic, copy) NSString *label;
+@property (nonatomic, strong) HeroPipeline *pipe;
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSData *> *vbufs;
+@property (nonatomic, strong) NSMutableArray<NSValue *> *draws;
+@property (nonatomic, strong) NSMutableArray<NSData *> *keep;
 @end
 @implementation HeroRenderEncoder
+- (instancetype)init { if ((self = [super init])) { _vbufs = [NSMutableDictionary dictionary]; _draws = [NSMutableArray array]; _keep = [NSMutableArray array]; } return self; }
 - (id<MTLDevice>)device { return (id)g_device; }
+- (void)setRenderPipelineState:(id<MTLRenderPipelineState>)s { _pipe = (HeroPipeline *)s; }
+- (void)setVertexBuffer:(id<MTLBuffer>)b offset:(NSUInteger)off atIndex:(NSUInteger)i {
+    HeroBuffer *hb = (HeroBuffer *)b;
+    if (hb) _vbufs[@(i)] = [NSData dataWithBytes:(uint8_t *)hb.bytes + off length:hb.size - off]; else [_vbufs removeObjectForKey:@(i)];
+}
+- (void)setVertexBytes:(const void *)bytes length:(NSUInteger)len atIndex:(NSUInteger)i { _vbufs[@(i)] = [NSData dataWithBytes:bytes length:len]; }
+- (void)setViewport:(MTLViewport)v {}
+- (void)setCullMode:(MTLCullMode)m {}
+- (void)setFrontFacingWinding:(MTLWinding)w {}
+- (void)drawPrimitives:(MTLPrimitiveType)type vertexStart:(NSUInteger)start vertexCount:(NSUInteger)count instanceCount:(NSUInteger)n { [self drawPrimitives:type vertexStart:start vertexCount:count]; }
+- (void)drawPrimitives:(MTLPrimitiveType)type vertexStart:(NSUInteger)start vertexCount:(NSUInteger)count {
+    NSData *vb = _vbufs[@0];
+    if (!_pipe || !_pipe.entry || !vb) { mtl_note("heromtl: draw without a known pipeline or vertex buffer 0 (pipeline %s)", _pipe ? "set" : "NOT set"); return; }
+    GLenum mode = type == MTLPrimitiveTypeTriangle ? GL_TRIANGLES : type == MTLPrimitiveTypeTriangleStrip ? GL_TRIANGLE_STRIP : type == MTLPrimitiveTypeLine ? GL_LINES : type == MTLPrimitiveTypeLineStrip ? GL_LINE_STRIP : type == MTLPrimitiveTypePoint ? GL_POINTS : GL_TRIANGLES;
+    [_keep addObject:vb];
+    DrawCall d = { _pipe.entry, vb.bytes, vb.length, mode, start, count };
+    [_draws addObject:[NSValue valueWithBytes:&d objCType:@encode(DrawCall)]];
+}
 - (void)endEncoding {
     MTLRenderPassColorAttachmentDescriptor *c = [_pass.colorAttachments objectAtIndexedSubscript:0];
     HeroTexture *t = (HeroTexture *)c.texture;
-    if (t && [t isKindOfClass:[HeroTexture class]] && c.loadAction == MTLLoadActionClear) {
-        MTLClearColor k = c.clearColor;
-        [t fillRed:k.red green:k.green blue:k.blue alpha:k.alpha];
-    } else if (t && c.loadAction != MTLLoadActionClear) {
-        mtl_note("heromtl: render pass of load action %ld not clearing: nothing drawn (M1)", (long)c.loadAction);
-    }
+    if (!t || ![t isKindOfClass:[HeroTexture class]]) return;
+    BOOL clear = c.loadAction == MTLLoadActionClear;
+    if (!clear && _draws.count == 0) { mtl_note("heromtl: render pass of load action %ld with no draws: nothing done", (long)c.loadAction); return; }
+    if (_draws.count == 0) { MTLClearColor k = c.clearColor; [t fillRed:k.red green:k.green blue:k.blue alpha:k.alpha]; return; }
+    run_pass(t, c.clearColor, clear, _draws);
 }
 @end
 
@@ -260,6 +416,16 @@ static HeroDevice *g_device;
 }
 - (id<MTLBuffer>)newBufferWithBytes:(const void *)p length:(NSUInteger)length options:(MTLResourceOptions)o {
     HeroBuffer *b = (HeroBuffer *)[self newBufferWithLength:length options:o]; if (p) memcpy(b.bytes, p, length); return b;
+}
+- (id<MTLLibrary>)newLibraryWithSource:(NSString *)source options:(MTLCompileOptions *)options error:(NSError **)error { return library_from_source(source); }
+- (void)newLibraryWithSource:(NSString *)source options:(MTLCompileOptions *)options completionHandler:(MTLNewLibraryCompletionHandler)h { HeroLibrary *l = library_from_source(source); if (h) h(l, nil); }
+- (id<MTLLibrary>)newDefaultLibrary { mtl_note("heromtl: newDefaultLibrary: the AIR in the application's default.metallib is not read (M3)"); return nil; }
+- (id<MTLLibrary>)newDefaultLibraryWithBundle:(NSBundle *)b error:(NSError **)error { return [self newDefaultLibrary]; }
+- (id<MTLRenderPipelineState>)newRenderPipelineStateWithDescriptor:(MTLRenderPipelineDescriptor *)d error:(NSError **)error {
+    HeroFunction *vf = (HeroFunction *)d.vertexFunction;
+    const ShaderEntry *e = vf ? shader_for(vf.fname) : NULL;
+    if (!e) { mtl_note("heromtl: no GLSL for vertex function '%s' (table of M2)", vf ? vf.fname.UTF8String : "(none)"); if (error) *error = [NSError errorWithDomain:@"heromtl" code:1 userInfo:@{ NSLocalizedDescriptionKey: @"no shader of that name in S7GE's table" }]; return nil; }
+    HeroPipeline *p = [HeroPipeline new]; p.entry = e; return p;
 }
 - (id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)d {
     if (d.textureType != MTLTextureType2D) { mtl_note("heromtl: newTexture: type %ld not supported (M1)", (long)d.textureType); return nil; }

@@ -62,7 +62,7 @@ $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroapp.dylib" "$HERE/src/heroapp.c" "
 
 # S7GE Metal provider (M1), loaded by libheroapp for the applications of mtl.on.
 $CC -O2 -fobjc-arc -Wall -Wno-protocol -Wno-incomplete-implementation -Wno-unused-function -dynamiclib -o "$OUT/lib/libheromtl.dylib" "$HERE/src/heromtl.m" \
-  -install_name @rpath/libheromtl.dylib -framework Foundation -framework Metal -framework QuartzCore -framework IOSurface -framework CoreGraphics -lobjc
+  -install_name @rpath/libheromtl.dylib -framework Foundation -framework Metal -framework OpenGLES -framework QuartzCore -framework IOSurface -framework CoreGraphics -lobjc
 
 # The smallest inserted library: dyld/insertion bisect (E-0336), dropped as lib/libheroapp.dylib for one boot.
 $CC -O2 -Wall -dynamiclib -o "$OUT/lib/libheroprobe.dylib" "$HERE/src/heroprobe.c" -install_name @rpath/libheroprobe.dylib
