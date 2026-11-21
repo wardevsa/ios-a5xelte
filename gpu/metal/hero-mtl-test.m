@@ -12,7 +12,9 @@
  */
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
+#import <QuartzCore/CAMetalLayer.h>
 #include <IOKit/IOKitLib.h>
+#include <IOSurface/IOSurfaceRef.h>
 #include <objc/runtime.h>
 #include <stdio.h>
 #include <time.h>
@@ -50,6 +52,129 @@ gradient(id<MTLDevice> dev, MTLTextureType type)
 	     bytesPerRow:16 * 16 bytesPerImage:16 * 16 * 16];
 	free(texels);
 	return t;
+}
+
+/* One post draw of 64x64 BGRA8 into `target`; the command buffer's status, or -1. */
+static long
+draw_post(id<MTLCommandQueue> q, id<MTLRenderPipelineState> ps, id<MTLTexture> target, id<MTLTexture> t2d,
+          id<MTLTexture> t3d, id<CAMetalDrawable> present)
+{
+	MTLRenderPassDescriptor *rp = [MTLRenderPassDescriptor renderPassDescriptor];
+	rp.colorAttachments[0].texture = target;
+	rp.colorAttachments[0].loadAction = MTLLoadActionClear;
+	rp.colorAttachments[0].clearColor = MTLClearColorMake(0.125, 0.25, 0.375, 0.5);
+	rp.colorAttachments[0].storeAction = MTLStoreActionStore;
+	id<MTLCommandBuffer> cb = [q commandBuffer];
+	id<MTLRenderCommandEncoder> e = [cb renderCommandEncoderWithDescriptor:rp];
+	if (e == nil)
+		return -1;
+	[e setRenderPipelineState:ps];
+	[e setFragmentTexture:t2d atIndex:0];
+	[e setFragmentTexture:t3d atIndex:1];
+	[e drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+	[e endEncoding];
+	if (present != nil)
+		[cb presentDrawable:present];
+	[cb commit];
+	[cb waitUntilCompleted];
+	if (cb.error)
+		printf("hero_mtl_test:   command buffer error: %s\n", [[cb.error description] UTF8String]);
+	return (long)cb.status;
+}
+
+static void
+say_pixels(const char *what, const uint32_t *px, unsigned stride_words)
+{
+	unsigned clear = 0, zero = 0;
+	for (unsigned y = 0; y < 64; y++)
+		for (unsigned x = 0; x < 64; x++) {
+			uint32_t v = px[y * stride_words + x];
+			clear += v == 0x80204060u;   /* the clear colour in BGRA8: B 60 G 40 R 20 A 80 */
+			zero += v == 0;
+		}
+	printf("hero_mtl_test: %s: %u clear, %u zero of 4096; (0,0) %08x (32,32) %08x (63,63) %08x\n", what, clear, zero,
+	       px[0], px[32 * stride_words + 32], px[63 * stride_words + 63]);
+}
+
+/*
+ * M4a (docs/herolte-metal.md): the post draw into memory CoreAnimation would hand over. First an IOSurface of our own
+ * (-newTextureWithDescriptor:iosurface:plane:, the call allocate_drawable_texture makes), read back through the
+ * processor's own mapping of the surface -- the display's view -- and compared with an ordinary texture drawn the same
+ * way; then a real CAMetalLayer's -nextDrawable, drawn and presented.
+ */
+static void
+surface_tests(id<MTLDevice> dev, id<MTLLibrary> lib, id<MTLCommandQueue> q, id<MTLTexture> t2d, id<MTLTexture> t3d)
+{
+	NSError *err = nil;
+	MTLRenderPipelineDescriptor *pd = [MTLRenderPipelineDescriptor new];
+	pd.vertexFunction = [lib newFunctionWithName:@"postVertex"];
+	pd.fragmentFunction = [lib newFunctionWithName:@"postFragment"];
+	pd.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+	id<MTLRenderPipelineState> ps = [dev newRenderPipelineStateWithDescriptor:pd error:&err];
+	if (ps == nil) {
+		printf("hero_mtl_test: BGRA pipeline: %s\n", [[err description] UTF8String]);
+		return;
+	}
+
+	/* the reference: an ordinary 64x64 BGRA8 texture */
+	MTLTextureDescriptor *td = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+	                                                                               width:64 height:64 mipmapped:NO];
+	td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+	id<MTLTexture> plain = [dev newTextureWithDescriptor:td];
+	static uint32_t ref[64 * 64];
+	if (plain != nil && draw_post(q, ps, plain, t2d, t3d, nil) == MTLCommandBufferStatusCompleted) {
+		[plain getBytes:ref bytesPerRow:64 * 4 fromRegion:MTLRegionMake2D(0, 0, 64, 64) mipmapLevel:0];
+		say_pixels("plain texture", ref, 64);
+	}
+
+	/* an IOSurface, the way CoreAnimation makes one: BGRA, global, 64x64 */
+	NSDictionary *props = @{
+		(id)kIOSurfaceWidth: @64, (id)kIOSurfaceHeight: @64, (id)kIOSurfaceBytesPerElement: @4,
+		(id)kIOSurfacePixelFormat: @((uint32_t)'BGRA'),
+	};
+	IOSurfaceRef io = IOSurfaceCreate((CFDictionaryRef)props);
+	printf("hero_mtl_test: IOSurface %u: %zux%zu, %zu bytes a row\n", io ? IOSurfaceGetID(io) : 0,
+	       io ? IOSurfaceGetWidth(io) : 0, io ? IOSurfaceGetHeight(io) : 0, io ? IOSurfaceGetBytesPerRow(io) : 0);
+	if (io != NULL) {
+		id<MTLTexture> st = [dev newTextureWithDescriptor:td iosurface:io plane:0];
+		printf("hero_mtl_test: texture over the surface: %s\n", st ? "made" : "NOT made");
+		if (st != nil) {
+			double t0 = now();
+			long status = draw_post(q, ps, st, t2d, t3d, nil);
+			printf("hero_mtl_test: draw into the surface: status %ld in %.3f s\n", status, now() - t0);
+			IOSurfaceLock(io, kIOSurfaceLockReadOnly, NULL);
+			const uint32_t *base = IOSurfaceGetBaseAddress(io);
+			unsigned stride = (unsigned)(IOSurfaceGetBytesPerRow(io) / 4), same = 0;
+			for (unsigned y = 0; y < 64; y++)
+				for (unsigned x = 0; x < 64; x++)
+					same += base[y * stride + x] == ref[y * 64 + x];
+			say_pixels("the surface, as the processor sees it", base, stride);
+			printf("hero_mtl_test: %u of 4096 pixels of the surface equal the plain texture's\n", same);
+			IOSurfaceUnlock(io, kIOSurfaceLockReadOnly, NULL);
+		}
+	}
+
+	/* a CAMetalLayer, off screen: nextDrawable (CoreAnimation makes the surface, the device the texture), present */
+	CAMetalLayer *layer = [CAMetalLayer layer];
+	layer.device = dev;
+	layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+	layer.drawableSize = CGSizeMake(64, 64);
+	layer.framebufferOnly = NO;
+	id<CAMetalDrawable> d = [layer nextDrawable];
+	printf("hero_mtl_test: CAMetalLayer nextDrawable: %s, texture %s\n", d ? "yes" : "nil",
+	       d && d.texture ? object_getClassName(d.texture) : "nil");
+	if (d != nil && d.texture != nil) {
+		double t0 = now();
+		long status = draw_post(q, ps, d.texture, t2d, t3d, d);
+		printf("hero_mtl_test: draw into the drawable and present: status %ld in %.3f s\n", status, now() - t0);
+		static uint32_t dp[64 * 64];
+		[d.texture getBytes:dp bytesPerRow:64 * 4 fromRegion:MTLRegionMake2D(0, 0, 64, 64) mipmapLevel:0];
+		unsigned same = 0;
+		for (unsigned i = 0; i < 64 * 64; i++)
+			same += dp[i] == ref[i];
+		say_pixels("the drawable", dp, 64);
+		printf("hero_mtl_test: %u of 4096 pixels of the drawable equal the plain texture's\n", same);
+	}
 }
 
 int
@@ -179,6 +304,7 @@ main(int argc, char **argv)
 			printf("hero_mtl_test:   (%u,%u) = %08x (hero_metal_test drew %08x)%s\n", at[k][0], at[k][1], v, want[k],
 			       v == want[k] ? "" : " DIFFERENT");
 		}
+		surface_tests(dev, lib, q, t2d, t3d);
 	}
 	printf("hero_mtl_test: done\n");
 	return 0;

@@ -30,6 +30,7 @@ done
 cat > "$T/hero_say.h" <<'H'
 #include <dlfcn.h>
 #include <stddef.h>
+void hero_sync_surfaces(void);   /* metal-herolte.py, in hakiosdrawable.m */
 static void hero_say(const char *line)
 {
 	static void (*log)(const char *, ...);
@@ -45,6 +46,8 @@ static void hero_say(const char *line)
 }
 H
 grep -q 'hero_say(line)' "$T/hakiosmetal_air.m"
+# ours: drawables through HeroGPU's surface import, surfaces synced when a command buffer completes
+python3 "$HERE/metal-herolte.py" "$T"
 sed -i '' '1i\
 #include "hero_say.h"
 ' "$T/hakiosmetal_air.m"
@@ -70,7 +73,7 @@ cat > "$OUT/metal/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
-$CC -o "$OUT/hero_mtl_test" "$HERE/hero-mtl-test.m" -framework Foundation -framework Metal -framework IOKit -lobjc -Wl,-rpath,/private/var/herolte/lib
+$CC -o "$OUT/hero_mtl_test" "$HERE/hero-mtl-test.m" -framework Foundation -framework Metal -framework IOKit -framework IOSurface -framework QuartzCore -framework CoreGraphics -lobjc -Wl,-rpath,/private/var/herolte/lib
 # signed on its own: next to its Info.plist codesign would take out/metal for a bundle (and add _CodeSignature/)
 codesign -s - -f "$T/HeroMetal"
 cp "$T/HeroMetal" "$OUT/metal/HeroMetal"
