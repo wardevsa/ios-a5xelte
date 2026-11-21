@@ -5466,3 +5466,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Análisis de Jet en la caché local; las pruebas en el teléfono vienen después."
+
+[[evidence]]
+id = "E-0370"
+title = "Dos resultados con el teléfono en TWRP: (1) HIPÓTESIS DE E-0369 REFUTADA: en Flappy Bird los cinco ficheros de SpriteKit (sprite.vsh 239 bytes, sprite.fsh 174, color.vsh 73, color.fsh 66, default.metallib 85028; modo 644, uid 0) se leen sin error ('stat 0, open ok', y el principio del contenido es GLSL válido) y NSBundle encuentra el recurso; por tanto el texto nulo de sombreador de Jet no viene de un fallo de lectura de esos ficheros (probablemente SpriteKit solo usa esa ruta para sus sombreadores simples y para los demás pide a Jet la función por otro medio: sin determinar); (2) SAFARI SIN CONEXIÓN: el Director dice que Safari responde 'no hay conexión'; el registro del kernel muestra que apple80211 de wifid contesta con valores inventados (POWER, STATE 4, RATE 54, RSSI, CHANNEL, BSSID...) y rechaza MCS: la Wi-Fi es SOLO una simulación para wifid, no hay controlador del chip real ni firmware cargado, así que no existe interfaz de red con tráfico (herowifi=1 sube el estado, no la radio); decisión del Director: empezar por Metal como base (docs/S7GE_METAL_DESIGN.md); la red real (controlador Wi-Fi o red por USB) queda como línea aparte; contadores D-0123: BOOT 18 de 80, DROP 40 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/n14-heroapp.log"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "4ca870b85a185ec3eeb3c854e9cd1fb1e5c45aa77c707b5ab26629b020a4b350"
+size = 338087
+immutable = true
+note = "heroapp.log con la prueba de ficheros de SpriteKit (scratch)."
