@@ -5124,3 +5124,18 @@ sha256 = "7324e3ffdf2ba6d18d36fd10f54ed416ea97dd9cac7c95770f862e7955fb3007"
 size = 636257
 immutable = true
 note = "Imagen min125 72d3360e; volcado de la barra de estado en libherosb de CI 44891084655."
+
+[[evidence]]
+id = "E-0347"
+title = "min125 con sbmode 1 (plataforma en tipo 1, solo el ajuste isHomeGestureEnabled = sí): el Director informa de que 'ahora no hay navegación por gestos, estamos como antes' (el ajuste solo no basta; hace falta que la plataforma diga tipo 2) y de que la manzana del arranque le parece algo aplastada y todo lo demás también 'muy poco' (sin dato medido: el lienzo es 750 x 1334, relación 0,5622, y el panel 1440 x 2560, relación 0,5625, y la escala sale 1,920 en horizontal y 1,919 en vertical: una diferencia del 0,05 %, que no se ve; si hay una deformación visible sería de otro origen y se mediría con el laboratorio de capturas); EL VOLCADO CON sbmode 1 da LA BARRA BUENA: SBHomeScreenWindow con márgenes seguros 20,0,0,0 (los de un iPhone 8, no los de gestos); UIStatusBar_Modern en 0,0 de 375 x 20, visible, con _UIStatusBar y _UIStatusBarForegroundView de 375 x 20, la hora (_UIStatusBarStringView 6,5 3,0 de 39 x 14,5), la batería (_UIStaticBatteryView 345,5 4,0 de 24 x 11,5) y otros textos de la barra; los anzuelos de proveedor no entraron (hooks 0): no hacen falta con el tipo 1; por tanto la diferencia entre el modo 0 (gestos, barra de altura 0, oculta, márgenes seguros 38,0,29,0) y el modo 1 (sin gestos, barra de 20 puntos, márgenes 20,0,0,0) es el tipo de botón que cree la plataforma; PRUEBA SIGUIENTE (DROP 21 de 80, sin tocar BOOT): sbmode 2 = modo 0 (tipo 2 en SpringBoard con gestos) más +[UIStatusBar_Modern _heightForStyle:orientation:forStatusBarFrame:inWindow:isAzulBLinked:] respondiendo 20 puntos; además a la ronda 20 se vuelca también el árbol de SBHomeScreenWindow; contadores D-0123: BOOT 15 de 80, DROP 21 de 80"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min125b-herolog.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "12c5528aa3974d8cd9acad205a2f668a04f9c8b8ef73c513b18f06e56858f9c6"
+size = 395241
+immutable = true
+note = "Imagen min125 72d3360e con sbmode 1 (libherosb de CI 44892229557)."
