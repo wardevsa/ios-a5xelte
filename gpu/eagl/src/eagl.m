@@ -20,6 +20,9 @@
 #define EAGLSharegroup BGEAGLSharegroup
 #endif
 #import "eagl_private.h"
+#include <stdarg.h>
+#include <fcntl.h>
+#include <unistd.h>
 #import <objc/runtime.h>
 #import <mach-o/dyld.h>
 #import <pthread.h>
@@ -156,6 +159,23 @@ static IOSurfaceRef make_surface(uint32_t w, uint32_t h) {
     return s;
 }
 
+
+#ifdef EAGL_INJECT
+/* E-0357: what the bridge sees, in /private/var/tmp/heroeagl.log (the apps' stderr goes nowhere) */
+static void shim_note(const char *fmt, ...) {
+    char line[400];
+    va_list ap; va_start(ap, fmt);
+    int n = vsnprintf(line, sizeof line - 1, fmt, ap);
+    va_end(ap);
+    if (n <= 0) return;
+    if (n > (int)sizeof line - 2) n = (int)sizeof line - 2;
+    line[n++] = '\n';
+    int fd = open("/private/var/tmp/heroeagl.log", O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd >= 0) { (void)!write(fd, line, (size_t)n); fchmod(fd, 0666); close(fd); }
+}
+#else
+#define shim_note(...) ((void)0)
+#endif
 static EAGLContext *cur_ctx(void) {
     pthread_once(&g_tls_once, tls_init);
     return (EAGLContext *)pthread_getspecific(g_tls);
@@ -746,7 +766,10 @@ static void eagl_install_hooks(void) {
     EAGLContext *old = pthread_getspecific(g_tls);
     if (ctx) {
         struct _EAGLContextPrivate *p = ctx->_private;
-        if (!osm_make_current(p->osm, p->dummy, DUMMY_W, DUMMY_H)) return NO;
+        int made = osm_make_current(p->osm, p->dummy, DUMMY_W, DUMMY_H);
+        const GLubyte *rend = made ? glGetString(GL_RENDERER) : NULL;
+        shim_note("%s: setCurrentContext %p: make_current %d, Mesa's own GL_RENDERER %s", getprogname(), (void *)ctx, made, rend ? (const char *)rend : "nil");
+        if (!made) return NO;
         [ctx retain];
     } else {
         osm_make_current(NULL, NULL, 0, 0);
@@ -807,9 +830,11 @@ static DrawBind *find_bind(struct _EAGLContextPrivate *p, GLuint rb) {
 
 - (BOOL)renderbufferStorage:(NSUInteger)target fromDrawable:(id<EAGLDrawable>)drawable {
     struct _EAGLContextPrivate *p = _private;
-    if (cur_ctx() != self || target != GL_RENDERBUFFER) return NO;
     GLint rb = 0;
-    glGetIntegerv(GL_RENDERBUFFER_BINDING, &rb);
+    if (cur_ctx() == self) glGetIntegerv(GL_RENDERBUFFER_BINDING, &rb);
+    { CGRect q = CGRectZero; if ([(id)drawable respondsToSelector:@selector(bounds)]) q = ((CGRect (*)(id, SEL))objc_msgSend)((id)drawable, @selector(bounds));
+      shim_note("%s: renderbufferStorage: current-is-self %d, target 0x%lx, bound renderbuffer %d, drawable bounds %gx%g", getprogname(), cur_ctx() == self, (unsigned long)target, rb, q.size.width, q.size.height); }
+    if (cur_ctx() != self || target != GL_RENDERBUFFER) return NO;
     if (!rb) return NO;
     DrawBind *b = find_bind(p, rb);
     if (!drawable) {                                    // drop the storage
