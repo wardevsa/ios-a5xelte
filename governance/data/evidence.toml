@@ -5169,3 +5169,18 @@ sha256 = "3efabb232f922152f1126d4591e1664d664b815cd7d2f0f956b4e2e150464360"
 size = 571617
 immutable = true
 note = "Imagen min125 con sbmode 3 (libherosb de CI 44898839953)."
+
+[[evidence]]
+id = "E-0350"
+title = "min126 (extensiones de widgets sin ejecutar, libherosb sbmode 4): el Director informa de que ahora no hay barra de arriba, pide empezar S7GE ya (instalar apps, videojuegos o YouTube aunque sea de terceros), arreglar la barra en paralelo más adelante y activar el Wi-Fi; EL REGISTRO: sbmode 4 dice 'natural provider asked of _UIStatusBarVisualProvider_iOS: _UIStatusBarVisualProvider_Phone' (UIKit, con la plataforma en tipo 1, elige el proveedor Phone; preguntado a la clase Phone devuelve nil), o sea el proveedor es el mismo que en sbmode 2, y la barra con tipo 2 sigue a 375 x 0, oculta y sin elementos: el PROVEEDOR no es la causa; con tipo 2 la barra de estado del proveedor Phone no se forma, con Split1125 (sbmode 3) sí; el Director prefiere dejar la barra para más tarde; extensiones de widgets: el kernel rechaza LockScreenPeopleWidget_iOSExtension, PassbookWidgetsExtension-iPhone, MailWidgetExtension, GCWidgets y FitnessWidget (NOEXEC), y aun así SpringBoard va al 446 % a los 30 s y 199 % a los 55 s, backboardd 131 % a los 55 s (la ventana de poca respuesta de los primeros ~100 s sigue, con otra causa: SpringBoard pintando 178 apps); DECISIÓN: se deja sbmode 3 (gestos con la barra de Split1125, hora y batería visibles aunque con aspecto de muesca) como configuración de diario hasta que la barra se arregle; Wi-Fi: min127 lleva herowifi=1 (la radio arranca con el firmware que ya está en la zona DROP; falta network.txt del Director para conectar); S7GE: apps/s7ge-lab (CI 44903218142): app de GLES2 por el puente EAGL que dibuja un triángulo, muestra GL_RENDERER y fotogramas por segundo, la pantalla y la altura segura, y un botón 'Probar Metal' que llama a MTLCreateSystemDefaultDevice(); escribe lo mismo en /private/var/tmp/s7ge-lab.txt; escrita en la zona DROP (24 de 80) junto con sbmode=3; BOOT = min127 (61d0c110…502b, kernel CI 44901325155, línea de min112 más herowifi=1, 603 caracteres); contadores D-0123: BOOT 17 de 80, DROP 24 de 80; los arranques con apps nuevas rehacen la base de LaunchServices (unos minutos)"
+kind = "log"
+path = "/home/pioxi/HackiOS/builds/device-day/phase1-20261114/min126-herolog.txt"
+location = "scratch"
+created = "2026-11-21"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "80f64a401c7b7a915d5b17efead621898ecf88acfa7d0485e247c2170ca13483"
+size = 617338
+immutable = true
+note = "Imagen min126 8083c944 con libherosb de CI 44899825163 (sbmode 4)."
