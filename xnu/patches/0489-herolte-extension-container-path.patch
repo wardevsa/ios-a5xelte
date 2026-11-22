@@ -1,0 +1,58 @@
+herolte: an app extension is given a container path by the sandbox stand-in (0489)
+
+PlugInKit raised "plugin has invalid sandbox or container: error 2" in every extension (SaveToFiles, DocumentManager.Service, PhotosFileProvider) because operation 4 failed with ENOENT. Extensions (executable in a .appex, non-root, own pid) are answered with /private/var/mobile; all else is as before (E-0401).
+
+diff --git a/bsd/kern/sweet_amfi.c b/bsd/kern/sweet_amfi.c
+index 136536b..f32f4c5 100644
+--- a/bsd/kern/sweet_amfi.c
++++ b/bsd/kern/sweet_amfi.c
+@@ -29,6 +29,7 @@
+ #include <mach/kern_return.h>
+ #include <sys/codesign.h>
+ #include <sys/errno.h>
++#include <sys/kauth.h>
+ #include <sys/mount.h>
+ #include <sys/priv.h>
+ #include <sys/proc.h>
+@@ -349,6 +350,41 @@ sweet_sandbox_syscall(struct proc *p, int call, __unused user_addr_t arg)
+ 			}
+ 		}
+ 	}
++	/*
++	 * 0489 (E-0401): an app extension (appex) that asks for its own container path got ENOENT here, and PlugInKit then raised
++	 * "plugin has invalid sandbox or container: error 2 path ?" (NSInternalInconsistencyException) and the extension died: SaveToFiles and
++	 * com.apple.DocumentManager.Service (Safari's "internal error, couldn't communicate with a helper application" when saving a file) and
++	 * PhotosFileProvider. PlugInKit's own check (PlugInKit +0x18c60, disassembled) is: sandbox_container_path_for_pid(getpid(), buf, 0x400)
++	 * returns 0 and strlen(buf) > 1; with no sandbox here that is all it needs. So an extension of a non-root user (its executable inside a
++	 * .appex) is answered with the mobile home, which exists and is writable; everything else keeps failing with ENOENT as before.
++	 */
++	if (call == 4 && arg != 0) {
++		uint64_t w[4] = { 0 };
++		if (copyin(arg, w, sizeof(w)) == 0 && w[0] == (uint64_t)proc_pid(p) && w[2] > 0x1000 && w[2] < 0x0000800000000000ULL &&
++		    w[3] >= 32 && w[3] <= 4096 && kauth_getuid() != 0) {
++			char path[256] = "";
++			int len = (int)sizeof(path);
++			vnode_t tv = proc_getexecutablevnode(p);
++			if (tv != NULLVP) {
++				if (vn_getpath(tv, path, &len) != 0) {
++					path[0] = 0;
++				}
++				vnode_put(tv);
++			}
++			if (strnstr(path, ".appex/", sizeof(path)) != NULL) {
++				static const char home[] = "/private/var/mobile";
++				if (copyout(home, (user_addr_t)w[2], sizeof(home)) == 0) {
++					static int shown;
++					if (shown++ < 8) {
++						char name[32];
++						proc_name(proc_pid(p), name, sizeof(name));
++						printf("SWEET Sandbox: %s (an extension) given the container path %s\n", name, home);
++					}
++					return 0;
++				}
++			}
++		}
++	}
+ 	switch (call) {
+ 	case 6:         /* extension consume: accepted, there is no sandbox to extend (0481) */
+ 		return 0;
