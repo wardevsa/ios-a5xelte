@@ -5964,3 +5964,18 @@ sha256 = "37685df408cd6d3c84a1f4d3eeb53871c852279dc36aa0c7c241679d9c691866"
 size = 285741
 immutable = true
 note = "Registro persistente del segundo arranque atascado, min132 (scratch)."
+
+[[evidence]]
+id = "E-0406"
+title = "A/B RESUELTO: min130 TAMBIÉN SE QUEDA EN EL LOGO (el Director: 'the same, and it was for like about 7-10 minutes'): tres arranques seguidos atascados (min131, min132 y min130 con el mismo estado) y min130 arrancó bien antes con el kernel idéntico (hash b7564646...): LA CAUSA NO ES EL KERNEL NI EL PARCHE 0489 (E-0403 y E-0405 descartadas); ES EL ESTADO GUARDADO EN EL TELÉFONO desde el último arranque bueno (el de la descarga y el intento de guardar el MP3: Safari, SaveToFiles y DocumentManager abortando); EVIDENCIA: los dos arranques fallidos analizados (log-n32, log-n33): SpringBoard (pid 27) a 11 MB y 0 % de CPU, 'exec PosterBoard' 0 veces (1 en cada arranque bueno), sin ninguna línea 'SWEET AKS: SpringBoard' ni 'SWEET SURF: SpringBoard create'; en el arranque bueno, tras 'SpringBoard sel 40' salen PosterBoard, las extensiones de pósters (GradientPoster, Collections, Weather...), assetsd, networkserviceproxy; en el atascado solo salen watchdogd, intelligenceplatformd, localizationswitcherd y extensionkitservice, y luego 51 'EXIT launchd[n] xstat 0x1' seguidos (uno por trabajo desactivado; en los arranques buenos hay 143-147 de estos); ficheros modificados al final del último arranque bueno (11-22 11:19 a 11:21 UTC, lectura del catálogo HFS+ de /private/var/mobile con las fechas de contenido): SpringBoard/RecentAppLayouts.pb.lzfse, Preferences/com.apple.springboard.plist (2664 bytes), FrontBoard/applicationState.db y -wal, Safari/History.db, SafariTabs.db-wal (3,7 MB), nfcd.plist, coreduetd.plist...; los arranques atascados NO escribieron nada más en /private/var/mobile (lo más reciente es de las 11:21:23); POR LO TANTO la actuación aprobada por el Director (pregunta con tres opciones: 'Solo SpringBoard (Recomendada)'): hero-run (autorun nuevo) con un solo uso (fichero reset.sb de la zona de drop; deja reset.sb.done): RENOMBRA (no borra) a NOMBRE.s7bak FrontBoard/applicationState.db, -wal y -shm, SpringBoard/RecentAppLayouts.pb.lzfse y Preferences/com.apple.springboard.plist, y mata SpringBoard una vez para que launchd lo vuelva a lanzar sin esos ficheros (se pierden las apps recientes del selector y ajustes menores de SpringBoard; no se toca Safari, ni las fotos, ni las apps); DROP 58 de 80 (sin BOOT nuevo: el BOOT actual es min130 = kernel bueno conocido); si SpringBoard arranca, queda demostrado que era el estado (y se pueden devolver los .s7bak uno a uno para ver cuál lo causa); si sigue atascado, el estado de SpringBoard no era la causa: habrá que probar con lo de Safari (segunda opción, sin aprobar) o con otras hipótesis; contadores D-0123: BOOT 23 de 80, DROP 58 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n33.txt"
+location = "scratch"
+created = "2026-11-22"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "37685df408cd6d3c84a1f4d3eeb53871c852279dc36aa0c7c241679d9c691866"
+size = 285741
+immutable = true
+note = "Registro persistente del arranque atascado (scratch)."
