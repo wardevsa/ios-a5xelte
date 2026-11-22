@@ -5895,3 +5895,18 @@ sha256 = "31cc54615522381420b1345e184ce4ad8eae13506b68d03cf583eb1bf6a53938"
 size = 1295903
 immutable = true
 note = "Registro del kernel con 34 muestras de memoria tras la tanda 1 (scratch)."
+
+[[evidence]]
+id = "E-0401"
+title = "min130: EL ERROR AL GUARDAR SIGUE, PERO CON OTRA CAUSA (el Director: 'Internal error, couldnt communicate with a helper application'): (1) min130 (0488) FUNCIONA para lo suyo: el registro del arranque no tiene NINGÚN cierre de mediaserverd (0; en min129 habia 3) y no hay NSNumber objectForKey: nuevo; no se midio si se reprodujo un audio en este arranque, asi que 'arreglado' queda como 'sin recurrencia'; (2) LA CAUSA DE ESTE ERROR: cierres en este arranque: 'SaveToFiles sig6' x2 y 'com.apple.DocumentManager.Service sig6' (y pkreporter sig9); registro unificado (db, dc): '*** Terminating app due to uncaught exception NSInternalInconsistencyException, reason: plugin has invalid sandbox or container: error 2 path ?' (4 veces), 'xpcservice<com.apple.DocumentManagerUICore.SaveToFiles([application<com.apple.mobilesafari>:366])>' lanzado y caido dos veces seguidas, y 'The connection does not exist' / 't communicate with a helper application' (el texto exacto de NSXPCConnectionInvalid que Safari muestra); es decir: Safari (guardar archivo) pide la extension 'Guardar en Archivos' (DocumentManagerUICore.SaveToFiles) y el servicio DocumentManager, y los dos ABORTAN al arrancar; (3) EL CÓDIGO DE PlugInKit (desensamblado, caché local de iOS 16, la función que contiene el marco +0x18d5c): llama a sandbox_container_path_for_pid(getpid(), buf, 0x400) (el buffer empieza con el carácter '?'), si devuelve distinto de cero lanza la excepción con el errno y el buffer (por eso 'error 2 path ?': ENOENT y el buffer sin tocar), y si devuelve 0 comprueba strlen(buf) > 1; CAUSA: el 'Sandbox' de este teléfono (bsd/kern/sweet_amfi.c) contesta ENOENT a la operación 4 (ruta del contenedor) para todos; E-0338 lo había visto con PhotosFileProvider ('error 2'); AHORA es el mismo fallo para TODA extension de app; (4) ARREGLO, parche 0489 (xnu/patches/0489-herolte-extension-container-path.patch, hecho a partir de nuestro 0481): para el propio pid, usuario no root y un ejecutable dentro de un .appex, la operación 4 contesta 0 y escribe '/private/var/mobile' (existe, es escribible y cumple strlen > 1); todo lo demás sigue contestando ENOENT; se escribe un aviso 'SWEET Sandbox: NOMBRE (an extension) given the container path ...' (8 como máximo); aplica limpio sobre la serie (simulación local), CI de kernel 45017282065 en marcha; RIESGO: una extensión que use ese camino como su contenedor escribirá en el $HOME de mobile en vez de en un contenedor propio: no hay sandbox que lo impida y los daemons que gestionan contenedores no se ven afectados; PENDIENTE: CI, imagen min131 (BOOT 21 de 80) y prueba de guardar el archivo otra vez; contadores D-0123: BOOT 20 de 80, DROP 57 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n31.txt"
+location = "scratch"
+created = "2026-11-22"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "9d3f361f564854e4987f686c5ede10a0a0ed5a04bca313616cdec10c397b38a2"
+size = 473913
+immutable = true
+note = "Registro del kernel de min130 con los cierres de SaveToFiles y DocumentManager (scratch)."
