@@ -28,6 +28,36 @@ malthiscode/ios-b1lte (Galaxy S10, Exynos 9820, Mali-G76 Bifrost), which boots t
 4. **P3, GPU.** First GLES through our bridge (gpu/hakios-gl, as b1lte's `b2l_gl=1` fallback), then Metal for the window
    server: the M1-M4 work of docs/herolte-metal.md carries over (AIR frontend, the device, HeroMetal.bundle, drawables).
 
+## P0 results (2026-11-22)
+
+**Kernel.** iOS 26.5's XNU is `xnu-12377.121.6` (apple-oss-distributions/xnu; b1lte pins the same commit,
+ac9718f). darwin-xnu-build takes it with `MACOS_VERSION=26.5`: it clones that tag and fetches the KDK
+"26.5 build 25F71" from the dortania manifest on its own. Xcode: the `macos-26` arm64 runner has 26.0.1-26.6
+(26.6 the default); `macos-15(-intel)`, which builds xnu-11215 today, stops at 16.2. b1lte builds with Xcode 27.1
+on a Mac and `SDKVERSION=26.5 RC_DARWIN_KERNEL_VERSION=25.5.0 BTI_BUILD=0 PLATFORM=iPhoneOS`.
+
+**IPSW: iPhone 11 (iPhone12,1), 23G90 (iOS 26.6.2), 9.1 GB.** 23G90 exists for every iOS 26 iPhone (16 Pro
+Max 10.6 GB, SE 2020 9.1 GB). `ipsw extract --dyld --remote` pulls only the cache (5.9 GB each, no full IPSW).
+`tools/dsc-tramp-space.py` over both caches (numbers only):
+
+| | iOS 18.7.8 (22H352, XR) | iOS 26 iPhone 11 (A13) | iOS 26 16 Pro Max (A18) |
+| --- | --- | --- | --- |
+| images | | 4305 | 4317 |
+| LSE sites | 463,816 | 828,714 | 829,081 |
+| LDAPR | 93,670 | 133,388 | 134,175 |
+| FP16 | 22,574 | 25,530 | 25,534 |
+| FCMA | 2,455 | **25,274** | 25,278 |
+| SHA3/SHA512, FJCVTZS, dotprod | 848, 474, - | 1,192, 535, 993 | the same |
+| free padding between images | 7.8 MiB | 8.7 MiB | 8.7 MiB |
+| routines that fit there (64 B) | 117,762 | 138,313 | 138,834 |
+
+The two iOS 26 caches are the same code (one arm64e baseline for every device; within 0.05 %), so a newer model
+(14 Pro, 16 Pro Max) gains nothing; the iPhone 11 is the smaller IPSW and the XR's successor (same screen class
+as the iOS 18 tuning). Against iOS 18: 1.8x the atomics, and FCMA (FCMLA/FCADD) is new at scale -- 10x, it needs
+FP routines like `fp16.py` or v80emu. Most sites are again in WebCore, WebKit, Recon3D, AppleCV3D, JavaScriptCore
+and libusd; the padding only holds a sixth, so `v80strip_cache.py`'s priority order (runtime and UI first, the
+`__text` of WebGPU as space, the rest to v80emu) carries over.
+
 ## Kept
 
 The iOS 18 root image and BOOT images stay on the PC (`priv/`), so the phone can go back to iOS 18 at any time.
