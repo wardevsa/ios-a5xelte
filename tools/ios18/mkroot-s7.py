@@ -118,7 +118,12 @@ def stage_cache(a, root):
     files = sorted((os.path.join(d, n) for n in os.listdir(d)
                     if n.startswith('dyld_shared_cache_arm64e') and not n.endswith(('.symbols', '.atlas', '.map'))),
                    key=lambda p: (len(p), p))
-    mk.run([sys.executable, '-I', os.path.join(HERE, 'v80strip_cache.py')] + files)
+    # iOS 26 (xnu-12377 with 9201): routines that find no room near the first sub-cache go to an island just below the
+    # cache, mapped by the kernel from ISLAND_PATH (2 MiB: dyld's slide must be at least that, else it is not mapped)
+    island = []
+    if os.environ.get('RENEGADE_TARGET', 'ios18') == 'ios26':
+        island = ['--island', str(2 << 20), os.path.join(root, 'System/Library/Caches/com.apple.herolte/routines.bin')]
+    mk.run([sys.executable, '-I', os.path.join(HERE, 'v80strip_cache.py')] + island + files)
     mk.run([sys.executable, '-I', os.path.join(RTOOLS, 'fips_rehmac.py'), d, '--patch'])
 
 

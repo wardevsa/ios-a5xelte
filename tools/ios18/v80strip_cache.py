@@ -272,6 +272,9 @@ def main():
     ap.add_argument('files', nargs='+')
     ap.add_argument('--scan', action='store_true', help='plan and count only, write nothing')
     ap.add_argument('--no-resign', action='store_true')
+    ap.add_argument('--island', nargs=2, metavar=('SIZE', 'FILE'),
+                    help='also place routines in SIZE bytes just below the cache (the herolte kernel maps FILE there, '
+                         'xnu 9201): room within branch range of libobjc, QuartzCore, CoreGraphics and CoreText')
     a = ap.parse_args()
     cache = Cache([f for f in a.files if not f.endswith(('.symbols', '.atlas', '.map'))], not a.scan)
     info = []
@@ -281,6 +284,18 @@ def main():
         if path.rsplit('/', 1)[-1] in SACRIFICE and not sacrifice_ok(cache, addr):
             sys.exit(f'v80strip_cache: {path} has initializers or +load classes, it cannot be given up as room')
     pads = find_pads(cache, info)
+    # The routine island (xnu 9201): the shared region between its base and the cache's first mapping is empty (dyld's
+    # slide); the kernel maps the island file there, read+execute, ISLAND bytes below the first mapping. The first
+    # sub-cache holds the hottest code and its padding is used up first (23G90: CoreGraphics' FP16 words, 7000 tier-0
+    # atomics of libobjc, QuartzCore, CoreText left).
+    island = None
+    if a.island:
+        isize = int(a.island[0], 0)
+        assert isize > 0 and isize % 16384 == 0, 'island size: a multiple of 16 KiB'
+        ibase = min(m[0] for m in cache.maps)
+        island = (ibase - isize, ibase, bytearray(isize))
+        pads.insert(0, [ibase - isize, ibase])
+        print(f'  island {ibase - isize:#x}..{ibase:#x} ({isize >> 10} KiB) -> {a.island[1]}')
     print(f'{len(cache.bufs)} files, {len(cache.images)} images, {len(pads)} pads, '
           f'{sum(e - s for s, e in pads) >> 10} KiB of room')
 
@@ -395,12 +410,17 @@ def main():
         per_tier[label + ' placed'] += 1
         counts[f'routine {why}'] += 1
         counts['routine bytes'] += need
+        if island and island[0] <= dst < island[1]:
+            per_tier[label + ' island'] += 1
         if not a.scan:
             ws = cache.where(at, 4)
-            wd = cache.where(dst, need)
-            struct.pack_into(f'<{len(words)}I', cache.bufs[wd[0]], wd[1], *words)
+            if island and island[0] <= dst < island[1]:
+                struct.pack_into(f'<{len(words)}I', island[2], dst - island[0], *words)
+            else:
+                wd = cache.where(dst, need)
+                struct.pack_into(f'<{len(words)}I', cache.bufs[wd[0]], wd[1], *words)
+                changed.setdefault(wd[0], set()).update(range(wd[1] >> 12, (wd[1] + need - 1 >> 12) + 1))
             struct.pack_into('<I', cache.bufs[ws[0]], ws[1], v.b(at, dst))
-            changed.setdefault(wd[0], set()).update(range(wd[1] >> 12, (wd[1] + need - 1 >> 12) + 1))
             changed.setdefault(ws[0], set()).add(ws[1] >> 12)
     print('placement:', dict(sorted(per_tier.items())))
     print('counts:', dict(sorted(counts.items())))
@@ -412,8 +432,12 @@ def main():
     if not a.scan:
         bad = 0
         for at, dst, words in placed:
-            wd, ws = cache.where(dst, 4 * len(words)), cache.where(at, 4)
-            got = list(struct.unpack_from(f'<{len(words)}I', cache.bufs[wd[0]], wd[1]))
+            ws = cache.where(at, 4)
+            if island and island[0] <= dst < island[1]:
+                got = list(struct.unpack_from(f'<{len(words)}I', island[2], dst - island[0]))
+            else:
+                wd = cache.where(dst, 4 * len(words))
+                got = list(struct.unpack_from(f'<{len(words)}I', cache.bufs[wd[0]], wd[1]))
             branch = struct.unpack_from('<I', cache.bufs[ws[0]], ws[1])[0]
             if got != list(words) or branch != v.b(at, dst):
                 bad += 1
@@ -424,6 +448,12 @@ def main():
         print(f'verified: {len(placed)} routines intact, each site branches to its own')
     if left_hot:
         print('tier 0 sites left to the kernel:', dict(left_hot.most_common(30)))
+    if island and not a.scan:
+        used = max((dst + 4 * len(w) for at, dst, w in placed if island[0] <= dst < island[1]), default=island[0])
+        os.makedirs(os.path.dirname(os.path.abspath(a.island[1])), exist_ok=True)
+        with open(a.island[1], 'wb') as f:
+            f.write(island[2])
+        print(f'  island: {used - island[0]} of {island[1] - island[0]} bytes used, written to {a.island[1]}')
     if not a.scan:
         for p, pages in sorted(changed.items()):
             n = 0 if a.no_resign else fix_signature(cache.bufs[p], pages)
