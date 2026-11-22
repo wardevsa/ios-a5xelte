@@ -6024,3 +6024,18 @@ sha256 = "7dd0ec2059028fb3396059a00f7f8988616f363cecc181e9c5735a1142879aa6"
 size = 512313
 immutable = true
 note = "Registro del arranque con min132 y el MP3 (scratch)."
+
+[[evidence]]
+id = "E-0410"
+title = "INVESTIGACIÓN DE ARCHIVOS (el Director: 'I cant save the file... can you research all of this, im going to lunch'): (1) SEGUNDO ARRANQUE (log-n37, 60 s de vida): con 'hero-run: 44 jobs in launchd's disabled list' SpringBoard LLEGA a la pantalla de inicio: 'exec PosterBoard' 1, SpringBoard 80 MB, MobileSafari 27 MB, com.apple.Docume 17 MB, 0 cierres, 'exec lskdd' 0: los 11 trabajos de la bisección (lskdd, 4 UARPUpdater, accessoryupdaterd, cloudpaird, MobileInternetSharing, OTACrashCopier, OTATaskingAgent, safetyalertsd) son SEGUROS y se quedan; los siete de Apple Watch, CarPlay y FaceTime quedan descartados (sospechosos, sin demostrar uno a uno); (2) EL PROVEEDOR LOCAL DE ARCHIVOS: la extensión que falta es /System/Library/Frameworks/FileProvider.framework/PlugIns/LocalStorageFileProvider.appex (ejecutable 'LocalStorageFileProvider', id com.apple.FileProvider.LocalStorage, NSExtensionFileProviderDocumentGroup group.com.apple.FileProvider.LocalStorage, EnabledByDefault true): NUNCA se ejecuta ('exec' del registro: bird, SaveToFiles, Spotlight, searchpartyd, com.apple.Docume...; ninguno LocalStorageFileProvider); la ruta del contenedor de grupo y el de la extensión SÍ existen en disco (Containers/Shared/AppGroup/3872A83B... con identificador group.com.apple.FileProvider.LocalStorage; Containers/Data/PluginKitPlugin/FCC2AA60... com.apple.FileProvider.LocalStorage; leídos de los .com.apple.mobile_container_manager.metadata.plist: 518 contenedores de extensión y 45 de grupo en el teléfono); (3) lo que dice fileproviderd (cadenas de FileProviderDaemon en la caché local): '[ERROR] Extension %@ doesnt have a group container for document group %{public}@ specified via %{public}@. Ignoring the extension.', '[DEBUG] ignoring call for LocalStorage', '[ERROR] extension record %@ has more than one persona associated', '[ERROR] Exiting fileproviderd because personas seem to have changed since it started'; en el registro unificado NO aparecen los argumentos públicos de esos errores (ni 'application-groups', ni 'DocumentGroup', ni 'group container'), pero el registro unificado persiste solo los niveles altos; lo que SÍ aparece: 'NSFileProviderInternalErrorDomain Code=0 No valid file provider found from URL ...Safari/Downloads/.../*.mp3', 'failed lookup ... com.apple.spotlight.SearchAgent ... error = 3', 'CSSearchQueryErrorDomain -2001' y 'Persona List failed with error NSPOSIXErrorDomain Code=2'; (4) Spotlight: searchd desactivado a propósito explica las ETIQUETAS ('Content Unavailable' al elegir una); (5) NO CONCLUYENTE: la causa de que LocalStorage no arranque (¿grupo de contenedor ausente en LaunchServices, personas, o otro?); SONDA (DROP 61 de 80, sin BOOT): el censo de hero-run (autorun CI 45030253200, en census.out y el registro del kernel) imprime para LocalStorage, SaveToFiles y DocumentManager.Service el registro de LaunchServices: entitlements, application-groups, groupContainerURLs y dataContainerURL; documento: docs/herolte-files-research.md; el MP3 se puede oír mientras tanto desde las descargas de Safari (QuickLook); contadores D-0123: BOOT 24 de 80, DROP 61 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n37.txt"
+location = "scratch"
+created = "2026-11-22"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "b25728e4ad1b1629edf4655c809a62aee6e9f70f8ea3c85f46aad5c25715d303"
+size = 362799
+immutable = true
+note = "Registro del arranque con la lista de 44 trabajos (scratch)."

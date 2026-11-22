@@ -326,3 +326,12 @@ Cuatro arranques atascados (`min131`, `min132`, `min130` x2) con SpringBoard par
 (`hero-run` renombró los cinco ficheros y reinició SpringBoard: igual). **Con la lista de 25 trabajos desactivados (33 con los fijos) SpringBoard llega a la pantalla de inicio.**
 **Causa probable (no del todo demostrada):** la tanda 1 (18 trabajos nuevos de E-0398). Que `min129` y `min130` arrancaran bien se explica porque la lista surte efecto **un arranque después** de escribirse.
 **Bisección en curso:** 11 de los 18 (sin Watch, CarPlay, FaceTime) en el DROP 60; `min132` (BOOT 24 de 80) para probar a la vez 0489 v2. Pregunta abierta: ¿cuál de los 18 espera SpringBoard? Aviso de una limitación ya conocida: arrancar iOS sin pasar por TWRP deja **el táctil sin alimentación** (`no supply`).
+
+### V.16 Archivos: qué falta y qué se sabe (E-0409, E-0410; informe `docs/herolte-files-research.md`)
+
+**Resuelto y confirmado en el teléfono:** `mediaserverd` ya no cae con vídeo (0488), las extensiones de app ya no abortan al arrancar (0489 v2, «given the container path» en el registro y 0 cierres), el atasco de
+arranque queda explicado por la tanda 1 de trabajos desactivados y la lista corta (25 + 11) llega a la pantalla de inicio con `lskdd` a 0 arranques.
+**Queda:** Archivos muestra «Content Unavailable». Dos causas distintas: las **etiquetas** dependen de Spotlight (desactivado), y **«En mi iPhone»** no existe porque el proveedor
+`LocalStorageFileProvider.appex` **nunca se ejecuta**. `fileproviderd` tiene un error para «extensión sin contenedor de grupo» que ignora la extensión; los contenedores existen en disco, pero no se sabe si LaunchServices los ve.
+**Sonda (DROP 61):** el censo de `hero-run` imprime los registros de LaunchServices (entitlements, `application-groups`, `groupContainerURLs`, `dataContainerURL`) de la extensión y de dos que sí arrancan.
+Siguiente: un arranque y leer esas líneas `groups ...`.
