@@ -5853,3 +5853,15 @@ sha256 = "7640a908aa947f2086b08950d40f0eb86d982763ff2d036022e02224dbfa33db"
 size = 1349746
 immutable = true
 note = "Registro del kernel con 26 muestras de memoria por proceso (scratch)."
+
+[[evidence]]
+id = "E-0398"
+title = "TANDA 1 DE DEMONIOS DESACTIVADOS (el Director dijo 'como quieras' a la propuesta de E-0397; DROP 57 de 80, sin BOOT): HALLAZGO EN EL REGISTRO DE min129: com.apple.lskdd se lanzó 484 veces en unos 13 minutos (una cada ~1,6 s; 'XPC[n] com.apple.lskdd', 'exec lskdd' y 'EXIT lskdd[n] xstat 0xff595c00' cada vez): un ciclo de arranque y caída de launchd que gasta CPU y mueve memoria; LA LISTA: disabled.list del teléfono (25 trabajos, ya existente, leída del teléfono) MÁS 18 nuevos: lskdd, nanoregistryd, nanoregistrylaunchd, nanoprefsyncd.2, nanotimekitcompaniond (Apple Watch), carkitd (CarPlay), avconferenced y FaceTime.FTConversationService (FaceTime), UARPUpdaterServiceAFU, ServiceHID, ServiceLegacyAudio, ServiceUSBPD y accessoryupdaterd (actualizadores de accesorios), cloudpaird, MobileInternetSharing, OTACrashCopier, OTATaskingAgent, safetyalertsd; copia en tools/herolte-disabled-drop.list (la 'tools/herolte-disabled.list' original es la del root de iOS 18, no se toca); hero-run la aplica al ARRANCAR (disable_refused_jobs escribe disabled.plist de launchd con los 8 trabajos fijos y los de disabled.list: 33 antes, 51 ahora); EFECTO ESPERADO (hipótesis): menos procesos y huellas; LÍNEA BASE de este arranque: 214 a 238 procesos, huellas 1048 a 1830 MB, libre mínima 50 MB, 484 arranques de lskdd; CRITERIO: tras el arranque, 0 arranques de lskdd, menos procesos que la línea base en las mismas marcas de tiempo y el teléfono llega a la pantalla de inicio (si no, quitar la tanda: dejar disabled.list con solo las 25 líneas de antes, desde TWRP; lo de 'SpringBoard esperando con 41 a la vez' ya ocurrió antes); LÍMITE: los muestreos de memoria dependen de lo que se haga con el teléfono, así que la comparación es por procesos residentes, no solo por MB libres; contadores D-0123: BOOT 19 de 80, DROP 57 de 80"
+kind = "document"
+path = "tools/herolte-disabled-drop.list"
+location = "git"
+created = "2026-11-22"
+domain = "device"
+level = "L1"
+device = "this-unit"
+note = "Lista que se dejó en la zona de drop; el efecto llega con la prueba."
