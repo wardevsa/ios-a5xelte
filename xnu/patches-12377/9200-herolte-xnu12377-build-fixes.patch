@@ -19,10 +19,20 @@ index 1d1656b..ac943ea 100644
  	if (touch_log && wire_dumps < 4) {
  		OSData *wire = collection->createBytes();
 diff --git a/makedefs/MakeInc.def b/makedefs/MakeInc.def
-index 8d6f344..901e979 100644
+index 8d6f344..7a69f7f 100644
 --- a/makedefs/MakeInc.def
 +++ b/makedefs/MakeInc.def
-@@ -1167,7 +1167,8 @@ LD_KERNEL_ARCHIVES = $(LDFLAGS_KERNEL_SDK) -lfirehose_kernel
+@@ -458,6 +458,9 @@ endif
+ # board inside the existing compact kernel VA layout instead.
+ ifneq ($(filter $(CURRENT_MACHINE_CONFIG),A5XELTE HEROLTE),)
+ LARGE_MEMORY_DEFINE=-UARM_LARGE_MEMORY
++# xnu-12377 turns ARM_LARGE_MEMORY on through ARM64_LARGE_MEMORY (LARGE_MEMORY_DEFINE is no longer read): with it the
++# compact link address above lies past VM_MAX_KERNEL_ADDRESS, "Unsupported memory configuration" (boot 26k1).
++ARM64_LARGE_MEMORY = 0
+ ARM64_PLKSEG_ADDR  =0xfffffff004004000
+ ARM64_LINK_ADDR    =0xfffffff007004000
+ endif
+@@ -1167,7 +1170,8 @@ LD_KERNEL_ARCHIVES = $(LDFLAGS_KERNEL_SDK) -lfirehose_kernel
  
  # Link binary support library (the KDK's closed lib<SoC>.os.<config>.a). SWEET builds those objects from the
  # open-source asm/pmap instead (nos_arm_asm, nos_arm_pmap; MASTER.arm64.sweet) and the KDK has no libSWEET.
@@ -32,7 +42,7 @@ index 8d6f344..901e979 100644
          LDFLAGS_KERNEL_ONLY += -rdynamic -Wl,-force_load,$(KDKROOT)/System/Library/KernelSupport/lib$(CURRENT_MACHINE_CONFIG).os.$(CURRENT_KERNEL_CONFIG).a
  endif
  
-@@ -1207,7 +1208,7 @@ endif # !EXCLAVES_ENABLED
+@@ -1207,7 +1211,7 @@ endif # !EXCLAVES_ENABLED
  
  
  # SWEET: the KDK's libTightbeam.a is x86_64/arm64e only and SWEET has no exclaves; never link or export it.
