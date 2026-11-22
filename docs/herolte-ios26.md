@@ -58,6 +58,20 @@ FP routines like `fp16.py` or v80emu. Most sites are again in WebCore, WebKit, R
 and libusd; the padding only holds a sixth, so `v80strip_cache.py`'s priority order (runtime and UI first, the
 `__text` of WebGPU as space, the rest to v80emu) carries over.
 
+## P1 progress (2026-11-22)
+
+Branch `herolte-ios26` (worktree `C:\Users\amanc\herolte\ios26`, commit `2b7366f`), `xnu/patches-12377`:
+Bergamota's own xnu-12377 series (271 patches; it boots iOS 26.6.2 as iPhone12,1 on its phone) as the base, our 197
+patches carried over by 3-way merge from the 11215 tree as CI builds it (179 clean, 17 by hand, 9150 obsolete), and
+9199 widening Bergamota's 12377-only fixes to A5XELTE/HEROLTE. Details: `xnu/patches-12377/README.md` there. Bench in
+WSL `/root/ios26/k` (`merge/` repo: tags old-base/old-top, new-base/new-top).
+Not built yet: the push started no run, and a manual dispatch got "Actions has been disabled for this repository"
+(the repository's own setting still says enabled).
+
+Still to do for a boot, from Bergamota's first iOS 26 boots: the ADT needs a 256-byte `/chosen/random-seed` and
+`kernel-ctrr-to-be-enabled` = 1 (our `tools/mkpayload.py` ADT), and the root's `TEXT_STUBS` sub-caches have `BRAA x16, x17`
+stubs to rewrite (Bergamota's `pacstrip_cache.py --stubs`; our v80emu would trap each one).
+
 ## Kept
 
 The iOS 18 root image and BOOT images stay on the PC (`priv/`), so the phone can go back to iOS 18 at any time.
