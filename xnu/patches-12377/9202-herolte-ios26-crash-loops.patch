@@ -1,0 +1,37 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+index d470f51..2f747d5 100644
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -101,7 +101,9 @@ herolte_noexec(const char *path)
+ 	 * plug-in set-up) and are started again all session: 54 crashes in boot-0323, each a process launch.
+ 	 */
+ 	if (strcmp(base, "SiriTTSSynthesizerAU") == 0 || strcmp(base, "KonaSynthesizer") == 0 ||
+-	    strcmp(base, "MacinTalkAUSP") == 0) {
++	    strcmp(base, "MacinTalkAUSP") == 0 ||
++	    /* iOS 26's: 250 SIGABRTs each in boot 26k5 */
++	    strcmp(base, "SiriAUSP") == 0 || strcmp(base, "MauiAUSP") == 0) {
+ 		return true;
+ 	}
+ 	if (hgl_noexec[0] == '\0') {
+diff --git a/bsd/kern/kern_memorystatus.c b/bsd/kern/kern_memorystatus.c
+index 6f8a417..7fc2c6f 100644
+--- a/bsd/kern/kern_memorystatus.c
++++ b/bsd/kern/kern_memorystatus.c
+@@ -5130,6 +5130,17 @@ memorystatus_on_ledger_footprint_exceeded(boolean_t warning, boolean_t memlimit_
+ 
+ 	proc_t p = current_proc();
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/*
++	 * HEROLTE (9202): per-process limits never kill. Without TPRO every process gets private copies of the dyld cache
++	 * pages dyld writes (the writable shared region, Bergamota 1004; "triggered unnest of ... DYLD shared region" for
++	 * each one), counted in its footprint: daemons sized for an iPhone crossed their 6-16 MB limits and were killed and
++	 * relaunched over and over (boot 26k5: deviceaccessd 22x, donotdisturbd, softposreaderd, liveactivitiesd, lsd).
++	 * As a soft limit the offender is only a candidate for jetsam under real memory pressure.
++	 */
++	memlimit_is_fatal = FALSE;
++#endif
++
+ #if VM_PRESSURE_EVENTS
+ 	if (warning == TRUE) {
+ 		/*
