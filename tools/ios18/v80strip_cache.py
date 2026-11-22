@@ -39,7 +39,10 @@ HASH_NAMES = {1: 'sha1', 2: 'sha256', 3: 'sha256', 4: 'sha384'}
 TIER0 = ('libobjc.A.dylib', 'libswiftCore.dylib', 'libsystem_platform.dylib', 'libsystem_pthread.dylib',
          'libsystem_malloc.dylib', 'libdispatch.dylib', 'libsystem_kernel.dylib', 'libc++.1.dylib', 'libc++abi.dylib',
          'CoreFoundation', 'Foundation', 'FoundationEssentials', 'libswift_Concurrency.dylib', 'libxpc.dylib',
-         'libsystem_trace.dylib', 'QuartzCore', 'UIKitCore', 'CoreGraphics', 'libsystem_c.dylib',
+         'libsystem_trace.dylib', 'QuartzCore', 'UIKitCore', 'CoreGraphics',
+         # iOS 26: SwiftUI draws through RenderBox; one of its FP16 words without a routine (tier 2 until then) was
+         # SpringBoard's and iconservicesagent's SIGILL (23G90, boot 26k3)
+         'RenderBox', 'libsystem_c.dylib',
          'libsystem_info.dylib', 'libsystem_notify.dylib', 'libsystem_blocks.dylib', 'libsystem_darwin.dylib',
          'libsystem_containermanager.dylib', 'libsystem_coreservices.dylib', 'libsystem_m.dylib',
          'libdispatch.dylib', 'libxpc.dylib', 'libc++.1.dylib', 'libc++abi.dylib', 'libdyld.dylib', 'dyld',
