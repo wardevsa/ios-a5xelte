@@ -5949,3 +5949,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Parche 0489 v2; la prueba en el teléfono viene después."
+
+[[evidence]]
+id = "E-0405"
+title = "min132 (0489 v2, sin ninguna búsqueda de rutas) SE QUEDA EN EL LOGO IGUAL que min131 (el Director: 'same thing'): registro (log-n33, 840 s de vida): SpringBoard 11 MB y 0 'SWEET AKS: SpringBoard', 0 'SWEET SURF: SpringBoard create', el resto del sistema vivo (1303 MB libres); NINGUNA línea 'given the container path': el camino de éxito de 0489 v2 tampoco se ejecutó; secuencia del Sandbox idéntica a la de min131: ...tccd op 22, tccd op 1, tccd op 5; CONSECUENCIA: la hipótesis de E-0403 (la búsqueda de la ruta del ejecutable de v1 bloquea a SpringBoard) queda REFUTADA: v2 no hace ninguna búsqueda y se queda igual; tampoco el camino de éxito tiene nada que ver (no corre); lo que min131 y min132 comparten con la diferencia respecto a min130 es: (a) el parche 0489 en cualquiera de sus formas, aunque solo su código previo corra (un copyin del argumento y de 2 bytes del buffer, y un kauth_getuid, para todo el que llame a la operación 4 con su propio pid) y (b) EL ESTADO DEL TELÉFONO: min130 arrancó bien con ese estado, pero el Director usó ese arranque (Safari, descarga y guardado del MP3, que dejó a SaveToFiles y a DocumentManager abortando: datos de Archivos/Safari en /private/var/mobile) y los dos arranques fallidos vinieron DESPUÉS; no se ha repetido min130 con el estado actual; EXPERIMENTO A/B: se vuelve a escribir min130 (BOOT 23 de 80, hash b7564646..., idéntico a la imagen que arrancó bien): si min130 TAMBIÉN se queda en el logo, la causa es el ESTADO guardado (no el kernel) y se busca en /private/var/mobile (Safari, Archivos, extensiones); si arranca, el culpable es 0489 (aunque su camino de éxito no corra) y se revisa su código previo; contadores D-0123: BOOT 23 de 80, DROP 57 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n33.txt"
+location = "scratch"
+created = "2026-11-22"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "37685df408cd6d3c84a1f4d3eeb53871c852279dc36aa0c7c241679d9c691866"
+size = 285741
+immutable = true
+note = "Registro persistente del segundo arranque atascado, min132 (scratch)."
