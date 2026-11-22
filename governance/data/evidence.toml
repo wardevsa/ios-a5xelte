@@ -5922,3 +5922,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Parche 0489; la prueba en el teléfono viene después."
+
+[[evidence]]
+id = "E-0403"
+title = "INCIDENTE: min131 (0489 v1) SE QUEDA EN EL LOGO DE APPLE (el Director: 'stuck in apple logo'; adb ve el teléfono en recovery, TWRP funciona; sin pérdida de datos): registro persistente del arranque (log-n32, 660 s de vida): el kernel y el resto del sistema VIVEN (táctil: moves=17839, backboardd 35 %, wifid, trustd, 139 procesos, memoria libre 1418-2152 MB) pero SpringBoard (pid 27) se quedó a 11 MB de huella y 0 % de CPU durante los 11 minutos: nunca llegó a 'SWEET AKS: SpringBoard sel 32', ni a crear superficies ('SWEET SURF: SpringBoard create ...'), ni a 'HEROGPU: SpringBoard sel 5', líneas que SÍ salen en el arranque de min130 con la misma lista de 51 demonios y las mismas líneas de hero-run (mismo complemento de Metal instalado, misma secuencia de census); la única diferencia de kernel entre min130 y min131 es el parche 0489 v1; en el registro NO hay ninguna línea 'SWEET Sandbox: ... given the container path': el camino de éxito de 0489 no se ejecutó nunca en este arranque, es decir, el único código nuevo que corrió fue el del camino previo de todas las llamadas a la operación 4: v1 pedía proc_getexecutablevnode(p) + vn_getpath(...) + vnode_put para CADA llamada a la operación 4 del Sandbox de un usuario no root con su propio pid; SpringBoard (usuario mobile) hace esa llamada al arrancar; HIPÓTESIS (NO demostrada): ese camino bloquea o tarda para siempre en SpringBoard (por ejemplo, vn_getpath sobre el vnode ejecutable en esa fase del arranque); la alternativa, una variación de temporización del arranque sin relación, no se puede descartar con un solo arranque (SpringBoard se ha quedado parado antes por otras causas: E-0344); DECISIÓN: no confirmo la hipótesis, pero v1 tiene un riesgo evitable, así que se sustituye por v2 que NO busca ninguna ruta: reconoce la llamada de PlugInKit por el contenido del buffer (PlugInKit lo limpia y pone un '?' en el primer byte, visto en su desensamblado) además de pid propio y usuario no root; v2 aplica limpio (simulación local), CI en marcha; PRUEBA: min132 = min130 + 0489 v2; si SpringBoard vuelve a quedarse parado con v2, la hipótesis queda descartada y se busca otra causa (volver a min130, repetir min131 para ver si el fallo es reproducible); contadores D-0123: BOOT 21 de 80, DROP 57 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n32.txt"
+location = "scratch"
+created = "2026-11-22"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "29fba04d18758bc49d5ad345bae55d4aad3eef22d85dd0d63a6a9035cfbdd7f6"
+size = 271842
+immutable = true
+note = "Registro persistente del arranque atascado de min131 (scratch)."
