@@ -27,3 +27,9 @@ Qué se intentó: guardar un MP3 descargado en Safari con «Guardar en Archivos�
 
 ## Cómo oír el MP3 mientras tanto
 Safari conserva la descarga en su carpeta (`Safari/Downloads/<id>/*.mp3`) y el botón de descargas de Safari abre una vista previa (QuickLook; el registro muestra su `QLPreviewControllerView`).
+
+## Resultado de la sonda (E-0412)
+LaunchServices **sí** conoce el grupo de contenedor de `LocalStorageFileProvider` (`group.com.apple.FileProvider.LocalStorage` = `Containers/Shared/AppGroup/3872A83B-...`) y su contenedor de datos
+(`PluginKitPlugin/FCC2AA60-...`), igual que el de las dos extensiones que sí arrancan. **Queda refutada** la hipótesis de que faltara el grupo. La causa de que `fileproviderd` no lance el proveedor local sigue
+sin encontrarse: candidatos sin descartar son las personas (`Persona List failed ... Code=2`), la creación del dominio por defecto y el lanzamiento por ExtensionKit. Seguir exigiría ver los argumentos privados del
+registro o insertar una biblioteca en `fileproviderd`. Mientras tanto, `S7GE Player` cubre oír la descarga.

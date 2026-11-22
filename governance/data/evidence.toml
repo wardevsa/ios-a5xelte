@@ -6051,3 +6051,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Código del reproductor; el resultado llega con la prueba."
+
+[[evidence]]
+id = "E-0412"
+title = "RESULTADO DE LA SONDA DE GRUPOS (census.out de la zona de drop, arranque de min132 con S7GE Player y la sonda corregida de E-0411): LaunchServices SÍ CONOCE los contenedores de grupo del proveedor local: com.apple.FileProvider.LocalStorage: registro ok (URL .../FileProvider.framework/PlugIns/LocalStorageFileProvider.appex/), groupContainerURLs { group.com.apple.FileProvider.LocalStorage = file:///private/var/mobile/Containers/Shared/AppGroup/3872A83B-8C80-48A6-9170-5E4DB22283E7/ }, dataContainerURL file:///private/var/mobile/Containers/Data/PluginKitPlugin/FCC2AA60-87E4-43AC-99FB-2641CD69B7C9/; SaveToFiles: group.com.apple.DocumentManager = AppGroup/B3A9339D-...; DocumentManager.Service: group.com.apple.DocumentManager y group.com.apple.FileProvider.LocalStorage (los dos); las tres con 'entitlements present (_LSDataBackedPropertyList)' (el diccionario de application-groups no se puede leer por subíndice: la clase no lo implementa, 'application-groups (nil)' es del acceso, no de los datos); CONSECUENCIA: LA HIPÓTESIS DE E-0410 ('a LocalStorage le falta su grupo de contenedor en LaunchServices') QUEDA REFUTADA: el grupo y el contenedor existen y están registrados, igual que en las dos extensiones que SÍ arrancan; el proveedor local sigue sin ejecutarse y la causa NO se ha encontrado; análisis estático de FileProviderDaemon (caché local de iOS 16, desensamblado con capstone, sin símbolos): el mensaje '[ERROR] Extension %@ doesnt have a group container...' se emite desde un camino de manejo de EXCEPCIÓN/error (un manejador que comprueba os_log_type_enabled(ERROR) y llama al registro), no desde una comprobación sencilla; '[DEBUG] ignoring call for LocalStorage' vive en unos métodos pequeños de FPDLocalStorageExtension que descartan llamadas, tampoco decide nada; QUEDA SIN EXPLICAR: por qué fileproviderd no lanza LocalStorage; candidatos que NO se pueden descartar: personas ('Persona List failed with error NSPOSIXErrorDomain Code=2'), un fallo al crear el dominio por defecto ('creating default domain', 'Cannot use the default domain for the FPFS'), o un error al lanzar la extensión por un camino de ExtensionKit; el error visible en Archivos es 'Error Domain=com.apple.DocumentManager Code=2' (descripción privada); hay además 'RunTimeThemeRefForBundleIdentifierAndName() couldnt find Assets.car in bundle DocumentManagerUICore.Service/SaveToFiles' (iconos del tema, cosmético); POR TANTO la línea de ARCHIVOS se deja aquí por ahora: para seguir haría falta ver los argumentos privados del registro o instrumentar fileproviderd desde dentro (insertar una biblioteca, como hace libheroapp con las apps); el reproductor S7GE Player cubre la necesidad inmediata (oír el MP3); contadores D-0123: BOOT 24 de 80, DROP 62 de 80"
+kind = "log"
+path = "/tmp/herolte-work/census.out"
+location = "scratch"
+created = "2026-11-22"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "16f4e51fee8a2a3313e741ddf3b530cf84662a6c6b88be8dd56b1d539d0ff1ae"
+size = 6674
+immutable = true
+note = "census.out de la zona de drop con la sonda de grupos (scratch)."
