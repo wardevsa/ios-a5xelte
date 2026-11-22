@@ -335,8 +335,16 @@ probe_group_containers(void)
       if (!record)
          continue;
       id ent = getter(record, "entitlements");
-      id groups = ent ? send_id(ent, "objectForKey:", nsstring("com.apple.security.application-groups"), NULL) : nil;
-      dprintf(census_fd, "groups %s: entitlements %s; application-groups %s\n", ids[i], ent ? "present" : "NONE", text_of(groups));
+      /* min133: -[_LSDataBackedPropertyList objectForKey:] does not exist (the first version of this probe died of it): the subscript form or nothing */
+      id groups = nil;
+      if (ent && ((BOOL (*)(id, SEL, SEL))objc_msgSend)(ent, sel_registerName("respondsToSelector:"), sel_registerName("objectForKeyedSubscript:")))
+         groups = send_id(ent, "objectForKeyedSubscript:", nsstring("com.apple.security.application-groups"), NULL);
+      dprintf(census_fd, "groups %s: entitlements %s (%s); application-groups %s\n", ids[i], ent ? "present" : "NONE", ent ? object_getClassName(ent) : "-", text_of(groups));
+      if (ent && groups == nil) {
+         char shown[500];
+         snprintf(shown, sizeof(shown), "%s", text_of(ent));
+         dprintf(census_fd, "groups %s: entitlements as text: %s\n", ids[i], shown);
+      }
       dprintf(census_fd, "groups %s: groupContainerURLs %s\n", ids[i], text_of(getter(record, "groupContainerURLs")));
       dprintf(census_fd, "groups %s: dataContainerURL %s\n", ids[i], text_of(getter(record, "dataContainerURL")));
       dprintf(census_fd, "groups %s: containerURL %s\n", ids[i], text_of(getter(record, "containerURL")));
