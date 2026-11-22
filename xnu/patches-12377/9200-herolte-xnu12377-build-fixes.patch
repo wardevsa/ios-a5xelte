@@ -1,0 +1,32 @@
+diff --git a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/SweetHID.cpp
+index 1d1656b..ac943ea 100644
+--- a/iokit/Kernel/arm/hid/SweetHID.cpp
++++ b/iokit/Kernel/arm/hid/SweetHID.cpp
+@@ -595,7 +595,14 @@ SweetHIDTouch::touch(int finger, bool down, int x, int y)
+ 		IOLog("SWEET HID: touch %d %s at %d,%d%s\n", finger, down ? "down" : "up", x, y,
+ 		    fEdge[finger] ? " edge" : "");
+ 	}
+-	/* The first few events as user space receives them, to compare with iOS's own IOHIDEventCreateData layout */
++	/* The first few events as user space receives them, to compare with iOS's own IOHIDEventCreateData layout
++	 * (Bergamota 1013; boot-arg sweethidlog=1; the down/up lines above stay unconditional, 0118) */
++	static int touch_log = -1;
++	if (touch_log < 0) {
++		int on = 0;
++		PE_parse_boot_argn("sweethidlog", &on, sizeof(on));
++		touch_log = on ? 1 : 0;
++	}
+ 	static int wire_dumps;
+ 	if (touch_log && wire_dumps < 4) {
+ 		OSData *wire = collection->createBytes();
+diff --git a/pexpert/pexpert/arm64/A5XELTE.h b/pexpert/pexpert/arm64/A5XELTE.h
+index d38f1b0..4838cf4 100644
+--- a/pexpert/pexpert/arm64/A5XELTE.h
++++ b/pexpert/pexpert/arm64/A5XELTE.h
+@@ -63,6 +63,7 @@
+ #define MPIDR_CORETYPE_MASK           ((1ULL << MPIDR_CORETYPE_WIDTH) - 1)
+ #define MPIDR_CORETYPE_ACC_E          (0ULL)
+ #define MPIDR_CORETYPE_ACC_P          (1ULL)
++#define MPIDR_CORETYPE_ACC_M          (4ULL)    /* xnu-12377: M_CORE in apple_arm64_cpu.h (as SWEET.h) */
+ 
+ #ifndef ASSEMBLER
+ #define PLATFORM_PANIC_LOG_DISABLED
