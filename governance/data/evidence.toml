@@ -5937,3 +5937,15 @@ sha256 = "29fba04d18758bc49d5ad345bae55d4aad3eef22d85dd0d63a6a9035cfbdd7f6"
 size = 271842
 immutable = true
 note = "Registro persistente del arranque atascado de min131 (scratch)."
+
+[[evidence]]
+id = "E-0404"
+title = "min132 ESCRITA (BOOT 22 de 80, dentro de D-0123 que caduca el 23/11) tras el incidente de min131 (E-0403): kernel de CI 45019429545 = serie + 0487 + 0488 + 0489 v2 (sin ninguna búsqueda de rutas: reconoce a PlugInKit por el buffer que empieza por '?' y por el pid propio y usuario no root); en el kernel está la cadena '(PlugInKit) given the container path' (la de v1, '(an extension) given', ya no); misma línea de arranque (603 caracteres), sha256 cd240e8766b013700d0593245f5d6c61bf1f88b3321ac24929b53f33e4ba1144, verificador 36 PASS 0 FAIL, escrita y leída de vuelta; EFS comparado antes y después de la operación: igual (hash absoluto 3a3f19b4...; sigue cambiando entre sesiones, quinta vez); VUELTA ATRÁS: min130 (0488, arranca bien según el Director y E-0401); PRUEBA: arrancar con paciencia (primer arranque puede tardar), comprobar que llega a la pantalla de inicio, y repetir el guardado del MP3; si SpringBoard se queda parado otra vez, la hipótesis de E-0403 queda descartada; contadores D-0123: BOOT 22 de 80, DROP 57 de 80"
+kind = "document"
+path = "xnu/patches/0489-herolte-extension-container-path.patch"
+location = "git"
+created = "2026-11-22"
+domain = "device"
+level = "L1"
+device = "this-unit"
+note = "Parche 0489 v2; la prueba en el teléfono viene después."

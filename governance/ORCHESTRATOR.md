@@ -310,3 +310,12 @@ ENOENT a la operación 4 a todos (E-0338 lo vio con PhotosFileProvider; ahora es
 
 **Arreglo (parche 0489, Nivel 3, dentro de D-0123):** para el propio pid, usuario no root y ejecutable dentro de un `.appex`, la operación 4 contesta 0 y `/private/var/mobile`; el resto, ENOENT como antes. CI verde, **`min131`** escrita (BOOT 21 de 80).
 Riesgo asumido: una extensión que use esa ruta como contenedor escribirá en el `$HOME` de mobile; no hay sandbox que lo impida. Pendiente: que Pioxi arranque y repita el guardado.
+
+### V.14 Incidente: min131 atascada en el logo (E-0403) y min132 (E-0404)
+
+`min131` (0489 v1) **se quedó en el logo**: el sistema entero vivía (táctil, `backboardd`, Wi-Fi, 139 procesos, 1,4-2,1 GB libres) pero **SpringBoard (pid 27) quedó a 11 MB y 0 % de CPU** durante los 11 min del registro,
+sin llegar a las llamadas que sí salen en `min130` (`SWEET AKS: SpringBoard sel 32`, creación de superficies, `HEROGPU: SpringBoard sel 5`). Las líneas de `hero-run` son idénticas a las de `min130`; la **única diferencia de kernel** es 0489 v1.
+**No hay ninguna línea «given the container path»**: el camino de éxito de 0489 no se ejecutó; el código nuevo que sí corrió fue el previo, que pedía `proc_getexecutablevnode` + `vn_getpath` en **cada** llamada de un usuario no root a la operación 4.
+**Hipótesis (no demostrada):** ese camino bloquea a SpringBoard (usuario mobile) al arrancar. No se descarta una carrera de arranque sin relación con un solo arranque.
+**Decisión:** v1 tenía un riesgo evitable; se sustituye por **v2 sin ninguna búsqueda de rutas**: PlugInKit se reconoce por el buffer (lo limpia y pone `?` en el primer byte, visto en su desensamblado), pid propio y no root.
+`min132` = `min130` + 0489 v2, BOOT 22 de 80, escrita. Si SpringBoard se para otra vez con v2, la hipótesis queda descartada. Vuelta atrás: `min130`. Dato: el hash absoluto de EFS ha cambiado en cinco escrituras seguidas (siempre idéntico antes y después de cada operación).
