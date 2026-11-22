@@ -41,8 +41,11 @@ $CC -O2 -g -Wall -I"$HG/src" -c "$HG/src/gl_hero.c" -o "$OBJ/hg_gl_hero.o"
 $CC -O2 -g -Wall -c "$HG/src/ca_hooks.c" -o "$OBJ/hg_ca_hooks.o"
 # iOS 18: the render server's GLES renderer (ca_server_hook.c, after Bergamota's); it does nothing on iOS 16's QuartzCore.
 $CC -O2 -g -Wall -c "$HG/src/ca_server_hook.c" -o "$OBJ/hg_ca_server_hook.o"
+# iOS 26 (23G90, iPhone12,1 cache): the same through QuartzCore's renderer()/new_metal_context (after ios-b1lte's);
+# each hook checks its QuartzCore's words and does nothing on the other one.
+$CC -O2 -g -Wall -c "$HG/src/ca_server_hook26.c" -o "$OBJ/hg_ca_server_hook26.o"
 # hero_log first: its constructor sends stderr to the kernel log before eagl.c and the hooks write to it.
-$CC -dynamiclib -o "$OUT/lib/libhakiosgl.dylib" "$OBJ"/{hero_log,hg_eagl,hg_gl_hero,hg_ca_hooks,hg_ca_server_hook,hero_backboardd,hero_prof}.o \
+$CC -dynamiclib -o "$OUT/lib/libhakiosgl.dylib" "$OBJ"/{hero_log,hg_eagl,hg_gl_hero,hg_ca_hooks,hg_ca_server_hook,hg_ca_server_hook26,hero_backboardd,hero_prof}.o \
   -install_name @rpath/libhakiosgl.dylib \
   -framework CoreFoundation -framework IOKit -framework IOSurface -lobjc \
   -L "$OUT/lib" -lOSMesa.8 -Wl,-rpath,/private/var/herolte/lib -Wl,-undefined,error

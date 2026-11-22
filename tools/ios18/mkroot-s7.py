@@ -124,6 +124,8 @@ def stage_cache(a, root):
     if os.environ.get('RENEGADE_TARGET', 'ios18') == 'ios26':
         island = ['--island', str(2 << 20), os.path.join(root, 'System/Library/Caches/com.apple.herolte/routines.bin')]
     mk.run([sys.executable, '-I', os.path.join(HERE, 'v80strip_cache.py')] + island + files)
+    if island:                                   # iOS 26: fixed-word patches (dsc_patch.py: push_surface)
+        mk.run([sys.executable, '-I', os.path.join(HERE, 'dsc_patch.py')] + files)
     mk.run([sys.executable, '-I', os.path.join(RTOOLS, 'fips_rehmac.py'), d, '--patch'])
 
 
