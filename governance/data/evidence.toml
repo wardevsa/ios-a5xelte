@@ -5838,3 +5838,18 @@ domain = "device"
 level = "L1"
 device = "this-unit"
 note = "Lectura del código; no hay medidas de consumo todavía."
+
+[[evidence]]
+id = "E-0397"
+title = "MEMORIA POR PROCESO EN min129 CON SAFARI (muestreador de E-0395, 26 muestras cada 30 s, unos 13 minutos; el Director usó el teléfono y Safari): LIBRE (MB) en el tiempo: 1604, 1231, 1161, 942, 576, 428, 229, 126, 86, 67, 132, 61, 50, 64, 94, 113, 147, 314, 301, 249, 232, 206, 195, 201, 203, 203; mínimo 50 MB; COMPRESOR (MB): 0 hasta que la libre baja de unos 130 MB y luego 2, 28, 26, 79, 109, 116, 122, 121 (estable en ~120): el compresor solo trabaja bajo presión; PROCESOS: de 214 a 238; HUELLAS TOTALES: de 1048 a 1830 MB (media por proceso 7-8 MB); LOS MAYORES (mapeados con las líneas XPC y SMP del mismo registro, porque proc_name devuelve vacío con mi puntero buscado con dlsym: el nombre no se imprimió, defecto mío): backboardd (pid 55) 215-260 MB (el mayor casi siempre); com.apple.WebKit.GPU (pid 389) 175-216 MB; SpringBoard (pid 27) 91-94 MB; com.apple.WebKit.WebContent (pids 390, 384, 499): 52-95 MB cada uno; MobileSafari (pid 383) 54-70 MB; AppStore (pid 374) 30-33 MB; com.apple.WebKit.Networking (pid 386) 17-25 MB; LECTURAS: (1) Safari y sus procesos suman unos 580 MB (GPU 215 + WebContent 70 + 60-95 + 55-66 + Safari 60 + Networking 24) y el hueco de 50 MB libres coincide con su pico (muestras 8 a 14): el trabajo de Safari es el que agota la memoria en este arranque; (2) los diez mayores suman unos 860 MB de 1777 MB: los otros ~900 MB están repartidos en unos 220 procesos pequeños (unos 4 MB cada uno): reducir el NÚMERO de procesos residentes (demonios y extensiones) es una palanca grande, más que adelgazar uno; (3) el proceso com.apple.WebKit.GPU gasta unos 215 MB a pesar de que 'herojit=0' y de ser una página sencilla: en iOS 16 Safari lo lanza para el dibujo de lienzo y los medios; apagar su uso (ajustes de WebKit) es una opción, SIN PROBAR; (4) sin pánico ni cuelgue con 50 MB libres: el sistema se sostiene con el compresor y matando algunas extensiones (CollectionsPoster en E-0394); NO MEDIDO: la memoria cableada del kernel (la suma de las huellas no la incluye), cuánto del pico es transitorio, ni qué pasa con dos pestañas; contadores D-0123: BOOT 19 de 80, DROP 56 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n29.txt"
+location = "scratch"
+created = "2026-11-22"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "7640a908aa947f2086b08950d40f0eb86d982763ff2d036022e02224dbfa33db"
+size = 1349746
+immutable = true
+note = "Registro del kernel con 26 muestras de memoria por proceso (scratch)."

@@ -263,3 +263,24 @@ Elegida (b) (memoria por proceso, DROP 56): en espera de un arranque con 10 min 
 Medir 10 min de corriente en reposo con la pantalla apagada (`SWEET BATTERY ... mA`, ya en el registro) de `min129` frente a `min130`. Límite honesto: el calibrador da mA enteros y si el motor gasta decenas de
 microamperios la medida dirá «no detectable» y habrá que decidir por el código. El 0342 (4514 líneas: Bluetooth, cámara, cargador, otro gobernador) se parte después, solo con Bluetooth y cámara, según ese resultado.
 Pioxi ya pidió que se incluya el brillo; el suelo por defecto (64) queda como decisión suya: a oscuras gasta más que 12, pero 12 deja la pantalla negra.
+
+### V.11 Memoria por proceso con Safari (E-0397)
+
+26 muestras (cada 30 s, unos 13 min). **Mínimo 50 MB libres**, a los ~6 min; luego el compresor llega a ~120 MB y la libre se estabiliza en ~200 MB. Sin pánico ni cuelgue.
+
+| Proceso | Huella típica |
+|---|---|
+| backboardd | 215-260 MB |
+| com.apple.WebKit.GPU | 175-216 MB |
+| SpringBoard | 91-94 MB |
+| 3 x com.apple.WebKit.WebContent | 52-95 MB cada uno |
+| MobileSafari | 54-70 MB |
+| AppStore | 30-33 MB |
+| com.apple.WebKit.Networking | 17-25 MB |
+
+- **Safari y sus procesos ≈ 580 MB**: el hueco de 50 MB coincide con su pico.
+- Los diez mayores = ~860 MB de 1777 MB: **el resto (~900 MB) son ~220 procesos pequeños** (~4 MB cada uno). La palanca grande es el **número** de procesos residentes.
+- `com.apple.WebKit.GPU` gasta ~215 MB para una página sencilla; apagar su uso por ajustes de WebKit es una opción **sin probar**.
+- Defecto mío: el nombre de proceso salió vacío (`proc_name` por `dlsym`); lo mapeé con las líneas `XPC[pid]` y `SMP` del mismo registro. Si quieres nombres directos, otro DROP (sin urgencia).
+
+**Propuesta:** (1) lista de demonios que podrían no arrancar (candidatos por huella y por ser inútiles sin SIM/iCloud/Apple Watch/Siri) midiendo antes el efecto en memoria libre, con `heronoexec` (nivel 2: argumento de arranque, hay 3 caracteres libres en la línea; mejor `disabled.list` que ya existe en el DROP); (2) probar apagar el proceso GPU de WebKit.
