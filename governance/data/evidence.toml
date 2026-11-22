@@ -5994,3 +5994,18 @@ sha256 = "ea4b5cc1804243dbc76fa154c5c9363b6f703fa89aeaeeac37bc1eb20ddc15ef"
 size = 271819
 immutable = true
 note = "Registro del arranque con el reinicio de estado (scratch)."
+
+[[evidence]]
+id = "E-0408"
+title = "EL ARRANQUE CON LA LISTA CORTA LLEGA A LA PANTALLA DE INICIO (el Director: 'at the second boot... im in the home screen rn'; 'the touch stop working... its lagging'): registro (log-n35, 120+ s de vida): 'hero-run: 33 jobs in launchd's disabled list' (la lista de 25 originales más los 8 fijos), 'exec PosterBoard' x1 (con la lista de 51 era 0 en los cuatro arranques atascados), SpringBoard llegó a la pantalla de inicio: EVIDENCIA A FAVOR de que la causa del atasco era la TANDA 1 de demonios desactivados (E-0398), con la salvedad de que el efecto de la lista llegó un arranque después de escribirla (por eso hicieron falta dos arranques, como avisé); CONDICIÓN NO CONTROLADA: este arranque se hizo sin pasar por TWRP, y el registro dice 'HEROLTE TOUCH: no supply; stopping' dos veces: el táctil se queda SIN ALIMENTACIÓN (el README del proyecto lo advierte: 'Boot from TWRP (not by rebooting iOS), or the touch panel gets no power'): es el límite conocido, no un fallo nuevo; crashes del arranque: solo 'nsurlsessiond sig11'; memoria libre 1834 y 1252 MB en las primeras muestras, 175-207 procesos; QUÉ NO SE SABE: cuál de los 18 trabajos nuevos deja a SpringBoard esperando; HIPÓTESIS DE TRABAJO: los de Apple Watch (nanoregistryd, nanoregistrylaunchd, nanoprefsyncd.2, nanotimekitcompaniond: SpringBoard consulta el registro de relojes al arrancar), CarPlay (carkitd) y FaceTime (avconferenced, FTConversationService); BISECCIÓN (DROP 60 de 80): disabled.list = las 25 originales + 11 de la tanda 1 sin esos siete: lskdd, 4 UARPUpdaterService*, accessoryupdaterd, cloudpaird, MobileInternetSharing, OTACrashCopier, OTATaskingAgent, safetyalertsd (36 líneas, copia en tools/herolte-disabled-drop.list); como el efecto llega UN ARRANQUE DESPUÉS, el arranque siguiente (el del MP3) aún usa la lista de 33 y debe llegar a la pantalla; el efecto de los 11 se verá en el arranque SIGUIENTE a ese: si se atasca, el culpable está entre los 11 (lskdd incluido) y habrá que seguir bisecando; si no, se quedan los 11 (el bucle de lskdd es la parte que más gastaba) y los siete de Apple Watch/CarPlay/FaceTime se descartan porque el ahorro es pequeño y el riesgo ya se vio; BOOT 24 de 80 = min132 (0489 v2, E-0404; el BOOT era min130): para que el arranque del MP3 pruebe el arreglo de las extensiones; contadores D-0123: BOOT 24 de 80, DROP 60 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n35.txt"
+location = "scratch"
+created = "2026-11-22"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "4e83531d14d121ad35bddec58ddd029b48de5ce905478ec5db7458363bad5f17"
+size = 506141
+immutable = true
+note = "Registro del arranque con la lista corta (scratch)."

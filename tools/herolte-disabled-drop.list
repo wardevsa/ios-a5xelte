@@ -23,15 +23,8 @@ com.apple.parsecd
 com.apple.photoanalysisd
 com.apple.wifip2pd
 com.apple.driverkitd
-# tanda 1 (E-0398, 2026-11-22): el bucle de lskdd (484 arranques en 13 min, sale al instante) y demonios sin uso en este telefono
+# tanda 1B (E-0408): la mitad de la tanda 1 sin los de Apple Watch / CarPlay / FaceTime (sospechosos de dejar a SpringBoard esperando)
 com.apple.lskdd
-com.apple.nanoregistryd
-com.apple.nanoregistrylaunchd
-com.apple.nanoprefsyncd.2
-com.apple.nanotimekitcompaniond
-com.apple.carkitd
-com.apple.avconferenced
-com.apple.FaceTime.FTConversationService
 com.apple.UARPUpdaterServiceAFU
 com.apple.UARPUpdaterServiceHID
 com.apple.UARPUpdaterServiceLegacyAudio

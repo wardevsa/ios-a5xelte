@@ -319,3 +319,10 @@ sin llegar a las llamadas que sí salen en `min130` (`SWEET AKS: SpringBoard sel
 **Hipótesis (no demostrada):** ese camino bloquea a SpringBoard (usuario mobile) al arrancar. No se descarta una carrera de arranque sin relación con un solo arranque.
 **Decisión:** v1 tenía un riesgo evitable; se sustituye por **v2 sin ninguna búsqueda de rutas**: PlugInKit se reconoce por el buffer (lo limpia y pone `?` en el primer byte, visto en su desensamblado), pid propio y no root.
 `min132` = `min130` + 0489 v2, BOOT 22 de 80, escrita. Si SpringBoard se para otra vez con v2, la hipótesis queda descartada. Vuelta atrás: `min130`. Dato: el hash absoluto de EFS ha cambiado en cinco escrituras seguidas (siempre idéntico antes y después de cada operación).
+
+### V.15 Atasco de arranque: no era el kernel ni el estado de SpringBoard; apunta a la tanda 1 de demonios (E-0405 a E-0408)
+
+Cuatro arranques atascados (`min131`, `min132`, `min130` x2) con SpringBoard parado a 11 MB y sin PosterBoard. **Descartado:** el parche 0489 (v1 y v2; `min130`, sin él, también se atasca), el estado de SpringBoard
+(`hero-run` renombró los cinco ficheros y reinició SpringBoard: igual). **Con la lista de 25 trabajos desactivados (33 con los fijos) SpringBoard llega a la pantalla de inicio.**
+**Causa probable (no del todo demostrada):** la tanda 1 (18 trabajos nuevos de E-0398). Que `min129` y `min130` arrancaran bien se explica porque la lista surte efecto **un arranque después** de escribirse.
+**Bisección en curso:** 11 de los 18 (sin Watch, CarPlay, FaceTime) en el DROP 60; `min132` (BOOT 24 de 80) para probar a la vez 0489 v2. Pregunta abierta: ¿cuál de los 18 espera SpringBoard? Aviso de una limitación ya conocida: arrancar iOS sin pasar por TWRP deja **el táctil sin alimentación** (`no supply`).
