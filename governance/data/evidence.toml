@@ -5910,3 +5910,15 @@ sha256 = "9d3f361f564854e4987f686c5ede10a0a0ed5a04bca313616cdec10c397b38a2"
 size = 473913
 immutable = true
 note = "Registro del kernel de min130 con los cierres de SaveToFiles y DocumentManager (scratch)."
+
+[[evidence]]
+id = "E-0402"
+title = "min131 ESCRITA (BOOT 21 de 80, dentro de D-0123 que caduca el 23/11; el Director dijo 'si quieres dejalo y sigue con la programacion' y antes 'lo dejo para que lo revises y luego lo soluciones'): kernel de CI 45017282065 = serie + 0487 + 0488 (alineación de planos como diccionario, E-0399) + 0489 (ruta de contenedor para extensiones de app, E-0401), con la misma línea de arranque (603 caracteres): sha256 198b644a83fef509a3e70f42bbe7bdd4436912183c1f8cc577c1a00d6b6ad4e3, verificador 36 PASS 0 FAIL, escrita y leída de vuelta; en el kernel están las cadenas PlaneBaseAlignmentLinear y 'given the container path'; EFS comparado antes y después de la operación: igual (el hash absoluto cambia entre sesiones, ya anotado en E-0399; ahora 9434a5a8...); vuelta atrás: min130 (sin 0489) o min129; PRUEBA: arrancar y repetir el guardado del MP3 en Safari: esperado: ninguna excepción 'plugin has invalid sandbox or container', ningún cierre de SaveToFiles ni DocumentManager.Service, y líneas 'SWEET Sandbox: ... (an extension) given the container path /private/var/mobile'; si guarda pero falla otra cosa, el registro lo dirá; contadores D-0123: BOOT 21 de 80, DROP 57 de 80"
+kind = "document"
+path = "xnu/patches/0489-herolte-extension-container-path.patch"
+location = "git"
+created = "2026-11-22"
+domain = "device"
+level = "L1"
+device = "this-unit"
+note = "Parche 0489; la prueba en el teléfono viene después."

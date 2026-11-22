@@ -300,3 +300,13 @@ Pendiente de prueba por Pioxi: Safari y la canción de nuevo; no debe haber exce
 
 **Dato para el orquestador sobre EFS:** el hash absoluto de EFS que imprime el flasher cambió en tres escrituras seguidas; el flasher lo compara antes y después de su operación (iguales) y no lo escribe. Posible causa, sin
 comprobar: TWRP lo monta o el teléfono lo modifica entre sesiones. Si te preocupa, una forma de saberlo es leer el hash dos veces seguidas en TWRP sin escribir nada.
+
+### V.13 min130: «couldn't communicate with a helper application» al guardar (E-0401, E-0402)
+
+`min130` (0488) funciona para lo suyo: **0 cierres de `mediaserverd`** (3 en `min129`). Pero guardar sigue fallando por **otra** causa, también nuestra:
+`SaveToFiles` x2 y `com.apple.DocumentManager.Service` **abortan al arrancar** con `NSInternalInconsistencyException: plugin has invalid sandbox or container: error 2 path ?`.
+Desensamblado de PlugInKit: llama a `sandbox_container_path_for_pid(getpid(), buf, 0x400)`; si da error lanza esa excepción; si da 0 solo comprueba `strlen(buf) > 1`. Nuestro «Sandbox» (`sweet_amfi.c`) contesta
+ENOENT a la operación 4 a todos (E-0338 lo vio con PhotosFileProvider; ahora es para **toda** extensión de app).
+
+**Arreglo (parche 0489, Nivel 3, dentro de D-0123):** para el propio pid, usuario no root y ejecutable dentro de un `.appex`, la operación 4 contesta 0 y `/private/var/mobile`; el resto, ENOENT como antes. CI verde, **`min131`** escrita (BOOT 21 de 80).
+Riesgo asumido: una extensión que use esa ruta como contenedor escribirá en el `$HOME` de mobile; no hay sandbox que lo impida. Pendiente: que Pioxi arranque y repita el guardado.
