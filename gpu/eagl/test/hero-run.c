@@ -1652,6 +1652,40 @@ memory_sampler(void *unused)
    return NULL;
 }
 
+
+/*
+ * E-0406 (the Director approved, "Solo SpringBoard"): min130, min131 and min132 stayed at the logo (SpringBoard idle at 11 MB, PosterBoard never started) after a good boot in
+ * which Safari's "Save to Files" failed; min130, the same kernel as that good boot, stuck too, so the cause is saved state, not the kernel. With the drop file reset.sb
+ * (one use: reset.sb.done is made), the SpringBoard state files are RENAMED (not deleted) to NAME.s7bak and SpringBoard is killed once so that launchd starts it again with
+ * none of them. Only these: FrontBoard/applicationState.db(-wal, -shm), SpringBoard/RecentAppLayouts.pb.lzfse, Preferences/com.apple.springboard.plist (the recents of
+ * the app switcher and SpringBoard's own settings); nothing of Safari's, the photos or the apps.
+ */
+static void
+reset_springboard_state(void)
+{
+   static const char *const files[] = {
+      "/private/var/mobile/Library/FrontBoard/applicationState.db",
+      "/private/var/mobile/Library/FrontBoard/applicationState.db-wal",
+      "/private/var/mobile/Library/FrontBoard/applicationState.db-shm",
+      "/private/var/mobile/Library/SpringBoard/RecentAppLayouts.pb.lzfse",
+      "/private/var/mobile/Library/Preferences/com.apple.springboard.plist",
+   };
+   if (access(DROP_DIR "reset.sb", F_OK) != 0 || access(DROP_DIR "reset.sb.done", F_OK) == 0)
+      return;
+   close(open(DROP_DIR "reset.sb.done", O_WRONLY | O_CREAT, 0644));
+   for (size_t i = 0; i < sizeof(files) / sizeof(files[0]); i++) {
+      char to[300];
+      struct stat st;
+      snprintf(to, sizeof(to), "%s.s7bak", files[i]);
+      if (stat(files[i], &st) != 0) {
+         herodrm_log("hero-run: reset.sb: %s is not there", files[i]);
+         continue;
+      }
+      herodrm_log("hero-run: reset.sb: %s (%lld bytes) -> .s7bak: %s", files[i], (long long)st.st_size, rename(files[i], to) == 0 ? "ok" : strerror(errno));
+   }
+   herodrm_log("hero-run: reset.sb: SpringBoard killed to start again without them (%d)", kill_by_name("SpringBoard", SIGKILL));
+}
+
 int
 main(int main_argc, char **main_argv)
 {
@@ -1672,6 +1706,7 @@ main(int main_argc, char **main_argv)
    assetsd_stderr_to_file();
    log_lib_dir();
    install_metal_plugin();
+   reset_springboard_state();
    reduce_transparency();
    remove_listed_apps();
    remove_ls_db_once();
