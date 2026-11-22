@@ -1,9 +1,9 @@
-herolte: an app extension is given a container path by the sandbox stand-in (0489)
+herolte: PlugInKit is given a container path by the sandbox stand-in, no lookups (0489 v2)
 
-PlugInKit raised "plugin has invalid sandbox or container: error 2" in every extension (SaveToFiles, DocumentManager.Service, PhotosFileProvider) because operation 4 failed with ENOENT. Extensions (executable in a .appex, non-root, own pid) are answered with /private/var/mobile; all else is as before (E-0401).
+PlugInKit raised "plugin has invalid sandbox or container: error 2" in every extension (SaveToFiles, DocumentManager.Service, PhotosFileProvider) because operation 4 failed with ENOENT. Own pid, non-root and a buffer that starts with "?" (what PlugInKit sets) are answered with /private/var/mobile; all else is as before. v1 (a vnode path lookup for every caller) was followed by a boot stuck at the logo (E-0403) and is replaced.
 
 diff --git a/bsd/kern/sweet_amfi.c b/bsd/kern/sweet_amfi.c
-index 136536b..f32f4c5 100644
+index 136536b..ee62819 100644
 --- a/bsd/kern/sweet_amfi.c
 +++ b/bsd/kern/sweet_amfi.c
 @@ -29,6 +29,7 @@
@@ -14,39 +14,33 @@ index 136536b..f32f4c5 100644
  #include <sys/mount.h>
  #include <sys/priv.h>
  #include <sys/proc.h>
-@@ -349,6 +350,41 @@ sweet_sandbox_syscall(struct proc *p, int call, __unused user_addr_t arg)
+@@ -349,6 +350,35 @@ sweet_sandbox_syscall(struct proc *p, int call, __unused user_addr_t arg)
  			}
  		}
  	}
 +	/*
-+	 * 0489 (E-0401): an app extension (appex) that asks for its own container path got ENOENT here, and PlugInKit then raised
-+	 * "plugin has invalid sandbox or container: error 2 path ?" (NSInternalInconsistencyException) and the extension died: SaveToFiles and
++	 * 0489 (E-0401, v2 after min131 stuck at the logo, E-0403): an app extension that asks for its own container path got ENOENT here, and PlugInKit
++	 * then raised "plugin has invalid sandbox or container: error 2 path ?" (NSInternalInconsistencyException) and the extension died: SaveToFiles and
 +	 * com.apple.DocumentManager.Service (Safari's "internal error, couldn't communicate with a helper application" when saving a file) and
-+	 * PhotosFileProvider. PlugInKit's own check (PlugInKit +0x18c60, disassembled) is: sandbox_container_path_for_pid(getpid(), buf, 0x400)
-+	 * returns 0 and strlen(buf) > 1; with no sandbox here that is all it needs. So an extension of a non-root user (its executable inside a
-+	 * .appex) is answered with the mobile home, which exists and is writable; everything else keeps failing with ENOENT as before.
++	 * PhotosFileProvider. PlugInKit's own check (PlugInKit +0x18c60, disassembled) is: sandbox_container_path_for_pid(getpid(), buf, 0x400) returns
++	 * 0 and strlen(buf) > 1. The buffer is PlugInKit's: it clears 1023 bytes and sets buf[0] = '?' before the call, which is what tells that caller
++	 * apart without any lookup (v1 looked the executable's path up with proc_getexecutablevnode/vn_getpath for every caller of this operation, a
++	 * risk in the early boot of every process; min131 stuck at the logo with SpringBoard idle). v2: own pid, non-root, buffer starting with "?\0":
++	 * answered with the mobile home, which exists and is writable; everything else keeps failing with ENOENT as before.
 +	 */
 +	if (call == 4 && arg != 0) {
 +		uint64_t w[4] = { 0 };
 +		if (copyin(arg, w, sizeof(w)) == 0 && w[0] == (uint64_t)proc_pid(p) && w[2] > 0x1000 && w[2] < 0x0000800000000000ULL &&
 +		    w[3] >= 32 && w[3] <= 4096 && kauth_getuid() != 0) {
-+			char path[256] = "";
-+			int len = (int)sizeof(path);
-+			vnode_t tv = proc_getexecutablevnode(p);
-+			if (tv != NULLVP) {
-+				if (vn_getpath(tv, path, &len) != 0) {
-+					path[0] = 0;
-+				}
-+				vnode_put(tv);
-+			}
-+			if (strnstr(path, ".appex/", sizeof(path)) != NULL) {
++			char mark[2] = { 1, 1 };
++			if (copyin((user_addr_t)w[2], mark, sizeof(mark)) == 0 && mark[0] == '?' && mark[1] == 0) {
 +				static const char home[] = "/private/var/mobile";
 +				if (copyout(home, (user_addr_t)w[2], sizeof(home)) == 0) {
 +					static int shown;
 +					if (shown++ < 8) {
 +						char name[32];
 +						proc_name(proc_pid(p), name, sizeof(name));
-+						printf("SWEET Sandbox: %s (an extension) given the container path %s\n", name, home);
++						printf("SWEET Sandbox: %s (PlugInKit) given the container path %s\n", name, home);
 +					}
 +					return 0;
 +				}
