@@ -6066,3 +6066,18 @@ sha256 = "16f4e51fee8a2a3313e741ddf3b530cf84662a6c6b88be8dd56b1d539d0ff1ae"
 size = 6674
 immutable = true
 note = "census.out de la zona de drop con la sonda de grupos (scratch)."
+
+[[evidence]]
+id = "E-0413"
+title = "HITO: EL MP3 SUENA EN EL S7 (el Director: 'it works so keep going'): S7GE Player (E-0411) tras el arranque largo: /private/var/tmp/s7ge-player.txt: '1 audio file(s)', '4739517 bytes .../Safari/Downloads/9205AD53-.../Y2Mate.is - the sopranos - dont stop believin.mp3' (la descarga de Safari, encontrada porque aquí no hay sandbox), 'play ...: ok true, duration 305.17986394557823, format <AVAudioFormat 2 ch, 44100 Hz, .mp3 ...>' y 'finished, ok true': se reprodujo la canción ENTERA (305 s, MP3 estéreo a 44,1 kHz) hasta el final con AVAudioPlayer: el decodificador de MP3 de AudioToolbox funciona en el S7 y la salida de audio (plug-in HakiosAudio, E-0386) también; la tubería completa: Safari descarga (red y Wi-Fi), el archivo está en el contenedor de Safari, S7GE Player lo lee y lo reproduce; queda abierto lo de Archivos (E-0412: el proveedor 'En mi iPhone' no arranca, sin causa); contadores D-0123: BOOT 24 de 80, DROP 62 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/player.txt"
+location = "scratch"
+created = "2026-11-22"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "56226fc386beefb9bae4f298bf80cbc7eb4bd92befc6d10a2e2b7a58575f573b"
+size = 733
+immutable = true
+note = "s7ge-player.txt del teléfono (scratch)."
