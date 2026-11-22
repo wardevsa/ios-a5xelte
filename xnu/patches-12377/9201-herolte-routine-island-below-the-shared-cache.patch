@@ -1,0 +1,185 @@
+diff --git a/bsd/vm/vm_unix.c b/bsd/vm/vm_unix.c
+index 64d187a..52df13e 100644
+--- a/bsd/vm/vm_unix.c
++++ b/bsd/vm/vm_unix.c
+@@ -1860,6 +1860,52 @@ done:
+ 	return error;
+ }
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++/*
++ * HEROLTE (9201): the routine island of the dyld cache (osfmk/vm/vm_shared_region.c herolte_island_map), read into
++ * kernel memory here, where vnodes are at hand; vm_shared_region_map_file() maps it and frees the buffer.
++ */
++#define HEROLTE_ISLAND_PATH     "/System/Library/Caches/com.apple.herolte/routines.bin"
++extern void     *herolte_island_buf;
++extern vm_size_t herolte_island_size;
++
++static void
++herolte_island_load(void)
++{
++	vfs_context_t ctx = vfs_context_current();
++	vnode_t vp = NULLVP;
++	off_t fs = 0;
++	int resid = 0, error;
++	void *buf;
++
++	if (herolte_island_buf != NULL) {
++		return;
++	}
++	if (vnode_lookup(HEROLTE_ISLAND_PATH, 0, &vp, ctx) != 0) {
++		return;
++	}
++	error = vnode_size(vp, &fs, ctx);
++	if (error == 0 && fs > 0 && fs <= (16 << 20) && (fs & PAGE_MASK) == 0) {
++		buf = kalloc_data((vm_size_t)fs, Z_WAITOK);
++		if (buf != NULL) {
++			error = vn_rdwr(UIO_READ, vp, (caddr_t)buf, (int)fs, 0, UIO_SYSSPACE, IO_NODELOCKED,
++			    vfs_context_ucred(ctx), &resid, vfs_context_proc(ctx));
++			if (error == 0 && resid == 0) {
++				herolte_island_buf = buf;
++				herolte_island_size = (vm_size_t)fs;
++			} else {
++				printf("HEROLTE ISLAND: read failed %d (resid %d)\n", error, resid);
++				kfree_data(buf, (vm_size_t)fs);
++			}
++		}
++	} else {
++		printf("HEROLTE ISLAND: %s has size %lld, not used\n", HEROLTE_ISLAND_PATH, (long long)fs);
++	}
++	vnode_put(vp);
++}
++#endif /* ARM64_BOARD_CONFIG_HEROLTE */
++
++
+ /*
+  * shared_region_map_np()
+  *
+@@ -1908,6 +1954,9 @@ _shared_region_map_and_slide(
+ 		return error;
+ 	}
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	herolte_island_load();
++#endif
+ 	/* map the file(s) into that shared region's submap */
+ 	kr = vm_shared_region_map_file(shared_region, files_count, sr_file_mappings);
+ 	if (kr != KERN_SUCCESS) {
+diff --git a/osfmk/vm/vm_shared_region.c b/osfmk/vm/vm_shared_region.c
+index 013b2ec..67e281b 100644
+--- a/osfmk/vm/vm_shared_region.c
++++ b/osfmk/vm/vm_shared_region.c
+@@ -1954,6 +1954,75 @@ vm_shared_region_map_file_final(
+  * or if they were already established identically by another process.
+  */
+ __attribute__((noinline))
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++/*
++ * HEROLTE (9201): the routine island below the shared cache. The S7's ARMv8.0 cores have no LSE atomics and no FP16
++ * arithmetic; tools/ios18/v80strip_cache.py turns such words of the dyld cache into branches to routines in the
++ * cache's own padding, which runs out near the first sub-cache (libobjc, QuartzCore, CoreGraphics, CoreText). On
++ * 23G90, CoreGraphics' RGBAf16_image_mark (RenderBox's CPU drawing) kept FP16 words and SpringBoard died of SIGILL
++ * (boot 26k3). The routines that found no room there sit in a block just below the cache's first mapping instead,
++ * saved as HEROLTE_ISLAND_PATH (bsd/vm/vm_unix.c reads it before the cache is mapped). The shared region is empty
++ * between its base and the first mapping (dyld's slide): the block is mapped there, read+execute, the same distance
++ * below the first mapping the tool assumed, so every site's B reaches its routine. Not mapped when the slide is
++ * smaller than the block: those sites then trap as before (v80emu, or SIGILL for FP16).
++ */
++void       *herolte_island_buf;
++vm_size_t   herolte_island_size;
++
++static void
++herolte_island_map(vm_shared_region_t shared_region, vm_map_t sr_map, void *buf, vm_size_t size,
++    mach_vm_offset_t *sfm_min_address)
++{
++	mach_vm_offset_t        first = shared_region->sr_first_mapping;
++	vm_object_t             object;
++	vm_map_offset_t         kaddr = 0, target;
++	vm_map_kernel_flags_t   vmk_flags;
++	kern_return_t           kr;
++
++	if (first == (mach_vm_offset_t)-1 || first < size) {
++		printf("HEROLTE ISLAND: %#lx bytes not mapped, the first mapping is at offset %#llx\n",
++		    (unsigned long)size, (unsigned long long)first);
++		return;
++	}
++	object = vm_object_allocate(size, kernel_map->serial_id);
++	if (object == VM_OBJECT_NULL) {
++		printf("HEROLTE ISLAND: vm_object_allocate failed\n");
++		return;
++	}
++	vmk_flags = VM_MAP_KERNEL_FLAGS_ANYWHERE();
++	vmk_flags.vmkf_no_copy_on_read = 1;
++	vmk_flags.vmkf_range_id = KMEM_RANGE_ID_DATA_SHARED;
++	kr = vm_map_enter(kernel_map, &kaddr, size, 0, vmk_flags, object, 0, FALSE,
++	    VM_PROT_READ | VM_PROT_WRITE, VM_PROT_READ | VM_PROT_WRITE, VM_INHERIT_NONE);
++	if (kr != KERN_SUCCESS) {
++		printf("HEROLTE ISLAND: kernel mapping failed %d\n", kr);
++		vm_object_deallocate(object);
++		return;
++	}
++	vm_object_reference(object);            /* keeps it alive after the kernel mapping goes */
++	bcopy(buf, (void *)kaddr, size);
++	vm_map_remove(kernel_map, kaddr, kaddr + size);
++
++	target = first - size;
++	vmk_flags = VM_MAP_KERNEL_FLAGS_FIXED();
++	vmk_flags.vmkf_no_copy_on_read = 1;
++	kr = vm_map_enter(sr_map, &target, size, 0, vmk_flags, object, 0, FALSE,
++	    VM_PROT_READ | VM_PROT_EXECUTE, VM_PROT_READ | VM_PROT_EXECUTE, VM_INHERIT_DEFAULT);
++	if (kr != KERN_SUCCESS) {
++		printf("HEROLTE ISLAND: shared region mapping at offset %#llx failed %d\n", (unsigned long long)target, kr);
++		vm_object_deallocate(object);
++		return;
++	}
++	/* the shared region's pmap is trimmed to [sfm_min_address, sfm_max_address): the island must be inside */
++	if (shared_region->sr_base_address + target < *sfm_min_address) {
++		*sfm_min_address = shared_region->sr_base_address + target;
++	}
++	printf("HEROLTE ISLAND: %#lx bytes of routines at %#llx, below the cache at %#llx\n", (unsigned long)size,
++	    (unsigned long long)(shared_region->sr_base_address + target),
++	    (unsigned long long)(shared_region->sr_base_address + first));
++}
++#endif /* ARM64_BOARD_CONFIG_HEROLTE */
++
+ kern_return_t
+ vm_shared_region_map_file(
+ 	vm_shared_region_t       shared_region,
+@@ -1975,6 +2044,13 @@ vm_shared_region_map_file(
+ 	struct _sr_file_mappings *srfmp;
+ 	vm_map_switch_context_t switch_ctx;
+ 	bool                    map_switched = false;
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	void                    *island_buf = herolte_island_buf;
++	vm_size_t               island_size = herolte_island_size;
++
++	herolte_island_buf = NULL;
++	herolte_island_size = 0;
++#endif
+ 
+ 	vmlp_api_start(VM_SHARED_REGION_MAP_FILE);
+ 
+@@ -2021,6 +2097,11 @@ vm_shared_region_map_file(
+ 		goto done;
+ 	}
+ 	assert(vmsr_num_slides == mappings_to_slide_cnt);
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	if (island_buf != NULL) {
++		herolte_island_map(shared_region, sr_map, island_buf, island_size, &sfm_min_address);
++	}
++#endif
+ 
+ 	assert(shared_region->sr_config_map != NULL);
+ 	switch_ctx = vm_map_switch_to(shared_region->sr_config_map);
+@@ -2098,6 +2179,11 @@ vm_shared_region_map_file(
+ 	vm_shared_region_unlock();
+ 
+ done:
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	if (island_buf != NULL) {
++		kfree_data(island_buf, island_size);
++	}
++#endif
+ 
+ #ifndef NO_NESTED_PMAP
+ 	/*
