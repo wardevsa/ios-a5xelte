@@ -1,0 +1,32 @@
+herolte: DisplayPipePlaneBaseAlignment is a dictionary, not a number (0488)
+
+VideoToolbox and QuartzCore read PlaneBaseAlignmentLinear out of that registry property of the display; the bare number set by 0046/0061 made them send objectForKey: to an NSNumber and mediaserverd aborted on every video (E-0399). Same fix as upstream 0342 (Note FE 0462), as a small patch of its own.
+
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index b0babdb..680316f 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -406,7 +406,22 @@ AppleCLCD::start(IOService *provider)
+ 
+ 	setProperty(kIOUserClientClassKey, "IOMobileFramebufferUserClient");
+ 	setProperty("external", false);
+-	setProperty("DisplayPipePlaneBaseAlignment", 64ULL, 32);
++	/*
++	 * 0488 (E-0399): a dictionary, as iOS 16's readers want it: VideoToolbox (FigGetAlignmentForIOSurfaceOutputToDisplayService, via the registry
++	 * search of "DisplayPipePlaneBaseAlignment" in the IOService plane) and QuartzCore look up PlaneBaseAlignmentLinear in it. The bare number
++	 * made them send -[__NSCFNumber objectForKey:] to a number: mediaserverd threw, aborted and was started again, every time a page or an app
++	 * played a video (the unified log of min130's boot: Safari playing an MP3 page with a video track). Same fix as upstream's 0342 (Note FE 0462).
++	 */
++	{
++		OSDictionary *align = OSDictionary::withCapacity(1);
++		OSNumber *linear = OSNumber::withNumber(64ULL, 32);
++		if (align && linear) {
++			align->setObject("PlaneBaseAlignmentLinear", linear);
++			setProperty("DisplayPipePlaneBaseAlignment", align);
++		}
++		OSSafeReleaseNULL(linear);
++		OSSafeReleaseNULL(align);
++	}
+ 	registerService();
+ 	IOLog("SWEET FB: AppleCLCD %ux%u stride %u at 0x%llx, default surface %u, presented as %ux%u\n",
+ 	    fWidth, fHeight, fRowBytes, fPhys, fSurface->id, fLogicalW, fLogicalH);
