@@ -1,0 +1,712 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 4923616..deae54c 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -17,6 +17,7 @@
+ #include <kern/clock.h>
+ #include <kern/thread.h>
+ #include <kern/sched_prim.h>
++#include <kern/locks.h>
+ #include <mach/mach_time.h>
+ #include <machine/machine_routines.h>
+ #include <pexpert/pexpert.h>
+@@ -27,6 +28,13 @@ void herolte_gpu_probe(void);
+ int herolte_gpu_present_slot(uint32_t id, uint64_t first_pa);
+ int herolte_gpu_present_map(uint32_t id, const uint64_t *pages, unsigned n);
+ bool herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h);
++/* User-space GPU jobs, for iokit/Kernel/arm/HeroGPU.cpp. */
++bool herolte_gpu_up(void);
++uint32_t herolte_gpu_reg(uint32_t off);
++uint64_t herolte_gpu_va_alloc(uint64_t bytes);
++bool herolte_gpu_map(uint64_t va, const uint64_t *pages, unsigned n);
++void herolte_gpu_unmap(uint64_t va, unsigned n);
++uint32_t herolte_gpu_submit(unsigned js, uint64_t jc, uint64_t *us);
+ 
+ #define HG_PMU_PA       0x105c0000u
+ #define HG_PMU_G3D_CONF 0x4060u
+@@ -325,6 +333,13 @@ static uint64_t hg_job_va = HG_TEST_VA;
+ static vm_offset_t hg_job_cpu;
+ /* Log only failed jobs (the per-frame GPU present). */
+ static bool hg_run_quiet;
++/* JS_STATUS of the last hg_run() (0 after a clean finish). */
++static uint32_t hg_last_js_status;
++/* Serializes the GPU between the present path and HeroGPU clients (both
++ * may start before herolte_gpu_probe(), so statically initialized). */
++static LCK_GRP_DECLARE(hg_grp, "herolte_gpu");
++static LCK_MTX_DECLARE(hg_mtx_store, &hg_grp);
++#define hg_mtx (&hg_mtx_store)
+ 
+ /* Program AS0, start the job at HG_TEST_VA on slot js, wait (bounded). */
+ static bool
+@@ -368,6 +383,7 @@ hg_run(unsigned js, const char *what)
+ 	}
+ 	volatile uint32_t *hdr = (volatile uint32_t *)(hg_job_cpu ? hg_job_cpu : hg_mem + HG_DATA_OFF);
+ 	bool ok = (jirq & (1u << js)) && !(jirq & (1u << (js + 16))) && !mirq && !(girq & 0x81);
++	hg_last_js_status = hg_rd(hg_gpu, slot + 0x24);
+ 	if (!ok || !hg_run_quiet) {
+ 		printf("HEROLTE GPU: %s: irq=%#x mmu=%#x gpu=%#x js_status=%#x as_fault=%#x@%#x "
+ 		    "exception=%#x fault=%#x:%#x gpu_fault=%#x@%#x\n", what, jirq, mirq, girq,
+@@ -985,12 +1001,35 @@ hgp_mmu_flush(uint64_t va, unsigned log2_size)
+ 	return hgp_as_idle();
+ }
+ 
++/*
++ * Shared bring-up (GPU present and the HeroGPU user client): MMIO, all
++ * cores powered and left on, and one address space for everything:
++ *   0x02000000  test pages        0x04000000  the panel
++ *   0x0a000000  the scratch block 0x10000000  present slots (8 MiB each)
++ *   0x40000000..0x7fffffff  user buffers (HeroGPU), L3 tables on demand
++ * The user range has its own L2 table and L3 pool at the top of the
++ * scratch block. Idempotent; called with hg_mtx held.
++ */
++#define HGU_L2_OFF      0x110000u
++#define HGU_L3_OFF      0x111000u
++#define HGU_L3_MAX      ((HG_SCR_BYTES - HGU_L3_OFF) / 0x1000u)
++#define HGU_VA_BASE     0x40000000ull
++#define HGU_VA_END      0x80000000ull
++static int hg_up_state;                 /* 0 not tried, 1 up, -1 failed */
++static uint16_t hgu_l3_of[512];         /* user L2 index -> pool table + 1 */
++static unsigned hgu_l3_used;
++static uint64_t hgu_next_va = HGU_VA_BASE;
++
+ static bool
+-hgp_setup(void)
++hg_bringup(void)
+ {
++	if (hg_up_state != 0) {
++		return hg_up_state == 1;
++	}
++	hg_up_state = -1;
+ 	vm_offset_t pmu = ml_io_map(HG_PMU_PA, 0x8000);
+ 	if (!pmu || !hg_powered(pmu)) {
+-		printf("HEROLTE GPU PRESENT: G3D domain off\n");
++		printf("HEROLTE GPU: bring-up: G3D domain off\n");
+ 		return false;
+ 	}
+ 	if (!hg_gpu) {
+@@ -1001,7 +1040,7 @@ hgp_setup(void)
+ 	}
+ 	hgp_scr = ml_io_map(HG_SCR_PA, HG_SCR_BYTES);
+ 	if (!hg_gpu || !hg_mem || !hgp_scr) {
+-		printf("HEROLTE GPU PRESENT: mapping failed\n");
++		printf("HEROLTE GPU: bring-up: mapping failed\n");
+ 		return false;
+ 	}
+ 	uint32_t all = hg_rd(hg_gpu, SHADER_PRESENT_LO);
+@@ -1015,6 +1054,7 @@ hgp_setup(void)
+ 	/* Page tables: test pages and the panel, then the scratch block. */
+ 	hg_tables(true, NULL, 0);
+ 	vm_offset_t scr = hgp_scr;
++	volatile uint64_t *l1 = (volatile uint64_t *)(hg_mem + 0x1000);
+ 	volatile uint64_t *l2t = (volatile uint64_t *)(hg_mem + 0x2000);
+ 	volatile uint64_t *sl3 = (volatile uint64_t *)(hg_mem + HG_SCR_L3_OFF);
+ 	l2t[(HG_SCR_VA >> 21) & 0x1ff] = (HG_TEST_PA + HG_SCR_L3_OFF) | 3;
+@@ -1024,6 +1064,23 @@ hgp_setup(void)
+ 	hg_zero(scr, S_HEAP + S_HEAP_BYTES);
+ 	hg_zero(scr + HGP_L3_OFF, HGP_SLOTS * HGP_SLOT_TABLES * 0x1000);
+ 	bzero(hgp_slots, sizeof(hgp_slots));
++	hg_zero(scr + HGU_L2_OFF, 0x1000);
++	l1[HGU_VA_BASE >> 30] = (HG_SCR_PA + HGU_L2_OFF) | 3;
++	__asm__ volatile ("dsb sy" ::: "memory");
++	hg_up_state = 1;
++	printf("HEROLTE GPU: up, cores %#x, user VA %#llx..%#llx, %u L3 tables\n", all,
++	    HGU_VA_BASE, HGU_VA_END, HGU_L3_MAX);
++	return true;
++}
++
++static bool
++hgp_setup(void)
++{
++	if (!hg_bringup()) {
++		return false;
++	}
++	vm_offset_t scr = hgp_scr;
++	uint32_t all = hg_rd(hg_gpu, SHADER_PRESENT_LO);
+ 
+ 	/* Shader, Renderer State + Blend, Viewport: as herogpu=9. */
+ 	for (unsigned i = 0; i < 20; i++) {
+@@ -1136,8 +1193,8 @@ herolte_gpu_present_slot(uint32_t id, uint64_t first_pa)
+ }
+ 
+ /* Map n 4 KiB pages of a surface into a slot (round robin); slot or -1. */
+-int
+-herolte_gpu_present_map(uint32_t id, const uint64_t *pages, unsigned n)
++static int
++hgp_map_locked(uint32_t id, const uint64_t *pages, unsigned n)
+ {
+ 	if (hgp_state == 0) {
+ 		hgp_state = hgp_setup() ? 1 : -1;
+@@ -1186,8 +1243,8 @@ herolte_gpu_present_map(uint32_t id, const uint64_t *pages, unsigned n)
+  * the rect to the point of coherency. False if the GPU failed (the caller
+  * falls back to the CPU copy).
+  */
+-bool
+-herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h)
++static bool
++hgp_draw_locked(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h)
+ {
+ 	if (hgp_state != 1 || s < 0 || s >= (int)HGP_SLOTS || w == 0 || h == 0 ||
+ 	    w > 0x10000 || h > 0x10000) {
+@@ -1248,6 +1305,148 @@ herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, uint32_t w, uint3
+ 	return ok;
+ }
+ 
++int
++herolte_gpu_present_map(uint32_t id, const uint64_t *pages, unsigned n)
++{
++	lck_mtx_lock(hg_mtx);
++	int s = hgp_map_locked(id, pages, n);
++	lck_mtx_unlock(hg_mtx);
++	return s;
++}
++
++bool
++herolte_gpu_present_draw(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h)
++{
++	lck_mtx_lock(hg_mtx);
++	bool ok = hgp_draw_locked(s, off, stride, w, h);
++	lck_mtx_unlock(hg_mtx);
++	return ok;
++}
++
++/*
++ * HeroGPU (iokit/Kernel/arm/HeroGPU.cpp): user-space GPU jobs, the kernel
++ * half of a Panfrost-style driver. Buffers get GPU VAs in the user range
++ * (64 KiB aligned, never reused yet) and are mapped noncached like
++ * everything else (the Mali is not IO-coherent; user mappings are
++ * write-combined). Jobs run one at a time under hg_mtx, polled.
++ */
++bool
++herolte_gpu_up(void)
++{
++	lck_mtx_lock(hg_mtx);
++	bool ok = hg_bringup();
++	lck_mtx_unlock(hg_mtx);
++	return ok;
++}
++
++/* A GPU register (GPU_ID, *_PRESENT, *_FEATURES...), for GetParam. */
++uint32_t
++herolte_gpu_reg(uint32_t off)
++{
++	if (hg_up_state != 1 || off >= 0x1000 || (off & 3)) {
++		return 0;
++	}
++	return hg_rd(hg_gpu, off);
++}
++
++uint64_t
++herolte_gpu_va_alloc(uint64_t bytes)
++{
++	lck_mtx_lock(hg_mtx);
++	uint64_t va = (hgu_next_va + 0xffff) & ~0xffffull;
++	uint64_t end = va + ((bytes + 0xfff) & ~0xfffull);
++	if (hg_up_state != 1 || bytes == 0 || end > HGU_VA_END) {
++		va = 0;
++	} else {
++		hgu_next_va = end;
++	}
++	lck_mtx_unlock(hg_mtx);
++	return va;
++}
++
++/* PTEs for n 4 KiB pages at va (pages == NULL: unmap), then an MMU flush. */
++static bool
++hgu_set_locked(uint64_t va, const uint64_t *pages, unsigned n)
++{
++	volatile uint64_t *l2 = (volatile uint64_t *)(hgp_scr + HGU_L2_OFF);
++	for (unsigned i = 0; i < n; i++) {
++		uint64_t a = va + (uint64_t)i * 0x1000;
++		if (a < HGU_VA_BASE || a >= HGU_VA_END) {
++			return false;
++		}
++		unsigned l2i = (unsigned)((a >> 21) & 0x1ff);
++		if (hgu_l3_of[l2i] == 0) {
++			if (pages == NULL) {
++				continue;
++			}
++			if (hgu_l3_used >= HGU_L3_MAX) {
++				printf("HEROLTE GPU: user L3 pool exhausted\n");
++				return false;
++			}
++			uint32_t table = HGU_L3_OFF + hgu_l3_used * 0x1000;
++			hg_zero(hgp_scr + table, 0x1000);
++			hgu_l3_of[l2i] = (uint16_t)(++hgu_l3_used);
++			l2[l2i] = (HG_SCR_PA + table) | 3;
++		}
++		volatile uint64_t *l3 = (volatile uint64_t *)(hgp_scr + HGU_L3_OFF +
++		    (hgu_l3_of[l2i] - 1u) * 0x1000);
++		l3[(a >> 12) & 0x1ff] = pages ? ((pages[i] & ~0xfffull) | 0x2c1) : 0;
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++	return hgp_mmu_flush(HGU_VA_BASE, 30);
++}
++
++bool
++herolte_gpu_map(uint64_t va, const uint64_t *pages, unsigned n)
++{
++	lck_mtx_lock(hg_mtx);
++	bool ok = hg_up_state == 1 && hgu_set_locked(va, pages, n);
++	lck_mtx_unlock(hg_mtx);
++	return ok;
++}
++
++void
++herolte_gpu_unmap(uint64_t va, unsigned n)
++{
++	lck_mtx_lock(hg_mtx);
++	if (hg_up_state == 1) {
++		(void)hgu_set_locked(va, NULL, n);
++	}
++	lck_mtx_unlock(hg_mtx);
++}
++
++/*
++ * Run the job chain at GPU VA jc on slot js (0: fragment, 1: vertex,
++ * tiler, compute) on all shader cores and wait (bounded). Returns 0 when
++ * it finished cleanly, else JS_STATUS (or ~0 if it never ran); *us = time.
++ */
++uint32_t
++herolte_gpu_submit(unsigned js, uint64_t jc, uint64_t *us)
++{
++	if (js > 1 || jc == 0) {
++		return ~0u;
++	}
++	lck_mtx_lock(hg_mtx);
++	uint32_t status = ~0u;
++	if (hg_up_state == 1) {
++		uint64_t start = mach_absolute_time();
++		hg_affinity = hg_rd(hg_gpu, SHADER_PRESENT_LO);
++		hg_job_va = jc;
++		hg_job_cpu = 0;
++		hg_run_quiet = true;
++		bool ok = hg_run(js, js ? "HEROGPU job JS1" : "HEROGPU job JS0");
++		hg_run_quiet = false;
++		hg_job_va = HG_TEST_VA;
++		hg_affinity = 1;
++		status = ok ? 0 : (hg_last_js_status ? hg_last_js_status : ~0u);
++		if (us) {
++			*us = hg_us_since(start);
++		}
++	}
++	lck_mtx_unlock(hg_mtx);
++	return status;
++}
++
+ /* herogpu=7, step 2: all shader cores clear the whole panel, timed. */
+ static void
+ hg_all_cores_test(uint64_t hold)
+diff --git a/iokit/Kernel/arm/HeroGPU.cpp b/iokit/Kernel/arm/HeroGPU.cpp
+new file mode 100644
+index 0000000..8ce5806
+--- /dev/null
++++ b/iokit/Kernel/arm/HeroGPU.cpp
+@@ -0,0 +1,378 @@
++/*
++ * HeroGPU: the Galaxy S7's Mali-T880 MP12 for user space, the kernel half of
++ * a Panfrost-style driver (Mesa's Panfrost/Midgard in an iOS process, the
++ * way ry-diffusion/Bergamota runs freedreno for the Adreno 630).
++ *
++ * The GPU itself is driven by bsd/dev/herolte_gpu.c (power-up, page tables,
++ * job slots; one address space, jobs run one at a time, polled). This file
++ * is the IOKit face: IOServiceMatching("HeroGPU"), open type 0, then
++ *
++ *   0 GetParam    [param]           -> [value]   Panfrost DRM param numbers
++ *   1 CreateBO    [size]            -> [handle, gpu_va, size]
++ *   2 FreeBO      [handle]
++ *   3 MapBO       [handle]          -> [user address]  (write-combined)
++ *   4 Submit      [jc_va, js]       -> [status, us]    js 0 fragment, 1 the rest
++ *
++ * Buffers are wired kernel buffers mapped noncached on the GPU side; the
++ * Mali is not IO-coherent, so the CPU sees them write-combined only (their
++ * cacheable kernel alias is cleaned once, after zeroing, and never used
++ * again). Submit is synchronous: status 0 = the chain finished cleanly,
++ * else the job slot's status. Everything a client created goes away with it.
++ *
++ * Boot-arg herogpu_selftest=1 runs a WRITE_VALUE job through these same
++ * paths about 70 s after boot (log: "HEROGPU SELFTEST").
++ */
++#include <pexpert/arm64/board_config.h>
++
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++#include <IOKit/IOService.h>
++#include <IOKit/IOUserClient.h>
++#include <IOKit/IOKitKeys.h>
++#include <IOKit/IOLib.h>
++#include <IOKit/IOBufferMemoryDescriptor.h>
++#include <kern/thread.h>
++#include <pexpert/pexpert.h>
++#include <sys/proc.h>
++
++extern "C" {
++bool herolte_gpu_up(void);
++uint32_t herolte_gpu_reg(uint32_t off);
++uint64_t herolte_gpu_va_alloc(uint64_t bytes);
++bool herolte_gpu_map(uint64_t va, const uint64_t *pages, unsigned n);
++void herolte_gpu_unmap(uint64_t va, unsigned n);
++uint32_t herolte_gpu_submit(unsigned js, uint64_t jc, uint64_t *us);
++}
++
++enum {
++	kHeroGPUGetParam = 0,
++	kHeroGPUCreateBO = 1,
++	kHeroGPUFreeBO   = 2,
++	kHeroGPUMapBO    = 3,
++	kHeroGPUSubmit   = 4,
++};
++
++#define HEROGPU_MAX_BOS         4096
++#define HEROGPU_MAX_BO_BYTES    (256ull << 20)
++
++/* Panfrost DRM_PANFROST_PARAM_* -> Midgard register offsets. */
++static uint32_t
++herogpu_param_reg(uint64_t param)
++{
++	static const uint16_t regs[] = {
++		0x000,  /* 0 GPU_PROD_ID (GPU_ID >> 16, below) */
++		0x000,  /* 1 GPU_REVISION (GPU_ID & 0xffff, below) */
++		0x100,  /* 2 SHADER_PRESENT */
++		0x110,  /* 3 TILER_PRESENT */
++		0x120,  /* 4 L2_PRESENT */
++		0xe00,  /* 5 STACK_PRESENT */
++		0x018,  /* 6 AS_PRESENT */
++		0x01c,  /* 7 JS_PRESENT */
++		0x004,  /* 8 L2_FEATURES */
++		0x008,  /* 9 CORE_FEATURES */
++		0x00c,  /* 10 TILER_FEATURES */
++		0x010,  /* 11 MEM_FEATURES */
++		0x014,  /* 12 MMU_FEATURES */
++		0x0ac,  /* 13 THREAD_FEATURES */
++		0x0a0,  /* 14 MAX_THREADS */
++		0x0a4,  /* 15 THREAD_MAX_WORKGROUP_SZ */
++		0x0a8,  /* 16 THREAD_MAX_BARRIER_SZ */
++		0x300,  /* 17 COHERENCY_FEATURES */
++		0x0b0, 0x0b4, 0x0b8, 0x0bc,     /* 18-21 TEXTURE_FEATURES0-3 */
++	};
++	if (param < sizeof(regs) / sizeof(regs[0])) {
++		return regs[param];
++	}
++	if (param >= 22 && param < 38) {
++		return 0x0c0 + (uint32_t)(param - 22) * 4;     /* JS_FEATURES0-15 */
++	}
++	return ~0u;
++}
++
++static uint64_t
++herogpu_param(uint64_t param)
++{
++	uint32_t id = herolte_gpu_reg(0x000);
++	switch (param) {
++	case 0:
++		return id >> 16;
++	case 1:
++		return id & 0xffff;
++	case 38:        /* NR_CORE_GROUPS: one L2 */
++		return 1;
++	case 39:        /* THREAD_TLS_ALLOC: none before v7 */
++		return 0;
++	case 40:        /* AFBC_FEATURES: v7+ only */
++		return 0;
++	}
++	uint32_t reg = herogpu_param_reg(param);
++	return reg == ~0u ? 0 : herolte_gpu_reg(reg);
++}
++
++struct herogpu_bo {
++	IOBufferMemoryDescriptor *mem;
++	IOMemoryMap              *umap;
++	uint64_t                  va;
++	uint32_t                  pages;
++};
++
++/* Allocate, zero, clean and GPU-map a buffer. */
++static bool
++herogpu_bo_create(struct herogpu_bo *bo, uint64_t size)
++{
++	size = (size + 0xfff) & ~0xfffull;
++	if (size == 0 || size > HEROGPU_MAX_BO_BYTES) {
++		return false;
++	}
++	bo->mem = IOBufferMemoryDescriptor::inTaskWithOptions(kernel_task,
++	    kIODirectionInOut | kIOMemoryKernelUserShared, size, page_size);
++	if (bo->mem == NULL) {
++		return false;
++	}
++	uintptr_t k = (uintptr_t)bo->mem->getBytesNoCopy();
++	bzero((void *)k, size);
++	for (uintptr_t p = k & ~(uintptr_t)63; p < k + size; p += 64) {
++		__asm__ volatile ("dc civac, %0" : : "r" (p) : "memory");
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++	bo->pages = (uint32_t)(size / 0x1000);
++	uint64_t *pa = (uint64_t *)IOMallocData(bo->pages * sizeof(uint64_t));
++	bool ok = pa != NULL;
++	for (uint32_t i = 0; ok && i < bo->pages; i++) {
++		IOByteCount len = 0;
++		pa[i] = bo->mem->getPhysicalSegment((IOByteCount)i * 0x1000, &len, kIOMemoryMapperNone);
++		ok = pa[i] != 0;
++	}
++	bo->va = ok ? herolte_gpu_va_alloc(size) : 0;
++	ok = bo->va != 0 && herolte_gpu_map(bo->va, pa, bo->pages);
++	if (pa != NULL) {
++		IOFreeData(pa, bo->pages * sizeof(uint64_t));
++	}
++	if (!ok) {
++		OSSafeReleaseNULL(bo->mem);
++		bo->va = 0;
++	}
++	return ok;
++}
++
++static void
++herogpu_bo_free(struct herogpu_bo *bo)
++{
++	if (bo->mem == NULL) {
++		return;
++	}
++	herolte_gpu_unmap(bo->va, bo->pages);
++	OSSafeReleaseNULL(bo->umap);
++	OSSafeReleaseNULL(bo->mem);
++	bzero(bo, sizeof(*bo));
++}
++
++class HeroGPU : public IOService {
++	OSDeclareDefaultStructors(HeroGPU);
++
++public:
++	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
++};
++
++OSDefineMetaClassAndStructors(HeroGPU, IOService);
++
++class HeroGPUUserClient : public IOUserClient {
++	OSDeclareDefaultStructors(HeroGPUUserClient);
++
++	task_t             fTask;
++	IOLock            *fLock;
++	struct herogpu_bo *fBOs;          /* handle = index + 1 */
++
++public:
++	bool initWithTask(task_t owningTask, void *securityID, UInt32 type) APPLE_KEXT_OVERRIDE;
++	IOReturn clientClose(void) APPLE_KEXT_OVERRIDE;
++	void free(void) APPLE_KEXT_OVERRIDE;
++	IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments *args,
++	    IOExternalMethodDispatch *dispatch, OSObject *target, void *reference) APPLE_KEXT_OVERRIDE;
++};
++
++OSDefineMetaClassAndStructors(HeroGPUUserClient, IOUserClient);
++
++static void herogpu_selftest(void *arg, wait_result_t wr);
++
++bool
++HeroGPU::start(IOService *provider)
++{
++	if (!IOService::start(provider)) {
++		return false;
++	}
++	setProperty(kIOUserClientClassKey, "HeroGPUUserClient");
++	setProperty("GPU", "Mali-T880 MP12");
++	registerService();
++	IOLog("HEROGPU: registered\n");
++	int selftest = 0;
++	thread_t thread;
++	if (PE_parse_boot_argn("herogpu_selftest", &selftest, sizeof(selftest)) && selftest &&
++	    kernel_thread_start(herogpu_selftest, NULL, &thread) == KERN_SUCCESS) {
++		thread_deallocate(thread);
++	}
++	return true;
++}
++
++bool
++HeroGPUUserClient::initWithTask(task_t owningTask, void *securityID, UInt32 type)
++{
++	if (!IOUserClient::initWithTask(owningTask, securityID, type)) {
++		return false;
++	}
++	fTask = owningTask;
++	fLock = IOLockAlloc();
++	fBOs = (struct herogpu_bo *)IOMallocZeroData(HEROGPU_MAX_BOS * sizeof(*fBOs));
++	return fLock != NULL && fBOs != NULL && herolte_gpu_up();
++}
++
++IOReturn
++HeroGPUUserClient::clientClose(void)
++{
++	terminate();
++	return kIOReturnSuccess;
++}
++
++void
++HeroGPUUserClient::free(void)
++{
++	if (fBOs != NULL) {
++		for (unsigned i = 0; i < HEROGPU_MAX_BOS; i++) {
++			herogpu_bo_free(&fBOs[i]);
++		}
++		IOFreeData(fBOs, HEROGPU_MAX_BOS * sizeof(*fBOs));
++		fBOs = NULL;
++	}
++	if (fLock != NULL) {
++		IOLockFree(fLock);
++		fLock = NULL;
++	}
++	IOUserClient::free();
++}
++
++IOReturn
++HeroGPUUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
++    __unused IOExternalMethodDispatch *dispatch, __unused OSObject *target,
++    __unused void *reference)
++{
++	uint64_t out[3] = { 0, 0, 0 };
++	uint32_t outCount = 0;
++	IOReturn ret = kIOReturnSuccess;
++	uint64_t in0 = args->scalarInputCount > 0 ? args->scalarInput[0] : 0;
++	uint64_t in1 = args->scalarInputCount > 1 ? args->scalarInput[1] : 0;
++
++	IOLockLock(fLock);
++	switch (selector) {
++	case kHeroGPUGetParam:
++		out[0] = herogpu_param(in0);
++		outCount = 1;
++		break;
++	case kHeroGPUCreateBO: {
++		unsigned i = 0;
++		while (i < HEROGPU_MAX_BOS && fBOs[i].mem != NULL) {
++			i++;
++		}
++		if (i == HEROGPU_MAX_BOS) {
++			ret = kIOReturnNoResources;
++		} else if (!herogpu_bo_create(&fBOs[i], in0)) {
++			ret = kIOReturnNoMemory;
++		} else {
++			out[0] = i + 1;
++			out[1] = fBOs[i].va;
++			out[2] = (uint64_t)fBOs[i].pages * 0x1000;
++			outCount = 3;
++		}
++		break;
++	}
++	case kHeroGPUFreeBO:
++		if (in0 == 0 || in0 > HEROGPU_MAX_BOS || fBOs[in0 - 1].mem == NULL) {
++			ret = kIOReturnBadArgument;
++		} else {
++			herogpu_bo_free(&fBOs[in0 - 1]);
++		}
++		break;
++	case kHeroGPUMapBO: {
++		struct herogpu_bo *bo = in0 && in0 <= HEROGPU_MAX_BOS ? &fBOs[in0 - 1] : NULL;
++		if (bo == NULL || bo->mem == NULL) {
++			ret = kIOReturnBadArgument;
++			break;
++		}
++		if (bo->umap == NULL) {
++			bo->umap = bo->mem->createMappingInTask(fTask, 0,
++			    kIOMapAnywhere | kIOMapWriteCombineCache);
++		}
++		if (bo->umap == NULL) {
++			ret = kIOReturnNoMemory;
++		} else {
++			out[0] = bo->umap->getAddress();
++			outCount = 1;
++		}
++		break;
++	}
++	case kHeroGPUSubmit:
++		out[0] = herolte_gpu_submit(in1 ? 1 : 0, in0, &out[1]);
++		outCount = 2;
++		break;
++	default:
++		ret = kIOReturnUnsupported;
++		break;
++	}
++	IOLockUnlock(fLock);
++
++	for (uint32_t i = 0; i < args->scalarOutputCount; i++) {
++		args->scalarOutput[i] = i < outCount ? out[i] : 0;
++	}
++	static uint32_t logged;
++	if (selector < 32 && !(logged & (1u << selector))) {
++		logged |= 1u << selector;
++		char name[32];
++		proc_selfname(name, sizeof(name));
++		IOLog("HEROGPU: %s sel %u in %u -> 0x%x\n", name, selector, args->scalarInputCount, ret);
++	}
++	return ret;
++}
++
++/*
++ * herogpu_selftest=1: a WRITE_VALUE job (64-bit zero over a canary)
++ * through the same buffer and submit paths a client uses.
++ */
++static void
++herogpu_selftest(__unused void *arg, __unused wait_result_t wr)
++{
++	IOSleep(70000);
++	if (!herolte_gpu_up()) {
++		IOLog("HEROGPU SELFTEST: GPU not up\n");
++		return;
++	}
++	IOLog("HEROGPU SELFTEST: GPU_ID %#llx rev %#llx shaders %#llx tiler features %#llx "
++	    "texture features0 %#llx threads %llu\n", herogpu_param(0), herogpu_param(1),
++	    herogpu_param(2), herogpu_param(10), herogpu_param(18), herogpu_param(14));
++	struct herogpu_bo bo;
++	bzero(&bo, sizeof(bo));
++	if (!herogpu_bo_create(&bo, 0x10000)) {
++		IOLog("HEROGPU SELFTEST: buffer failed\n");
++		return;
++	}
++	/* Through a write-combined kernel mapping, as a client would. */
++	IOMemoryMap *map = bo.mem->createMappingInTask(kernel_task, 0,
++	    kIOMapAnywhere | kIOMapWriteCombineCache);
++	volatile uint8_t *job = map ? (volatile uint8_t *)map->getVirtualAddress() : NULL;
++	if (job == NULL) {
++		IOLog("HEROGPU SELFTEST: mapping failed\n");
++		herogpu_bo_free(&bo);
++		return;
++	}
++	job[16] = 1 | (2 << 1);                         /* 64-bit, WRITE_VALUE */
++	*(volatile uint16_t *)(job + 18) = 1;           /* index */
++	*(volatile uint64_t *)(job + 32) = bo.va + 0x100;
++	*(volatile uint64_t *)(job + 40) = 3;           /* zero 64 bits */
++	volatile uint64_t *output = (volatile uint64_t *)(job + 0x100);
++	*output = 0xa5a5a5a55a5a5a5aull;
++	__asm__ volatile ("dsb sy" ::: "memory");
++	uint64_t us = 0;
++	uint32_t status = herolte_gpu_submit(1, bo.va, &us);
++	IOLog("HEROGPU SELFTEST: buffer at GPU VA %#llx, status %#x in %llu us, output %#llx -> %s\n",
++	    bo.va, status, us, *output, status == 0 && *output == 0 ? "OK" : "FAILED");
++	map->release();
++	herogpu_bo_free(&bo);
++}
++#endif /* ARM64_BOARD_CONFIG_HEROLTE */
+diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+index b89b64d..d1099ff 100644
+--- a/iokit/KernelConfigTables.cpp
++++ b/iokit/KernelConfigTables.cpp
+@@ -96,6 +96,13 @@ const char * gIOKernelConfigTables =
+     "     'IOMatchCategory' = SweetBattery;"
+     "   },"
+ #endif
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++    "   {"
++    "     'IOClass'         = HeroGPU;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = HeroGPU;"
++    "   },"
++#endif
+ #if defined(ARM64_BOARD_CONFIG_A5XELTE)
+     "   {"
+     "     'IOClass'         = A5XELTEGPU;"
+diff --git a/iokit/conf/files.arm64 b/iokit/conf/files.arm64
+index 4a5f5f4..4e56d3d 100644
+--- a/iokit/conf/files.arm64
++++ b/iokit/conf/files.arm64
+@@ -17,6 +17,7 @@ iokit/Kernel/arm/SweetSurface.cpp                                optional iokitc
+ iokit/Kernel/arm/SweetFramebuffer.cpp                            optional iokitcpp
+ iokit/Kernel/arm/A5XELTEGPU.cpp                                 optional iokitcpp
+ iokit/Kernel/arm/SweetBattery.cpp                                optional iokitcpp
++iokit/Kernel/arm/HeroGPU.cpp                                     optional iokitcpp
+ iokit/Kernel/arm/hid/SweetHID.cpp                                optional iokitcpp
+ iokit/Kernel/arm/hid/IOHIDEvent.cpp                              optional iokitcpp
+ iokit/Kernel/arm/hid/IOHIDEventServiceQueue.cpp                  optional iokitcpp

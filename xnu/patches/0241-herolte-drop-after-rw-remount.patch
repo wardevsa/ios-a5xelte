@@ -1,0 +1,133 @@
+diff --git a/bsd/dev/herolte_drop.c b/bsd/dev/herolte_drop.c
+index ee81faf..bf37841 100644
+--- a/bsd/dev/herolte_drop.c
++++ b/bsd/dev/herolte_drop.c
+@@ -8,10 +8,10 @@
+  *   block 0: "HERODRP1" | u32 version 1 | u32 entry count | u64 bytes | u64 id
+  *   then, from block 1, back to back, 8-byte aligned:
+  *     u32 path length | u32 mode (0 = directory) | u64 size | path | data
+- * Paths are absolute and must start with /private/var/herolte/. Just
+- * before launchd starts (bsd_init.c), every entry is written into the
+- * root volume as root:wheel with its mode, on every boot (idempotent).
+- * Boot-arg herodrop=0 skips it.
++ * Paths are absolute and must start with /private/var/herolte/. Once
++ * launchd has remounted the root volume read-write, every entry is written
++ * into it as root:wheel with its mode, unless that package (by id) is
++ * already installed. Boot-arg herodrop=0 skips it.
+  */
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ #include <sys/param.h>
+@@ -24,9 +24,15 @@
+ #include <sys/vnode_internal.h>
+ #include <sys/namei.h>
+ #include <sys/kauth.h>
++#include <sys/mount.h>
+ #include <kern/kalloc.h>
++#include <kern/clock.h>
++#include <kern/thread.h>
+ #include <pexpert/pexpert.h>
+ 
++extern vnode_t rootvnode;
++extern kern_return_t kernel_thread_start(thread_continue_t, void *, thread_t *);
++extern void thread_deallocate(thread_t);
+ int herolte_ufs_read_before_log(uint64_t back, uint32_t count, void *dst);
+ void herolte_drop_apply(void);
+ 
+@@ -158,14 +164,74 @@ hdrop_file(struct hdrop_reader *r, const char *path, int mode, uint64_t data, ui
+ 	return error;
+ }
+ 
++/* The id of the package last installed, kept next to the files. */
++#define HDROP_ID_PATH   "/private/var/herolte/.drop-id"
++
++static uint64_t
++hdrop_installed_id(vfs_context_t ctx)
++{
++	vnode_t vp = NULLVP;
++	uint64_t id = 0;
++	int resid = 0;
++	if (vnode_open(HDROP_ID_PATH, FREAD, 0, 0, &vp, ctx) == 0) {
++		if (vn_rdwr(UIO_READ, vp, (caddr_t)&id, sizeof(id), 0, UIO_SYSSPACE, 0,
++		    vfs_context_ucred(ctx), &resid, vfs_context_proc(ctx)) != 0 || resid != 0) {
++			id = 0;
++		}
++		vnode_close(vp, FREAD, ctx);
++	}
++	return id;
++}
++
++static void
++hdrop_set_installed_id(uint64_t id, vfs_context_t ctx)
++{
++	vnode_t vp = NULLVP;
++	int resid = 0;
++	if (vnode_open(HDROP_ID_PATH, FWRITE | O_CREAT | O_TRUNC, 0644, 0, &vp, ctx) == 0) {
++		(void)vn_rdwr(UIO_WRITE, vp, (caddr_t)&id, sizeof(id), 0, UIO_SYSSPACE, IO_UNIT,
++		    vfs_context_ucred(ctx), &resid, vfs_context_proc(ctx));
++		vnode_close(vp, FWRITE, ctx);
++	}
++}
++
++static void hdrop_install(void);
++
++/*
++ * The root volume is still read-only when launchd starts (it remounts it
++ * read-write itself; 0240 failed with EROFS), so a thread waits for that
++ * and installs then. Files persist: a new package's autorun runs from the
++ * next boot on. A package already installed (same id) is not rewritten,
++ * so a running autorun is never truncated.
++ */
++static void
++hdrop_thread(__unused void *arg, __unused wait_result_t wr)
++{
++	for (unsigned i = 0; i < 3000; i++) {           /* up to 5 minutes */
++		if (rootvnode != NULLVP && vnode_mount(rootvnode) != NULL &&
++		    !vfs_isrdonly(vnode_mount(rootvnode))) {
++			hdrop_install();
++			return;
++		}
++		delay(100000);
++	}
++	printf("HEROLTE DROP: the root volume never became writable\n");
++}
++
+ void
+ herolte_drop_apply(void)
+ {
+ 	int on = 1;
++	thread_t thread;
+ 	PE_parse_boot_argn("herodrop", &on, sizeof(on));
+-	if (!on) {
+-		return;
++	if (on && kernel_thread_start(hdrop_thread, NULL, &thread) == KERN_SUCCESS) {
++		thread_deallocate(thread);
+ 	}
++}
++
++static void
++hdrop_install(void)
++{
+ 	struct hdrop_reader r = { .buf = kalloc_data(HDROP_CHUNK, Z_WAITOK) };
+ 	if (r.buf == NULL) {
+ 		return;
+@@ -186,6 +252,10 @@ herolte_drop_apply(void)
+ 	unsigned files = 0, failed = 0;
+ 	char path[HDROP_MAX_PATH + 1];
+ 	(void)hdrop_mkdir("/private/var/herolte", 0755, ctx);
++	if (hdrop_installed_id(ctx) == h.id) {
++		printf("HEROLTE DROP: package %llu already installed\n", h.id);
++		goto out;
++	}
+ 	for (uint32_t i = 0; i < h.count; i++) {
+ 		const uint8_t *p = hdrop_at(&r, off, sizeof(struct hdrop_entry));
+ 		struct hdrop_entry e;
+@@ -220,6 +290,9 @@ herolte_drop_apply(void)
+ 		}
+ 	}
+ 	printf("HEROLTE DROP: package %llu: %u entries written, %u failed\n", h.id, files, failed);
++	if (failed == 0) {
++		hdrop_set_installed_id(h.id, ctx);
++	}
+ out:
+ 	kfree_data(r.buf, HDROP_CHUNK);
+ }

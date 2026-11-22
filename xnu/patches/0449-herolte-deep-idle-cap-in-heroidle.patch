@@ -1,0 +1,53 @@
+herolte: the longest deep-idle sleep is a knob, in heroidle bits 8-15 (0449)
+
+min78 (PMU step back, binary checked): cpu1 enter 18717 / resume 15763 in ~4 minutes (about 80 cycles a second per core, the 5 ms cap of 0447) and the screen-off current 497 mA = the same as with one core (E-0290: 492): the cycles cost what the sleep saves. heroidle=<value>: bits 0-7 are the CPU mask, bits 8-15 the cap in ms (0 = 5 ms), so no new argument is needed on the 606-character line. 100 ms is the next test: the core sleeps until its own pop, a wake-up SGI or 100 ms; whether SGIs wake a sleeping core is not known (min76 and min77 ran without the PMU step and say nothing). heroidle only (D-0089).
+
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -493,6 +493,7 @@
+ volatile uint64_t herolte_idle_entry_pa;
+ volatile uint64_t herolte_idle_enter[MAX_CPUS], herolte_idle_resume[MAX_CPUS], herolte_idle_since[MAX_CPUS];
+ volatile uint64_t herolte_idle_arm[MAX_CPUS];        /* 0440: arm_init_idle_cpu reached (MMU on) */
++volatile uint64_t herolte_idle_cap_ticks;       /* 0449: longest sleep, in 26 MHz ticks (0 = 5 ms); heroidle bits 8-15 are the cap in ms */
+ volatile uint64_t herolte_idle_pop[MAX_CPUS];        /* 0445: the next timer pop of a core when it went to sleep (what the broadcast tick of herolte_gpu.c wakes it for) */
+ volatile uint64_t herolte_idle_pmu_cfg[MAX_CPUS];   /* 0441: VA of each core's PMU CONFIGURATION register (PMU+0x2000+0x80*(Aff1<<2|Aff0)); 0 = not mapped: no deep idle */
+ 
+@@ -522,7 +523,8 @@
+ 	 * than the state's min-residency (exynos-powermode.c get_next_event_time_us; DTB: 750 us boot cluster, 2000 us the others).
+ 	 * Here: the core's own next timer pop (what XNU armed in SetIdlePop: rtcPop) must be at least 3 ms away; otherwise plain WFI.
+ 	 */
+-	uint64_t sleep_ticks = 130000ULL;
++	uint64_t cap_ticks = herolte_idle_cap_ticks ? herolte_idle_cap_ticks : 130000ULL;
++	uint64_t sleep_ticks = cap_ticks;
+ 	{
+ 		uint64_t now_t = mach_absolute_time(), pop = cdp->rtcPop;
+ 		if (pop <= now_t || pop - now_t < 78000ULL) {      /* a timer already due, or less than 3 ms away (26 MHz) */
+@@ -531,7 +533,7 @@
+ 		/* 0445/0447 (corrected in 0448): the pop is published for the (unused) broadcast tick; the sleep is bounded by a hand-armed CNTV below. */
+ 		herolte_idle_pop[c] = pop;
+ 		/* 0447: the hand-armed virtual timer rings for the earlier of the core's pop and 5 ms (the 2 ms of min71/min72 was the same mechanism). */
+-		sleep_ticks = pop - now_t > 130000ULL ? 130000ULL : pop - now_t;
++		sleep_ticks = pop - now_t > cap_ticks ? cap_ticks : pop - now_t;
+ 	}
+ 	herolte_idle_enter[c]++;
+ 	herolte_idle_since[c] = mach_absolute_time();
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2747,6 +2747,17 @@
+ 	bool idle_armed = false;
+ 	uint64_t idle_t0 = 0, idle_ipis = 0;
+ 	PE_parse_boot_argn("heroidle", &idle_mask_want, sizeof(idle_mask_want));
++	/*
++	 * 0449: heroidle=<value>: bits 0-7 the mask of logical CPUs, bits 8-15 the longest sleep in ms (0 = 5 ms), so that the boot
++	 * line (606 characters) needs no new argument. min78 (PMU step back): six cores sleep and wake, but at ~80 cycles a second each
++	 * (the 5 ms cap) the screen-off current is the same as with one core (497 mA). The cap is now the knob: 100 ms means the core
++	 * sleeps until its own pop, a wake-up SGI or the cap.
++	 */
++	{
++		extern volatile uint64_t herolte_idle_cap_ticks;
++		herolte_idle_cap_ticks = ((idle_mask_want >> 8) & 0xffu) * 26000ull;
++		idle_mask_want &= 0xffu;
++	}
+ 	int gov_on = 0;
+ 	PE_parse_boot_argn("herogov", &gov_on, sizeof(gov_on));
+ 	uint64_t gov_prev_busy = 0, gov_prev_t = 0, gov_flips = 0;

@@ -1,6 +1,8 @@
+diff --git a/osfmk/kern/exception.c b/osfmk/kern/exception.c
+index 14aa31d..a20a764 100644
 --- a/osfmk/kern/exception.c
 +++ b/osfmk/kern/exception.c
-@@ -873,6 +873,25 @@
+@@ -873,6 +873,25 @@ sweet_crash_log(const char *name, int pid, int sig, uint64_t code, uint64_t subc
  	}
  	printf("%s\n", line);
  

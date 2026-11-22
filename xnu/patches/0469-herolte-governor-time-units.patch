@@ -1,0 +1,29 @@
+herolte: the governor v2 compared mach ticks with nanoseconds (0469)
+
+min102 (E-0323): the summary line every 10 s never appeared and the minimum time between down steps was about 2.5 s instead of 60 ms, because last_log and hold_until are in mach_absolute_time ticks and were compared with nanosecond values. The two intervals are now converted with nanoseconds_to_absolutetime. herogov=2 only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2839,6 +2839,9 @@
+ 	uint64_t res_ns[G2_N] = { 0 }, trans = 0, ups = 0, downs = 0, boosts = 0, sat = 0, samples = 0, tr_ns_sum = 0, tr_ns_max = 0;
+ 	unsigned lv = 0, down_n = 0, idle_n = 0;
+ 	bool started = false, boosting = false;
++	uint64_t ticks_60ms = 0, ticks_10s = 0;        /* mach_absolute_time is in ticks, not nanoseconds (min102 compared the two: no summary line, a 2.5 s minimum instead of 60 ms) */
++	nanoseconds_to_absolutetime(60ull * 1000 * 1000, &ticks_60ms);
++	nanoseconds_to_absolutetime(10ull * NSEC_PER_SEC, &ticks_10s);
+ 	for (;;) {
+ 		hg_msleep(20);
+ 		if (!hc.saved || hc.broken) {
+@@ -2965,10 +2968,10 @@
+ 					downs++;
+ 				}
+ 				lv = want;
+-				hold_until = t1 + 60ull * NSEC_PER_SEC / 1000;
++				hold_until = t1 + ticks_60ms;
+ 			}
+ 		}
+-		if (!last_log || now - last_log > 10ull * 1000 * NSEC_PER_SEC / 1000) {
++		if (!last_log || now - last_log > ticks_10s) {
+ 			if (last_log) {
+ 				uint64_t tot = 0;
+ 				for (unsigned i = 0; i < G2_N; i++) {

@@ -1,0 +1,113 @@
+diff --git a/bsd/conf/files b/bsd/conf/files
+index d0c145d..882a2b3 100644
+--- a/bsd/conf/files
++++ b/bsd/conf/files
+@@ -111,6 +111,7 @@ bsd/dev/herolte_touch.c			standard
+ bsd/dev/herolte_battery.c		standard
+ bsd/dev/herolte_gpu.c			standard
+ bsd/dev/herolte_drop.c			standard
++bsd/dev/herolte_gl.c			standard
+ bsd/dev/a5xelte_keys.c			standard
+ bsd/dev/a5xelte_touch.c			standard
+ bsd/dev/sweet_sample.c			standard
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+new file mode 100644
+index 0000000..b2ef08b
+--- /dev/null
++++ b/bsd/dev/herolte_gl.c
+@@ -0,0 +1,63 @@
++/*
++ * HEROLTE GL: CoreAnimation's render server (backboardd) on the Mali.
++ *
++ * iOS 16's QuartzCore falls back to its OpenGL ES renderer when Metal makes
++ * no context; the EAGL shim (gpu/eagl, libheroeagl.dylib in the drop zone)
++ * gives it a working ES3 EAGLContext over Mesa's Panfrost. This puts the
++ * shim into backboardd without touching the root image: when launchd
++ * execs /usr/libexec/backboardd, exec_extract_strings() appends
++ *   DYLD_INSERT_LIBRARIES=/private/var/herolte/lib/libheroeagl.dylib
++ *   HERO_LOG_STDERR=1          (the shim's stderr goes to the kernel log)
++ * to its environment. Guards: boot-arg herogl=1 (2 also sets
++ * EAGL_SHIM_DEBUG=1), the dylib must exist, and only the first two
++ * launches of a boot get it: if backboardd dies twice, the next one is
++ * stock, so a broken shim costs two restarts and no more.
++ */
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++#include <sys/param.h>
++#include <sys/systm.h>
++#include <sys/vnode.h>
++#include <string.h>
++#include <pexpert/pexpert.h>
++
++int herolte_gl_env(const char *path, const char **extra, int max);
++
++#define HGL_TARGET      "/usr/libexec/backboardd"
++#define HGL_SHIM        "/private/var/herolte/lib/libheroeagl.dylib"
++#define HGL_MAX_LAUNCHES 2
++
++static int hgl_mode = -1;
++static int hgl_launches;
++
++int
++herolte_gl_env(const char *path, const char **extra, int max)
++{
++	if (hgl_mode < 0) {
++		hgl_mode = 0;
++		PE_parse_boot_argn("herogl", &hgl_mode, sizeof(hgl_mode));
++	}
++	if (hgl_mode == 0 || path == NULL || strcmp(path, HGL_TARGET) != 0 || max < 3) {
++		return 0;
++	}
++	int launch = ++hgl_launches;
++	if (launch > HGL_MAX_LAUNCHES) {
++		printf("HEROLTE GL: backboardd launch %d: stock (the shim had %d launches)\n",
++		    launch, HGL_MAX_LAUNCHES);
++		return 0;
++	}
++	vnode_t vp = NULLVP;
++	if (vnode_lookup(HGL_SHIM, 0, &vp, vfs_context_kernel()) != 0) {
++		printf("HEROLTE GL: backboardd launch %d: no %s, stock\n", launch, HGL_SHIM);
++		return 0;
++	}
++	vnode_put(vp);
++	int n = 0;
++	extra[n++] = "DYLD_INSERT_LIBRARIES=" HGL_SHIM;
++	extra[n++] = "HERO_LOG_STDERR=1";
++	if (hgl_mode >= 2) {
++		extra[n++] = "EAGL_SHIM_DEBUG=1";
++	}
++	printf("HEROLTE GL: backboardd launch %d: EAGL shim inserted (herogl=%d)\n", launch, hgl_mode);
++	return n;
++}
++#endif /* ARM64_BOARD_CONFIG_HEROLTE */
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index deccec2..fa74c10 100644
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -5741,6 +5741,27 @@ exec_extract_strings(struct image_params *imgp)
+ 		imgp->ip_envc++;
+ 	}
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/* bsd/dev/herolte_gl.c: the EAGL shim for backboardd (boot-arg herogl). */
++	{
++		extern int herolte_gl_env(const char *path, const char **extra, int max);
++		const char *extra[4];
++		int n = herolte_gl_env(imgp->ip_strings + strlen(EXECUTABLE_KEY), extra, 4);
++		for (int i = 0; i < n; i++) {
++			error = exec_add_user_string(imgp, CAST_USER_ADDR_T(extra[i]), UIO_SYSSPACE, TRUE);
++			if (error) {
++				goto bad;
++			}
++			if (imgp->ip_argspace < new_ptr_size) {
++				error = E2BIG;
++				goto bad;
++			}
++			imgp->ip_argspace -= new_ptr_size;
++			imgp->ip_envc++;
++		}
++	}
++#endif
++
+ 	/* Save space for envv[] NULL terminator */
+ 	if (imgp->ip_argspace < new_ptr_size) {
+ 		error = E2BIG;

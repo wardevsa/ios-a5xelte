@@ -1,6 +1,8 @@
+diff --git a/bsd/dev/sweet_ufs.c b/bsd/dev/sweet_ufs.c
+index ec54e68..6b926fe 100644
 --- a/bsd/dev/sweet_ufs.c
 +++ b/bsd/dev/sweet_ufs.c
-@@ -700,6 +700,36 @@
+@@ -700,6 +700,36 @@ sweet_log_append(const char *c, int size)
  	}
  }
  
@@ -37,9 +39,11 @@
  struct sweet_log_header {
  	char magic[8];
  	uint32_t version, size;
+diff --git a/bsd/dev/sweet_usb.c b/bsd/dev/sweet_usb.c
+index 9e8cb33..9c42e45 100644
 --- a/bsd/dev/sweet_usb.c
 +++ b/bsd/dev/sweet_usb.c
-@@ -764,6 +764,54 @@
+@@ -764,6 +764,54 @@ ud_thread(void *arg __unused, wait_result_t wr __unused)
  	}
  }
  
@@ -94,7 +98,7 @@
  static void
  sweet_usb_gadget_start(vm_offset_t dwc)
  {
-@@ -838,5 +886,10 @@
+@@ -838,5 +886,10 @@ sweet_usb_gadget_start(vm_offset_t dwc)
  	if (kernel_thread_start(ud_thread, NULL, &thread) == KERN_SUCCESS) {
  		thread_deallocate(thread);
  	}

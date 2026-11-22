@@ -1,0 +1,104 @@
+diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
+index f5987c2..947abe7 100644
+--- a/osfmk/arm64/arm_vm_init.c
++++ b/osfmk/arm64/arm_vm_init.c
+@@ -1000,8 +1000,7 @@ arm_vm_page_granular_helper(vm_offset_t start, vm_offset_t _end, vm_offset_t va,
+ 
+ 		pmap_paddr_t requested_pa = start - gVirtBase + gPhysBase - pa_offset;
+ 		pmap_paddr_t mapping_end = hakios_ram_mapping_end(requested_pa);
+-		if (!mapping_end) panic("ram_banks: physical mapping outside claimed banks");
+-		if (pa >= mapping_end) return;
++		if (pa >= mapping_end) return;          /* (mapping_end 0: above every bank, nothing to map) */
+ 
+ 		tte2 = arm_kva_to_tte(va);
+ 
+@@ -1120,7 +1119,10 @@ arm_vm_page_granular_prot(vm_offset_t start, unsigned long size, pmap_paddr_t pa
+ 
+ 			tte2 = arm_kva_to_tte(align_start);
+ 
+-			if (hakios_ram_mapping_end(pa) >= pa + ARM_TT_L2_SIZE) {
++			/* Apple's own test for the boot bank; a whole twig of an extra bank too. */
++			pmap_paddr_t bank_end = hakios_ram_mapping_end(pa);
++			if ((pa >= gPhysBase && pa < real_avail_end) ||
++			    (bank_end != real_avail_end && bank_end >= pa + ARM_TT_L2_SIZE)) {
+ 				tmplate = (pa & ARM_TTE_BLOCK_L2_MASK) | ARM_TTE_TYPE_BLOCK
+ 				    | ARM_TTE_VALID | ARM_TTE_BLOCK_AF | ARM_TTE_BLOCK_NX
+ 				    | ARM_TTE_BLOCK_AP(pte_prot_APX) | ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY)
+@@ -1615,6 +1617,7 @@ arm_vm_physmap_init(boot_args *args)
+ 	    real_avail_end - args->topOfKernelData, AP_RWNA, ARM64_GRANULE_ALLOW_BLOCK | ARM64_GRANULE_ALLOW_HINT); // rest of physmem
+ 
+ 
++	sweet_early_mark(7, "rb: extra banks");
+ 	/* Compact virtual aperture; never map the physical holes between banks. */
+ 	for (uint32_t i = 1; i < hakios_managed_ram.count; ++i) {
+ 		const struct hakios_ram_bank *bank = &hakios_managed_ram.bank[i];
+@@ -1622,6 +1625,7 @@ arm_vm_physmap_init(boot_args *args)
+ 		arm_vm_physmap_slide(temp_ptov_table, synthetic_va, bank->pages << PAGE_SHIFT, AP_RWNA, 0);
+ 	}
+ 
++	sweet_early_mark(7, "rb: extra banks mapped");
+ 	assert((temp_ptov_table[ptov_index - 1].va + temp_ptov_table[ptov_index - 1].len) <= physmap_end);
+ 
+ 	// Sort in descending order of segment length.  LUT traversal is linear, so largest (most likely used)
+@@ -2003,6 +2007,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	avail_start = args->topOfKernelData;
+ 
+ #if defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR)
++	sweet_early_mark(7, "rb: identity map");
+ 	arm_replace_identity_map();
+ #endif
+ 
+@@ -2041,6 +2046,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	 *   on large memory systems the physical aperture exists separately below
+ 	 *   the rest of the kernel virtual address space
+ 	 */
++	sweet_early_mark(7, "rb: physmap tables");
+ 	init_ptpages(cpu_tte, physmap_base, ROUND_L1(physmap_end), TRUE, ARM_DYNAMIC_TABLE_XN | ARM_TTE_TABLE_AP(ARM_TTE_TABLE_AP_USER_NA));
+ #endif
+ 
+@@ -2157,6 +2163,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	vm_prelink_sdata = segPRELINKDATAB;
+ 	vm_prelink_edata = segPRELINKDATAB + segSizePRELINKDATA;
+ 
++	sweet_early_mark(7, "rb: prot_init");
+ 	arm_vm_prot_init(args);
+ 
+ 	/*
+@@ -2207,6 +2214,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	/* phystokv() must still refer to the bootstrap aperture here. */
+ 	sweet_early_map_final();
+ #endif
++	sweet_early_mark(7, "rb: physmap_init");
+ 	arm_vm_physmap_init(args);
+ 	set_mmu_ttb_alternate(cpu_ttep & TTBR_BADDR_MASK);
+ 
+diff --git a/osfmk/arm64/hakios_ram_banks.inc b/osfmk/arm64/hakios_ram_banks.inc
+index 22971f0..e703728 100644
+--- a/osfmk/arm64/hakios_ram_banks.inc
++++ b/osfmk/arm64/hakios_ram_banks.inc
+@@ -58,7 +58,11 @@ hakios_ram_mapping_end(pmap_paddr_t address)
+         uint64_t size = bank->pages << PAGE_SHIFT;
+         if (address >= bank->base && address - bank->base < size) return bank->base + size;
+     }
+-    return 0;
++    /*
++     * HEROLTE: anything else as Apple's code had it ("if (pa >= real_avail_end) return"): below the boot bank's end
++     * it is mapped, above it not. Scion's panic here made any such mapping fatal, with or without extra banks.
++     */
++    return address < real_avail_end ? real_avail_end : 0;
+ }
+ 
+ static uint64_t
+@@ -101,7 +105,10 @@ hakios_ram_boot_memory_size(boot_args *args, uint64_t limit)
+         panic("ram_banks: extra banks require the generic non-KASAN pmap configuration");
+ #endif
+     uint64_t bytes = hakios_managed_ram.total_pages << PAGE_SHIFT;
+-    kprintf("ram_banks: %u claimed banks, %llu MiB managed, primary %llu MiB\n",
+-            hakios_managed_ram.count, bytes >> 20, hakios_managed_ram.bank[0].pages >> (20 - PAGE_SHIFT));
++    /*
++     * HEROLTE: no kprintf here. This runs inside arm_vm_init, long before serial_init maps the UART: the first
++     * 0326 boot stopped right after "entering arm_vm_init" with no panic text. pmap_bootstrap's console says it.
++     */
++    sweet_early_mark(7, "ram banks: list read");
+     return bytes;
+ }

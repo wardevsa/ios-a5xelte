@@ -1,0 +1,202 @@
+herolte: power instrumentation and a CPU-rate measurement run (0433)
+
+First step of docs/S7GE_ENERGIA_TERMICA_ARQUITECTURA_20261117.md: measure before optimizing. herobatms=<ms> sets the battery poll (30 s by default; 2-60 s); each poll logs "HEROLTE PWR: mA mV % battery-C cpu-MHz". herocycle=<s> (>=20) makes the power thread step the Mongoose cluster 2288 -> 1976 -> 2600 MHz every that many seconds while the screen is on and the SoC is not hot (hc_rate: the table of hg_cpu_up, voltage up first / down after), so one boot compares the rates. heromeas=<s> is both at once (cycle every <s> s, 5 s poll) in one short argument: the boot line is at its 606-character limit. The charger dump slows to every 6th poll. All off by default.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2368,6 +2368,9 @@
+  * and the raised rate: with the screen off or the battery hot the cores go back to exactly the bootloader's numbers
+  * (hc_go_low), and up again to herocpu_mhz (hc_go_high). Only the power thread (hg_power_thread) moves them after boot.
+  */
++/* 0433: the CPU rate the power thread last set, for the battery's HEROLTE PWR lines (bsd/dev/herolte_battery.c). */
++volatile uint32_t herolte_pm_mhz;
++
+ static struct {
+ 	bool saved, high, broken;
+ 	uint32_t boot_pll, boot_div[HC_NDIVS], boot_ema, boot_assist;
+@@ -2444,6 +2447,7 @@
+ 	}
+ 	hc_from_switch();
+ 	hc.high = true;
++	herolte_pm_mhz = hc.mhz;
+ 	return true;
+ }
+ 
+@@ -2467,6 +2471,7 @@
+ 	}
+ 	hc_from_switch();
+ 	hc.high = false;
++	herolte_pm_mhz = 728;
+ 	hg_wr(hc.sysreg, 0x314, hc.boot_ema);
+ 	hg_wr(hc.sysreg, 0x1040, hc.boot_assist);
+ 	uint8_t set = 0;
+@@ -2478,6 +2483,60 @@
+ 	return true;
+ }
+ 
++/*
++ * 0433: from one of the cluster's rates to another while it runs (the same table as hg_cpu_up: 1976, 2288, 2600 MHz): a
++ * lower rate is relocked first and its voltage written after, a higher rate gets its voltage first (hc_go_high). Anything
++ * unexpected puts the previous rate's numbers back. Only the power thread calls it (herocycle=<seconds>, below).
++ */
++static bool
++hc_rate(uint32_t mhz)
++{
++	extern bool herolte_apm_mngs_voltage(uint8_t value);
++	static const struct {
++		uint32_t mhz, m;
++		uint8_t volt, promise;
++	} rates[] = {
++		{ 1976, 228, 0x62, 5 },
++		{ 2288, 264, 0x6f, 6 },
++		{ 2600, 300, 0x7c, 7 },
++	};
++	if (!hc.saved || hc.broken || !hc.high) {
++		return false;
++	}
++	for (unsigned i = 0; i < sizeof(rates) / sizeof(rates[0]); i++) {
++		if (rates[i].mhz != mhz) {
++			continue;
++		}
++		if (hc.mhz == mhz) {
++			return true;
++		}
++		uint32_t old_mhz = hc.mhz, old_m = hc.m;
++		uint8_t old_volt = hc.volt, old_promise = hc.promise;
++		hc.mhz = mhz;
++		hc.m = rates[i].m;
++		hc.volt = rates[i].volt;
++		hc.promise = rates[i].promise;
++		if (!hc_go_high()) {
++			hc.mhz = old_mhz;
++			hc.m = old_m;
++			hc.volt = old_volt;
++			hc.promise = old_promise;
++			return false;
++		}
++		herolte_pm_mhz = mhz;
++		if (hc.volt < old_volt) {
++			uint8_t set = 0;
++			bool wrote = herolte_apm_mngs_voltage(hc.volt);
++			delay(200);
++			if (!wrote || !herolte_apm_pmic_read(0x1d, &set) || set != hc.volt) {
++				printf("HEROLTE CPU: vdd_mngs down to %#x failed (now %#x), the old voltage stays\n", hc.volt, set);
++			}
++		}
++		return true;
++	}
++	return false;
++}
++
+ static void
+ hg_cpu_up(void)
+ {
+@@ -2609,6 +2668,13 @@
+ 	printf("HEROLTE POWER: Mongoose to %u MHz with the screen off or the SoC at %u C (back under %u C)\n", hp_boot_mhz(), hot, cool);
+ 	bool hot_now = false;
+ 	uint64_t last_log = 0;
++	/* 0433: boot-arg herocycle=<seconds>: a measurement run, the cluster steps 2600 -> 2288 -> 1976 -> 2600 ... every
++	 * that many seconds while the screen is on and the SoC not hot, so one boot compares the rates (HEROLTE PWR lines). */
++	uint32_t cycle_s = 0;
++	uint64_t cycle_at = 0;
++	unsigned cycle_i = 0;
++	PE_parse_boot_argn("herocycle", &cycle_s, sizeof(cycle_s));
++	PE_parse_boot_argn("heromeas", &cycle_s, sizeof(cycle_s));      /* heromeas=<s>: the same, and a 5 s battery poll (SweetBattery.cpp) */
+ 	int top = -1000, seen_max = -1000;
+ 	for (;;) {
+ 		hg_msleep(200);
+@@ -2644,6 +2710,20 @@
+ 			printf("HEROLTE POWER: Mongoose %s %u MHz (screen %s%s, SoC %d C)\n", ok ? "to" : "NOT to",
+ 			    want_low ? hp_boot_mhz() : hc.mhz, screen_off ? "off" : "on", hot_now ? ", hot" : "", top);
+ 		}
++		if (cycle_s >= 20 && hc.high && !hot_now && !screen_off) {
++			uint64_t el = 0;
++			if (cycle_at == 0) {
++				cycle_at = now;
++			}
++			absolutetime_to_nanoseconds(now - cycle_at, &el);
++			if (el > (uint64_t)cycle_s * NSEC_PER_SEC) {
++				static const uint32_t order[] = { 2288, 1976, 2600 };
++				uint32_t to = order[cycle_i++ % 3];
++				bool ok = hc_rate(to);
++				cycle_at = now;
++				printf("HEROLTE POWER: cycle: Mongoose %s %u MHz (SoC %d C)\n", ok ? "to" : "NOT to", to, top);
++			}
++		}
+ 		uint64_t since = 0;
+ 		absolutetime_to_nanoseconds(now - last_log, &since);
+ 		if (last_log == 0 || since > 60ull * NSEC_PER_SEC) {
+--- a/bsd/dev/herolte_battery.c
++++ b/bsd/dev/herolte_battery.c
+@@ -191,7 +191,7 @@
+ fg_charger_dump(void)
+ {
+ 	static unsigned calls;
+-	if (calls++ % 2 != 0) {
++	if (calls++ % 6 != 0) {
+ 		return;
+ 	}
+ 	uint8_t v;
+@@ -293,6 +293,15 @@
+ 		herolte_fg_temp_dc = (int)(int16_t)temp * 10 / 256;
+ 	}
+ 	fg_charger_dump();
++	/* 0433: one compact line per poll (herobatms in SweetBattery.cpp sets the interval): the numbers a power experiment needs. */
++	{
++		extern volatile uint32_t herolte_pm_mhz;        /* bsd/dev/herolte_gpu.c */
++		extern volatile int herolte_fg_temp_dc;
++		printf("HEROLTE PWR: %d mA %u mV %u%% batt %d.%u C cpu %u MHz\n", (int)(((int64_t)(int16_t)current * 15625) / 100000),
++		    (unsigned)(((uint64_t)vcell * 78125u) / 1000000u), (unsigned)(((unsigned)soc * 10u) >> 8) / 10u,
++		    herolte_fg_temp_dc / 10, (unsigned)(herolte_fg_temp_dc < 0 ? -herolte_fg_temp_dc : herolte_fg_temp_dc) % 10,
++		    (unsigned)herolte_pm_mhz);
++	}
+ 	unsigned permille = ((unsigned)soc * 10u) >> 8;
+ 	unsigned p = (permille * 1000u / FG_CAPACITY_MAX + 5u) / 10u;
+ 	*percent = p > 100 ? 100 : p;
+--- a/iokit/Kernel/arm/SweetBattery.cpp
++++ b/iokit/Kernel/arm/SweetBattery.cpp
+@@ -220,6 +220,26 @@
+ #endif
+ 
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
++/* 0433: boot-arg herobatms=<ms> (2000 to 60000) sets the battery poll, 30 s by default: power experiments want a few seconds. */
++static unsigned
++pollMs(void)
++{
++	unsigned ms = 30000, meas = 0;
++	if (PE_parse_boot_argn("heromeas", &meas, sizeof(meas)) && meas) {
++		ms = 5000;      /* a measurement run (herocycle in herolte_gpu.c) polls every 5 s */
++	}
++	PE_parse_boot_argn("herobatms", &ms, sizeof(ms));
++	return ms < 2000 ? 2000 : (ms > 60000 ? 60000 : ms);
++}
++#else
++static unsigned
++pollMs(void)
++{
++	return 30000;
++}
++#endif
++
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ void
+ SweetBattery::poll(void)
+ {
+@@ -298,7 +318,7 @@
+ 	SweetBattery *self = OSDynamicCast(SweetBattery, owner);
+ 	if (self && self->fRunning) {
+ 		self->poll();
+-		sender->setTimeoutMS(30000);
++		sender->setTimeoutMS(pollMs());
+ 	}
+ }
+ 
+@@ -324,7 +344,7 @@
+ 		if (fLoop && fTimer && fLoop->addEventSource(fTimer) == kIOReturnSuccess) {
+ 			fTimerAdded = true;
+ 			fRunning = true;
+-			fTimer->setTimeoutMS(30000);
++			fTimer->setTimeoutMS(pollMs());
+ 		} else {
+ 			fReal = false;
+ 			poll();

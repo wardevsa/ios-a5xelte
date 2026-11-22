@@ -1,0 +1,82 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 0da4385..d3348e7 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2240,6 +2240,7 @@ ha_read(uint32_t reg, uint16_t *value)
+ #include <miscfs/devfs/devfs.h>
+ #include <sys/conf.h>
+ #include <sys/errno.h>
++#include <sys/ioccom.h>
+ #include <sys/uio.h>
+ #include "herolte_audio_table.h"
+ 
+@@ -2390,8 +2391,9 @@ static uint64_t ha_ring_lost, ha_ring_short;
+ static vm_offset_t ha_i2s;
+ 
+ static int
+-ha_dev_open(__unused dev_t dev, __unused int flags, __unused int devtype, __unused struct proc *p)
++ha_dev_open(__unused dev_t dev, __unused int flags, __unused int devtype, struct proc *p)
+ {
++	printf("HEROLTE AUDIO: /dev/hakios-audio opened by %s\n", proc_name_address(p));
+ 	return 0;
+ }
+ 
+@@ -2428,8 +2430,12 @@ ha_dev_write(__unused dev_t dev, struct uio *uio, __unused int ioflag)
+ 
+ /* The plug-in's volume: iOS scales the samples itself in this route, there is nothing to set. */
+ static int
+-ha_dev_ioctl(__unused dev_t dev, __unused u_long command, __unused caddr_t data, __unused int flags, __unused struct proc *p)
++ha_dev_ioctl(__unused dev_t dev, u_long command, caddr_t data, __unused int flags, __unused struct proc *p)
+ {
++	if (command == _IOW('r', 2, char[200])) {       /* the plug-in's words (its standard error goes nowhere) */
++		data[199] = '\0';
++		printf("HEROLTE AUDIO: plug-in: %s", data);
++	}
+ 	return 0;
+ }
+ 
+@@ -2476,15 +2482,29 @@ ha_serve_start(vm_offset_t i2s)
+ 	extern kern_return_t kernel_thread_start_priority(thread_continue_t, void *, integer_t, thread_t *);
+ 	thread_t thread;
+ 	ha_i2s = i2s;
+-	int major = cdevsw_add(-1, &ha_cdevsw);
+-	if (major < 0 || devfs_make_node(makedev(major, 0), DEVFS_CHAR, UID_ROOT, GID_WHEEL, 0666, "hakios-audio") == NULL) {
+-		printf("HEROLTE AUDIO: no /dev/hakios-audio\n");
+-		return;
++	/* Half a second of 440 Hz through the ring: heard, this path is good, whatever iOS does. */
++	int32_t a = 0, b = 2621;
++	for (unsigned i = 0; i < HA_RATE / 2; i++) {
++		uint16_t sample = (uint16_t)(int16_t)a;
++		ha_ring[ha_ring_in % HA_RING_FRAMES] = ((uint32_t)sample << 16) | sample;
++		ha_ring_in++;
++		a += (b * 1887) >> 15;
++		b -= (a * 1887) >> 15;
+ 	}
+ 	if (kernel_thread_start_priority(ha_feed_thread, NULL, 90, &thread) == KERN_SUCCESS) {
+ 		thread_deallocate(thread);
+ 	}
+-	printf("HEROLTE AUDIO: /dev/hakios-audio ready\n");
++	printf("HEROLTE AUDIO: playing\n");
++}
++
++/* Before anything else of the sound: mediaserverd opens the device as it starts, long before the codec is set up. */
++static void
++ha_dev_make(void)
++{
++	int major = cdevsw_add(-1, &ha_cdevsw);
++	if (major < 0 || devfs_make_node(makedev(major, 0), DEVFS_CHAR, UID_ROOT, GID_WHEEL, 0666, "hakios-audio") == NULL) {
++		printf("HEROLTE AUDIO: no /dev/hakios-audio\n");
++	}
+ }
+ 
+ /* The I2S block is the codec's slave (CBM_CFM); its FIFO filled by hand for now. A sine at 440 Hz. */
+@@ -2595,6 +2615,9 @@ ha_tone(void)
+ static void
+ hg_audio_thread(void *arg, __unused wait_result_t wr)
+ {
++	if ((int)(uintptr_t)arg == 3) {
++		ha_dev_make();
++	}
+ 	hg_msleep(20000);
+ 	vm_offset_t cmu = ml_io_map(HA_CMU_PA, 0x2000);
+ 	ha_pins = ml_io_map(HA_PINS_PA, 0x1000);

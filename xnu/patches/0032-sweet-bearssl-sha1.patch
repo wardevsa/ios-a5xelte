@@ -1,18 +1,8 @@
---- a/libkern/conf/files
-+++ b/libkern/conf/files
-@@ -106,6 +106,9 @@
- libkern/crypto/sweet_md5.c	optional crypto
- libkern/crypto/sweet_dec32le.c	optional crypto
- libkern/crypto/sweet_enc32le.c	optional crypto
-+libkern/crypto/sweet_sha1.c	optional crypto
-+libkern/crypto/sweet_dec32be.c	optional crypto
-+libkern/crypto/sweet_enc32be.c	optional crypto
- libkern/crypto/corecrypto_aesxts.c		optional crypto
- libkern/crypto/corecrypto_rand.c		optional crypto
- libkern/crypto/corecrypto_rsa.c		    optional crypto
+diff --git a/libkern/conf/Makefile.template b/libkern/conf/Makefile.template
+index 219b65a..f77f69c 100644
 --- a/libkern/conf/Makefile.template
 +++ b/libkern/conf/Makefile.template
-@@ -44,6 +44,15 @@
+@@ -44,6 +44,15 @@ sweet_md5.o_CFLAGS_ADD += -mgeneral-regs-only
  sweet_dec32le.o_CFLAGS_ADD += -mgeneral-regs-only
  sweet_enc32le.o_CFLAGS_ADD += -mgeneral-regs-only
  corecrypto_md5.o_CFLAGS_ADD += -mgeneral-regs-only
@@ -28,9 +18,25 @@
  endif
  
  # Runtime support functions don't interact well with LTO (9294679)
+diff --git a/libkern/conf/files b/libkern/conf/files
+index 07dcc6b..4423c84 100644
+--- a/libkern/conf/files
++++ b/libkern/conf/files
+@@ -106,6 +106,9 @@ libkern/crypto/sweet_aes_ct_cbcdec.c	optional crypto
+ libkern/crypto/sweet_md5.c	optional crypto
+ libkern/crypto/sweet_dec32le.c	optional crypto
+ libkern/crypto/sweet_enc32le.c	optional crypto
++libkern/crypto/sweet_sha1.c	optional crypto
++libkern/crypto/sweet_dec32be.c	optional crypto
++libkern/crypto/sweet_enc32be.c	optional crypto
+ libkern/crypto/corecrypto_aesxts.c		optional crypto
+ libkern/crypto/corecrypto_rand.c		optional crypto
+ libkern/crypto/corecrypto_rsa.c		    optional crypto
+diff --git a/libkern/crypto/corecrypto_sha1.c b/libkern/crypto/corecrypto_sha1.c
+index 5fd982b..409533d 100644
 --- a/libkern/crypto/corecrypto_sha1.c
 +++ b/libkern/crypto/corecrypto_sha1.c
-@@ -16,6 +16,62 @@
+@@ -16,6 +16,62 @@ setCount(SHA1_CTX *ctx, uint64_t count)
  	ctx->c.b64[0] = count;
  }
  
@@ -93,7 +99,7 @@
  /* Copy a ccdigest ctx into a legacy SHA1 context */
  static void
  DiToSHA1(const struct ccdigest_info *di, struct ccdigest_ctx *di_ctx, SHA1_CTX *sha1_ctx)
-@@ -69,6 +125,8 @@
+@@ -69,6 +125,8 @@ SHA1Final(void *digest, SHA1_CTX *ctx)
  	ccdigest_final(di, di_ctx, digest);
  }
  
@@ -102,13 +108,9 @@
  /* This is not publicised in header, but exported in libkern.exports */
  void SHA1Final_r(SHA1_CTX *context, void *digest);
  void
---- /dev/null
-+++ b/libkern/crypto/sweet_sha1.c
-@@ -0,0 +1,4 @@
-+/* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
-+#if defined(ARM64_BOARD_CONFIG_SWEET)
-+#include "sweet_bearssl/src/hash/sha1.c"
-+#endif
+diff --git a/libkern/crypto/sweet_dec32be.c b/libkern/crypto/sweet_dec32be.c
+new file mode 100644
+index 0000000..7415ae8
 --- /dev/null
 +++ b/libkern/crypto/sweet_dec32be.c
 @@ -0,0 +1,4 @@
@@ -116,10 +118,23 @@
 +#if defined(ARM64_BOARD_CONFIG_SWEET)
 +#include "sweet_bearssl/src/codec/dec32be.c"
 +#endif
+diff --git a/libkern/crypto/sweet_enc32be.c b/libkern/crypto/sweet_enc32be.c
+new file mode 100644
+index 0000000..179919b
 --- /dev/null
 +++ b/libkern/crypto/sweet_enc32be.c
 @@ -0,0 +1,4 @@
 +/* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
 +#if defined(ARM64_BOARD_CONFIG_SWEET)
 +#include "sweet_bearssl/src/codec/enc32be.c"
++#endif
+diff --git a/libkern/crypto/sweet_sha1.c b/libkern/crypto/sweet_sha1.c
+new file mode 100644
+index 0000000..77365ed
+--- /dev/null
++++ b/libkern/crypto/sweet_sha1.c
+@@ -0,0 +1,4 @@
++/* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
++#if defined(ARM64_BOARD_CONFIG_SWEET)
++#include "sweet_bearssl/src/hash/sha1.c"
 +#endif

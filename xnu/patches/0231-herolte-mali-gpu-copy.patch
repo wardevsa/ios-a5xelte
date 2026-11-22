@@ -1,0 +1,306 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index c08d1f6..2ba345f 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -121,8 +121,8 @@ hg_probe(vm_offset_t pmu, const char *when)
+ 	printf("HEROLTE GPU: present shader=%#x tiler=%#x l2=%#x; ready shader=%#x tiler=%#x l2=%#x\n",
+ 	    hg_rd(gpu, SHADER_PRESENT_LO), hg_rd(gpu, TILER_PRESENT_LO), hg_rd(gpu, L2_PRESENT_LO),
+ 	    hg_rd(gpu, SHADER_READY_LO), hg_rd(gpu, TILER_READY_LO), hg_rd(gpu, L2_READY_LO));
+-	printf("HEROLTE GPU: GPU_STATUS=%#x IRQ_RAWSTAT=%#x; no GPU jobs\n",
+-	    hg_rd(gpu, GPU_STATUS), hg_rd(gpu, GPU_IRQ_RAWSTAT));
++	printf("HEROLTE GPU: GPU_STATUS=%#x IRQ_RAWSTAT=%#x COHERENCY_FEATURES=%#x ENABLE=%#x; no GPU jobs\n",
++	    hg_rd(gpu, GPU_STATUS), hg_rd(gpu, GPU_IRQ_RAWSTAT), hg_rd(gpu, 0x300), hg_rd(gpu, 0x304));
+ }
+ 
+ /*
+@@ -162,6 +162,8 @@ hg_pmic_dump(void)
+  *              the panel scanout buffer (0xe2a00000, stride 5760)
+  *   herogpu=6  + the whole 1440x2560 panel green; the CPU copies of iOS
+  *              frames are held 8 s around each panel job so it stays visible
++ *   herogpu=7  + the GPU copies the last iOS frame to the panel (tile
++ *              preload, 256 rows lower), then all 12 cores clear the panel
+  *
+  * The fragment job is the A5's (0131-0133): Mesa Panfrost Midgard v4
+  * single-target framebuffer descriptor and the empty polygon list with
+@@ -181,6 +183,10 @@ hg_pmic_dump(void)
+ #define HG_PANEL_BYTES  (1440u * 2560u * 4u)
+ #define HG_PANEL_W      1440u
+ #define HG_PANEL_H      2560u
++/* An iOS surface (GPU copy test) at GPU VA 0x08000000, L3 tables at +0x18000. */
++#define HG_SRC_L3_OFF   0x18000u
++#define HG_SRC_VA       0x08000000ull
++#define HG_SRC_MAX_PAGES (8u * 512u)
+ #define HG_DATA_OFF     0x4000u         /* GPU VA HG_TEST_VA: 12 data pages */
+ #define HG_OUT_OFF      0x100u
+ #define HG_FBD_OFF      0x100u
+@@ -264,11 +270,12 @@ hg_zero(vm_offset_t va, size_t bytes)
+ }
+ 
+ /*
+- * Fresh page tables: the 12 data pages at HG_TEST_VA and, if asked, the
+- * whole panel at HG_PANEL_VA (8 level-3 tables of 2 MiB each).
++ * Fresh page tables: the 12 data pages at HG_TEST_VA, if asked the whole
++ * panel at HG_PANEL_VA (8 level-3 tables of 2 MiB each), and src_n pages
++ * of an iOS surface at HG_SRC_VA.
+  */
+ static void
+-hg_tables(bool panel)
++hg_tables(bool panel, const uint64_t *src, unsigned src_n)
+ {
+ 	hg_zero(hg_mem, HG_TEST_BYTES);
+ 	volatile uint64_t *l0 = (volatile uint64_t *)hg_mem;
+@@ -293,9 +300,20 @@ hg_tables(bool panel)
+ 			}
+ 		}
+ 	}
++	for (unsigned t = 0; src && t * 512 < src_n && t < 8; t++) {
++		uint32_t table = HG_SRC_L3_OFF + t * 0x1000;
++		volatile uint64_t *sl3 = (volatile uint64_t *)(hg_mem + table);
++		l2t[((HG_SRC_VA >> 21) & 0x1ff) + t] = (HG_TEST_PA + table) | 3;
++		for (unsigned i = 0; i < 512 && t * 512 + i < src_n; i++) {
++			sl3[i] = src[t * 512 + i] | 0x2c1;
++		}
++	}
+ 	__asm__ volatile ("dsb sy" ::: "memory");
+ }
+ 
++/* Shader cores a job may use (JS_AFFINITY). */
++static uint32_t hg_affinity = 1;
++
+ /* Program AS0, start the job at HG_TEST_VA on slot js, wait (bounded). */
+ static bool
+ hg_run(unsigned js, const char *what)
+@@ -321,7 +339,7 @@ hg_run(unsigned js, const char *what)
+ 	}
+ 	hg_wr(hg_gpu, slot + 0x40, (uint32_t)HG_TEST_VA);       /* HEAD_NEXT */
+ 	hg_wr(hg_gpu, slot + 0x44, 0);
+-	hg_wr(hg_gpu, slot + 0x50, 1);                          /* AFFINITY: core 0 */
++	hg_wr(hg_gpu, slot + 0x50, hg_affinity);                /* AFFINITY */
+ 	hg_wr(hg_gpu, slot + 0x54, 0);
+ 	hg_wr(hg_gpu, slot + 0x58, (8 << 16) | (3 << 8) | (3 << 12));
+ 	hg_wr(hg_gpu, slot + 0x60, 1);                          /* START */
+@@ -350,7 +368,7 @@ hg_run(unsigned js, const char *what)
+ static bool
+ hg_job_write_value(void)
+ {
+-	hg_tables(false);
++	hg_tables(false, NULL, 0);
+ 	volatile uint8_t *job = (volatile uint8_t *)(hg_mem + HG_DATA_OFF);
+ 	job[16] = 1 | (2 << 1);                         /* 64-bit, WRITE_VALUE */
+ 	*(volatile uint16_t *)(job + 18) = 1;           /* index */
+@@ -377,11 +395,29 @@ hg_job_write_value(void)
+  * the A5 descriptor's (0xb84da201): RGBA8, swizzle 0x688, linear, dither,
+  * clean pixel write.
+  */
++static bool hg_job_fragment_rt(uint64_t pixels_va, uint32_t w, uint32_t h, uint32_t stride,
++    uint32_t color, uint64_t preload_va, uint32_t preload_stride, const char *what);
++
+ static bool
+ hg_job_fragment(uint64_t pixels_va, uint32_t w, uint32_t h, uint32_t stride, uint32_t color,
+     bool panel, const char *what)
+ {
+-	hg_tables(panel);
++	hg_tables(panel, NULL, 0);
++	return hg_job_fragment_rt(pixels_va, w, h, stride, color, 0, 0, what);
++}
++
++/*
++ * Render target writeback at pixels_va. preload_va == 0: clear to color.
++ * Otherwise each tile is first loaded from preload_va (same RGBA8 linear
++ * format, preload_stride per row) and written back unchanged: a copy done
++ * by the GPU's tile buffer, no shader involved (Midgard v5 RT words 2 and
++ * 12-15; the preload buffer shares words 12-15 with the clear color).
++ * The page tables must already be set up.
++ */
++static bool
++hg_job_fragment_rt(uint64_t pixels_va, uint32_t w, uint32_t h, uint32_t stride, uint32_t color,
++    uint64_t preload_va, uint32_t preload_stride, const char *what)
++{
+ 	uint64_t fb_va = HG_TEST_VA + HG_FBD_OFF;
+ 	uint64_t poly_va = HG_TEST_VA + HG_POLY_OFF;
+ 	uint32_t tiles_x = (w + 15) / 16, tiles_y = (h + 15) / 16;
+@@ -424,8 +460,17 @@ hg_job_fragment(uint64_t pixels_va, uint32_t w, uint32_t h, uint32_t stride, uin
+ 	*(volatile uint64_t *)(rt + 8) = pixels_va;     /* RGB base */
+ 	rt[10] = stride;                                /* row stride */
+ 	rt[11] = 0;                                     /* surface stride */
+-	for (unsigned i = 0; i < 4; i++) {
+-		rt[12 + i] = color;     /* clear color */
++	if (preload_va) {
++		rt[2] = 1u |            /* preload enable */
++		    (19u << 3) |        /* preload format R8G8B8A8 */
++		    (2u << 10);         /* preload block format linear */
++		*(volatile uint64_t *)(rt + 12) = preload_va;   /* preload base */
++		rt[14] = preload_stride;
++		rt[15] = 0;
++	} else {
++		for (unsigned i = 0; i < 4; i++) {
++			rt[12 + i] = color;     /* clear color */
++		}
+ 	}
+ 	__asm__ volatile ("dsb sy" ::: "memory");
+ 	return hg_run(0, what);
+@@ -433,6 +478,74 @@ hg_job_fragment(uint64_t pixels_va, uint32_t w, uint32_t h, uint32_t stride, uin
+ 
+ /* SweetFramebuffer.cpp skips its CPU copies until this mach time. */
+ extern uint64_t sweet_fb_hold_until;
++extern bool sweet_fb_last_surface(uint64_t *pages, unsigned max_pages, unsigned *npages,
++    uint32_t *offset, uint32_t *stride, uint32_t *width, uint32_t *height, uintptr_t *kva);
++
++static uint64_t
++hg_us_since(uint64_t start)
++{
++	uint64_t ns;
++	absolutetime_to_nanoseconds(mach_absolute_time() - start, &ns);
++	return ns / 1000;
++}
++
++/*
++ * herogpu=7, step 1: the GPU copies the last full-screen iOS frame to the
++ * panel, 256 rows lower so it is visibly not the CPU's copy, held 8 s.
++ * iOS draws through the CPU caches and the GPU reads DRAM, so the surface
++ * is cleaned to the point of coherency first (timed: if the GPU is not
++ * IO-coherent, this clean is the price of every GPU copy).
++ */
++static void
++hg_gpu_copy_test(uint64_t hold)
++{
++	static uint64_t pages[HG_SRC_MAX_PAGES];
++	unsigned n = 0;
++	uint32_t soff = 0, sstride = 0, sw = 0, sh = 0;
++	uintptr_t kva = 0;
++	if (!sweet_fb_last_surface(pages, HG_SRC_MAX_PAGES, &n, &soff, &sstride, &sw, &sh, &kva)) {
++		printf("HEROLTE GPU: GPU COPY: no full-screen iOS surface yet\n");
++		return;
++	}
++	printf("HEROLTE GPU: GPU COPY: surface %ux%u stride %u offset %#x, %u pages, first pa %#llx\n",
++	    sw, sh, sstride, soff, n, pages[0]);
++	uint64_t start = mach_absolute_time();
++	uintptr_t end = kva + soff + (uintptr_t)sstride * sh;
++	for (uintptr_t p = (kva + soff) & ~(uintptr_t)63; p < end; p += 64) {
++		__asm__ volatile ("dc cvac, %0" : : "r" (p) : "memory");
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++	uint64_t clean_us = hg_us_since(start);
++
++	const uint32_t shift = 256;
++	hg_tables(true, pages, n);
++	sweet_fb_hold_until = mach_absolute_time() + hold;
++	start = mach_absolute_time();
++	bool ok = hg_job_fragment_rt(HG_PANEL_VA + (uint64_t)shift * HG_FB_STRIDE, HG_PANEL_W,
++	    HG_PANEL_H - shift, HG_FB_STRIDE, 0, HG_SRC_VA + soff, sstride, "GPU COPY");
++	printf("HEROLTE GPU: GPU COPY: cache clean %llu us, GPU copy %llu us (one core) -> %s\n",
++	    clean_us, hg_us_since(start),
++	    ok ? "THE SCREEN SHOWS THE iOS FRAME 256 PIXELS LOWER FOR 8 SECONDS" : "failed");
++}
++
++/* herogpu=7, step 2: all shader cores clear the whole panel, timed. */
++static void
++hg_all_cores_test(uint64_t hold)
++{
++	uint32_t all = hg_rd(hg_gpu, SHADER_PRESENT_LO);
++	if (!hg_power(SHADER_PWRON_LO, SHADER_READY_LO, all, "all shader cores")) {
++		printf("HEROLTE GPU: ALL CORES: not all cores came up\n");
++		return;
++	}
++	hg_affinity = all;
++	sweet_fb_hold_until = mach_absolute_time() + hold;
++	uint64_t start = mach_absolute_time();
++	bool ok = hg_job_fragment(HG_PANEL_VA, HG_PANEL_W, HG_PANEL_H, HG_FB_STRIDE, HG_RED, true,
++	    "FRAGMENT whole panel, all cores");
++	printf("HEROLTE GPU: ALL CORES (%#x): whole panel in %llu us -> %s\n", all,
++	    hg_us_since(start), ok ? "THE SCREEN SHOULD BE BLUE FOR 8 SECONDS" : "failed");
++	hg_affinity = 1;
++}
+ 
+ static void
+ hg_jobs(vm_offset_t pmu, int mode)
+@@ -507,6 +620,12 @@ hg_jobs(vm_offset_t pmu, int mode)
+ 		printf("HEROLTE GPU: FRAGMENT whole panel 1440x2560 in %llu us (one core) -> %s\n",
+ 		    ns / 1000, ok ? "THE SCREEN SHOULD BE GREEN FOR 8 SECONDS" : "failed");
+ 	}
++	if (ok && mode >= 7) {
++		hg_msleep(10000);
++		hg_gpu_copy_test(hold);
++		hg_msleep(10000);
++		hg_all_cores_test(hold);
++	}
+ 	hg_cores_off();
+ }
+ 
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index 3304d87..12b7033 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -61,6 +61,10 @@ static void sweet_fb_copy_init(void);
+ /* No CPU copies to the panel before this mach time (herolte_gpu.c). */
+ extern "C" uint64_t sweet_fb_hold_until;
+ uint64_t sweet_fb_hold_until;
++/* Last surface copied full-screen to the panel (GPU copy test). */
++static uint32_t sweet_fb_last_surface_id;
++extern "C" bool sweet_fb_last_surface(uint64_t *pages, unsigned max_pages, unsigned *npages,
++    uint32_t *offset, uint32_t *stride, uint32_t *width, uint32_t *height, uintptr_t *kva);
+ #endif
+ 
+ enum {
+@@ -711,6 +715,9 @@ AppleCLCD::present(const uint8_t *rec)
+ 			sweet_fb_copy_rows(fPixels + (uint64_t)dy * fRowBytes + (uint64_t)dx * 4, fRowBytes,
+ 			    src + s->offset + (uint64_t)sy * s->bytesPerRow + (uint64_t)sx * 4, s->bytesPerRow,
+ 			    (size_t)w * 4, h);
++			if (w == (int32_t)fWidth && h == (int32_t)fHeight) {
++				__atomic_store_n(&sweet_fb_last_surface_id, s->id, __ATOMIC_RELEASE);
++			}
+ #else
+ 			for (int32_t y = 0; y < h; y++) {
+ 				memcpy((void *)(fPixels + (uint64_t)(dy + y) * fRowBytes + (uint64_t)dx * 4),
+@@ -724,6 +731,51 @@ AppleCLCD::present(const uint8_t *rec)
+ 	return copied;
+ }
+ 
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++/*
++ * For the GPU copy test (bsd/dev/herolte_gpu.c): the 4 KiB physical pages
++ * of the last full-screen iOS surface, its layout and kernel address. The
++ * surface stays alive in the id table while iOS uses it; the test runs once.
++ */
++extern "C" bool
++sweet_fb_last_surface(uint64_t *pages, unsigned max_pages, unsigned *npages,
++    uint32_t *offset, uint32_t *stride, uint32_t *width, uint32_t *height, uintptr_t *kva)
++{
++	uint32_t id = __atomic_load_n(&sweet_fb_last_surface_id, __ATOMIC_ACQUIRE);
++	SweetSurface *s = id ? sweet_surface_copy(id) : NULL;
++	if (s == NULL) {
++		return false;
++	}
++	bool ok = s->memory != NULL && s->bytesPerElement == 4 && s->elementWidth == 1 &&
++	    s->elementHeight == 1;
++	unsigned n = ok ? (unsigned)((s->memory->getLength() + 0xfff) / 0x1000) : 0;
++	if (ok && n <= max_pages) {
++		for (unsigned i = 0; i < n; i++) {
++			IOByteCount len = 0;
++			addr64_t pa = s->memory->getPhysicalSegment((IOByteCount)i * 0x1000, &len,
++			    kIOMemoryMapperNone);
++			if (pa == 0) {
++				ok = false;
++				break;
++			}
++			pages[i] = pa & ~0xfffULL;
++		}
++	} else {
++		ok = false;
++	}
++	if (ok) {
++		*npages = n;
++		*offset = s->offset;
++		*stride = s->bytesPerRow;
++		*width = s->width;
++		*height = s->height;
++		*kva = s->kernelAddress();
++	}
++	s->release();
++	return ok && *kva != 0;
++}
++#endif
++
+ bool
+ IOMobileFramebufferUserClient::initWithTask(task_t owningTask, void *securityID, UInt32 type)
+ {

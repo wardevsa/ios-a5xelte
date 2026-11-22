@@ -1,8 +1,3 @@
-sweet: drop KPI exports that only Apple's closed per-SoC library defines
-(DART/SART/UAT IOMMUs, NVMe PPL, pmap_iommu_*, IOUnifiedAddressTranslator).
-None of that hardware exists on SM7150; kextsymboltool rejects exports
-the kernel does not define. Verified with tools/check-exports.py.
-
 diff --git a/config/Private.arm64.exports b/config/Private.arm64.exports
 index db31d71..3ccaaf7 100644
 --- a/config/Private.arm64.exports
@@ -57,10 +52,10 @@ index db31d71..3ccaaf7 100644
  __ZN24IOBufferMemoryDescriptor20inTaskWithGuardPagesEP4taskjy
  __ZN27IOGuardPageMemoryDescriptor12initWithSizeEm
 diff --git a/config/Private.exports b/config/Private.exports
-index 252f91f..95550c9 100644
+index 9432f34..179b510 100644
 --- a/config/Private.exports
 +++ b/config/Private.exports
-@@ -778,11 +778,9 @@ _kernel_image4_get_monitor_exports
+@@ -775,11 +775,9 @@ _kernel_image4_get_monitor_exports
  _pmap_claim_reserved_ppl_page
  _pmap_free_reserved_ppl_page
  _pmap_in_ppl

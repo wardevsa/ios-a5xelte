@@ -1,0 +1,27 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 427ccc6..4852d27 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2139,8 +2139,19 @@ notefe_brightness_set(uint32_t level, const char *why)
+ 	if (level > 255) {
+ 		level = 255;
+ 	}
+-	if (level < 12) {
+-		level = 12;             /* never black: the slider at 0 is dim, as on an iPhone */
++	/*
++	 * (0343, S7) a floor that stays readable: with no light sensor CoreBrightness's auto-brightness reads 0 lux and asks
++	 * for brightness 1 (boot-0342: 206 -> 12 right after the slider was moved, the screen black, touch still working),
++	 * and it keeps that level across boots. Boot-arg herobrightmin=N (12-255, default 64).
++	 */
++	static uint32_t floor_level;
++	if (floor_level == 0) {
++		uint32_t m = 64;
++		PE_parse_boot_argn("herobrightmin", &m, sizeof(m));
++		floor_level = m < 12 ? 12 : m > 255 ? 255 : m;
++	}
++	if (level < floor_level) {
++		level = floor_level;    /* never black: the slider at 0 is dim, as on an iPhone */
+ 	}
+ 	if (level != notefe_bright_level && (++logged <= 60 || logged % 50 == 0)) {
+ 		printf("NOTEFE BRIGHT: %u -> %u (%s)\n", notefe_bright_level, level, why);
+

@@ -1,0 +1,45 @@
+herolte: the Sandbox stand-in issues TCC's extension tokens and accepts consumption (0481)
+
+The dump of min115 (E-0339) gives the layout of operation 5 as tccd calls it: word 0 the extension class, word 4 an output buffer. For classes starting "com.apple.tcc." a token of the usual shape is copied into that buffer and the call succeeds, so that tccd stops answering "Failed to issue Sandbox Extension for kTCCServicePhotos" (which made assetsd die with "requires TCCPhotosService access" and left Contacts and Photos with an error); operation 6 (consume) is accepted instead of failing with ENOENT. Other extension classes and operation 4 (container path) fail as before.
+
+--- a/bsd/kern/sweet_amfi.c
++++ b/bsd/kern/sweet_amfi.c
+@@ -323,10 +323,37 @@
+ 			}
+ 		}
+ 	}
++	/*
++	 * 0481 (E-0339): the dump of min115 shows tccd's calls to operation 5: word 0 the extension class ("com.apple.tcc.kTCCServicePhotos"),
++	 * word 1 0, word 2 a string, word 3 0, word 4 a heap pointer that is a buffer (it held stale text), word 7 a copy of word 0. The kernel
++	 * answers with a token in that buffer; with no sandbox the token is never checked, so a token of the usual shape is enough: tccd then
++	 * stops answering "Failed to issue Sandbox Extension" and the client "consumes" it (operation 6, accepted). Only the TCC classes are
++	 * answered here (a layout seen, not guessed); every other class keeps failing as before. Operation 4 (the container path of a pid:
++	 * words pid, 0, buffer, 0x400) still fails with ENOENT, which is what PhotosFileProvider reports as "invalid sandbox or container: error 2".
++	 */
++	if (call == 5 && arg != 0) {
++		uint64_t w[8] = { 0 };
++		char cls[72] = { 0 };
++		size_t got = 0;
++		if (copyin(arg, w, sizeof(w)) == 0 && w[0] > 0x1000 && w[0] < 0x0000800000000000ULL &&
++		    copyinstr((user_addr_t)w[0], cls, sizeof(cls) - 1, &got) == 0 && strncmp(cls, "com.apple.tcc.", 14) == 0 &&
++		    w[4] > 0x1000 && w[4] < 0x0000800000000000ULL) {
++			char token[200];
++			int n = snprintf(token, sizeof(token), "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef;00000000;00000000;0000000000000000;%s;01;00000000;/", cls);
++			if (n > 0 && n < (int)sizeof(token) && copyout(token, (user_addr_t)w[4], (size_t)n + 1) == 0) {
++				static int shown;
++				if (shown++ < 8) {
++					printf("SWEET Sandbox: extension issued for %s (%d bytes)\n", cls, n);
++				}
++				return 0;
++			}
++		}
++	}
+ 	switch (call) {
++	case 6:         /* extension consume: accepted, there is no sandbox to extend (0481) */
++		return 0;
+ 	case 4:         /* container path (audit token / pid) */
+ 	case 5:         /* extension issue */
+-	case 6:         /* extension consume */
+ 	case 0x43:      /* container expected */
+ 		return ENOENT;
+ 	default:

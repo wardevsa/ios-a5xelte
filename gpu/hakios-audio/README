@@ -1,0 +1,2 @@
+The AudioServerPlugIn of HakiOS (https://github.com/soumarcelino/fiio-jm21-xnu, userland/src), MIT, as it is there: what it writes
+to /dev/hakios-audio is played by bsd/dev/herolte_gpu.c (boot-arg heroaudio=3). See LICENSE.

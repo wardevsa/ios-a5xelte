@@ -1,0 +1,96 @@
+herolte: a first CPU governor for the Mongoose cluster, herogov=1 (0434)
+
+E-0286 (min58-min60): with the screen on and the CPU all but idle (all 13-31 % of 800 %) the phone draws ~850 mA at 1976-2288 MHz and ~480 mA at the bootloader's 728 MHz / 675 mV; under load (Safari) 1.9-2.6 A. The idle cores leak at the raised voltage. herogov=1: the power thread measures the busy fraction of cores 4-7 every 200 ms (recount idle time; herolte_cluster_busy_mach in osfmk/kern/processor.c) and keeps the cluster at herocpu_mhz only while it is above 15 %; after 1 s below 6 % it goes to the bootloader numbers (hc_go_low), the same transition the screen-off and heat logic already use. Off unless herogov=1, which also sets the 5 s battery poll (the boot line has no room for another argument).
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2675,6 +2675,18 @@
+ 	unsigned cycle_i = 0;
+ 	PE_parse_boot_argn("herocycle", &cycle_s, sizeof(cycle_s));
+ 	PE_parse_boot_argn("heromeas", &cycle_s, sizeof(cycle_s));      /* heromeas=<s>: the same, and a 5 s battery poll (SweetBattery.cpp) */
++	/*
++	 * 0434: boot-arg herogov=1, a first governor: the Mongoose cluster at herocpu_mhz only while its four cores are busy.
++	 * Measured (min58-min60, E-0285/E-0286): with the screen on and the CPU all but idle the phone draws about 850 mA with the
++	 * cluster at 1976-2288 MHz and about 480 mA at the bootloader's 728 MHz / 675 mV: the idle cores leak at the raised
++	 * voltage. Busy fraction of cores 4-7 over 200 ms from recount's idle time; high above 15 %, low after 1 s below 6 %.
++	 * It only asks for what the screen-off / hot logic already does (hc_go_low / hc_go_high).
++	 */
++	int gov_on = 0;
++	PE_parse_boot_argn("herogov", &gov_on, sizeof(gov_on));
++	uint64_t gov_prev_busy = 0, gov_prev_t = 0, gov_flips = 0;
++	unsigned gov_idle_n = 0;
++	bool gov_low = false;
+ 	int top = -1000, seen_max = -1000;
+ 	for (;;) {
+ 		hg_msleep(200);
+@@ -2704,11 +2716,29 @@
+ 				hot_now = false;
+ 			}
+ 		}
+-		bool want_low = screen_off || hot_now;
++		if (gov_on && !hc.broken) {
++			extern uint64_t herolte_cluster_busy_mach(int first, int last);      /* osfmk/kern/processor.c */
++			uint64_t busy = herolte_cluster_busy_mach(4, 7);
++			if (gov_prev_t != 0 && now > gov_prev_t) {
++				uint64_t per_mille = (busy - gov_prev_busy) * 1000 / ((now - gov_prev_t) * 4);
++				if (per_mille > 150) {
++					gov_idle_n = 0;
++					gov_low = false;
++				} else if (per_mille < 60 && ++gov_idle_n >= 5) {
++					gov_low = true;
++				}
++			}
++			gov_prev_busy = busy;
++			gov_prev_t = now;
++		}
++		bool want_low = screen_off || hot_now || gov_low;
+ 		if (!hc.broken && want_low == hc.high) {
+ 			bool ok = want_low ? hc_go_low() : hc_go_high();
+-			printf("HEROLTE POWER: Mongoose %s %u MHz (screen %s%s, SoC %d C)\n", ok ? "to" : "NOT to",
+-			    want_low ? hp_boot_mhz() : hc.mhz, screen_off ? "off" : "on", hot_now ? ", hot" : "", top);
++			if (!gov_on || ++gov_flips <= 40 || gov_flips % 100 == 0 || !ok) {
++				printf("HEROLTE POWER: Mongoose %s %u MHz (screen %s%s%s, SoC %d C; %llu changes)\n", ok ? "to" : "NOT to",
++				    want_low ? hp_boot_mhz() : hc.mhz, screen_off ? "off" : "on", hot_now ? ", hot" : "", gov_low ? ", idle" : "",
++				    top, gov_flips);
++			}
+ 		}
+ 		if (cycle_s >= 20 && hc.high && !hot_now && !screen_off) {
+ 			uint64_t el = 0;
+--- a/osfmk/kern/processor.c
++++ b/osfmk/kern/processor.c
+@@ -1728,3 +1728,24 @@
+ }
+ 
+ #endif /* defined(__arm64__) */
++
++/*
++ * 0434: the time the cores first..last have spent running (user + system, Mach time, idle excluded), for bsd/dev/herolte_gpu.c's
++ * governor of the Mongoose cluster (cores 4-7).
++ */
++uint64_t herolte_cluster_busy_mach(int first, int last);
++uint64_t
++herolte_cluster_busy_mach(int first, int last)
++{
++	uint64_t busy = 0;
++	for (int c = first; c <= last; c++) {
++		processor_t p = cpu_to_processor(c);
++		if (p != PROCESSOR_NULL) {
++			struct recount_usage usage = { 0 };
++			uint64_t idle = 0;
++			recount_processor_usage(&p->pr_recount, &usage, &idle);
++			busy += usage.ru_user_time_mach + usage.ru_system_time_mach;
++		}
++	}
++	return busy;
++}
+--- a/iokit/Kernel/arm/SweetBattery.cpp
++++ b/iokit/Kernel/arm/SweetBattery.cpp
+@@ -225,7 +225,7 @@
+ pollMs(void)
+ {
+ 	unsigned ms = 30000, meas = 0;
+-	if (PE_parse_boot_argn("heromeas", &meas, sizeof(meas)) && meas) {
++	if ((PE_parse_boot_argn("heromeas", &meas, sizeof(meas)) && meas) || (PE_parse_boot_argn("herogov", &meas, sizeof(meas)) && meas)) {
+ 		ms = 5000;      /* a measurement run (herocycle in herolte_gpu.c) polls every 5 s */
+ 	}
+ 	PE_parse_boot_argn("herobatms", &ms, sizeof(ms));

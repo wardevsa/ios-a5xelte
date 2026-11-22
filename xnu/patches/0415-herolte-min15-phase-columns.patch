@@ -1,0 +1,48 @@
+diag(min15): continue the phase list in two more columns when the first one reaches the bottom of the screen
+
+min14 (no herostop) listed 36 phases down to thread_init: exactly slots 41-76, the last row of the screen, because sweet_early_block() ignored slots above 76. The failure is somewhere beyond. Slots 77-112 now go to a second column (x=660) and 113-148 to a third (x=20), each starting at the row of slot 41; the phase names are drawn to the left of their block in each column. Drawing only.
+
+--- a/osfmk/arm64/sweet_early.c	2026-11-14 23:36:54.654271322 +0100
++++ b/osfmk/arm64/sweet_early.c	2026-11-14 23:36:54.670738328 +0100
+@@ -169,8 +169,9 @@
+ 	while (s[len] && len < 48) {
+ 		len++;
+ 	}
+-	unsigned int x0 = 1290 - len * 8 * scale;
+-	unsigned int y0 = 88 + 32 * slot - 6;
++	unsigned int col = (slot - 41) / 36;
++	unsigned int x0 = 1290 - 640 * col - len * 8 * scale;
++	unsigned int y0 = 88 + 32 * (41 + (slot - 41) % 36) - 6;
+ 	for (unsigned int c = 0; c < len; c++) {
+ 		const unsigned char *glyph = iso_font + (unsigned char)s[c] * 16;
+ 		for (unsigned int gy = 0; gy < 16; gy++) {
+@@ -195,7 +196,7 @@
+ 		return;
+ 	}
+ 	unsigned int slot = 41 + a5_phase_n++;
+-	if (slot > 76) {
++	if (slot > 148) {
+ 		return;
+ 	}
+ 	a5_label(slot, message);
+@@ -215,11 +216,18 @@
+ void
+ sweet_early_block(unsigned int slot, uint32_t argb)
+ {
+-	if (!a5_active || slot > 76) {
++	if (!a5_active || slot > 148) {
+ 		return;
+ 	}
++	/* min15: slots 41-76 are column 0 (x=1300); 77-112 column 1 (x=660); 113-148 column 2 (x=20); each column starts again at the row of slot 41. */
++	unsigned int bx = 1300u, brow = slot;
++	if (slot >= 41) {
++		unsigned int col = (slot - 41) / 36;
++		bx = 1300u - 640u * col;
++		brow = 41 + (slot - 41) % 36;
++	}
+ 	for (unsigned int y = 0; y < 21; y++) {
+-		volatile uint32_t *line = A5_FB + (88u + 32u * slot + y) * A5_STRIDE + 1300u;
++		volatile uint32_t *line = A5_FB + (88u + 32u * brow + y) * A5_STRIDE + bx;
+ 		for (unsigned int x = 0; x < 36; x++) {
+ 			line[x] = argb;
+ 		}

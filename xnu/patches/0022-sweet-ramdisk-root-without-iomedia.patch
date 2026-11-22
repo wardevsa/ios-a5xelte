@@ -1,7 +1,8 @@
 diff --git a/iokit/Kernel/IOService.cpp b/iokit/Kernel/IOService.cpp
+index 9d22cc9..59c834e 100644
 --- a/iokit/Kernel/IOService.cpp
 +++ b/iokit/Kernel/IOService.cpp
-@@ -5126,7 +5126,9 @@
+@@ -5126,7 +5126,9 @@ IOService::publishHiddenMedia(IOService * parent)
  	bool                wasHiding;
  
  	iomediaClass = OSMetaClass::getMetaClassWithName(gIOMediaKey);
@@ -11,7 +12,7 @@ diff --git a/iokit/Kernel/IOService.cpp b/iokit/Kernel/IOService.cpp
  
  	LOCKWRITENOTIFY();
  	wasHiding = gIOServiceHideIOMedia;
-@@ -5135,6 +5137,13 @@
+@@ -5135,6 +5137,13 @@ IOService::publishHiddenMedia(IOService * parent)
  	}
  	UNLOCKNOTIFY();
  

@@ -1,0 +1,456 @@
+diff --git a/bsd/conf/files b/bsd/conf/files
+index 882a2b3..a16d8e0 100644
+--- a/bsd/conf/files
++++ b/bsd/conf/files
+@@ -111,6 +111,7 @@ bsd/dev/herolte_touch.c			standard
+ bsd/dev/herolte_battery.c		standard
+ bsd/dev/herolte_gpu.c			standard
+ bsd/dev/herolte_drop.c			standard
++bsd/dev/herolte_wifi.c			standard
+ bsd/dev/herolte_gl.c			standard
+ bsd/dev/a5xelte_keys.c			standard
+ bsd/dev/a5xelte_touch.c			standard
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 7277ab6..c243721 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2802,9 +2802,10 @@ hg_twrp_thread(void *arg, __unused wait_result_t wr)
+ /*
+  * Boot-arg herowifi=1, the first step of Wi-Fi: the BCM4359 is on PCIe channel 0 (FSYS1), as Linux's pci-exynos.c brings it up.
+  * In its order and with its timing: the chip gets #PERST high about 20 ms before the link starts, not half a minute, and Samsung's
+- * driver tries up to ten times. The LTSSM's history says how far each try got. Of the chip, only its PCI configuration is
+- * written: its two windows, and through the first the identity of the backplane is read.
++ * driver tries up to ten times. The LTSSM's history says how far each try got. The firmware is bsd/dev/herolte_wifi.c.
+  */
++extern void herolte_wifi_firmware(vm_offset_t cfg);
++
+ static void
+ hw_step(const char *what)
+ {
+@@ -2982,6 +2983,10 @@ hg_wifi_thread(__unused void *arg, __unused wait_result_t wr)
+ 	hg_wr(dbi, 0x908, 1u << 31);
+ 	printf("HEROLTE WIFI: chip id %#x class %#x bar0 %#x bar2 %#x\n", hg_rd(cfg, 0), hg_rd(cfg, 8), hg_rd(cfg, 0x10), hg_rd(cfg, 0x18));
+ 	hw_step("the chip's windows");
++	/* Their sizes, as a BAR tells them with all ones written. */
++	hg_wr(cfg, 0x10, ~0u);
++	hg_wr(cfg, 0x18, ~0u);
++	printf("HEROLTE WIFI: bar0 size mask %#x, bar2 size mask %#x\n", hg_rd(cfg, 0x10), hg_rd(cfg, 0x18));
+ 	hg_wr(dbi, 0x900, 1);                                   /* outbound window 1: memory, at the same addresses */
+ 	hg_wr(dbi, 0x904, 0);
+ 	hg_wr(dbi, 0x90c, 0x1c100000u);
+@@ -2992,15 +2997,13 @@ hg_wifi_thread(__unused void *arg, __unused wait_result_t wr)
+ 	hg_wr(dbi, 0x908, 1u << 31);
+ 	hg_wr(cfg, 0x10, 0x1c100000u);                          /* BAR0: registers, 32 KiB */
+ 	hg_wr(cfg, 0x14, 0);
+-	hg_wr(cfg, 0x18, 0x1c400000u);                          /* BAR2: the chip's memory, 4 MiB */
++	hg_wr(cfg, 0x18, 0x1c400000u);                          /* BAR2: the chip's memory */
+ 	hg_wr(cfg, 0x1c, 0);
+-	hg_wr(cfg, 0x04, hg_rd(cfg, 0x04) | 6u);                /* memory, bus master */
++	hg_wr(cfg, 0x04, hg_rd(cfg, 0x04) | 2u);                /* memory; no bus master until there are buffers for it */
+ 	hg_wr(cfg, 0x80, 0x18000000u);                          /* BAR0's window: ChipCommon */
+ 	printf("HEROLTE WIFI: bar0 %#x bar2 %#x command %#x window %#x\n", hg_rd(cfg, 0x10), hg_rd(cfg, 0x18), hg_rd(cfg, 0x04), hg_rd(cfg, 0x80));
+-	vm_offset_t regs = ml_io_map(0x1c100000u, 0x8000);
+-	if (regs) {
+-		printf("HEROLTE WIFI: ChipCommon chip id %#x capabilities %#x\n", hg_rd(regs, 0), hg_rd(regs, 4));
+-	}
++	hw_step("the firmware");
++	herolte_wifi_firmware(cfg);
+ }
+ 
+ void
+diff --git a/bsd/dev/herolte_wifi.c b/bsd/dev/herolte_wifi.c
+new file mode 100644
+index 0000000..0b5932a
+--- /dev/null
++++ b/bsd/dev/herolte_wifi.c
+@@ -0,0 +1,390 @@
++/*
++ * herowifi=1, second step: the BCM4359's firmware. The link is up (bsd/dev/herolte_gpu.c) and BAR0 and BAR2 are assigned.
++ * As Linux's brcmfmac (chip.c, pcie.c, ISC license): the backplane's cores from the enumeration ROM, the ARM and the radio
++ * cores held, firmware and NVRAM into the chip's memory, the ARM let go. The firmware says it runs by putting the address of
++ * its shared structure in the last word of the RAM, and its own console tells the rest.
++ *
++ * The firmware and the NVRAM are the phone's own, from VENDOR, in the drop zone: they are not in this repository.
++ */
++#include <sys/param.h>
++#include <sys/systm.h>
++#include <sys/errno.h>
++#include <sys/fcntl.h>
++#include <sys/proc.h>
++#include <string.h>
++#include <sys/vnode_internal.h>
++#include <sys/kauth.h>
++#include <kern/kalloc.h>
++#include <kern/clock.h>
++#include <machine/machine_routines.h>
++#include <pexpert/pexpert.h>
++
++extern void IOSleep(unsigned milliseconds);
++void herolte_wifi_firmware(vm_offset_t cfg);
++
++#define HW_BAR0_PA      0x1c100000u
++#define HW_BAR2_PA      0x1c400000u
++#define HW_BAR2_BYTES   0x400000u
++#define HW_ENUM_BASE    0x18000000u
++#define HW_RAMBASE      0x160000u           /* a 4359 of revision 9 or later */
++#define HW_FW_MAX       (1024u * 1024u)
++#define HW_NVRAM_MAX    (16u * 1024u)
++
++#define BCMA_IOCTL      0x408u
++#define BCMA_RESET_CTL  0x800u
++#define IOCTL_CLK       1u
++#define IOCTL_FGC       2u
++#define IOCTL_CPUHALT   0x20u
++#define IOCTL_PHYCLOCK  4u
++#define IOCTL_PHYRESET  8u
++
++#define CORE_D11        0x812u
++#define CORE_PCIE2      0x83cu
++#define CORE_CR4        0x83eu
++
++static vm_offset_t hw_cfg, hw_regs, hw_tcm;
++
++static uint32_t
++hw_rd(vm_offset_t base, uint32_t off)
++{
++	uint32_t v = *(volatile uint32_t *)(base + off);
++	__asm__ volatile ("dsb osh" ::: "memory");
++	return v;
++}
++
++static void
++hw_wr(vm_offset_t base, uint32_t off, uint32_t v)
++{
++	*(volatile uint32_t *)(base + off) = v;
++	__asm__ volatile ("dsb osh" ::: "memory");
++}
++
++/* A backplane address through BAR0's window. */
++static uint32_t
++bp_rd(uint32_t addr)
++{
++	hw_wr(hw_cfg, 0x80, addr & ~0xfffu);
++	return hw_rd(hw_regs, addr & 0xfffu);
++}
++
++static void
++bp_wr(uint32_t addr, uint32_t v)
++{
++	hw_wr(hw_cfg, 0x80, addr & ~0xfffu);
++	hw_wr(hw_regs, addr & 0xfffu, v);
++}
++
++/* brcmf_chip_dmp_get_regaddr(): the core's registers and wrapper, from the descriptors after its two first ones. */
++static bool
++hw_core_addrs(uint32_t *erom, uint32_t *base, uint32_t *wrap)
++{
++	uint32_t val = bp_rd(*erom), wraptype;
++	*erom += 4;
++	*base = *wrap = 0;
++	if ((val & 0xf) == 3) {         /* a master port */
++		wraptype = 3;
++	} else if ((val & 0xf & ~8u) == 5) {
++		*erom -= 4;
++		wraptype = 2;
++	} else {
++		*erom -= 4;
++		return false;
++	}
++	do {
++		uint32_t kind;
++		do {
++			val = bp_rd(*erom);
++			*erom += 4;
++			kind = val & 0xf;
++			if ((kind & ~8u) == 5) {
++				kind = 5;
++			}
++			if (kind == 0xf) {
++				*erom -= 4;
++				return false;
++			}
++		} while (kind != 5 && kind != 1);
++		if (kind == 1) {
++			*erom -= 4;
++			return true;
++		}
++		if (val & 8) {
++			*erom += 4;
++		}
++		uint32_t sizetype = (val >> 4) & 3;
++		if (sizetype == 3) {
++			uint32_t size = bp_rd(*erom);
++			*erom += 4;
++			if (size & 8) {
++				*erom += 4;
++			}
++		}
++		if (sizetype > 1) {
++			continue;
++		}
++		uint32_t type = (val >> 6) & 3;
++		if (*base == 0 && type == 0) {
++			*base = val & 0xfffff000u;
++		}
++		if (*wrap == 0 && type == wraptype) {
++			*wrap = val & 0xfffff000u;
++		}
++	} while (*base == 0 || *wrap == 0);
++	return true;
++}
++
++static void
++hw_core_disable(uint32_t wrap, uint32_t prereset, uint32_t reset)
++{
++	if (!(bp_rd(wrap + BCMA_RESET_CTL) & 1)) {
++		bp_wr(wrap + BCMA_IOCTL, prereset | IOCTL_FGC | IOCTL_CLK);
++		(void)bp_rd(wrap + BCMA_IOCTL);
++		bp_wr(wrap + BCMA_RESET_CTL, 1);
++		delay(20);
++		for (unsigned t = 0; t < 30 && bp_rd(wrap + BCMA_RESET_CTL) != 1; t++) {
++			delay(10);
++		}
++	}
++	bp_wr(wrap + BCMA_IOCTL, reset | IOCTL_FGC | IOCTL_CLK);
++	(void)bp_rd(wrap + BCMA_IOCTL);
++}
++
++static void
++hw_core_reset(uint32_t wrap, uint32_t prereset, uint32_t reset, uint32_t postreset)
++{
++	hw_core_disable(wrap, prereset, reset);
++	for (unsigned t = 0; t < 50 && (bp_rd(wrap + BCMA_RESET_CTL) & 1); t++) {
++		bp_wr(wrap + BCMA_RESET_CTL, 0);
++		delay(50);
++	}
++	bp_wr(wrap + BCMA_IOCTL, postreset | IOCTL_CLK);
++	(void)bp_rd(wrap + BCMA_IOCTL);
++}
++
++/* The whole of a file of the drop zone; its length, or 0. */
++static uint32_t
++hw_read_file(const char *path, void *buf, uint32_t max)
++{
++	vfs_context_t ctx = vfs_context_kernel();
++	vnode_t vp = NULLVP;
++	int resid = 0;
++	int error = vnode_open(path, FREAD, 0, 0, &vp, ctx);
++	if (error == 0) {
++		error = vn_rdwr(UIO_READ, vp, (caddr_t)buf, (int)max, 0, UIO_SYSSPACE, 0, vfs_context_ucred(ctx), &resid, vfs_context_proc(ctx));
++		vnode_close(vp, FREAD, ctx);
++	}
++	if (error != 0) {
++		printf("HEROLTE WIFI: %s: error %d\n", path, error);
++		return 0;
++	}
++	return max - (uint32_t)resid;
++}
++
++/*
++ * brcmf_fw_nvram_strip(): the text as the firmware wants it, each key=value ended by a zero, without comments, padded to a
++ * word, and last a word with its length in words and the complement of that. The result takes the place of the text.
++ */
++static uint32_t
++hw_nvram_strip(char *text, uint32_t len)
++{
++	uint32_t in = 0, out = 0;
++	while (in < len) {
++		while (in < len && (text[in] == ' ' || text[in] == '\t' || text[in] == '\r' || text[in] == '\n')) {
++			in++;
++		}
++		if (in < len && text[in] == '#') {
++			while (in < len && text[in] != '\n') {
++				in++;
++			}
++			continue;
++		}
++		uint32_t start = in;
++		bool has_value = false;
++		while (in < len && text[in] != '\n' && text[in] != '\r' && text[in] != ' ' && text[in] != '\t' && text[in] != '#') {
++			has_value = has_value || text[in] == '=';
++			in++;
++		}
++		if (has_value) {
++			for (uint32_t i = start; i < in; i++) {
++				text[out++] = text[i];
++			}
++			text[out++] = 0;
++		}
++		while (in < len && text[in] != '\n') {
++			in++;
++		}
++	}
++	text[out++] = 0;
++	while (out & 3) {
++		text[out++] = 0;
++	}
++	uint32_t words = out / 4, token = (~words << 16) | (words & 0xffff);
++	memcpy(text + out, &token, 4);
++	return out + 4;
++}
++
++static void
++hw_copy_to_tcm(uint32_t addr, const uint8_t *from, uint32_t len)
++{
++	for (uint32_t i = 0; i < len; i += 4) {
++		uint32_t word = 0;
++		memcpy(&word, from + i, len - i < 4 ? len - i : 4);
++		hw_wr(hw_tcm, addr + i, word);
++	}
++}
++
++/* What the firmware's console holds beyond index *done, line by line. */
++static void
++hw_console(uint32_t console, uint32_t *done)
++{
++	static char line[160];
++	static unsigned used;
++	uint32_t buf = hw_rd(hw_tcm, console + 8), size = hw_rd(hw_tcm, console + 12), at = hw_rd(hw_tcm, console + 16);
++	if (buf == 0 || size == 0 || size > HW_BAR2_BYTES || buf >= HW_BAR2_BYTES - size || at >= size) {
++		return;
++	}
++	while (*done != at) {
++		uint32_t word = hw_rd(hw_tcm, buf + (*done & ~3u));
++		char c = (char)(word >> ((*done & 3) * 8));
++		*done = (*done + 1) % size;
++		if (c == '\r') {
++			continue;
++		}
++		if (c == '\n' || used == sizeof(line) - 1) {
++			line[used] = 0;
++			printf("HEROLTE WIFI: firmware: %s\n", line);
++			used = 0;
++		}
++		if (c != '\n') {
++			line[used++] = c;
++		}
++	}
++}
++
++void
++herolte_wifi_firmware(vm_offset_t cfg)
++{
++	hw_cfg = cfg;
++	hw_regs = ml_io_map(HW_BAR0_PA, 0x8000);
++	hw_tcm = ml_io_map(HW_BAR2_PA, HW_BAR2_BYTES);
++	uint8_t *fw = kalloc_data(HW_FW_MAX, Z_WAITOK);
++	char *nvram = kalloc_data(HW_NVRAM_MAX, Z_WAITOK);
++	if (!hw_regs || !hw_tcm || !fw || !nvram) {
++		printf("HEROLTE WIFI: no memory for the firmware\n");
++		return;
++	}
++	uint32_t fw_len = hw_read_file("/private/var/herolte/wifi/fw.bin", fw, HW_FW_MAX);
++	uint32_t nvram_len = hw_read_file("/private/var/herolte/wifi/nvram.txt", nvram, HW_NVRAM_MAX - 16);
++	printf("HEROLTE WIFI: firmware %u bytes, NVRAM %u bytes\n", fw_len, nvram_len);
++	if (fw_len == 0 || nvram_len == 0) {
++		return;
++	}
++
++	uint32_t chip = bp_rd(HW_ENUM_BASE), erom = bp_rd(HW_ENUM_BASE + 0xfc);
++	uint32_t cr4 = 0, cr4_wrap = 0, pcie2 = 0, d11_wrap[2] = { 0, 0 };
++	unsigned d11s = 0;
++	printf("HEROLTE WIFI: chip %#x, cores from %#x:\n", chip, erom);
++	for (unsigned t = 0; t < 512; t++) {
++		uint32_t val = bp_rd(erom);
++		erom += 4;
++		if ((val & 0xf) == 0xf) {
++			break;
++		}
++		if ((val & 0xf) != 1) {
++			continue;
++		}
++		uint32_t id = (val >> 8) & 0xfff;
++		val = bp_rd(erom);
++		erom += 4;
++		uint32_t nmw = (val >> 14) & 0x1f, nsw = (val >> 19) & 0x1f, rev = val >> 24, base, wrap;
++		if (nmw + nsw == 0 || !hw_core_addrs(&erom, &base, &wrap)) {
++			continue;
++		}
++		printf("HEROLTE WIFI:   core %#x rev %u at %#x wrapper %#x\n", id, rev, base, wrap);
++		if (id == CORE_CR4) {
++			cr4 = base;
++			cr4_wrap = wrap;
++		} else if (id == CORE_PCIE2) {
++			pcie2 = base;
++		} else if (id == CORE_D11 && d11s < 2) {
++			d11_wrap[d11s++] = wrap;
++		}
++	}
++	if (!cr4 || !pcie2) {
++		printf("HEROLTE WIFI: no ARM or no PCIe core\n");
++		return;
++	}
++
++	/* brcmf_chip_cr4_set_passive() */
++	uint32_t halted = bp_rd(cr4_wrap + BCMA_IOCTL) & IOCTL_CPUHALT;
++	hw_core_reset(cr4_wrap, halted, IOCTL_CPUHALT, IOCTL_CPUHALT);
++	for (unsigned i = 0; i < d11s; i++) {
++		hw_core_disable(d11_wrap[i], IOCTL_PHYRESET | IOCTL_PHYCLOCK, IOCTL_PHYCLOCK);
++	}
++	/* brcmf_pcie_attach(): the window of BAR2 may not be sized properly */
++	bp_wr(pcie2 + 0x120, 0x4e0);
++	bp_wr(pcie2 + 0x124, bp_rd(pcie2 + 0x124));
++
++	/* brcmf_chip_tcm_ramsize() */
++	uint32_t cap = bp_rd(cr4 + 4), banks = (cap & 0xf) + ((cap >> 4) & 0xf), ramsize = 0;
++	for (uint32_t i = 0; i < banks; i++) {
++		bp_wr(cr4 + 0x40, i);
++		uint32_t info = bp_rd(cr4 + 0x44);
++		ramsize += ((info & 0x7f) + 1) * ((info & 0x200) ? 1024u : 8192u);
++	}
++	printf("HEROLTE WIFI: %u banks, RAM %u KiB at %#x\n", banks, ramsize / 1024, HW_RAMBASE);
++	if (ramsize == 0 || ramsize > HW_BAR2_BYTES - HW_RAMBASE || fw_len + HW_NVRAM_MAX > ramsize) {
++		return;
++	}
++
++	uint32_t nvram_bytes = hw_nvram_strip(nvram, nvram_len);
++	uint32_t resetintr;
++	memcpy(&resetintr, fw, 4);
++	uint64_t start = mach_absolute_time(), ns;
++	hw_copy_to_tcm(HW_RAMBASE, fw, fw_len);
++	hw_wr(hw_tcm, HW_RAMBASE + ramsize - 4, 0);
++	hw_copy_to_tcm(HW_RAMBASE + ramsize - nvram_bytes, (const uint8_t *)nvram, nvram_bytes);
++	uint32_t bad = 0;
++	for (uint32_t i = 0; i + 4 <= fw_len; i += 4) {
++		uint32_t word;
++		memcpy(&word, fw + i, 4);
++		bad += hw_rd(hw_tcm, HW_RAMBASE + i) != word;
++	}
++	absolutetime_to_nanoseconds(mach_absolute_time() - start, &ns);
++	printf("HEROLTE WIFI: copied and read back in %llu ms, %u words differ; NVRAM %u bytes, reset vector %#x\n", ns / 1000000, bad, nvram_bytes, resetintr);
++	uint32_t written = hw_rd(hw_tcm, HW_RAMBASE + ramsize - 4);
++	if (bad != 0) {
++		return;
++	}
++
++	/* brcmf_chip_cr4_set_active() */
++	hw_wr(hw_tcm, 0, resetintr);
++	hw_core_reset(cr4_wrap, IOCTL_CPUHALT, 0, 0);
++	uint32_t shared = written;
++	for (unsigned t = 0; t < 100 && shared == written; t++) {
++		IOSleep(50);
++		shared = hw_rd(hw_tcm, HW_RAMBASE + ramsize - 4);
++	}
++	if (shared == written) {
++		printf("HEROLTE WIFI: the firmware did not start: last word %#x, first word %#x, ARM ioctl %#x reset %#x\n", shared, hw_rd(hw_tcm, HW_RAMBASE),
++		    bp_rd(cr4_wrap + BCMA_IOCTL), bp_rd(cr4_wrap + BCMA_RESET_CTL));
++		return;
++	}
++	if (shared < HW_RAMBASE || shared >= HW_RAMBASE + ramsize) {
++		printf("HEROLTE WIFI: the firmware's last word is not an address: %#x\n", shared);
++		return;
++	}
++	uint32_t flags = hw_rd(hw_tcm, shared), console = hw_rd(hw_tcm, shared + 20);
++	printf("HEROLTE WIFI: THE FIRMWARE RUNS: shared at %#x, protocol %u, flags %#x, rings at %#x, console at %#x\n", shared, flags & 0xff, flags,
++	    hw_rd(hw_tcm, shared + 48), console);
++	kfree_data(fw, HW_FW_MAX);
++	kfree_data(nvram, HW_NVRAM_MAX);
++	if (console < HW_RAMBASE || console >= HW_RAMBASE + ramsize) {
++		return;
++	}
++	uint32_t done = 0;
++	for (unsigned t = 0; t < 30; t++) {
++		hw_console(console, &done);
++		IOSleep(2000);
++	}
++}

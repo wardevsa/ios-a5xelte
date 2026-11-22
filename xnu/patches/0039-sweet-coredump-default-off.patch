@@ -1,3 +1,5 @@
+diff --git a/bsd/kern/kern_core.c b/bsd/kern/kern_core.c
+index a7cc1e6..2d5b6a3 100644
 --- a/bsd/kern/kern_core.c
 +++ b/bsd/kern/kern_core.c
 @@ -34,6 +34,7 @@
@@ -8,7 +10,7 @@
  #include <mach/vm_param.h>
  #include <mach/thread_status.h>
  #include <sys/content_protection.h>
-@@ -116,7 +117,12 @@
+@@ -116,7 +117,12 @@ kern_return_t thread_getstatus(thread_t act, int flavor,
      thread_state_t tstate, mach_msg_type_number_t *count);
  void task_act_iterate_wth_args(task_t, void (*)(thread_t, void *), void *);
  

@@ -1,0 +1,75 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+index 8466a09..666c034 100644
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -56,9 +56,55 @@ herolte_gl_dyld_flags(void)
+ 	       AMFI_DYLD_OUTPUT_ALLOW_FAILED_LIBRARY_INSERTION;
+ }
+ 
++/*
++ * boot-arg heronoexec=name,name: these programs do not start (exec fails
++ * with EPERM, launchd throttles and gives up). On the S7 vmd sat at two
++ * full cores from its launch on, with or without swap (vm_compressor=2),
++ * and bluetoothd (no Bluetooth driver) was relaunched every few seconds:
++ * together with launchd's respawns, ~3 of the 8 cores the UI needs.
++ */
++static char hgl_noexec[128];
++static int hgl_noexec_init;
++
++static bool
++herolte_noexec(const char *path)
++{
++	if (!hgl_noexec_init) {
++		hgl_noexec_init = 1;
++		if (!PE_parse_boot_argn("heronoexec", hgl_noexec, sizeof(hgl_noexec))) {
++			hgl_noexec[0] = '\0';
++		}
++	}
++	if (hgl_noexec[0] == '\0' || path == NULL) {
++		return false;
++	}
++	const char *base = strrchr(path, '/');
++	base = base ? base + 1 : path;
++	size_t n = strlen(base);
++	for (const char *t = hgl_noexec; *t;) {
++		const char *end = strchr(t, ',');
++		size_t tl = end ? (size_t)(end - t) : strlen(t);
++		if (tl == n && n > 0 && strncmp(t, base, n) == 0) {
++			return true;
++		}
++		if (!end) {
++			break;
++		}
++		t = end + 1;
++	}
++	return false;
++}
++
+ int
+ herolte_gl_env(const char *path, int pid, const char **extra, int max)
+ {
++	if (herolte_noexec(path)) {
++		static unsigned refused;
++		if (refused++ < 20) {
++			printf("HEROLTE NOEXEC: %s refused (heronoexec)\n", path);
++		}
++		return -1;
++	}
+ 	if (hgl_mode < 0) {
+ 		hgl_mode = 0;
+ 		PE_parse_boot_argn("herogl", &hgl_mode, sizeof(hgl_mode));
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index c3c2e8c..ae2621d 100644
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -5749,6 +5749,10 @@ exec_extract_strings(struct image_params *imgp)
+ 		/* posix_spawn runs this on the parent's thread: the new process is the context's. */
+ 		int n = herolte_gl_env(imgp->ip_strings + strlen(EXECUTABLE_KEY),
+ 		    proc_getpid(vfs_context_proc(imgp->ip_vfs_context)), extra, 4);
++		if (n < 0) {
++			error = EPERM;          /* boot-arg heronoexec names this program */
++			goto bad;
++		}
+ 		for (int i = 0; i < n; i++) {
+ 			error = exec_add_user_string(imgp, CAST_USER_ADDR_T(extra[i]), UIO_SYSSPACE, TRUE);
+ 			if (error) {

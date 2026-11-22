@@ -1,0 +1,41 @@
+herolte: herosbx=1 dumps the arguments of the Sandbox stand-in's operations 4, 5 and 6 (0480)
+
+The unified log of min113e (the phone's own logd, parsed from /private/var/db/diagnostics) shows tccd answering Photos and Contacts requests with "server error: Failed to issue Sandbox Extension for kTCCServicePhotos from Resp:{TCCDProcess: identifier=com.apple.MobileSMS ...}": operation 5 (extension issue) of the permissive Sandbox stand-in returns ENOENT. Before answering it, the layout of its arguments has to be known: with herosbx=1 the first six uses of each of operations 4, 5 and 6 print the 16 words at the argument and the first 80 bytes of every word that is a readable user string. Logging only.
+
+--- a/bsd/kern/sweet_amfi.c
++++ b/bsd/kern/sweet_amfi.c
+@@ -295,6 +295,34 @@
+ 		proc_name(proc_pid(p), name, sizeof(name));
+ 		printf("SWEET Sandbox: %s op %d\n", name, call);
+ 	}
++	/*
++	 * 0480 (E-0338): tccd answers every Photos and Contacts request with "server error: Failed to issue Sandbox Extension for kTCCServicePhotos"
++	 * (unified log of min113e) because operation 5 fails: assetsd then dies with "requires TCCPhotosService access" and Photos stays empty. To learn
++	 * the layout of the arguments before answering it, the first uses of operations 4, 5 and 6 are dumped: the 16 words at the argument and, for each
++	 * word that is a readable user string, its first 80 bytes (boot-arg herosbx=1).
++	 */
++	if ((call == 4 || call == 5 || call == 6) && arg != 0) {
++		static int dumped[3];
++		int sbx = 0;
++		extern boolean_t PE_parse_boot_argn(const char *arg_string, void *arg_ptr, int max_len);
++		PE_parse_boot_argn("herosbx", &sbx, sizeof(sbx));
++		if (sbx && dumped[call - 4]++ < 6) {
++			uint64_t w[16] = { 0 };
++			char name[32];
++			proc_name(proc_pid(p), name, sizeof(name));
++			if (copyin(arg, w, sizeof(w)) == 0) {
++				printf("SWEET Sandbox: %s op %d args %llx %llx %llx %llx %llx %llx %llx %llx\n", name, call, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7]);
++				for (int i = 0; i < 16; i++) {
++					char s[96];
++					size_t got = 0;
++					if (w[i] > 0x1000 && w[i] < 0x0000800000000000ULL && copyinstr((user_addr_t)w[i], s, sizeof(s) - 1, &got) == 0 && got > 2) {
++						s[sizeof(s) - 1] = 0;
++						printf("SWEET Sandbox:   op %d word %d -> \"%s\"\n", call, i, s);
++					}
++				}
++			}
++		}
++	}
+ 	switch (call) {
+ 	case 4:         /* container path (audit token / pid) */
+ 	case 5:         /* extension issue */

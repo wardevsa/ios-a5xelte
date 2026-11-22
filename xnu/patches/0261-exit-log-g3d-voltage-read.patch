@@ -1,0 +1,33 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index a95a618..37ddc19 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -1829,6 +1829,12 @@ hg_thread(void *arg, __unused wait_result_t wr)
+ 	hg_probe(pmu, "5s");
+ 	hg_msleep(55000);
+ 	hg_probe(pmu, "60s");
++	{
++		/* What the bootloader left on vdd_g3d: register 0x26 (PMIC_G3D_OUT in Samsung's APM driver). Nothing is written. */
++		uint8_t out = 0;
++		bool read = herolte_apm_pmic_read(0x26, &out);
++		printf("HEROLTE GPU: PMIC G3D out reg 0x26 = %#x (%s)\n", out, read ? "read" : "read failed");
++	}
+ 	if (mode >= 2) {
+ 		hg_pmic_dump();
+ 	}
+diff --git a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
+index a29409d..be4bd29 100644
+--- a/bsd/kern/kern_exit.c
++++ b/bsd/kern/kern_exit.c
+@@ -2112,6 +2112,11 @@ proc_exit(proc_t p)
+ 
+ 	uth = current_uthread();
+ 
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
++	/* A short line: which services die and relaunch, and how. */
++	printf("EXIT %s[%d] xstat %#x\n", p->p_name, proc_getpid(p), p->p_xstat);
++#endif
++
+ 	proc_lock(p);
+ 	proc_transstart(p, 1, 0);
+ 	if (!(p->p_lflag & P_LEXIT)) {

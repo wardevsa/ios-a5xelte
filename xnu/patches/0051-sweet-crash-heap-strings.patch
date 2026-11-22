@@ -1,6 +1,8 @@
+diff --git a/osfmk/kern/exception.c b/osfmk/kern/exception.c
+index 4ce918b..f618ec2 100644
 --- a/osfmk/kern/exception.c
 +++ b/osfmk/kern/exception.c
-@@ -833,6 +833,7 @@
+@@ -833,6 +833,7 @@ exception_triage(
   * (crashing) thread.
   */
  void sweet_crash_log(const char *name, int pid, int sig, uint64_t code, uint64_t subcode);
@@ -8,7 +10,7 @@
  
  void
  sweet_crash_log(const char *name, int pid, int sig, uint64_t code, uint64_t subcode)
-@@ -871,6 +872,103 @@
+@@ -871,6 +872,103 @@ sweet_crash_log(const char *name, int pid, int sig, uint64_t code, uint64_t subc
  		fp = frame[0];
  	}
  	printf("%s\n", line);

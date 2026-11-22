@@ -1,0 +1,73 @@
+herolte: VGR0 off by default; heropd=<s> switches unused power domains off one by one (0436)
+
+min62 (HEROLTE PD lines, all 14 dumps, screen on and off): cam0, cam1, isp0, isp1, mfc, mscl, aud, g3d and disp0 were all ON (CONFIG 0xf, STATUS 0x3000f), the bootloader's state. With the cable on, the net battery current with the screen off stayed at ~0 mA, so the screen-off consumption is at least what the charger delivers: the SoC does not sleep. heropd=<s> (>=20, off by default): every <s> s one of mfc, isp1, isp0, cam1, cam0, mscl is switched off through its PMU CONFIG (low nibble 0), STATUS read back within 10 ms or put back on; audio, display and G3D are never touched; a reboot restores them. Also herovgr defaults to 0 (VGR0 present was 4,2 fps in min49; herovgr=1 turns it on) so that the boot line has room for heropd.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -1841,7 +1841,7 @@
+ 		return false;
+ 	}
+ 	if (!hvg_decon) {
+-		uint32_t on = 1;
++		uint32_t on = 0;        /* 0436: off by default (min49: 4,2 fps with it); herovgr=1 turns it on */
+ 		PE_parse_boot_argn("herovgr", &on, sizeof(on));
+ 		vm_offset_t pmu1 = ml_io_map(0x105c4000u, 0x1000);
+ 		if (!on || !pmu1 || (hg_rd(pmu1, 0x1a4) & 0xfu) != 0xfu) {
+@@ -2682,6 +2682,17 @@
+ 	 * voltage. Busy fraction of cores 4-7 over 200 ms from recount's idle time; high above 15 %, low after 1 s below 6 %.
+ 	 * It only asks for what the screen-off / hot logic already does (hc_go_low / hc_go_high).
+ 	 */
++	/*
++	 * 0436: boot-arg heropd=<s> (>=20): from <s> seconds after the power thread starts, one more unused power domain is
++	 * switched off every <s> seconds (mfc, isp1, isp0, cam1, cam0, mscl: all were left ON by the bootloader, min62
++	 * HEROLTE PD lines, with nothing using them). CONFIG's low nibble to 0, STATUS read back; a domain that does not
++	 * report off within 10 ms is put back on. The audio and display domains and the GPU's are never touched. A reboot
++	 * restores them (S-Boot sets them up again). One boot thus gives the current with each domain on and then off.
++	 */
++	uint32_t pd_s = 0;
++	uint64_t pd_at = 0;
++	unsigned pd_i = 0;
++	PE_parse_boot_argn("heropd", &pd_s, sizeof(pd_s));
+ 	int gov_on = 0;
+ 	PE_parse_boot_argn("herogov", &gov_on, sizeof(gov_on));
+ 	uint64_t gov_prev_busy = 0, gov_prev_t = 0, gov_flips = 0;
+@@ -2716,6 +2727,39 @@
+ 				hot_now = false;
+ 			}
+ 		}
++		if (pd_s >= 20 && pd_i < 6) {
++			uint64_t el = 0;
++			if (pd_at == 0) {
++				pd_at = now;
++			}
++			absolutetime_to_nanoseconds(now - pd_at, &el);
++			if (el > (uint64_t)pd_s * NSEC_PER_SEC) {
++				static const struct { const char *name; uint16_t off; } order[] = {
++					{ "mfc", 0x180 }, { "isp1", 0x160 }, { "isp0", 0x140 }, { "cam1", 0xa0 }, { "cam0", 0x20 }, { "mscl", 0x40 },
++				};
++				static vm_offset_t pdb;
++				if (!pdb) {
++					pdb = ml_io_map(0x105c4000u, 0x200);
++				}
++				if (pdb) {
++					uint16_t off = order[pd_i].off;
++					uint32_t before = hg_rd(pdb, off);
++					bool down = false;
++					hg_wr(pdb, off, before & ~0xfu);
++					for (unsigned k = 0; k < 2000 && !down; k++) {
++						delay(5);
++						down = (hg_rd(pdb, off + 4u) & 0xfu) == 0;
++					}
++					if (!down) {
++						hg_wr(pdb, off, before);
++					}
++					printf("HEROLTE PD: %s %s (config %#x -> %#x, status %#x)\n", order[pd_i].name, down ? "OFF" : "did not go off, put back on",
++					    before, hg_rd(pdb, off), hg_rd(pdb, off + 4u));
++				}
++				pd_i++;
++				pd_at = now;
++			}
++		}
+ 		if (gov_on && !hc.broken) {
+ 			extern uint64_t herolte_cluster_busy_mach(int first, int last);      /* osfmk/kern/processor.c */
+ 			uint64_t busy = herolte_cluster_busy_mach(4, 7);

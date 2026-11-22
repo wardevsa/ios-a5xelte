@@ -1,0 +1,18 @@
+diag(min7): count entries to start_first_cpu next to the A5XELTE marker
+
+At the marker (PA 0x8ffff100, inside the loader's preserved log page) the word at +8 is incremented on every start_first_cpu entry (MMU off). Read the word from TWRP before and after a boot attempt: the difference is the number of times start.s ran during it (1 = no re-entry). The loader is deliberately not touched (the Nov-12 loader binary stays byte-identical across min1..min7).
+
+--- a/osfmk/arm64/start.s	2026-11-14 15:08:09.272123737 +0100
++++ b/osfmk/arm64/start.s	2026-11-14 15:08:09.286070238 +0100
+@@ -520,6 +520,11 @@
+ 	/* Earliest XNU-owned physical marker in preserved Samsung log RAM. */
+ 	MOV64	x10, A5XELTE_MARKER_PA
+ 	MOV64	x11, 0x3145544c45554e58
++	/* min7: count entries to start_first_cpu in the word after the marker (MMU off, plain physical store). The word
++	 * is read from TWRP before and after a boot attempt; the difference is the number of entries. */
++	ldr		x13, [x10, #8]
++	add		x13, x13, #1
++	str		x13, [x10, #8]
+ 	str		x11, [x10]
+ 	dsb		sy
+ 	/* XNU-owned green entry block on the Exynos DECON scanout buffer. */

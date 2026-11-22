@@ -1,0 +1,140 @@
+diag(min8): keep the early framebuffer drawing alive after TTBR0 goes (kernel VA alias) and add blocks 20-27
+
+0340/0341 reached block 19 (just before set_mmu_ttb(invalid_ttep)); the reset is after TTBR0 is turned off, where the PA alias of the DECON framebuffer disappears. Map the 32 MiB block holding the scanout buffer at the empty kernel VA above the low globals in the final table (as the donor's sweet_early_map_final()), relocate the early drawing pointer there after TTBR1 is final (no more sweet_early_disable() before the TTBR0 switch; it still happens at serial_init), and draw blocks 20-27: after TTBR0 off / TLB flush (20), table pointers rebound (21), before pmap_bootstrap (22), after it (23), early I/O tables ready (24), arm_vm_init returned (25), before serial_init (26), after serial_init (27). herostop=N works for the new slots.
+
+--- a/osfmk/arm/arm_init.c	2026-11-14 16:31:07.338703531 +0100
++++ b/osfmk/arm/arm_init.c	2026-11-14 16:31:07.359940082 +0100
+@@ -567,6 +567,7 @@
+ 	sweet_early_block(9, 0xffffffff);
+ 	arm_vm_init(xmaxmem, args);
+ 	sweet_early_mark(15, "arm_vm_init returned");
++	sweet_early_block(25, 0xff9932cc);
+ 
+ 	if (debug_boot_arg) {
+ 		patch_low_glo();
+@@ -580,8 +581,10 @@
+ 
+ 	/* Setup debugging output. */
+ 	sweet_early_mark(16, "calling serial_init");
++	sweet_early_block(26, 0xffffffff);
+ 	const unsigned int serial_exists = serial_init();
+ 	sweet_early_mark(19, "serial_init returned");
++	sweet_early_block(27, 0xffa9a9a9);
+ 	kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF);
+ 	kprintf("kprintf initialized\n");
+ 	sweet_early_mark(20, "kprintf startup complete");
+--- a/osfmk/arm64/sweet_early.c	2026-11-14 16:31:07.340582660 +0100
++++ b/osfmk/arm64/sweet_early.c	2026-11-14 16:31:07.358624738 +0100
+@@ -12,7 +12,9 @@
+ #include <kern/misc_protos.h>
+ 
+ /* The bootstrap TTBR0 maps DECON scanout VA=PA until arm_vm_init. */
+-#define A5_FB ((volatile uint32_t *)(uintptr_t)A5XELTE_FB_PA)
++/* The bootstrap TTBR0 maps the scanout VA=PA; arm_vm_init relocates the pointer to a kernel VA alias before TTBR0 goes (min8). */
++static volatile uint32_t *a5_fb = (volatile uint32_t *)(uintptr_t)A5XELTE_FB_PA;
++#define A5_FB a5_fb
+ #define A5_STRIDE (A5XELTE_FB_STRIDE / 4u)
+ #define A5_SCALE ((unsigned int)A5XELTE_FB_TEXT_SCALE)
+ #define A5_ROW_HEIGHT (16u * A5_SCALE)
+@@ -142,7 +144,13 @@
+ 	}
+ }
+ 
+-void sweet_early_relocate(uint64_t base) { (void)base; }
++void
++sweet_early_relocate(uint64_t base)
++{
++	a5_fb = (volatile uint32_t *)(uintptr_t)base;
++	__asm__ volatile("dsb sy" ::: "memory");
++}
++
+ void sweet_early_disable(void) { a5_active = 0; }
+ #elif defined(SWEET)
+ #include <stdint.h>
+--- a/osfmk/arm64/arm_vm_init.c	2026-11-14 16:31:07.340661666 +0100
++++ b/osfmk/arm64/arm_vm_init.c	2026-11-14 16:31:07.359663788 +0100
+@@ -1859,6 +1859,34 @@
+ #define ARM64_PHYSMAP_ALIGNMENT_PADDING ((8 + (vm_size_t)hakios_managed_ram.count) * ARM_TT_TWIG_SIZE)
+ #endif
+ 
++#if defined(A5XELTE)
++/*
++ * min8: keep the early framebuffer console alive past the TTBR0 switch. Map the 32 MiB block that contains the DECON scanout
++ * buffer (Normal-NC) in the final table at the otherwise empty VA above the low globals, as the donor's
++ * sweet_early_map_final() does, and let sweet_early_relocate() point the early drawing there.
++ */
++#define A5_EARLY_FB_BLOCK_PA (A5XELTE_FB_PA & ~(uint64_t)(ARM_TT_L2_SIZE - 1))
++#define A5_EARLY_FB_VA       (VM_MIN_KERNEL_ADDRESS + ARM_TT_L2_SIZE)
++#define A5_EARLY_FB_OFF      (A5XELTE_FB_PA - A5_EARLY_FB_BLOCK_PA)
++
++static void
++a5_early_map_final(void)
++{
++	const vm_map_address_t va = A5_EARLY_FB_VA;
++	assert(va + ARM_TT_L2_SIZE <= gVirtBase);
++	tt_entry_t l1 = cpu_tte[(va & ARM_TT_L1_INDEX_MASK) >> ARM_TT_L1_SHIFT];
++	assert((l1 & (ARM_TTE_VALID | ARM_TTE_TYPE_MASK)) == (ARM_TTE_VALID | ARM_TTE_TYPE_TABLE));
++	tt_entry_t *l2 = (tt_entry_t *)phystokv(l1 & ARM_TTE_TABLE_MASK);
++	tt_entry_t *slot = &l2[(va & ARM_TT_L2_INDEX_MASK) >> ARM_TT_L2_SHIFT];
++	assert(*slot == ARM_TTE_EMPTY);
++	*slot = (uint64_t)A5_EARLY_FB_BLOCK_PA | ARM_TTE_VALID | ARM_TTE_TYPE_BLOCK |
++	    ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY) |
++	    ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_WRITECOMB) |
++	    ARM_TTE_BLOCK_AF | ARM_TTE_BLOCK_PNX | ARM_TTE_BLOCK_NX;
++	__asm__ volatile ("dsb ishst" ::: "memory");
++}
++#endif
++
+ #if defined(SWEET) && !defined(A5XELTE)
+ /*
+  * The reserved low-globals/kernel region is excluded from VM allocation.
+@@ -2224,6 +2252,9 @@
+ 	/* phystokv() must still refer to the bootstrap aperture here. */
+ 	sweet_early_map_final();
+ #endif
++#if defined(A5XELTE)
++	a5_early_map_final();
++#endif
+ 	sweet_early_mark(7, "rb: physmap_init");
+ 	sweet_early_block(16, 0xffff1493);
+ 	arm_vm_physmap_init(args);
+@@ -2239,17 +2270,19 @@
+ #endif
+ #if defined(A5XELTE)
+ 	sweet_early_block(19, 0xffffffff);
+-	sweet_early_disable(); /* the low physical alias goes away with this TTBR0 switch */
++	sweet_early_relocate(A5_EARLY_FB_VA + A5_EARLY_FB_OFF); /* TTBR1 is final: draw through the kernel alias from here */
+ #endif
+ 	set_mmu_ttb(invalid_ttep & TTBR_BADDR_MASK);
+ 
+ 	flush_mmu_tlb();
+ 	sweet_early_mark(10, "TTBR0 off; TLB flushed");
++	sweet_early_block(20, 0xffff4500);
+ 	kva_active = TRUE;
+ 	// global table pointers may need to be different due to physical aperture remapping
+ 	cpu_tte = (tt_entry_t*)(phystokv(cpu_ttep));
+ 	invalid_tte = (tt_entry_t*)(phystokv(invalid_ttep));
+ 	sweet_early_mark(11, "physmap table pointers rebound");
++	sweet_early_block(21, 0xffffd700);
+ 
+ 	// From here on out, we're off the bootstrap translation tables.
+ 
+@@ -2343,8 +2376,10 @@
+ #endif
+ #endif
+ 	sweet_early_mark(12, "calling pmap_bootstrap");
++	sweet_early_block(22, 0xffff69b4);
+ 	pmap_bootstrap(dynamic_memory_begin);
+ 	sweet_early_mark(13, "pmap_bootstrap done");
++	sweet_early_block(23, 0xff32cd32);
+ 
+ 	disable_preemption();
+ 
+@@ -2396,6 +2431,7 @@
+ 		cpu_l1_tte++;
+ 	}
+ 	sweet_early_mark(14, "early I/O page tables ready");
++	sweet_early_block(24, 0xff1e90ff);
+ 
+ #if defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR)
+ 	/*

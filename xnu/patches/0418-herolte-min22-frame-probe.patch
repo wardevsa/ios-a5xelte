@@ -1,0 +1,39 @@
+diag(min22): log a 32x64 luminance thumbnail of the panel buffer after present() so the persistent log shows what the panel was given
+
+min21 (E-0197): heroring=0 removed the ring, SpringBoard and backboardd are alive and present frames, yet the panel stays black and the Director cannot tell whether the frames are black or the panel is off; photos and transcriptions are the bottleneck. AppleCLCD::present() now logs, for the first 12 presents and then every 25th (at most 40 probes), 64 lines of 32 hex digits (0 black .. f white luminance of the sampled panel pixels) plus fPowerOff and the copied byte count. IOLog only, no behaviour change; the sampling reads the panel buffer after the copy under the vsync-serialized present().
+
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -969,6 +969,32 @@
+ 		}
+ 		s->release();
+ 	}
++	/*
++	 * min22 probe: a 32x64 luminance thumbnail of the PANEL buffer after the copy, one hex digit per cell
++	 * (0 black .. f white), logged as 64 short lines, so the persistent log shows what the panel was given
++	 * without photos. First 12 presents, then every 25th, at most 40 probes.
++	 */
++	{
++		static uint32_t presents, probes;
++		presents++;
++		if (copied != 0 && probes < 40 && (presents <= 12 || presents % 25 == 0)) {
++			static const char hex[] = "0123456789abcdef";
++			char line[40];
++			probes++;
++			IOLog("FBPROBE %u present %u off=%d copied=%llu\n", probes, presents, fPowerOff ? 1 : 0, copied);
++			for (uint32_t ty = 0; ty < 64; ty++) {
++				uint32_t y = (ty * fHeight + fHeight / 128) / 64;
++				for (uint32_t tx = 0; tx < 32; tx++) {
++					uint32_t x = (tx * fWidth + fWidth / 64) / 32;
++					uint32_t px = *(volatile uint32_t *)(fPixels + (uint64_t)y * fRowBytes + (uint64_t)x * 4);
++					uint32_t l = (((px >> 16) & 0xff) + ((px >> 8) & 0xff) + (px & 0xff)) / 3;
++					line[tx] = hex[l >> 4];
++				}
++				line[32] = 0;
++				IOLog("FBP %02u %s\n", ty, line);
++			}
++		}
++	}
+ 	return copied;
+ }
+ 

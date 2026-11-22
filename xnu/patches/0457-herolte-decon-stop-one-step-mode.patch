@@ -1,0 +1,39 @@
+herolte: one-step mode of the DECON stop, herodisp=1..9 (0457, D-0094)
+
+min87 (E-0304): stopping the display controller at the end of the frame while the screen is off takes the current from ~520-535 to ~355 mA (-164 and -177 mA in two cycles); the full stop (level 2) adds nothing measurable; the screen woke every time. herodisp=<s> with 1 <= s <= 9 does only level 1, <s> seconds after the display went off (no 30 s wait, no level 2); s >= 10 keeps the min87 behaviour. The screen-off test uses the display-off timestamp itself (off != 0): screen_off only turns true after 3 s and would have restored the DECON at once. Restore is unchanged (SweetFramebuffer first, power thread as safety net). herodisp only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3105,18 +3105,26 @@
+ 		 * min85 (E-0301): the cores are 97-99.9 % idle and cluster power-down saves nothing measurable, so the screen-off floor
+ 		 * (~465-505 mA against Linux's 25-35) is elsewhere.
+ 		 */
+-		/* 0456 (D-0094): herodisp=<s> (>= 10): with the screen off for 30 s stop the DECON (level 1), <s> seconds later fully (level 2);
+-		 * screen on again: restore at once (and re-arm). */
+-		if (disp_s >= 10) {
++		/*
++		 * 0456 (D-0094) / 0457: herodisp=<s>. s >= 10: the min87 experiment, with the screen off for 30 s stop the DECON (level 1),
++		 * <s> seconds later fully (level 2). 1 <= s <= 9: ONE-STEP mode, level 1 only, <s> seconds after the display went off (min87,
++		 * E-0304: level 1 takes the screen-off current from ~520-535 to ~355 mA in two cycles, level 2 adds nothing measurable, and the
++		 * screen woke correctly every time). Restore as soon as the screen is on again (SweetFramebuffer calls it first; this is the
++		 * safety net) and re-arm. The screen's own "off" flag is used (off != 0), not screen_off, which only turns true after 3 s.
++		 */
++		if (disp_s >= 1) {
+ 			extern void herolte_disp_stop(unsigned level);
+ 			extern void herolte_disp_restore(void);
+-			if (screen_off && disp_i < 2 && ns >= (30ull + (uint64_t)disp_i * disp_s) * NSEC_PER_SEC) {
++			bool single = disp_s < 10;
++			unsigned levels = single ? 1 : 2;
++			uint64_t first = single ? disp_s : 30;
++			if (off != 0 && disp_i < levels && ns >= (first + (single ? 0 : (uint64_t)disp_i * disp_s)) * NSEC_PER_SEC) {
+ 				herolte_disp_stop(disp_i + 1);
+ 				disp_i++;
+-			} else if (!screen_off && herolte_disp_state) {
++			} else if (off == 0 && herolte_disp_state) {
+ 				herolte_disp_restore();
+ 				disp_i = 0;
+-			} else if (!screen_off && disp_i) {
++			} else if (off == 0 && disp_i) {
+ 				disp_i = 0;
+ 			}
+ 		}

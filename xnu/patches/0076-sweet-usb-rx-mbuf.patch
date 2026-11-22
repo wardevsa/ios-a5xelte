@@ -1,6 +1,8 @@
+diff --git a/bsd/dev/sweet_usb.c b/bsd/dev/sweet_usb.c
+index c21486a..9e8cb33 100644
 --- a/bsd/dev/sweet_usb.c
 +++ b/bsd/dev/sweet_usb.c
-@@ -498,10 +498,19 @@
+@@ -498,10 +498,19 @@ ud_rx_done(void)
  	uint32_t len = UD_FRAME_MAX - (t[2] & 0xffffff);
  	ud_sync(UD_RX, UD_FRAME_MAX);
  	if (ud.ifp != NULL && len >= ETHER_HDR_LEN && len <= ETHER_MAX_LEN) {

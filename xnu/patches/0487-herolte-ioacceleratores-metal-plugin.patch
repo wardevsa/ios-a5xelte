@@ -1,0 +1,33 @@
+herolte: HeroGPU names the Metal plug-in on its IOAcceleratorES (0487)
+
+From upstream wardevsa/ios-a5xelte herolte-ios18 patch 9198 (same hunk: our HeroGPU.cpp has the same 0260 context). Metal.framework reads MetalPluginName and MetalPluginClassName off every IOAcceleratorES; HeroMetal.bundle (gpu/metal, installed by hero-run) gives a device only to the processes named in the drop zone metal.allow. herometal=0 empties the service again.
+
+diff --git a/iokit/Kernel/arm/HeroGPU.cpp b/iokit/Kernel/arm/HeroGPU.cpp
+--- a/iokit/Kernel/arm/HeroGPU.cpp
++++ b/iokit/Kernel/arm/HeroGPU.cpp
+@@ -309,8 +309,24 @@
+ 	if (accel) {
+ 		IOAcceleratorES *es = OSTypeAlloc(IOAcceleratorES);
+ 		if (es != NULL && es->init() && es->attach(this)) {
++			/*
++			 * Metal M3 (docs/herolte-metal.md): what Metal.framework reads off every
++			 * IOAcceleratorES (-[MTLIOAccelServiceGlobalContext init], as ios-b1lte's
++			 * B2LMetalAccel.cpp found): the bundle /System/Library/Extensions/<name>.bundle
++			 * and the class in it it sends -initWithAcceleratorPort:. HeroMetal.bundle
++			 * (gpu/metal, installed by hero-run) gives a device only to the processes named
++			 * in the drop zone's metal.allow; everybody else gets nil, as before.
++			 * herometal=0: an empty service again.
++			 */
++			int metal = 1;
++			PE_parse_boot_argn("herometal", &metal, sizeof(metal));
++			if (metal) {
++				es->setProperty("MetalPluginName", "HeroMetal");
++				es->setProperty("MetalPluginClassName", "HeroMetalDevice");
++			}
+ 			es->registerService();
+-			IOLog("HEROGPU: IOAcceleratorES registered\n");
++			IOLog("HEROGPU: IOAcceleratorES registered%s\n",
++			    metal ? ", Metal plug-in HeroMetal.bundle" : "");
+ 		}
+ 		OSSafeReleaseNULL(es);
+ 	}

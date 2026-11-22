@@ -1,6 +1,8 @@
+diff --git a/bsd/sweet_hfs/core/hfs_catalog.c b/bsd/sweet_hfs/core/hfs_catalog.c
+index 98fcb51..fedfc15 100644
 --- a/bsd/sweet_hfs/core/hfs_catalog.c
 +++ b/bsd/sweet_hfs/core/hfs_catalog.c
-@@ -757,6 +757,22 @@
+@@ -757,6 +757,22 @@ falsematch:
  }
  
  
@@ -23,7 +25,7 @@
  /*
   * cat_lookupbykey - lookup a catalog node using a cnode key
   */
-@@ -865,7 +881,9 @@
+@@ -865,7 +881,9 @@ cat_lookupbykey(struct hfsmount *hfsmp, CatalogKey *keyp, int flags, u_int32_t h
  		if (ilink) {
  			/* This is a hard link and the link count bit was not set */
  			if (!(attrp->ca_recflags & kHFSHasLinkChainMask)) {
@@ -34,7 +36,7 @@
  				attrp->ca_recflags |= kHFSHasLinkChainMask;
  			}
  		} else {
-@@ -877,12 +895,16 @@
+@@ -877,12 +895,16 @@ cat_lookupbykey(struct hfsmount *hfsmp, CatalogKey *keyp, int flags, u_int32_t h
  				(parentid != hfsmp->hfs_private_desc[DIR_HARDLINKS].cd_cnid)) {
  				/* This is not a hard link or inode and the link count bit was set */
  				if (attrp->ca_recflags & kHFSHasLinkChainMask) {

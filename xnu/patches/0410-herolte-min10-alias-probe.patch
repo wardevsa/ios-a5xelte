@@ -1,0 +1,89 @@
+diag(min10): probe the virtual framebuffer alias BEFORE TTBR0 goes, renumber the post-TTBR0 blocks
+
+min9 (kernel 0344, no herostop) stays frozen on the stages page with blocks up to 19 and no panic text: either the CPU hangs between block 19 and the first draw through the new alias, or the alias does not display. Before apagar TTBR0 (a) write a pixel through the virtual alias, read it back through the physical mapping and draw the verdict (green = same memory, red = different) as block 20; a fault would be drawn as a panic by the physical alias; (b) relocate the early drawing to the alias and draw block 21 through it while TTBR0 still maps the physical alias. The old blocks 20-27 become 22-29 (0343 numbering +2), same places in the code.
+
+--- a/osfmk/arm/arm_init.c	2026-11-14 17:27:26.828101363 +0100
++++ b/osfmk/arm/arm_init.c	2026-11-14 17:27:26.858005711 +0100
+@@ -567,7 +567,7 @@
+ 	sweet_early_block(9, 0xffffffff);
+ 	arm_vm_init(xmaxmem, args);
+ 	sweet_early_mark(15, "arm_vm_init returned");
+-	sweet_early_block(25, 0xff9932cc);
++	sweet_early_block(27, 0xff9932cc);
+ 
+ 	if (debug_boot_arg) {
+ 		patch_low_glo();
+@@ -581,10 +581,10 @@
+ 
+ 	/* Setup debugging output. */
+ 	sweet_early_mark(16, "calling serial_init");
+-	sweet_early_block(26, 0xffffffff);
++	sweet_early_block(28, 0xffffffff);
+ 	const unsigned int serial_exists = serial_init();
+ 	sweet_early_mark(19, "serial_init returned");
+-	sweet_early_block(27, 0xffa9a9a9);
++	sweet_early_block(29, 0xffa9a9a9);
+ 	kernel_startup_initialize_upto(STARTUP_SUB_KPRINTF);
+ 	kprintf("kprintf initialized\n");
+ 	sweet_early_mark(20, "kprintf startup complete");
+--- a/osfmk/arm64/arm_vm_init.c	2026-11-14 17:27:26.830430785 +0100
++++ b/osfmk/arm64/arm_vm_init.c	2026-11-14 17:27:26.857856430 +0100
+@@ -2273,19 +2273,34 @@
+ #endif
+ #if defined(A5XELTE)
+ 	sweet_early_block(19, 0xffffffff);
++	{
++		/* min10: probe the virtual alias while TTBR0 still maps the physical one (a fault here is drawn by the panic path through the
++		 * physical alias). Write a pixel through the alias, read it back through the physical mapping, and show the verdict. */
++		volatile uint32_t *pa_fb = (volatile uint32_t *)(uintptr_t)A5XELTE_FB_PA;
++		volatile uint32_t *va_fb = (volatile uint32_t *)(uintptr_t)(A5_EARLY_FB_VA + A5_EARLY_FB_OFF);
++		const uintptr_t probe = (uintptr_t)1500 * (A5XELTE_FB_STRIDE / 4) + 1300;
++		uint32_t seen = 0;
++		va_fb[probe] = 0xff123456u;
++		__asm__ volatile ("dsb sy; isb" ::: "memory");
++		for (unsigned int tries = 0; tries < 1000 && seen != 0xff123456u; tries++) {
++			seen = pa_fb[probe];
++		}
++		sweet_early_block(20, seen == 0xff123456u ? 0xff00ff00 : 0xffff0000);
++	}
+ 	sweet_early_relocate(A5_EARLY_FB_VA + A5_EARLY_FB_OFF); /* TTBR1 is final: draw through the kernel alias from here */
++	sweet_early_block(21, 0xffffd700); /* drawn through the virtual alias while TTBR0 still maps the physical one */
+ #endif
+ 	set_mmu_ttb(invalid_ttep & TTBR_BADDR_MASK);
+ 
+ 	flush_mmu_tlb();
+ 	sweet_early_mark(10, "TTBR0 off; TLB flushed");
+-	sweet_early_block(20, 0xffff4500);
++	sweet_early_block(22, 0xffff4500);
+ 	kva_active = TRUE;
+ 	// global table pointers may need to be different due to physical aperture remapping
+ 	cpu_tte = (tt_entry_t*)(phystokv(cpu_ttep));
+ 	invalid_tte = (tt_entry_t*)(phystokv(invalid_ttep));
+ 	sweet_early_mark(11, "physmap table pointers rebound");
+-	sweet_early_block(21, 0xffffd700);
++	sweet_early_block(23, 0xffffd700);
+ 
+ 	// From here on out, we're off the bootstrap translation tables.
+ 
+@@ -2379,10 +2394,10 @@
+ #endif
+ #endif
+ 	sweet_early_mark(12, "calling pmap_bootstrap");
+-	sweet_early_block(22, 0xffff69b4);
++	sweet_early_block(24, 0xffff69b4);
+ 	pmap_bootstrap(dynamic_memory_begin);
+ 	sweet_early_mark(13, "pmap_bootstrap done");
+-	sweet_early_block(23, 0xff32cd32);
++	sweet_early_block(25, 0xff32cd32);
+ 
+ 	disable_preemption();
+ 
+@@ -2434,7 +2449,7 @@
+ 		cpu_l1_tte++;
+ 	}
+ 	sweet_early_mark(14, "early I/O page tables ready");
+-	sweet_early_block(24, 0xff1e90ff);
++	sweet_early_block(26, 0xff1e90ff);
+ 
+ #if defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR)
+ 	/*

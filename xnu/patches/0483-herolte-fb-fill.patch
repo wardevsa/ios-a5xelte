@@ -1,0 +1,38 @@
+herolte: sweetfb_fill=1 stretches a non-16:9 canvas over the whole panel (0483)
+
+min119 (E-0341): with the iPhone XR canvas (828x1792, 9:19.5) on the 9:16 panel the picture is drawn full height with black bars at the sides, which the Director finds does not fit the phone. sweetfb_fill=1 draws the canvas over the whole panel (about 21 % wider than its true proportion) and the touch mapping normalizes over the whole panel instead of the centered strip. Off by default.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2016,9 +2016,18 @@
+ 	hg_wr32(scr, S_FBD + 128 + 40, small ? HVG_STRIDE_PX * 4 : HG_FB_STRIDE);
+ 	hg_wr32(scr, S_FRAG_JOB + 36, (((rh + 15) / 16 - 1) << 16) | ((rw + 15) / 16 - 1));
+ 	uint32_t x0 = 0, x1 = HG_PANEL_W, y0 = 0, y1 = HG_PANEL_H;
++	/* 0483: sweetfb_fill=1 stretches a canvas that is not 16:9 over the whole panel instead of leaving black bars (a 9:19.5 iPhone XR canvas on a 9:16 panel
++	 * is drawn 21 % wider than it is: the Director prefers that to the bars at the sides) */
++	static int fill = -1;
++	if (fill < 0) {
++		fill = 0;
++		PE_parse_boot_argn("sweetfb_fill", &fill, sizeof(fill));
++	}
+ 	if (small) {
+ 		x1 = w;
+ 		y1 = h;
++	} else if (fill) {
++		/* the whole panel */
+ 	} else if ((uint64_t)w * HG_PANEL_H < (uint64_t)h * HG_PANEL_W) {
+ 		uint32_t dw = (uint32_t)((uint64_t)w * HG_PANEL_H / h);
+ 		x0 = (HG_PANEL_W - dw) / 2;
+--- a/iokit/Kernel/arm/hid/SweetHID.cpp
++++ b/iokit/Kernel/arm/hid/SweetHID.cpp
+@@ -452,7 +452,9 @@
+ 		uint32_t lw = 0, lh = 0;
+ 		PE_parse_boot_argn("sweetfb_lw", &lw, sizeof(lw));
+ 		PE_parse_boot_argn("sweetfb_lh", &lh, sizeof(lh));
+-		if (lw && lh && (uint64_t)lw * 2560 < (uint64_t)lh * 1440) {
++		int fill = 0;           /* 0483: sweetfb_fill=1 stretches the canvas over the whole panel (herolte_gpu.c): normalize over the panel */
++		PE_parse_boot_argn("sweetfb_fill", &fill, sizeof(fill));
++		if (!fill && lw && lh && (uint64_t)lw * 2560 < (uint64_t)lh * 1440) {
+ 			fLogicalW = (int)((uint64_t)lw * 2560 / lh);
+ 		}
+ 	}

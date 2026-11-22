@@ -1,0 +1,128 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index c61459f..4464750 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -578,30 +578,52 @@ hg_power_cycle(void)
+ }
+ 
+ /*
+- * The domain cycle alone does not clear them, and they appear only above the
+- * bootloader's rate after minutes of work, at the voltage it left for 260 MHz.
+- * Back to that rate: if the jobs come back, the clock is too much for the voltage.
++ * What the job the GPU would not read holds, and whether a job in the kernel's own memory still runs after the
++ * reset: tells a bad chain from a GPU that has lost its way to memory.
+  */
++extern uint64_t phystokv(uint64_t pa);
++static bool hg_probing;
++static bool hg_run(unsigned js, const char *what);
++
+ static void
+-hg_clock_down(void)
++hg_read_fault_probe(uint64_t job_va)
+ {
+-	static vm_offset_t top;
+-
+-	if (!top) {
+-		top = ml_io_map(0x10570000u, 0x1000);
+-	}
+-	if (!top) {
+-		return;
+-	}
+-	uint32_t old = hg_rd(top, 0x1e0);
+-	hg_wr(top, 0x1e0, (old & ~((0x3ffu << 16) | 0x7u)) | (160u << 16) | 2u);
+-	bool locked = false;
+-	for (unsigned i = 0; i < 1000 && !locked; i++) {
+-		delay(10);
+-		locked = (hg_rd(top, 0x1e0) >> 29) & 1;
+-	}
+-	printf("HEROLTE GPU: clock down to 260 MHz after read faults: G3D_PLL %#x -> %#x, %s\n", old, hg_rd(top, 0x1e0),
+-	    locked ? "locked" : "NOT locked");
++	uint64_t pte = hgu_pte(job_va);
++	uint64_t pa = (pte & 0xfffffff000ull) | (job_va & 0xfff);
++	if ((pte & 1) && pa >= 0x880000000ull && pa < 0x900000000ull) {
++		volatile uint32_t *job = (volatile uint32_t *)phystokv(pa);
++		printf("HEROLTE GPU: the job holds %08x %08x %08x %08x %08x %08x %08x %08x\n", job[0], job[1], job[2], job[3],
++		    job[4], job[5], job[6], job[7]);
++	}
++	uint64_t saved_va = hg_job_va;
++	vm_offset_t saved_cpu = hg_job_cpu;
++	uint32_t saved_status = hg_last_js_status;
++	unsigned saved_faults = hg_read_faults;
++	bool saved_quiet = hg_run_quiet;
++	volatile uint8_t *mine = (volatile uint8_t *)(hg_mem + HG_DATA_OFF);
++	for (unsigned i = 0; i < 64; i++) {
++		mine[i] = 0;
++	}
++	mine[16] = 1 | (2 << 1);                        /* 64-bit, WRITE_VALUE */
++	*(volatile uint16_t *)(mine + 18) = 1;
++	*(volatile uint64_t *)(mine + 32) = HG_TEST_VA + HG_OUT_OFF;
++	*(volatile uint64_t *)(mine + 40) = 3;
++	volatile uint64_t *output = (volatile uint64_t *)(hg_mem + HG_DATA_OFF + HG_OUT_OFF);
++	*output = 0xa5a5a5a55a5a5a5aull;
++	__asm__ volatile ("dsb sy" ::: "memory");
++	hg_probing = true;
++	hg_run_quiet = true;
++	hg_job_va = HG_TEST_VA;
++	hg_job_cpu = 0;
++	bool ran = hg_run(1, "probe");
++	printf("HEROLTE GPU: a job of the kernel's after the reset: %s, status %#x, output %#llx\n", ran ? "ran" : "FAILED",
++	    hg_last_js_status, *output);
++	hg_probing = false;
++	hg_run_quiet = saved_quiet;
++	hg_job_va = saved_va;
++	hg_job_cpu = saved_cpu;
++	hg_last_js_status = saved_status;
++	hg_read_faults = saved_faults;
+ }
+ 
+ static void
+@@ -626,6 +648,9 @@ hg_recover(const char *what)
+ 	 * with nothing left active on a slot. Reset for it too (backing off if
+ 	 * the reset does not help, a reset per job would stall everything).
+ 	 */
++	if (hg_probing) {
++		return;
++	}
+ 	bool read_fault = (hg_last_js_status & 0xff) == 0x42;
+ 	if (read_fault) {
+ 		hg_read_faults++;
+@@ -636,12 +661,12 @@ hg_recover(const char *what)
+ 	    (hg_rd(hg_gpu, JS_BASE(1) + 0x24) & 0xff) != 0x08) {
+ 		return;
+ 	}
+-	if (read_fault && hg_read_faults == 8) {
++	/* The soft reset has not cured these: from the second one in a row a hard reset, from the fourth the domain too. */
++	if (read_fault && hg_read_faults == 4) {
+ 		hg_power_cycle();
+-		hg_clock_down();
+ 	}
+ 	hg_wr(hg_gpu, 0x024, 0xffffffffu);                      /* GPU_IRQ_CLEAR */
+-	hg_wr(hg_gpu, 0x030, 1);                                /* GPU_COMMAND SOFT_RESET */
++	hg_wr(hg_gpu, 0x030, read_fault && hg_read_faults >= 2 ? 2 : 1); /* GPU_COMMAND HARD_RESET : SOFT_RESET */
+ 	for (unsigned i = 0; i < 10000 && !(hg_rd(hg_gpu, GPU_IRQ_RAWSTAT) & 0x100); i++) {
+ 		delay(10);
+ 	}
+@@ -656,6 +681,9 @@ hg_recover(const char *what)
+ 		printf("HEROLTE GPU: %s: GPU soft reset #%u (%s), cores %s\n", what, resets,
+ 		    done ? "done" : "timed out", up ? "back up" : "NOT up");
+ 	}
++	if (read_fault && hg_read_faults <= 6) {
++		hg_read_fault_probe(hg_job_va);
++	}
+ }
+ 
+ /* Program AS0, start the job at HG_TEST_VA on slot js, wait (bounded). */
+@@ -716,7 +744,12 @@ hg_run(unsigned js, const char *what)
+ 	bool ok = (jirq & (1u << js)) && !(jirq & (1u << (js + 16))) && !mirq && !(girq & 0x81);
+ 	hg_last_js_status = hg_rd(hg_gpu, slot + 0x24);
+ 	if (ok) {
+-		hg_read_faults = 0;
++		if (hg_read_faults && !hg_probing) {
++			printf("HEROLTE GPU: jobs run again after %u read faults\n", hg_read_faults);
++		}
++		if (!hg_probing) {
++			hg_read_faults = 0;
++		}
+ 	}
+ 	/* (a read fault says so in hg_read_fault_report(): thousands of lines cost more than the jobs) */
+ 	if ((!ok && (hg_last_js_status & 0xff) != 0x42) || !hg_run_quiet) {

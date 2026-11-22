@@ -1,3 +1,5 @@
+diff --git a/bsd/kern/sweet_amfi.c b/bsd/kern/sweet_amfi.c
+index 11f3ca8..cb67b4d 100644
 --- a/bsd/kern/sweet_amfi.c
 +++ b/bsd/kern/sweet_amfi.c
 @@ -29,6 +29,7 @@
@@ -8,7 +10,7 @@
  #include <sys/proc.h>
  #include <sys/systm.h>
  #include <sys/ubc_internal.h>
-@@ -308,8 +309,46 @@
+@@ -308,8 +309,46 @@ static const struct mac_policy_ops sweet_amfi_mac_ops = {
  	.mpo_vnode_check_signature = sweet_amfi_vnode_check_signature,
  };
  

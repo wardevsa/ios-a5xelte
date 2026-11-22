@@ -1,0 +1,48 @@
+herolte: the home screen's widget extensions do not start (0485)
+
+E-0343 and E-0350: after every change of the screen or of the apps chronod starts all the widget extensions together (CalendarWidgetExtension, WeatherWidgetExtension, StocksWidget, GCWidgets, WorldClockWidget, PodcastsWidget, RemindersWidgetExtension, ScreenTimeWidget...), each at about 60 % of a core for the first 100 s: TOP lines of 500-1000 % of 800, a phone that does not answer touches, which the Director describes as it having crashed. chronod itself has to keep running (refusing it, min123, left SpringBoard waiting at the logo): only the extensions, programs inside a ".appex" with "Widget" in their name, are refused by herolte_noexec. herowidgets=1 lets them start again.
+
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -95,6 +95,18 @@
+ static int hgl_noexec_init;
+ 
+ static bool
++hgl_has(const char *hay, const char *needle)
++{
++	size_t n = strlen(needle);
++	for (; *hay; hay++) {
++		if (strncmp(hay, needle, n) == 0) {
++			return true;
++		}
++	}
++	return false;
++}
++
++static bool
+ herolte_noexec(const char *path)
+ {
+ 	if (!hgl_noexec_init) {
+@@ -120,6 +132,22 @@
+ 	    strcmp(base, "MacinTalkAUSP") == 0) {
+ 		return true;
+ 	}
++	/*
++	 * 0485 (E-0343, E-0350): the widget extensions of the home screen (CalendarWidgetExtension, WeatherWidgetExtension, StocksWidget, GCWidgets, ...) are all
++	 * started together by chronod after every change of the screen or of the apps, each at about 60 % of a core for the first 100 s: 500-1000 % of 800 in the TOP
++	 * lines, the phone does not answer touches and the Director reports it as having crashed. chronod itself must keep running (refusing it hung SpringBoard at
++	 * the logo, min123); only the extensions in a ".appex" whose program has "Widget" in its name are refused. herowidgets=1 lets them start.
++	 */
++	{
++		static int widgets = -1;
++		if (widgets < 0) {
++			widgets = 0;
++			PE_parse_boot_argn("herowidgets", &widgets, sizeof(widgets));
++		}
++		if (!widgets && hgl_has(path, ".appex/") && hgl_has(base, "Widget")) {
++			return true;
++		}
++	}
+ 	if (hgl_noexec[0] == '\0') {
+ 		return false;
+ 	}

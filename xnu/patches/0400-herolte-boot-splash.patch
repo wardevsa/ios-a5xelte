@@ -1,0 +1,26 @@
+diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
+index 195967c..109f9f2 100644
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -372,6 +372,21 @@ arm_init(
+ #endif /* defined(HAS_APPLE_PAC) */
+ 
+ 	PE_init_platform(FALSE, args); /* Get platform expert set up */
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	{
++		/*
++		 * herosplash=1: keep the loader's boot image on screen (shim/herolte/splash.c). From here on the
++		 * kernel text console stops drawing, and so do the early stage markers; the text still reaches the
++		 * persistent log and a panic draws again. Off by default.
++		 */
++		extern int sweet_console_muted;
++		int herosplash = 0;
++		if (PE_parse_boot_argn("herosplash", &herosplash, sizeof(herosplash)) && herosplash != 0) {
++			sweet_console_muted = 1;
++			sweet_early_disable();
++		}
++	}
++#endif /* ARM64_BOARD_CONFIG_HEROLTE */
+ 	sweet_early_mark(2, "PE_init_platform done");
+ 
+ #if __arm64__

@@ -1,0 +1,17 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 6e24e25..4fe5bf5 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2396,6 +2396,12 @@ ha_tone(void)
+ 	ha_step("codec");
+ 	ha_codec_setup();
+ 	ha_step("amplifier");
++	/* These pins' controller is in PERIC0, whose bus clock gate was closed: touching it hung the whole bus. */
++	vm_offset_t peric0 = ml_io_map(0x13610000u, 0x1000);
++	printf("HEROLTE AUDIO: PERIC0 mux %#x gates %#x\n", hg_rd(peric0, 0x200), hg_rd(peric0, 0x800));
++	hg_wr(peric0, 0x800, hg_rd(peric0, 0x800) | (1u << 5));
++	ha_step("amplifier pins");
++	printf("HEROLTE AUDIO: gpd1 con %#x dat %#x\n", hg_rd(ha_i2c, 0), hg_rd(ha_i2c, 4));
+ 	bool ok = true;
+ 	for (unsigned i = 0; i < sizeof(ha_amp_table) / sizeof(ha_amp_table[0]); i++) {
+ 		ok = ha_amp_write(ha_amp_table[i][0], ha_amp_table[i][1]) && ok;

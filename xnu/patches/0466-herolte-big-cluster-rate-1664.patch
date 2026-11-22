@@ -1,0 +1,32 @@
+herolte: a 1664 MHz rate for the big cluster, with the EMA picked by voltage (0466)
+
+E-0320: capping the big cluster at 1976 MHz instead of 2288 saved 21% of the current in use with no measurable loss of fluidity. ECT dvfs_big row 1664: the dividers are those of the higher rates and only DIV_SCLK_PROMISE changes (4); MNGS_PLL M 192 P 3 S 0; vdd_mngs 0x5f = 893.75 mV, the voltage Linux sets for 1664 MHz on this chip (the project's 1976/2288/2600 values are 50-70 mV below Linux's, tested; 1664 takes Linux's own value for safety). dfsbig_set_ema writes 0x1095b9 below 900 mV and 0x1091b9 from 900 mV: hc_go_high now picks it by voltage instead of always 0x1091b9. herocpu_mhz=1664.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2481,7 +2481,8 @@
+ 			return false;
+ 		}
+ 	}
+-	hg_wr(hc.sysreg, 0x314, 0x001091b9);    /* MNGS_EMA_CON for 900 mV and more */
++	/* MNGS_EMA_CON as Linux's dfsbig_set_ema picks it by voltage: 900 mV and more 0x1091b9, below that 0x1095b9 (the 1664 MHz rate runs at 893.75 mV) */
++	hg_wr(hc.sysreg, 0x314, (300000u + (uint32_t)hc.volt * 6250u) >= 900000u ? 0x001091b9 : 0x001095b9);
+ 	hg_wr(hc.sysreg, 0x1040, 0);            /* MNGS_ASSIST_CON */
+ 	for (unsigned i = 0; i < HC_NDIVS; i++) {
+ 		uint32_t mask = (1u << hc_divs[i].bits) - 1;
+@@ -2731,6 +2732,7 @@
+ 		uint32_t mhz, m;
+ 		uint8_t volt, promise;
+ 	} rates[] = {
++		{ 1664, 192, 0x5f, 4 },
+ 		{ 1976, 228, 0x62, 5 },
+ 		{ 2288, 264, 0x6f, 6 },
+ 		{ 2600, 300, 0x7c, 7 },
+@@ -2780,6 +2782,7 @@
+ 		uint32_t mhz, m;
+ 		uint8_t volt, promise;
+ 	} rates[] = {
++		{ 1664, 192, 0x5f, 4 }, /* 893.75 mV: the voltage Linux sets for 1664 MHz on this chip (E-0321; the others are lower by 50-70 mV, tested) */
+ 		{ 1976, 228, 0x62, 5 }, /* 912.5 mV */
+ 		{ 2288, 264, 0x6f, 6 }, /* 993.75 mV, Samsung's boot rate */
+ 		{ 2600, 300, 0x7c, 7 }, /* 1075 mV */

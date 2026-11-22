@@ -1,3 +1,5 @@
+diff --git a/bsd/kern/syscalls.master b/bsd/kern/syscalls.master
+index 5b8e184..422873e 100644
 --- a/bsd/kern/syscalls.master
 +++ b/bsd/kern/syscalls.master
 @@ -650,7 +650,7 @@
@@ -9,9 +11,11 @@
  435	AUE_NULL	ALL	{ int pid_hibernate(int pid); }
  #else
  435     AUE_NULL        ALL     { int nosys(void); }
+diff --git a/bsd/vm/vm_unix.c b/bsd/vm/vm_unix.c
+index 336c84d..636bd3d 100644
 --- a/bsd/vm/vm_unix.c
 +++ b/bsd/vm/vm_unix.c
-@@ -1755,7 +1755,12 @@
+@@ -1755,7 +1755,12 @@ out:
  	return error;
  }
  
@@ -25,7 +29,7 @@
  /*
   * Freeze the specified process (provided in args->pid), or find and freeze a PID.
   * When a process is specified, this call is blocking, otherwise we wake up the
-@@ -1817,7 +1822,7 @@
+@@ -1817,7 +1822,7 @@ out:
  	*ret = error;
  	return error;
  }

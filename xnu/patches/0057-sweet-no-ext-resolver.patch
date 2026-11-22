@@ -1,3 +1,5 @@
+diff --git a/config/MASTER.arm64.sweet b/config/MASTER.arm64.sweet
+index a8faad3..e305f0d 100644
 --- a/config/MASTER.arm64.sweet
 +++ b/config/MASTER.arm64.sweet
 @@ -31,7 +31,7 @@

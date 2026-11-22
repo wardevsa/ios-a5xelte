@@ -1,0 +1,62 @@
+herolte: read-only census of the S2MPS16 registers, screen on and screen off (0462)
+
+min94 (E-0312): the screen-off floor is 284 mA against 25-35 mA for Linux in TWRP. Linux leaves a known set of rails enabled; S-Boot may leave more on. heropmic=1 prints registers 0x00-0x7f of the PMIC over the APM channel once 90 s after the thread starts (screen on) and once 100 s into each screen-off, as "HEROLTE PMIC: NN: 16 bytes". Reads only; the same registers are read from Linux regmap in TWRP and compared. heropmic only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2349,6 +2349,24 @@
+ static vm_offset_t ha_spi;
+ static bool ha_read(uint32_t reg, uint16_t *value);
+ 
++/* 0462 (D-0104): read-only census of the S2MPS16 PMIC registers, to compare with what Linux leaves enabled (heropmic=1) */
++extern bool herolte_apm_pmic_read(uint8_t reg, uint8_t *value);
++static void
++hg_pmic_census(const char *when)
++{
++	printf("HEROLTE PMIC: census %s\n", when);
++	for (unsigned base = 0; base < 0x80; base += 16) {
++		char line[16 * 3 + 1];
++		unsigned n = 0;
++		for (unsigned k = 0; k < 16; k++) {
++			uint8_t v = 0;
++			bool ok = herolte_apm_pmic_read((uint8_t)(base + k), &v);
++			n += (unsigned)snprintf(line + n, sizeof(line) - n, ok ? "%02x " : "?? ", v);
++		}
++		printf("HEROLTE PMIC: %02x: %s\n", base, line);
++	}
++}
++
+ static void
+ hc_mux(vm_offset_t base, uint32_t off, uint32_t src)
+ {
+@@ -2825,6 +2843,9 @@
+ 	 * is turned off for <s> seconds, then on for 20 s. Each change is the "SWEET FB: display on|off" line of a real request.
+ 	 */
+ 	uint32_t cyc_s = 0;
++	uint32_t pm_s = 0;          /* 0462: heropmic=1 */
++	bool pm_done_on = false, pm_done_off = false;
++	PE_parse_boot_argn("heropmic", &pm_s, sizeof(pm_s));
+ 	PE_parse_boot_argn("herocycle", &cyc_s, sizeof(cyc_s));
+ 	uint64_t cyc_t0 = mach_absolute_time();
+ 	/*
+@@ -2881,6 +2902,20 @@
+ 			absolutetime_to_nanoseconds(now - off, &ns);
+ 		}
+ 		bool screen_off = off != 0 && ns > 3ull * NSEC_PER_SEC;
++		if (pm_s) {
++			uint64_t el_pm = 0;
++			absolutetime_to_nanoseconds(now - cyc_t0, &el_pm);
++			if (off == 0 && !pm_done_on && el_pm > 90ull * NSEC_PER_SEC) {
++				pm_done_on = true;
++				hg_pmic_census("screen on");
++			}
++			if (off == 0) {
++				pm_done_off = false;
++			} else if (!pm_done_off && ns > 100ull * NSEC_PER_SEC) {
++				pm_done_off = true;
++				hg_pmic_census("screen off 100 s");
++			}
++		}
+ 		if (cyc_s) {
+ 			extern void herolte_fb_power(int off);
+ 			uint64_t el_ns = 0;

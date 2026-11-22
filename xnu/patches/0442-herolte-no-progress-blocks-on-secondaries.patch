@@ -1,0 +1,150 @@
+herolte: the early progress blocks and text are drawn by the boot CPU only (0442)
+
+min71 (0441): deep idle works on cpu 7 (enter 13534, resume 6677 in 13 minutes, the system lived 780 s, ~44 mA less with the screen off), but every wake-up goes through start_cpu, which draws the blue, cyan and pink blocks and "XNU MMU ON" (and the others) at fixed places of the framebuffer: they stayed over iOS. The six post-MMU blocks of start.s now skip themselves unless MPIDR_EL1 is the boot CPU (0x100).
+
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -934,6 +934,13 @@
+ 	isb		sy
+ 
+ #if defined(A5XELTE)
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/* 0442: the progress blocks are for the boot CPU only: a core back from deep idle (0438) went through here thousands of times and left them over iOS */
++	mrs		x15, MPIDR_EL1
++	and		x15, x15, #0xffff
++	cmp		x15, #0x100
++	b.ne		Lherolte_nomark_1
++#endif
+ 	/* Blue block: the 4 KiB MMU is active and the framebuffer alias works. */
+ 	MOV64	x10, (A5XELTE_FB_PA+120*A5XELTE_FB_STRIDE+960)
+ 	MOV64	x11, 0xff0000ff
+@@ -957,6 +964,9 @@
+ 	mov	x2, #288
+ 	bl	La5_draw_text
+ 	mov	lr, x17
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++Lherolte_nomark_1:
++#endif
+ #endif
+ 
+ #if !VMAPPLE && !defined(SWEET)
+@@ -978,6 +988,13 @@
+ #endif
+ 
+ #if defined(A5XELTE)
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/* 0442: the progress blocks are for the boot CPU only: a core back from deep idle (0438) went through here thousands of times and left them over iOS */
++	mrs		x15, MPIDR_EL1
++	and		x15, x15, #0xffff
++	cmp		x15, #0x100
++	b.ne		Lherolte_nomark_2
++#endif
+ 	/* fp_enabled: write directly to the DECON scanout alias. */
+ 	MOV64	x10, (A5XELTE_FB_PA+152*A5XELTE_FB_STRIDE+960)
+ 	MOV64	x11, 0xff00ffff
+@@ -994,6 +1011,9 @@
+ 	subs	x12, x12, #1
+ 	b.ne	La5_fp_enabled_row
+ 	dsb	sy
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++Lherolte_nomark_2:
++#endif
+ #endif
+ 
+ 	// Clear thread pointer
+@@ -1013,6 +1033,13 @@
+ 	APPLY_TUNABLES x12, x13, x14
+ 
+ #if defined(A5XELTE)
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/* 0442: the progress blocks are for the boot CPU only: a core back from deep idle (0438) went through here thousands of times and left them over iOS */
++	mrs		x15, MPIDR_EL1
++	and		x15, x15, #0xffff
++	cmp		x15, #0x100
++	b.ne		Lherolte_nomark_3
++#endif
+ 	/* tunables_done: write directly to the DECON scanout alias. */
+ 	MOV64	x10, (A5XELTE_FB_PA+184*A5XELTE_FB_STRIDE+960)
+ 	MOV64	x11, 0xffff00ff
+@@ -1029,6 +1056,9 @@
+ 	subs	x12, x12, #1
+ 	b.ne	La5_tunables_done_row
+ 	dsb	sy
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++Lherolte_nomark_3:
++#endif
+ #endif
+ 
+ 
+@@ -1043,6 +1073,13 @@
+ 	cbnz	x21, Ltrampoline
+ 
+ #if defined(A5XELTE)
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/* 0442: the progress blocks are for the boot CPU only: a core back from deep idle (0438) went through here thousands of times and left them over iOS */
++	mrs		x15, MPIDR_EL1
++	and		x15, x15, #0xffff
++	cmp		x15, #0x100
++	b.ne		Lherolte_nomark_4
++#endif
+ 	/* min4_after_cbnz: diagnostic block (min4). */
+ 	MOV64	x10, (A5XELTE_FB_PA+312*A5XELTE_FB_STRIDE+960)
+ 	MOV64	x11, 0xffff8000
+@@ -1059,6 +1096,9 @@
+ 	subs	x12, x12, #1
+ 	b.ne	La5_min4_after_cbnz_row
+ 	dsb	sy
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++Lherolte_nomark_4:
++#endif
+ #endif
+ 
+ 
+@@ -1067,6 +1107,13 @@
+ 	sub		x0, x0, x23
+ 
+ #if defined(A5XELTE)
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/* 0442: the progress blocks are for the boot CPU only: a core back from deep idle (0438) went through here thousands of times and left them over iOS */
++	mrs		x15, MPIDR_EL1
++	and		x15, x15, #0xffff
++	cmp		x15, #0x100
++	b.ne		Lherolte_nomark_5
++#endif
+ 	/* min4_bootargs_ready: diagnostic block (min4). */
+ 	MOV64	x10, (A5XELTE_FB_PA+344*A5XELTE_FB_STRIDE+960)
+ 	MOV64	x11, 0xffff80c0
+@@ -1083,6 +1130,9 @@
+ 	subs	x12, x12, #1
+ 	b.ne	La5_min4_bootargs_ready_row
+ 	dsb	sy
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++Lherolte_nomark_5:
++#endif
+ #endif
+ 
+ #if KASAN
+@@ -1099,6 +1149,13 @@
+ #endif
+ 
+ #if defined(A5XELTE)
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/* 0442: the progress blocks are for the boot CPU only: a core back from deep idle (0438) went through here thousands of times and left them over iOS */
++	mrs		x15, MPIDR_EL1
++	and		x15, x15, #0xffff
++	cmp		x15, #0x100
++	b.ne		Lherolte_nomark_6
++#endif
+ 	/* arm_init_jump: write directly to the DECON scanout alias. */
+ 	MOV64	x10, (A5XELTE_FB_PA+216*A5XELTE_FB_STRIDE+960)
+ 	MOV64	x11, 0xffffff00
+@@ -1115,6 +1172,9 @@
+ 	subs	x12, x12, #1
+ 	b.ne	La5_arm_init_jump_row
+ 	dsb	sy
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++Lherolte_nomark_6:
++#endif
+ #endif
+ 
+ 	// Return to arm_init()

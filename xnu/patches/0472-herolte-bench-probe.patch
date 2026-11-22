@@ -1,0 +1,63 @@
+herolte: bench probe: find where the icons are (0472)
+
+min105 (launch scenario): all twelve dock taps per boot opened nothing (settle -1, 0 frames), so either the coordinates or the tap shape was wrong. The tap now lasts 120 ms with three reports like a finger, and heroscens bit 4 (16) runs a probe instead of the rounds: it taps a lattice of 4 columns by 11 rows on the home screen and reports for each point how long iOS kept drawing, to read the icon positions straight from the log. heroscen only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3056,9 +3056,15 @@
+ static void
+ hs_tap(int x, int y)
+ {
++	/* 0472: min105 tapped for 60 ms with a single report and nothing opened; a finger lasts about 100 ms and moves a pixel, so the
++	 * touch driver gets a few reports like with the real one */
+ 	hs_touch(1, x, y);
+-	hg_msleep(60);
+-	hs_touch(0, x, y);
++	hg_msleep(40);
++	hs_touch(1, x + 1, y);
++	hg_msleep(40);
++	hs_touch(1, x, y + 1);
++	hg_msleep(40);
++	hs_touch(0, x, y + 1);
+ }
+ 
+ static int
+@@ -3152,7 +3158,7 @@
+ 			ncap = 0;
+ 		}
+ 	}
+-	if (!ncap || !(mask & 0xF) || rounds < 1 || rounds > 6) {
++	if (!ncap || !(mask & 0x1F) || rounds < 1 || rounds > 6) {
+ 		printf("HEROLTE SCEN: bad parameters (rounds %u mask %u caps %u), bench off\n", rounds, mask, capsarg);
+ 		return;
+ 	}
+@@ -3163,6 +3169,29 @@
+ 	hs_play(0);
+ 	hs_play(1);
+ 	printf("HEROLTE SCEN: warm-up done\n");
++	if (mask & 16) {
++		/* 0472: probe, mask bit 4: taps a lattice of 4 columns by 11 rows on the home screen at 1976 MHz and reports for each point how
++		 * long iOS kept drawing (-1: nothing happened), to find where the icons are in touch coordinates (1440 x 2560) */
++		for (unsigned row = 0; row < 11; row++) {
++			for (unsigned col = 0; col < 4; col++) {
++				unsigned fr = 0;
++				int x = 180 + 360 * (int)col, y = 250 + 220 * (int)row;
++				if (herolte_screen_off_at != 0) {
++					printf("HEROLTE SCEN: screen off, probe stops\n");
++					return;
++				}
++				hs_tap(x, y);
++				int ms = hs_settle(&fr);
++				printf("HEROLTE SCEN: probe x %d y %d settle_ms %d frames %u\n", x, y, ms, fr);
++				if (ms >= 0) {
++					hs_home();
++					(void)hs_settle(&fr);
++				}
++			}
++		}
++		printf("HEROLTE SCEN: probe finished\n");
++		return;
++	}
+ 	for (unsigned r = 0; r < rounds; r++) {
+ 		for (unsigned k = 0; k < ncap; k++) {
+ 			unsigned lvl = digits[(k + r) % ncap];

@@ -1,0 +1,103 @@
+herolte: scenario bench v2 (0470)
+
+min103 (E-0324): the scripted idle was not idle (Spotlight left open, backboardd 30 %, 10 frames/s) and the first run read 1496 mA against about 700 afterwards. v2 warms up at 1976 MHz with one paging and one spotlight, presses Home through sweet_hid_key before every scenario and at the end of spotlight, waits up to 6 s for iOS to stop drawing before the idle (fewer than 4 frames in 2 s), plays twenty swipes and six pull-downs, idles 20 s, and runs three rounds (2288 1976 1664 / 1664 1976 2288 / 1976 2288 1664). heroscen only.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3021,26 +3021,55 @@
+ 	hs_touch(0, x1, y1);
+ }
+ 
++/* 0470: Home key through the real HID path: closes Spotlight and its keyboard, which min103 left open (backboardd stayed at 30 % and
++ * 10 frames/s during the scripted "idle", E-0324) */
++static void
++hs_home(void)
++{
++	extern void sweet_hid_key(int key, int down);
++	sweet_hid_key(3, 1);
++	hg_msleep(80);
++	sweet_hid_key(3, 0);
++	hg_msleep(600);
++}
++
++/* wait until iOS has stopped drawing (fewer than 4 frames in 2 s), at most 6 s: the quiet test that min103 lacked */
++static unsigned
++hs_quiet(void)
++{
++	unsigned waited = 0;
++	while (waited < 6000) {
++		uint64_t f0 = herolte_fb_presented;
++		hg_msleep(2000);
++		waited += 2000;
++		if (herolte_fb_presented - f0 < 4) {
++			break;
++		}
++	}
++	return waited;
++}
++
+ static void
+ hs_play(unsigned scen)
+ {
+ 	switch (scen) {
+-	case 0:         /* paging: ten swipes, left and right */
+-		for (unsigned i = 0; i < 10; i++) {
++	case 0:         /* paging: twenty swipes (0470; ten before), left and right */
++		for (unsigned i = 0; i < 20; i++) {
+ 			hs_swipe(i % 2 ? 230 : 850, 1200, i % 2 ? 850 : 230, 1200, 240);
+ 			hg_msleep(700);
+ 		}
+ 		break;
+ 	case 1:         /* spotlight: pull down, hold, push up, three times */
+-		for (unsigned i = 0; i < 3; i++) {
++		for (unsigned i = 0; i < 6; i++) {
+ 			hs_swipe(540, 700, 540, 1500, 300);
+ 			hg_msleep(800);
+ 			hs_swipe(540, 1500, 540, 500, 300);
+ 			hg_msleep(800);
+ 		}
++		hs_home();
+ 		break;
+ 	default:        /* idle */
+-		hg_msleep(15000);
++		hg_msleep(20000);
+ 		break;
+ 	}
+ }
+@@ -3049,7 +3078,7 @@
+ hs_thread(__unused void *arg, __unused wait_result_t wr)
+ {
+ 	static const char *const names[] = { "paging", "spotlight", "idle" };
+-	static const unsigned order[2][3] = { { 4, 3, 2 }, { 2, 3, 4 } };
++	static const unsigned order[3][3] = { { 4, 3, 2 }, { 2, 3, 4 }, { 3, 4, 2 } };      /* 0470: three rounds, each cap once per position */
+ 	uint32_t settle = 0;
+ 	extern volatile uint64_t herolte_screen_off_at;
+ 	extern volatile int herolte_fg_temp_dc;
+@@ -3058,8 +3087,13 @@
+ 		return;
+ 	}
+ 	hg_msleep(settle * 1000);
+-	printf("HEROLTE SCEN: bench starts: caps 2288 1976 1664 / 1664 1976 2288 MHz, scenarios paging spotlight idle\n");
+-	for (unsigned r = 0; r < 2; r++) {
++	printf("HEROLTE SCEN: bench starts: caps 2288 1976 1664 / 1664 1976 2288 / 1976 2288 1664 MHz, scenarios paging spotlight idle, v2 (warm-up, Home, quiet wait)\n");
++	g2_cap = 3;     /* 0470: warm-up at 1976 MHz, one paging and one spotlight, not measured: the first run of min103 read 1496 mA against about 700 afterwards */
++	hs_home();
++	hs_play(0);
++	hs_play(1);
++	printf("HEROLTE SCEN: warm-up done\n");
++	for (unsigned r = 0; r < 3; r++) {
+ 		for (unsigned k = 0; k < 3; k++) {
+ 			g2_cap = order[r][k];
+ 			hg_msleep(2500);
+@@ -3069,6 +3103,11 @@
+ 					g2_cap = (unsigned)G2_N - 1;
+ 					return;
+ 				}
++				hs_home();
++				if (s == 2) {
++					unsigned q = hs_quiet();
++					printf("HEROLTE SCEN: quiet wait %u ms before idle (round %u cap %u)\n", q, r, g2_lv[order[r][k]]);
++				}
+ 				uint64_t fp0 = herolte_fb_presented, h0[6], ps0 = herolte_pwr_sum, pn0 = herolte_pwr_n, tr0 = g2_stat_trans, sa0 = g2_stat_sat, sm0 = g2_stat_samples;
+ 				for (unsigned b = 0; b < 6; b++) {
+ 					h0[b] = herolte_fb_gap_hist[b];

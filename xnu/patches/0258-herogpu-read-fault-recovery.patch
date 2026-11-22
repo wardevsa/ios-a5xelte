@@ -1,0 +1,127 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 91d7d90..a95a618 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -447,6 +447,35 @@ hg_clock_set(void)
+  * Without this one MMU fault left the job stalled on its slot, and every
+  * later job of every client timed out behind it ("slot busy").
+  */
++static uint64_t hgu_pte(uint64_t va);
++static unsigned hg_read_faults;         /* in a row; hg_run() clears it */
++
++/* What the state is when a job gets a read fault: the first few of them in a row, and now and then after. */
++static void
++hg_read_fault_report(void)
++{
++	static vm_offset_t pmu, top;
++	static unsigned told;
++
++	if (hg_read_faults > 4 && hg_read_faults % 4096 != 0) {
++		return;
++	}
++	if (told++ > 64) {
++		return;
++	}
++	if (!pmu) {
++		pmu = ml_io_map(0x105c4000u, 0x1000);
++		top = ml_io_map(0x10570000u, 0x1000);
++	}
++	uint64_t pte = hgu_pte(hg_job_va);
++	printf("HEROLTE GPU: read fault %u in a row: job %#llx pte %#llx | status %#x faultstatus %#x@%#x%08x "
++	    "| ready shader %#x tiler %#x l2 %#x | as status %#x | PMU G3D %#x/%#x | G3D_PLL %#x\n", hg_read_faults,
++	    hg_job_va, pte, hg_rd(hg_gpu, 0x034), hg_rd(hg_gpu, GPU_FAULTSTATUS), hg_rd(hg_gpu, GPU_FAULTADDR_LO + 4),
++	    hg_rd(hg_gpu, GPU_FAULTADDR_LO), hg_rd(hg_gpu, SHADER_READY_LO), hg_rd(hg_gpu, TILER_READY_LO),
++	    hg_rd(hg_gpu, L2_READY_LO), hg_rd(hg_gpu, AS0 + 0x28), pmu ? hg_rd(pmu, 0x60) : 0, pmu ? hg_rd(pmu, 0x64) : 0,
++	    top ? hg_rd(top, 0x1e0) : 0);
++}
++
+ static void
+ hg_recover(const char *what)
+ {
+@@ -463,7 +492,19 @@ hg_recover(const char *what)
+ 	hg_wr(hg_gpu, JOB_IRQ_CLEAR, 0xffffffffu);
+ 	hg_wr(hg_gpu, MMU_IRQ_CLEAR, 0xffffffffu);
+ 	hg_as_ok = false;                       /* re-UPDATE AS0 after a fault */
+-	if ((hg_rd(hg_gpu, JS_BASE(0) + 0x24) & 0xff) != 0x08 &&
++	/*
++	 * JOB_READ_FAULT (0x42) with no MMU fault: seen with more than 1 GiB of
++	 * RAM, once it starts every later job of the boot fails the same way
++	 * with nothing left active on a slot. Reset for it too (backing off if
++	 * the reset does not help, a reset per job would stall everything).
++	 */
++	bool read_fault = (hg_last_js_status & 0xff) == 0x42;
++	if (read_fault) {
++		hg_read_faults++;
++		hg_read_fault_report();
++	}
++	if (!(read_fault && (hg_read_faults <= 16 || hg_read_faults % 64 == 0)) &&
++	    (hg_rd(hg_gpu, JS_BASE(0) + 0x24) & 0xff) != 0x08 &&
+ 	    (hg_rd(hg_gpu, JS_BASE(1) + 0x24) & 0xff) != 0x08) {
+ 		return;
+ 	}
+@@ -479,8 +520,10 @@ hg_recover(const char *what)
+ 	    hg_power(SHADER_PWRON_LO, SHADER_READY_LO, all, "all shader cores") &&
+ 	    hg_power(TILER_PWRON_LO, TILER_READY_LO, hg_rd(hg_gpu, TILER_PRESENT_LO), "tiler");
+ 	hg_quirks();
+-	printf("HEROLTE GPU: %s: GPU soft reset #%u (%s), cores %s\n", what, ++resets,
+-	    done ? "done" : "timed out", up ? "back up" : "NOT up");
++	if (++resets <= 32) {
++		printf("HEROLTE GPU: %s: GPU soft reset #%u (%s), cores %s\n", what, resets,
++		    done ? "done" : "timed out", up ? "back up" : "NOT up");
++	}
+ }
+ 
+ /* Program AS0, start the job at HG_TEST_VA on slot js, wait (bounded). */
+@@ -540,7 +583,11 @@ hg_run(unsigned js, const char *what)
+ 	volatile uint32_t *hdr = (volatile uint32_t *)(hg_job_cpu ? hg_job_cpu : hg_mem + HG_DATA_OFF);
+ 	bool ok = (jirq & (1u << js)) && !(jirq & (1u << (js + 16))) && !mirq && !(girq & 0x81);
+ 	hg_last_js_status = hg_rd(hg_gpu, slot + 0x24);
+-	if (!ok || !hg_run_quiet) {
++	if (ok) {
++		hg_read_faults = 0;
++	}
++	/* (a read fault says so in hg_read_fault_report(): thousands of lines cost more than the jobs) */
++	if ((!ok && (hg_last_js_status & 0xff) != 0x42) || !hg_run_quiet) {
+ 		/* A client's chain is not in hg_mem: its header fields mean nothing. */
+ 		bool own = hg_job_cpu || hg_job_va == HG_TEST_VA;
+ 		printf("HEROLTE GPU: %s: irq=%#x mmu=%#x gpu=%#x js_status=%#x head=%#x%08x "
+@@ -1594,6 +1641,20 @@ hgu_set_locked(uint64_t va, const uint64_t *pages, unsigned n)
+ 	return hgp_mmu_flush(HGU_VA_BASE, 30);
+ }
+ 
++/* The PTE of a user VA (0: none): for the log. */
++static uint64_t
++hgu_pte(uint64_t va)
++{
++	if (va < HGU_VA_BASE || va >= HGU_VA_END || !hgp_scr) {
++		return 0;
++	}
++	unsigned l2i = (unsigned)((va >> 21) & 0x1ff);
++	if (hgu_l3_of[l2i] == 0) {
++		return 0;
++	}
++	return ((volatile uint64_t *)(hgp_scr + HGU_L3_OFF + (hgu_l3_of[l2i] - 1u) * 0x1000))[(va >> 12) & 0x1ff];
++}
++
+ bool
+ herolte_gpu_map(uint64_t va, const uint64_t *pages, unsigned n)
+ {
+diff --git a/iokit/Kernel/arm/HeroGPU.cpp b/iokit/Kernel/arm/HeroGPU.cpp
+index 028efdc..1ac390c 100644
+--- a/iokit/Kernel/arm/HeroGPU.cpp
++++ b/iokit/Kernel/arm/HeroGPU.cpp
+@@ -397,7 +397,14 @@ HeroGPUUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *
+ 		break;
+ 	}
+ 	case kHeroGPUSubmit:
++		/*
++		 * Not under the client's lock: the call lasts as long as the job,
++		 * and gpu/mesa/herodrm.c queues jobs so that its other calls (log,
++		 * cache sync) go on meanwhile. The GPU has its own mutex.
++		 */
++		IOLockUnlock(fLock);
+ 		out[0] = herolte_gpu_submit(in1 ? 1 : 0, in0, &out[1]);
++		IOLockLock(fLock);
+ 		outCount = 2;
+ 		break;
+ 	case kHeroGPUSurfaceBO: {

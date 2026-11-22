@@ -1,0 +1,99 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index b86d5ee..6e24e25 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2330,6 +2330,35 @@ ha_amp_write(uint8_t reg, uint8_t value)
+ 	return ack;
+ }
+ 
++/*
++ * A wrong step here hangs the whole bus, with the big cores left burning (50 C). The watchdog restarts the phone then,
++ * into recovery as INFORM3 says, and each step waits for the log's flush (10 s) so the last one is on disk.
++ */
++static vm_offset_t ha_wdt;
++
++static void
++ha_step(const char *what)
++{
++	printf("HEROLTE AUDIO: step: %s\n", what);
++	hg_wr(ha_wdt, 8, 0xffff);
++	hg_msleep(11000);
++	hg_wr(ha_wdt, 8, 0xffff);
++}
++
++static void
++ha_guard(vm_offset_t pmu)
++{
++	ha_wdt = ml_io_map(0x10020000u, 0x1000);
++	hg_wr(pmu, 0x808, 0x12345678);
++	hg_wr(pmu, 0x80c, 0x12345674);
++	hg_wr(pmu, 0x408, hg_rd(pmu, 0x408) & ~(1u << 24));
++	hg_wr(pmu, 0x40c, hg_rd(pmu, 0x40c) & ~(1u << 24));
++	hg_wr(ha_wdt, 4, 0xffff);
++	hg_wr(ha_wdt, 8, 0xffff);
++	hg_wr(ha_wdt, 0, (0xffu << 8) | (3u << 3) | (1u << 5) | 1u);    /* /256 /128, enabled, reset */
++	printf("HEROLTE AUDIO: watchdog armed, con %#x\n", hg_rd(ha_wdt, 0));
++}
++
+ /* The I2S block is the codec's slave (CBM_CFM); its FIFO filled by hand for now. A sine at 440 Hz. */
+ static void
+ ha_tone(void)
+@@ -2340,28 +2369,40 @@ ha_tone(void)
+ 	vm_offset_t i2s = ml_io_map(0x11440000u, 0x1000);
+ 	vm_offset_t pins = ml_io_map(0x114b0000u, 0x1000);
+ 	ha_i2c = ml_io_map(HA_AMP_PINS_PA & ~0xfffu, 0x1000) + (HA_AMP_PINS_PA & 0xfffu);
++	ha_guard(pmu);
++	ha_step("PMU");
+ 	printf("HEROLTE AUDIO: PMU debug %#x, AUD domain %#x/%#x\n", hg_rd(pmu, 0xa00), hg_rd(pmu, 0x40c0), hg_rd(pmu, 0x40c4));
++	ha_step("MCLK");
+ 	hg_wr(pmu, 0xa00, 0x1f00);              /* MCLK1: 26 MHz out to the codec */
++	ha_step("AUD domain");
+ 	hg_wr(pmu, 0x40c0, 0xf);
+ 	for (unsigned i = 0; i < 1000 && (hg_rd(pmu, 0x40c4) & 0xf) != 0xf; i++) {
+ 		delay(10);
+ 	}
+ 	hg_wr(pmu, 0x1340, 1);                  /* the AUD pads out of retention */
+-	printf("HEROLTE AUDIO: AUD domain now %#x; cmu mux %#x div %#x %#x gates %#x %#x\n", hg_rd(pmu, 0x40c4), hg_rd(aud, 0x200),
+-	    hg_rd(aud, 0x400), hg_rd(aud, 0x404), hg_rd(aud, 0x800), hg_rd(aud, 0x804));
++	printf("HEROLTE AUDIO: AUD domain now %#x\n", hg_rd(pmu, 0x40c4));
++	ha_step("CMU_AUD");
++	printf("HEROLTE AUDIO: cmu mux %#x div %#x %#x gates %#x %#x\n", hg_rd(aud, 0x200), hg_rd(aud, 0x400), hg_rd(aud, 0x404),
++	    hg_rd(aud, 0x800), hg_rd(aud, 0x804));
++	ha_step("AUD clocks");
+ 	hg_wr(aud, 0x800, 1);
+ 	hg_wr(aud, 0x804, 0x1f3fff);
++	ha_step("LPASS");
+ 	hg_wr(lpass, 0x08, hg_rd(lpass, 0x08) | (3u << 7));
+ 	printf("HEROLTE AUDIO: lpass version %#x reset %#x; i2s con %#x mod %#x ver %#x\n", hg_rd(lpass, 0), hg_rd(lpass, 0x08), hg_rd(i2s, 0),
+ 	    hg_rd(i2s, 4), hg_rd(i2s, 0x44));
++	ha_step("I2S pins");
+ 	hg_wr(pins, 0, 0x2222222);
++	ha_step("codec");
+ 	ha_codec_setup();
++	ha_step("amplifier");
+ 	bool ok = true;
+ 	for (unsigned i = 0; i < sizeof(ha_amp_table) / sizeof(ha_amp_table[0]); i++) {
+ 		ok = ha_amp_write(ha_amp_table[i][0], ha_amp_table[i][1]) && ok;
+ 	}
+ 	ok = ha_amp_write(0x3a, 0xf8) && ok;
+ 	printf("HEROLTE AUDIO: amplifier %s\n", ok ? "answered" : "DID NOT ANSWER");
++	ha_step("I2S");
+ 	hg_wr(i2s, 0x08, 1u << 15);             /* FIC_TXFLUSH */
+ 	delay(10);
+ 	hg_wr(i2s, 0x08, 0);
+@@ -2377,6 +2418,7 @@ ha_tone(void)
+ 		b -= (a * 1887) >> 15;
+ 	}
+ 	unsigned sent = 0, stuck = 0, phase = 0;
++	hg_wr(ha_wdt, 8, 0xffff);
+ 	while (sent < 48000u * 8u) {
+ 		if (hg_rd(i2s, 0) & (1u << 8)) {        /* CON_TXFIFO_FULL */
+ 			delay(20);
+@@ -2392,6 +2434,7 @@ ha_tone(void)
+ 	}
+ 	printf("HEROLTE AUDIO: tone: %u frames sent, %u waits, i2s con %#x, level %#x\n", sent, stuck, hg_rd(i2s, 0), hg_rd(i2s, 8));
+ 	hg_wr(i2s, 0x00, 0);
++	hg_wr(ha_wdt, 0, 0);
+ }
+ 
+ static void

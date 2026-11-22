@@ -1,0 +1,151 @@
+herolte: read-only PMU sampler for the big cores (0476)
+
+S7PM criterion 3 (docs/herolte-s7pm-cierre.md): the busy fraction misled governor v2 (E-0323, E-0331), and the hypothesis is that memory stalls look like computation. herogovlog=2 (the value 1 still means only the per-core load lines) starts a thread that, every 2 s, runs one cross-call on every core; the four Mongoose cores (MIDR implementer 0x53, ID_AA64DFR0_EL1 PMUVer checked first) read PMCCNTR_EL0 and four event counters (INST_RETIRED, L1D_CACHE_REFILL, L2D_CACHE_REFILL, BUS_ACCESS), programming them when the PMU is off. The first sample prints the PMU identification. Registers are accessed by encoding. Nothing changes a clock, a voltage or a governor.
+
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -17,6 +17,7 @@
+ #include <kern/clock.h>
+ #include <kern/thread.h>
+ #include <kern/sched_prim.h>
++#include <kern/cpu_number.h>
+ #include <kern/locks.h>
+ #include <mach/mach_time.h>
+ #include <machine/machine_routines.h>
+@@ -3270,6 +3271,123 @@
+ 	printf("HEROLTE SCEN: bench finished\n");
+ }
+ 
++/*
++ * 0476 (S7PM, criterion 3): heropmu through herogovlog=2. Read-only look at the ARMv8 PMU of the big cores, to see whether instructions per cycle (and cache
++ * refills) tell "computing" from "waiting for memory", the hypothesis for why the busy fraction misled governor v2 (E-0323, E-0331). Nothing here changes a
++ * clock, a voltage or a governor. Every 2 s one cross-call runs on every core, the four Mongoose cores (MIDR implementer 0x53) read the cycle counter
++ * (PMCCNTR_EL0) and four event counters (0x08 INST_RETIRED, 0x03 L1D_CACHE_REFILL, 0x17 L2D_CACHE_REFILL, 0x19 BUS_ACCESS) and program them first when the PMU
++ * is off (after a cluster power-down it is). The first sample prints what the PMU is (ID_AA64DFR0_EL1, PMCR_EL0 with the counter count N, PMCEID0/1). If N is 0
++ * (MDCR_EL2.HPMN written 0 by start.s at EL2) only the cycle counter works and the line says so. Registers are named by encoding so that no assembler support is
++ * needed. The cross-call wakes idle cores: sampling every 2 s is a small bias on the idle current, noted in the evidence.
++ */
++#define HPMU_RD(var, enc) __asm__ volatile ("mrs %0, " enc : "=r"(var))
++#define HPMU_WR(enc, val) __asm__ volatile ("msr " enc ", %0" : : "r"((uint64_t)(val)))
++static volatile uint64_t hpmu_slot[8][8];      /* per cpu: 0 valid, 1 cycles, 2..5 the events, 6 N, 7 reprogrammed */
++static volatile uint64_t hpmu_probe_word[4];
++static volatile bool hpmu_probe_done;
++
++static void
++hpmu_sample(__unused void *arg)
++{
++	uint64_t midr = 0, pmcr = 0, en = 0, v = 0, dfr = 0;
++	int cpu = cpu_number();
++	if (cpu < 0 || cpu > 7) {
++		return;
++	}
++	HPMU_RD(midr, "MIDR_EL1");
++	if (((midr >> 24) & 0xff) != 0x53) {
++		hpmu_slot[cpu][0] = 0;                 /* not a Mongoose core */
++		return;
++	}
++	HPMU_RD(dfr, "S3_0_C0_C5_0");           /* ID_AA64DFR0_EL1 */
++	if (((dfr >> 8) & 0xf) == 0) {
++		hpmu_slot[cpu][0] = 0;                 /* no PMUv3: do not touch PMCR_EL0 */
++		return;
++	}
++	HPMU_RD(pmcr, "S3_3_C9_C12_0");         /* PMCR_EL0 */
++	unsigned n = (unsigned)((pmcr >> 11) & 0x1f), use = n > 4 ? 4 : n;
++	HPMU_RD(en, "S3_3_C9_C12_1");           /* PMCNTENSET_EL0 */
++	hpmu_slot[cpu][7] = 0;
++	if (!(en & (1ull << 31))) {
++		static const uint32_t ev[4] = { 0x08, 0x03, 0x17, 0x19 };
++		HPMU_WR("S3_3_C9_C12_0", (pmcr & ~0x1full) | 0x7);        /* E, P (reset event counters), C (reset the cycle counter) */
++		for (unsigned i = 0; i < use; i++) {
++			HPMU_WR("S3_3_C9_C12_5", i);                            /* PMSELR_EL0 */
++			__asm__ volatile ("isb");
++			HPMU_WR("S3_3_C9_C13_1", ev[i]);                        /* PMXEVTYPER_EL0: counts at EL0 and EL1 */
++		}
++		HPMU_WR("S3_3_C9_C12_1", (1ull << 31) | ((1ull << use) - 1));   /* PMCNTENSET_EL0 */
++		hpmu_slot[cpu][7] = 1;
++	}
++	HPMU_RD(v, "S3_3_C9_C13_0");            /* PMCCNTR_EL0 */
++	hpmu_slot[cpu][1] = v;
++	for (unsigned i = 0; i < 4; i++) {
++		v = 0;
++		if (i < use) {
++			HPMU_WR("S3_3_C9_C12_5", i);
++			__asm__ volatile ("isb");
++			HPMU_RD(v, "S3_3_C9_C13_2");                    /* PMXEVCNTR_EL0 */
++		}
++		hpmu_slot[cpu][2 + i] = v;
++	}
++	hpmu_slot[cpu][6] = n;
++	hpmu_slot[cpu][0] = 1;
++	if (!hpmu_probe_done) {
++		uint64_t c0 = 0, c1 = 0;
++		HPMU_RD(c0, "S3_3_C9_C12_6");            /* PMCEID0_EL0 */
++		HPMU_RD(c1, "S3_3_C9_C12_7");            /* PMCEID1_EL0 */
++		hpmu_probe_word[0] = dfr;
++		hpmu_probe_word[1] = pmcr;
++		hpmu_probe_word[2] = c0;
++		hpmu_probe_word[3] = c1;
++		hpmu_probe_done = true;
++	}
++}
++
++static void
++hpmu_thread(__unused void *arg, __unused wait_result_t wr)
++{
++	uint64_t prev[8][6] = { { 0 } };
++	bool have[8] = { false };
++	bool announced = false;
++	hg_msleep(30000);
++	printf("HEROLTE PMU: sampling the big cores every 2 s (read-only)\n");
++	for (;;) {
++		hg_msleep(2000);
++		cpu_broadcast_xcall_simple(TRUE, hpmu_sample, NULL);
++		if (!announced && hpmu_probe_done) {
++			announced = true;
++			printf("HEROLTE PMU: ID_AA64DFR0_EL1 %#llx PMCR_EL0 %#llx (N=%llu) PMCEID0 %#llx PMCEID1 %#llx\n", (unsigned long long)hpmu_probe_word[0],
++			    (unsigned long long)hpmu_probe_word[1], (unsigned long long)((hpmu_probe_word[1] >> 11) & 0x1f), (unsigned long long)hpmu_probe_word[2],
++			    (unsigned long long)hpmu_probe_word[3]);
++		}
++		char line[400];
++		unsigned o = 0, got = 0;
++		for (int c = 4; c < 8; c++) {
++			if (!hpmu_slot[c][0]) {
++				o += (unsigned)snprintf(line + o, sizeof(line) - o, " | cpu%d none", c);
++				continue;
++			}
++			uint64_t cur[6] = { hpmu_slot[c][1], hpmu_slot[c][2], hpmu_slot[c][3], hpmu_slot[c][4], hpmu_slot[c][5], hpmu_slot[c][6] };
++			if (have[c] && !hpmu_slot[c][7] && cur[0] >= prev[c][0]) {
++				o += (unsigned)snprintf(line + o, sizeof(line) - o, " | cpu%d cyc %llu inst %llu l1r %llu l2r %llu bus %llu", c, (unsigned long long)(cur[0] - prev[c][0]),
++				    (unsigned long long)(cur[1] - prev[c][1]), (unsigned long long)(cur[2] - prev[c][2]), (unsigned long long)(cur[3] - prev[c][3]),
++				    (unsigned long long)(cur[4] - prev[c][4]));
++				got++;
++			} else {
++				o += (unsigned)snprintf(line + o, sizeof(line) - o, " | cpu%d first", c);
++			}
++			for (int i = 0; i < 6; i++) {
++				prev[c][i] = cur[i];
++			}
++			have[c] = true;
++		}
++		if (got) {
++			printf("HEROLTE PMU:%s\n", line);
++		}
++	}
++}
++
+ static void
+ hg_cpu_up(void)
+ {
+@@ -3608,6 +3726,12 @@
+ 			printf("HEROLTE GOV2: the governor thread did not start\n");
+ 		}
+ 	}
++	if (gl_s == 2) {
++		thread_t hpth;
++		if (kernel_thread_start(hpmu_thread, NULL, &hpth) == KERN_SUCCESS) {
++			thread_deallocate(hpth);
++		}
++	}
+ 	if (gov_on == 2) {
+ 		thread_t hsth;
+ 		if (kernel_thread_start(hs_thread, NULL, &hsth) == KERN_SUCCESS) {

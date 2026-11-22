@@ -1,6 +1,8 @@
+diff --git a/bsd/vfs/kpi_vfs.c b/bsd/vfs/kpi_vfs.c
+index 6bf58c3..90cd9fc 100644
 --- a/bsd/vfs/kpi_vfs.c
 +++ b/bsd/vfs/kpi_vfs.c
-@@ -4459,6 +4459,20 @@
+@@ -4459,6 +4459,20 @@ vn_rename(struct vnode *fdvp, struct vnode **fvpp, struct componentname *fcnp, s
  					_err = VNOP_RENAME(fdvp, *fvpp, fcnp, tdvp, *tvpp, tcnp, ctx);
  				}
  			}

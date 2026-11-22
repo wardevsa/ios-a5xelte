@@ -1,0 +1,115 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 6876a77..1ef54af 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -396,29 +396,63 @@ hg_clock_report(void)
+ }
+ 
+ /*
+- * Boot-arg herogpu_mhz=338, 390 or 419: G3D_PLL is relocked at that rate, before
+- * the GPU has any work, at the voltage the bootloader left (the PMIC is not
++ * Boot-arg herogpu_mhz=338 to 650: vdd_g3d is raised to this phone's table and
++ * G3D_PLL relocked at that rate, before the GPU has any work (once the PMIC was not
+  * touched, so only these small steps above its 260 MHz are accepted). Without
+  * the boot-arg nothing is written. A PLL that does not lock goes back.
+  */
+ static void
+ hg_clock_set(void)
+ {
+-	uint32_t mhz = 0, m;
++	extern bool herolte_apm_g3d_voltage(uint8_t value);
++	/*
++	 * This phone's own table, as its Samsung kernel prints it (asv_table, G3D
++	 * ASV group 11). vdd_g3d register = (mV - 300) / 6.25: 0x30 is the 600 mV and
++	 * MIF's 0x53 the 818 mV Linux reports after the same bootloader.
++	 */
++	static const struct {
++		uint32_t mhz, m, s;
++		uint8_t volt;
++	} rates[] = {
++		{ 338, 208, 2, 0x30 },  /* 600 mV */
++		{ 390, 240, 2, 0x32 },  /* the 612.5 mV of 419: between the table's rates, the higher one */
++		{ 419, 258, 2, 0x32 },  /* 612.5 mV */
++		{ 546, 168, 1, 0x3a },  /* 662.5 mV */
++		{ 600, 185, 1, 0x3d },  /* 681.25 mV */
++		{ 650, 200, 1, 0x40 },  /* 700 mV */
++	};
++	uint32_t mhz = 0, m = 0, s = 2;
++	uint8_t volt = 0, now = 0;
+ 
+ 	if (!PE_parse_boot_argn("herogpu_mhz", &mhz, sizeof(mhz))) {
+ 		return;
+ 	}
+-	if (mhz == 338) {
+-		m = 208;
+-	} else if (mhz == 390) {
+-		m = 240;
+-	} else if (mhz == 419) {
+-		m = 258;
+-	} else {
++	for (unsigned i = 0; i < sizeof(rates) / sizeof(rates[0]); i++) {
++		if (rates[i].mhz == mhz) {
++			m = rates[i].m;
++			s = rates[i].s;
++			volt = rates[i].volt;
++		}
++	}
++	if (!m) {
+ 		printf("HEROLTE GPU: clock: herogpu_mhz=%u not accepted\n", mhz);
+ 		return;
+ 	}
++	/* The voltage first, and read back: without it the clock stays as the bootloader left it. */
++	if (!herolte_apm_pmic_read(0x26, &now)) {
++		printf("HEROLTE GPU: clock: cannot read vdd_g3d, %u MHz not set\n", mhz);
++		return;
++	}
++	if (now < volt) {
++		uint8_t set = 0;
++		bool wrote = herolte_apm_g3d_voltage(volt);
++		delay(100);
++		if (!wrote || !herolte_apm_pmic_read(0x26, &set) || set != volt) {
++			printf("HEROLTE GPU: clock: vdd_g3d %#x -> %#x failed (now %#x), %u MHz not set\n", now, volt, set, mhz);
++			return;
++		}
++		printf("HEROLTE GPU: clock: vdd_g3d %#x -> %#x\n", now, set);
++	}
+ 	vm_offset_t top = ml_io_map(0x10570000u, 0x1000);
+ 	if (!top) {
+ 		return;
+@@ -429,7 +463,7 @@ hg_clock_set(void)
+ 		printf("HEROLTE GPU: clock: G3D_PLL con0=%#x not as expected, left alone\n", old);
+ 		return;
+ 	}
+-	hg_wr(top, 0x1e0, (old & ~(0x3ffu << 16)) | (m << 16));
++	hg_wr(top, 0x1e0, (old & ~((0x3ffu << 16) | 0x7u)) | (m << 16) | s);
+ 	bool locked = false;
+ 	for (unsigned i = 0; i < 1000 && !locked; i++) {
+ 		delay(10);
+@@ -555,7 +589,7 @@ hg_clock_down(void)
+ 		return;
+ 	}
+ 	uint32_t old = hg_rd(top, 0x1e0);
+-	hg_wr(top, 0x1e0, (old & ~(0x3ffu << 16)) | (160u << 16));
++	hg_wr(top, 0x1e0, (old & ~((0x3ffu << 16) | 0x7u)) | (160u << 16) | 2u);
+ 	bool locked = false;
+ 	for (unsigned i = 0; i < 1000 && !locked; i++) {
+ 		delay(10);
+diff --git a/bsd/dev/herolte_touch.c b/bsd/dev/herolte_touch.c
+index 9ff610a..0e02a61 100644
+--- a/bsd/dev/herolte_touch.c
++++ b/bsd/dev/herolte_touch.c
+@@ -480,6 +480,14 @@ apm_pmic_write(uint8_t reg, uint8_t value)
+ 	return apm_message(0, reg, value, &r) && r == 0xau;
+ }
+ 
++/* For herolte_gpu.c: vdd_g3d only. Refused until the touch thread has started the APM. */
++bool herolte_apm_g3d_voltage(uint8_t value);
++bool
++herolte_apm_g3d_voltage(uint8_t value)
++{
++	return apm_ready && apm_pmic_write(0x26, value);
++}
++
+ /* Switch on tsp_io (LDO32) then tsp_avdd (LDO33) via the APM. */
+ static bool
+ apm_touch_power_on(void)

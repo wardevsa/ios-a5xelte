@@ -1,5 +1,6 @@
 diff --git a/iokit/Kernel/arm/SweetCPU.cpp b/iokit/Kernel/arm/SweetCPU.cpp
 new file mode 100644
+index 0000000..bbe6515
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetCPU.cpp
 @@ -0,0 +1,171 @@
@@ -175,9 +176,10 @@ new file mode 100644
 +}
 +#endif /* SWEET */
 diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+index e58bad1..011582b 100644
 --- a/iokit/KernelConfigTables.cpp
 +++ b/iokit/KernelConfigTables.cpp
-@@ -41,6 +41,12 @@
+@@ -41,6 +41,12 @@ const char * gIOKernelConfigTables =
      "     'IONameMatch'     = 'xiaomi,sweet';"
      "     'IOProbeScore'    = 10000:32;"
      "   },"
@@ -191,9 +193,10 @@ diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
      "   {"
      "     'IOClass'         = IOPanicPlatform;"
 diff --git a/iokit/conf/files.arm64 b/iokit/conf/files.arm64
+index 90cff06..2aec2c0 100644
 --- a/iokit/conf/files.arm64
 +++ b/iokit/conf/files.arm64
-@@ -8,3 +8,5 @@
+@@ -8,3 +8,5 @@ iokit/Kernel/arm/AppleARMSMP.cpp    					optional iokitcpp
  
  # SWEET device-tree platform (empty translation unit on other boards)
  iokit/Kernel/arm/SweetPlatformExpert.cpp                         optional iokitcpp

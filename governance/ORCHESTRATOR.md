@@ -1,0 +1,337 @@
+# ORCHESTRATOR.md: canal entre el orquestador (chat web) y el ejecutor (esta sesión)
+
+Roles: orquestador = propone y revisa; ejecutor = repo, teléfono, CI; Director (Pioxi) = aprueba BOOT/USERDATA y arquitectura.
+Niveles: 1 autónomo (leer, analizar, evidencias), 2 informar después (push a `mio`, DROP dentro de D-0123), 3 preguntar antes (BOOT,
+USERDATA fuera de DROP, modificar parches).
+
+Nota del ejecutor (2026-11-21): este archivo NO existía en el repositorio cuando llegó el briefing (no hay secciones I a IV escritas ni
+subidas); lo creo yo con la sección V para que el canal exista. Las secciones I a IV son del orquestador.
+
+## I a IV (del orquestador, pendientes de escribir/subir)
+
+## V. Reportes del ejecutor
+
+### V.1 Diagnóstico del cierre de Flappy Bird con min129 (2026-11-21, E-0381 y E-0382)
+
+**Estado real de partida (corrige el briefing):** BOOT = min129 (BOOT 19 de 80); DROP = 49 de 80, no 48 (el 49 es una sonda de libheroapp para este
+mismo caso); kernel de la rama `herolte-sync-upstream` = nuestra serie + 0487 (HeroGPU nombra el complemento), parches 0339-0345 de
+upstream apartados (62 de los nuestros dejaban de aplicar, E-0379).
+
+**1. Simbolización** (caché local de iOS 16.7.16, la del root; desliz del registro del kernel 0x30718000; el PC real que da el briefing,
+0x1c2617198, sale bien):
+
+| Dirección con desliz | Sin deslizar | Imagen +offset | Qué es |
+|---|---|---|---|
+| 0x1f2d2f198 (pc) | 0x1c2617198 | libsystem_kernel +0x7198 | `__pthread_kill` |
+| 0x2022be5f8 (lr) | 0x1d1ba65f8 | libsystem_pthread +0xd5f8 | `pthread_kill` |
+| 0x1be374868 | 0x18dc5c868 | libsystem_c +0x1c868 | `raise` |
+| 0x10109e37c | (no está en la caché) | libheroapp | el manejador de cierres de libheroapp |
+| 0x20221b2f4 | 0x1d1b032f4 | libsystem_platform +0x22f4 | `_sigtramp` |
+| 0x21fcdd590 (x2) | 0x1ef5c5590 | **Jet +0x7590** | `jet_context_OpenGL::create_program(jet_function*, jet_function*)` |
+| 0x200251dbc / 0x200253e94 | 0x1cfb39dbc / 0x1cfb3be94 | SpriteKit +0xaedbc / +0xb0e94 | |
+| 0x2001eae8c / 0x2001eb3c0 / 0x2001efe94 | | SpriteKit +0x47e8c / +0x483c0 / +0x4ce94 | |
+
+Lectura: **el PC del briefing NO es el punto de fallo.** Es el `raise` que hace nuestro propio manejador (libheroapp captura SIGSEGV, anota y
+vuelve a lanzar la señal): `pthread_kill` <- `raise` <- manejador <- `_sigtramp`. La señal original, que libheroapp anotó en
+`/private/var/tmp/heroapp-crash.txt`, es **SIGSEGV, dirección 0x0, en `__dynamic_cast` (libc++abi +0x14cb4), llamado desde Jet +0x7590**.
+
+**2. Función en el PC:** Jet `jet_context_OpenGL::create_program`. Desensamblado (capstone, caché local): `create_function` (Jet +0x7474)
+devuelve NULL cuando su texto fuente de sombreador es NULL (el ayudante de compilación, 0x1ef5bf198, lo comprueba y no llama a ninguna gl*);
+`create_program` hace `dynamic_cast` de ese NULL.
+
+**3. Clasificación de las tres hipótesis:**
+- *Método no implementado en HeroMetal.bundle*: **descartada.** El complemento nunca se consulta en Flappy: en el registro del kernel de min129 los
+  arranques de Flappy (pids 313, 314) no tienen ninguna línea `hero-metal` ni `hakiosmetal`, mientras que S7GELab tiene `bundle loaded`,
+  `asks for a device`, `targetDeviceInfo`, `B2L fc: fragment function tri_fragment` y arranca `MTLCompilerService`. Tampoco hay en
+  `heroapp.log` ninguna llamada de Flappy a `MTLCreateSystemDefaultDevice` (libheroapp las anota).
+- *Shader que AIR no maneja*: **descartada** por lo mismo: no se compila ninguna función de Metal.
+- *Entitlements*: **sin indicio.** El mismo complemento da dispositivo a S7GELab, que tiene los mismos (ninguno) entitlements de depuración; el
+  filtro es `metal.allow` (contiene `Flappy Bird`, nombre igual al que ve libheroapp).
+
+**Causa real:** SpriteKit elige su ruta OpenGL (Jet) **antes** de preguntar a Metal. **No se sabe por qué.** Pistas sin confirmar: cadenas de
+SpriteKit `PrefersOpenGL`, `enableMetal`, `MetalCompatibility`, `OpenGLESCompatibility`, `globalMetalDevice`; el Info.plist de Flappy
+(org.brandonplank.flappybird) no tiene `PrefersOpenGL`. No encontré las referencias de código con ADRP/ADD (las cadenas son CFString).
+
+**4. Evidencias:** E-0381 (diagnóstico completo, ya escrita antes de este briefing) y E-0382 (esta simbolización).
+
+**5. Decisión propuesta:** ninguna. El fix no es claro: sin causa, cualquier parche sería adivinar. (Nota: **D-0125 ya existe**, es la de mover las
+apps de sistema preparadas; el siguiente número libre es D-0126.)
+
+**6. Siguiente paso (Nivel 2, ya hecho):** DROP 49 de 80: libheroapp anota en Flappy las claves de la elección y llama directamente a
+`MTLCreateSystemDefaultDevice` (el de Metal, sin el desvío) para ver si el complemento acepta a ese proceso. Espera una apertura de Flappy.
+No se ha escrito ningún parche del kernel en este diagnóstico. Preguntas para el orquestador: ¿conoce cómo decide SpriteKit de iOS 16 entre Metal
+y OpenGL (el trabajo de Scion/ios-b1lte hizo funcionar SpriteKit sobre este complemento)?
+
+### V.2 Resultado parcial de la sonda del DROP 49 (E-0383)
+
+Respuestas al orquestador (3 aperturas de Flappy):
+1. **¿MTLCreateSystemDefaultDevice() da nil o dispositivo?** `nil`, pero llamado desde el CONSTRUCTOR de libheroapp y sin ninguna línea `hero-metal` del
+   complemento: no concluyente (Metal quizá no está listo en un constructor). Repetido más tarde en el DROP 50.
+2. **¿Qué comprobación de Jet lo rechaza?** Sin respuesta: no hay evidencia de que SpriteKit llame a `MTLCreateSystemDefaultDevice` (libheroapp no anota
+   ninguna llamada de Flappy por el desvío) ni de que llegue a mirar feature sets. Tu hipótesis encaja, pero no está medida.
+3. **¿Clave de Info.plist o default?** Ninguna: las seis claves (PrefersOpenGL, enableMetal, MetalCompatibility, OpenGLESCompatibility, SKPrefersOpenGL,
+   SKEnableMetal) valen `(none)` en defaults y en Info.plist.
+
+Causa raíz NO confirmada; no propongo D-0126. Siguiente: DROP 50 (la misma petición cuando UIKit anuncia el lanzamiento). Tu observación sobre
+`hakios-gl` devolviendo NULL donde Jet espera un objeto: lo que sé es que `create_function` (Jet +0x7474) devuelve NULL por texto de sombreador NULO, sin
+llamar a gl*; ese texto no viene de hakios-gl (que es el puente de backboardd, no el de apps; las apps cargan libheroeagl-app).
+
+### V.3 Causa raíz de que Flappy no reciba dispositivo (E-0384)
+
+Matiz primero: tu mensaje dice «E-0383 confirmada: nil para Flappy»; no lo estaba: E-0383 solo mostraba que ninguna clave fuerza OpenGL y que una
+llamada hecha desde el constructor daba nil sin línea del complemento. La confirmación llega ahora, por el código, no por la sonda.
+
+1. `metal.allow` en el teléfono: `S7GELab` y `Flappy Bird`, una por línea (cat -A: `Flappy Bird$`).
+2. HeroMetal compara `getprogname()` (nombre de ejecutable; no bundle ID ni nombre visible ni ruta). El Mach-O es `Flappy Bird`, con espacio.
+3. **El fallo:** `allowed()` cortaba la línea en el primer espacio o tabulador (`strcspn(line, "\r\n \t#")`), de modo que `Flappy Bird` quedaba en `Flappy` y
+   nunca coincidía. HeroMetal rechaza en silencio (sus líneas de registro solo salen para procesos permitidos), SpriteKit recibe nil y cae a OpenGL/Jet.
+4. **Corrección de mi E-0381:** no puedo afirmar que Flappy «nunca consulta a Metal»; la ausencia de líneas `hero-metal` se explica por el filtro. Tu
+   hipótesis (SpriteKit pide dispositivo, recibe nil, cae a OpenGL) es la que encaja.
+5. **Arreglo:** no era corregir `metal.allow` (el fichero estaba bien: ningún nombre con espacio puede escribirse de forma que esa versión lo acepte),
+   sino `gpu/metal/hero-metal-plugin.m`: la línea acaba en `#` o fin de línea y solo se quitan blancos finales. CI de userland verde; DROP 51 de 80:
+   `metal/HeroMetal` y `metal/Info.plist`; hero-run los instala al arrancar. Es un cambio en código de userland, no un parche del kernel (Nivel 2).
+   Pido a Pioxi: arrancar y abrir Flappy una vez. Esperado en el registro: `hero-metal: bundle loaded in Flappy Bird` y `asks for a device`.
+   No propongo D-0126 todavía: el arreglo está dentro de D-0123 (DROP); si funciona basta con la evidencia.
+
+### V.4 El arreglo de V.3 no se había instalado (E-0385)
+
+Tras arrancar con el HeroMetal corregido en la zona de drop: `hero-run: Metal plug-in: drop zone 86304 bytes, Extensions 86304 bytes`, sin línea `put`;
+sin líneas `hero-metal` de Flappy; Flappy se cierra igual. Causa mía: el `install_metal_plugin` de upstream solo instala si el tamaño difiere o la zona de drop
+es más nueva; mi arreglo no cambia el tamaño y el instalado era más reciente. Arreglo: comparar bytes (DROP 52, `autorun` nuevo; Nivel 2). Un primer intento de
+edición cayó por error en `install_audio_plugin` y rompió la compilación; lo detectó la CI y lo rehice en la función correcta. Pendiente: otro arranque y
+abrir Flappy una vez. Sugerencia para el orquestador, si ve de nuevo ese código de upstream: su criterio de «instalar» (tamaño y hora) falla con cualquier
+cambio que no varíe el tamaño; conviene decírselo a quien mantiene ese repositorio.
+
+### V.5 Cambio de frente: Flappy aparcado y estado real de funciones (E-0386)
+
+**T-0070 (Flappy Bird / SpriteKit): BLOQUEADA** hasta tener causa raíz confirmada con evidencia. Sin más DROP en ello. Estado: HeroMetal recortaba los nombres con espacio
+(E-0384, confirmado por el código) y `hero-run` no reinstalaba el complemento (E-0385); falta ver un arranque con ambos arreglos; no lo pido.
+
+**Una premisa del briefing que no se cumple:** «verificar qué más funciona del merge upstream (cámara, BT, haptics) en min129 sin tocar BOOT». Esas tres funciones
+viven en los parches de kernel 0339-0345 de upstream, que **no están en min129** (los aparté en E-0379 porque con ellos 62 de nuestros parches dejan de aplicar). Del merge
+solo hay en min129: la pila de Metal (con 0487), el `hero-run` fusionado y las librerías de userland (incluida `libnotefecam`, sin kernel que la sirva). En el registro:
+Bluetooth, cámara y vibración no dan ninguna señal. No es un fallo: no se pueden verificar sin BOOT.
+
+**Estado real (E-0386), resumen:**
+
+| Área | Estado en min129 | Evidencia |
+|---|---|---|
+| Wi-Fi (enlace) | Funciona | conecta en 1937 ms, -46 dBm; 2462 tramas enviadas / 1892 recibidas |
+| Red de las apps (Safari) | No funciona | 32 `connectx() failed necp_set_socket_domain_attributes`; sandbox niega a mDNSResponder/nsurlsessiond/trustd |
+| Audio | Funciona | 24000 tramas, 0 perdidas |
+| Táctil | Funciona | 4179 movimientos, 0 lecturas perdidas |
+| Batería, térmica | Funcionan | 92 %, SoC 33-34 C |
+| Pantalla | Funciona, ritmo variable | 27,8 fps (otro tramo 6,5); VGR0 de upstream apagado (`herovgr=0`) |
+| OpenGL ES de apps | Funciona | triángulo en S7GE Lab (E-0359) |
+| **Metal real (HeroMetal+AIR)** | **Funciona en S7GE Lab** | dispositivo `Mali-T880 (Panfrost) (Hakios)`, 683 cuadros de franja, MSL compilado por el compilador del teléfono |
+| SpriteKit (Flappy) | No funciona, aparcado | T-0070 |
+| Bluetooth, cámara frontal, vibración | No están en min129 | requieren 0339-0345 en el kernel |
+| Memoria | Ajustada | 122 MB libres a los 600 s de uso |
+| Vídeo, YouTube, cámara trasera, módem | No existen | sin motor de decodificación |
+
+**Siguiente hito medible que no depende de Flappy (propuesta, en orden):**
+
+1. **H1: Metal medido, sin BOOT ni parches** (Nivel 2, solo la app de S7GE Lab y DROP). Un banco dentro de S7GE Lab con el Metal real: (a) limpiar la pantalla, (b) un
+   triángulo, (c) 48 triángulos superpuestos, (d) un cuadrado con textura y muestreador, (e) un `compute` que suma dos vectores y se comprueba. Resultado: fotogramas por
+   segundo, milisegundos por envío y suma de comprobación correcta o no, frente a las mismas pruebas por OpenGL ES. Criterio de éxito: las cinco pasan con resultado correcto y
+   se publica la tabla. Aclara también cuánto cuesta el envío síncrono de Metal (hoy GL baja de 119 a 30-44 fps cuando Metal corre a la vez).
+2. **H2: red de Safari** (necesita BOOT, Nivel 3: toca kernel). Causa conocida, sin arreglar: `necp_set_socket_domain_attributes` y la denegación del sandbox. Criterio: Safari
+   carga una página sencilla por Wi-Fi.
+3. **H3: Bluetooth, cámara frontal y vibración** (BOOT y fusión hunk a hunk de 0339-0345, Nivel 3). Criterio: BT lista un dispositivo, la cámara entrega N cuadros, el motor vibra.
+
+Recomiendo H1 ahora (no cuesta BOOT y fija la base de Metal con números), luego H2 por valor de uso, y H3 como proyecto aparte. Espero la decisión de Pioxi.
+
+### V.6 H1: banco de Metal medido (E-0387, E-0388)
+
+Banco en S7GE Lab (`apps/s7ge-lab/bench.swift`), Metal real (HeroMetal + libhakiosair, `Mali-T880 (Panfrost) (Hakios)`), textura BGRA 512x512 fuera de pantalla, 2 s por
+prueba (mínimo 10), tiempo = `commit` hasta `waitUntilCompleted`; GLES = mismo FBO con `glFinish`. Una sola ejecución. **Todas las pruebas pasan.**
+
+| Prueba | API | Resultado | Iter. | ms/it | /s | Comprobación |
+|---|---|---|---|---|---|---|
+| a limpiar | Metal | PASS | 3046 | 0,66 | 1522,7 | centro BGRA [191,128,64,255] = esperado |
+| a limpiar | GLES | PASS | 5097 | 0,39 | 2548,0 | centro RGBA [64,128,191,255] |
+| compilar 3 pipelines | Metal | PASS | 1 | 20,76 total | 48,2 | los tres existen (no incluye `makeLibrary`) |
+| b 1 triángulo | Metal | PASS | 2338 | 0,86 | 1168,6 | centro [0,0,255,255] = rojo |
+| b 1 triángulo | GLES | PASS | 3980 | 0,50 | 1989,7 | centro [255,0,0,255] |
+| c 48 triángulos superpuestos | Metal | PASS | 793 | 2,52 | 396,1 | centro [0,0,255,255] |
+| c 48 triángulos superpuestos | GLES | PASS | 1314 | 1,52 | 656,9 | centro [255,0,0,255] |
+| d cuadrado con textura y muestreador | Metal | PASS | 2379 | 0,84 | 1189,5 | centro [127,0,128,255] = esperado |
+| e cómputo: suma de 4096 flotantes | Metal | PASS | 3577 | 0,56 | 1788,4 | 0 erróneos de 4096 |
+
+**Lectura:** Metal cuesta de 1,66 a 1,72 veces lo que OpenGL ES en lo comparable; el coste fijo por command buffer síncrono es de 0,27-0,36 ms; el coste por triángulo extra
+es 0,035 ms (Metal) frente a 0,022 ms (GL). Metal real en el S7 funciona de verdad: render, textura con muestreador, y cómputo con resultado exacto. **Cumplido el criterio de éxito.**
+
+**Límites (no dice el banco):** una sola ejecución (sin varianza); no mide presentación ni pantalla; escenas triviales (upstream midió ~14,5 ms/cuadro con MercuryPoster de iOS 18);
+no mide el tiempo de compilar el MSL (`makeLibrary`); no mide Metal y GL a la vez ni el consumo.
+
+**Siguiente (propuesta, sin BOOT):** H1b, repetir tres veces para tener varianza y añadir: (i) tiempo de `makeLibrary(source:)`, (ii) presentación a pantalla completa por
+`CAMetalLayer` (750x1334) con fps reales y coste por cuadro, (iii) un fragment shader pesado (bucle) para ver si el compilador de AIR de upstream se comporta con
+carga, no solo con escenas triviales. Después, H2 (red de Safari) cuando Pioxi lo decida; H3 queda condicionado a medir el consumo en reposo, como pidió.
+
+### V.7 H1b: banco de Metal con variación, sombreador pesado y presentación (E-0389, E-0390)
+
+Tres pasadas, 1,5 s por prueba, 512x512 fuera de pantalla, mismo dispositivo que V.6. **13 de 13 filas PASS, sin cierres.** ms/it (mín / media / máx):
+
+| Prueba | Metal | GLES | Metal/GLES | Comprobación |
+|---|---|---|---|---|
+| a limpiar | 0,84 / 0,87 / 0,92 | 0,39 / 0,39 / 0,39 | 2,2 | centro correcto |
+| b 1 triángulo | 1,04 / 1,08 / 1,15 | 0,49 / 0,49 / 0,50 | 2,2 | rojo |
+| c 48 triángulos | 2,64 / 2,74 / 2,91 | 1,50 / 1,51 / 1,52 | 1,8 | rojo |
+| d textura + muestreador | 0,99 / 1,02 / 1,07 | n/d | | [127,0,128] |
+| e cómputo (4096 flotantes) | 0,66 / 0,70 / 0,73 | n/d | | 0 erróneos |
+| **f bucle de 128 pasos/píxel** | **4,12 / 4,13 / 4,14** | n/d | | = CPU |
+| **g bucle de 1024 pasos/píxel** | **25,46 / 25,59 / 25,72** | n/d | | = CPU |
+| `makeLibrary(source)` MSL | 0,34 / 259,98 / 779,25 | | | primera ~779 ms, siguientes ~0,35 ms (caché) |
+| 3 pipelines | 7,87 / 9,74 / 13,31 | | | |
+| h presentación | 1,54 ms/cuadro | | | **drawable 375x667, no 750x1334** (ver abajo) |
+
+**Lectura:** (1) el compilador de AIR de upstream aguanta carga y calcula bien: 1024 pasos por píxel en 25,6 ms (unos 10,5 millardos de iteraciones/s; estimación mía); el
+coste crece casi linealmente (8x pasos = 6,2x tiempo). (2) La dispersión dentro de una sesión es pequeña (<10 %), pero entre sesiones es mayor (+30 % en el coste fijo respecto a
+V.6): **el banco de V.6, con una sola ejecución, subestimaba**; la razón Metal/GL pasa de ~1,7 a ~2,0. Hipótesis sin medir: el gobernador de CPU. (3) La primera compilación de MSL cuesta ~0,8 s
+en el teléfono (el compilador de Apple), con caché después: importante para el arranque de apps reales.
+
+**Defecto de mi prueba h:** el drawable salió de 375x667 (leí `contentScaleFactor` antes de que la vista estuviera en pantalla); no mide el tamaño del panel, y los 650 fps no son visibles
+(iOS entrega ~27 fps según E-0386): es el coste de codificar, presentar y esperar sin sincronía con la pantalla. Corregirlo exige otra versión del banco; propongo no hacerlo ahora: la
+conclusión de fondo (Metal funciona con carga, es ~2x GL en latencia por envío) ya está.
+
+**Siguiente: H2 (red de Safari).** Antes de tocar el kernel, una sonda de solo DROP: una app `S7GENet` que prueba por separado DNS (`getaddrinfo`), conexión TCP a direcciones numéricas, DNS por UDP
+directo a un servidor, `URLSession` por HTTP y por HTTPS, con el `errno` de cada paso. Así se sabe QUÉ falla (DNS, conexión, TLS) antes de decidir si hace falta un parche (Nivel 3).
+
+### V.8 H2a: la red de las apps funciona (E-0391, E-0392, E-0393). H2 cambia de objeto.
+
+Sonda `S7GE Net` (solo DROP 55), dos ejecuciones:
+
+| Capa | Resultado |
+|---|---|
+| Interfaz `en0` | 192.168.1.67 UP RUNNING |
+| DNS del sistema (`getaddrinfo`) | example.com 27-31 ms, neverssl.com 52-58 ms: **ok** |
+| TCP numérico (1.1.1.1:80, 8.8.8.8:53, 9.9.9.9:443) | **conecta** en 11-26 ms |
+| DNS por UDP directo (8.8.8.8, 1.1.1.1) | respuesta 61 bytes, rcode 0, 2 respuestas, 14-22 ms: **ok** |
+| `URLSession` HTTP a 1.1.1.1 | **HTTP 200, 56614 bytes, 346 ms** (2.ª ejecución) |
+| `URLSession` HTTPS a example.com (TLS, trustd) | **HTTP 200, 577 bytes, 218 ms** (2.ª ejecución) |
+| 1.ª ejecución (a los 4 min 41 s del arranque) | errores -1200/-1202 de certificado: **la hora era 1970-01-01** |
+| neverssl.com por HTTP | -1022 = App Transport Security de la app de prueba, no de la red |
+
+**Consecuencias, y una corrección mía:**
+1. Las hipótesis de E-0371 y E-0386 («Safari/red de apps no funciona por `necp_set_socket_domain_attributes` y la sandbox») eran **incorrectas**: esos 32 avisos y las denegaciones del sandbox
+   no impiden DNS, TCP ni TLS. Son ruido para este tráfico. El «no hay conexión» que Pioxi vio al principio era de su red/operador (lo dijo él; los datos no lo contradicen).
+2. **H2 queda cerrada como «no hay problema de red en el teléfono»**; no necesita parche de kernel ni BOOT.
+3. Hallazgo real y distinto: **la hora es 1970 en los primeros minutos tras arrancar** y el TLS falla hasta que la red da la hora. Candidato a mejora (sembrar la hora del arranque con la
+   fecha de compilación del kernel, o una hora guardada); baja prioridad, Nivel 3 si toca el kernel.
+4. **Lo que sigue sin comprobar de Safari es WebKit**, no la red: WebContent, JIT (upstream: `herojit`), y la memoria (122 MB libres a los 600 s, E-0386). Propongo H4: abrir
+   Safari de verdad en una página sencilla y registrar qué hace WebContent (cierres, memoria), solo con DROP y lectura de registros.
+
+Pioxi decide: H4 (Safari/WebContent), o H3 (BT/cámara/vibración, condicionado a medir el consumo en reposo), o corregir la hora del arranque.
+
+### V.9 H4: Safari y WebKit en min129 (E-0394)
+
+El Director abrió apple.com en este arranque. Del registro del kernel (unos 1140 s de uso):
+
+| Cosa | Evidencia |
+|---|---|
+| MobileSafari + procesos de WebKit arrancan | 2 MobileSafari; WebContent x7, Networking x2, GPU x2 |
+| WebKit sin JIT, estable | `asks for JIT memory: refused (herojit=0)`; WebContent y segundos Networking/GPU salen con `xstat 0`; ningún cierre de WebContent ni de Safari |
+| Dibujo | WebKit.GPU crea superficies de 750x990; lo que se vio, solo lo dice el Director |
+| CPU | MobileSafari 79-115 %, WebKit 69-123 % y 37-38 % (de 800 %) |
+| **Memoria** | MB libres: 708 (60 s), 201 (240 s), **33 (420 s)**, 163 (600 s), 176 (960 s): casi agotada a los 7 minutos |
+| **backboardd cae (sig 11) y se reinicia** | `pc` = libsystem_platform +0xeac (copia de memoria); `far` = **final exacto de un mapa de solo lectura** de 4,8 MB (lectura que se pasa); justo antes: `icon: texture 227 filled from surface 169` |
+| Matadas | `CollectionsPoster sig9`, `pkreporter sig9`, con la memoria casi agotada (no hay mensaje de jetsam) |
+| Otras | `mediaserverd sig6`, `PhotosFileProvider sig6` (conocido) |
+
+**Safari no es el problema.** Cumple lo que se pedía de H4: WebKit arranca y se mantiene sin JIT. Lo que sí aparece es **más serio que Safari**: (1) **backboardd se cae** (la pantalla se reinicia) por
+una lectura que se pasa del final de un mapa, ocurrida durante el relleno de una textura de icono desde una IOSurface, con la CPU saturada; (2) **la memoria llega a 33 MB libres** y
+el sistema empieza a matar extensiones.
+
+**Causa de (1): no confirmada.** El registro no nombra las bibliotecas de los marcos. Propongo (Nivel 2 o 3, que decida Pioxi, porque toca la biblioteca de `backboardd` y un fallo suyo
+dejaría sin pantalla hasta restaurarla desde TWRP): añadir a `libhakiosgl` un manejador de cierres como el de `libheroapp` (imagen, desplazamiento y símbolo de cada marco) para que la
+próxima vez el cierre se nombre solo. **Causa de (2): no medida**: faltaría un registro de la memoria por proceso (`TOP` lo da para CPU, no para memoria).
+
+Opciones para Pioxi: (a) el manejador en backboardd (diagnóstico del respring), (b) un registro de memoria por proceso (diagnóstico de la matada), (c) H3 (BT/cámara/vibración) con la condición de consumo, (d) dejar estas dos cosas y seguir con otra línea.
+
+### V.10 H3 (BT, cámara, vibración + brillo): lo que dice el código antes de medir (E-0396)
+
+Elegida (b) (memoria por proceso, DROP 56): en espera de un arranque con 10 min de uso. Mientras, el análisis de H3 que pidió Pioxi **antes de proponerlo**. Es lectura de código, no medición.
+
+| Función | Qué hace en reposo (según el código) | Riesgo de consumo | Medido |
+|---|---|---|---|
+| Vibración (0339-0341) | Al iniciar enciende VDD_MOT_3.3V (LDO34 del PMIC) y pone el MFD en modo motor; **no hay orden de apagarlo después** | **Probable**: alimentación del motor encendida en reposo | No |
+| Bluetooth (0342) | Solo con `kern.notefe_bt` (modos 4 encender, 6 apagar...) o `bt.level` de hero-run; sin eso, apagado | Bajo si no se pide | No |
+| Cámara frontal (0342) | Secuencia de encendido y la inversa; solo al pedirla (`kern.notefe_cam`, `cam.media`) | Bajo si no se pide; un censo de lectura al iniciar | No |
+| **Brillo mínimo (0343)** | Suelo de 64/255 (`herobrightmin`, 12-255); evita la pantalla negra por el auto-brillo a 0 lux | **Sí, a propósito**: no baja del 25 % | No |
+
+**Propuesta (Nivel 3, necesita BOOT y decisión de Pioxi):** `min130` = nuestra serie + 0487 + 0339-0341 + 0343 fusionados (0343 sin conflicto; 0339 tiene 2 trozos rechazados), **sin el 0342**.
+Medir 10 min de corriente en reposo con la pantalla apagada (`SWEET BATTERY ... mA`, ya en el registro) de `min129` frente a `min130`. Límite honesto: el calibrador da mA enteros y si el motor gasta decenas de
+microamperios la medida dirá «no detectable» y habrá que decidir por el código. El 0342 (4514 líneas: Bluetooth, cámara, cargador, otro gobernador) se parte después, solo con Bluetooth y cámara, según ese resultado.
+Pioxi ya pidió que se incluya el brillo; el suelo por defecto (64) queda como decisión suya: a oscuras gasta más que 12, pero 12 deja la pantalla negra.
+
+### V.11 Memoria por proceso con Safari (E-0397)
+
+26 muestras (cada 30 s, unos 13 min). **Mínimo 50 MB libres**, a los ~6 min; luego el compresor llega a ~120 MB y la libre se estabiliza en ~200 MB. Sin pánico ni cuelgue.
+
+| Proceso | Huella típica |
+|---|---|
+| backboardd | 215-260 MB |
+| com.apple.WebKit.GPU | 175-216 MB |
+| SpringBoard | 91-94 MB |
+| 3 x com.apple.WebKit.WebContent | 52-95 MB cada uno |
+| MobileSafari | 54-70 MB |
+| AppStore | 30-33 MB |
+| com.apple.WebKit.Networking | 17-25 MB |
+
+- **Safari y sus procesos ≈ 580 MB**: el hueco de 50 MB coincide con su pico.
+- Los diez mayores = ~860 MB de 1777 MB: **el resto (~900 MB) son ~220 procesos pequeños** (~4 MB cada uno). La palanca grande es el **número** de procesos residentes.
+- `com.apple.WebKit.GPU` gasta ~215 MB para una página sencilla; apagar su uso por ajustes de WebKit es una opción **sin probar**.
+- Defecto mío: el nombre de proceso salió vacío (`proc_name` por `dlsym`); lo mapeé con las líneas `XPC[pid]` y `SMP` del mismo registro. Si quieres nombres directos, otro DROP (sin urgencia).
+
+**Propuesta:** (1) lista de demonios que podrían no arrancar (candidatos por huella y por ser inútiles sin SIM/iCloud/Apple Watch/Siri) midiendo antes el efecto en memoria libre, con `heronoexec` (nivel 2: argumento de arranque, hay 3 caracteres libres en la línea; mejor `disabled.list` que ya existe en el DROP); (2) probar apagar el proceso GPU de WebKit.
+
+### V.12 «Internal error» al guardar un MP3 (E-0399) y resultado de la tanda 1 de demonios (E-0400)
+
+**Causa raíz (confirmada, con código y datos):** `mediaserverd` abortaba cada vez que WebKit reproducía un medio con pista de vídeo. Excepción en el registro unificado:
+`-[__NSCFNumber objectForKey:]: unrecognized selector`; lanzada desde **VideoToolbox +0x27548c**, que busca en el registro de IOKit la propiedad **`DisplayPipePlaneBaseAlignment`** y lee **`PlaneBaseAlignmentLinear`**
+de ella. Nuestro parche **0046/0061** la deja como un **número (64)**; iOS espera un **diccionario**. Upstream ya lo había corregido en su 0342 (Note FE 0462) con el mismo comentario.
+El «internal error» de Safari es el aviso genérico por perder el servicio de medios. Las líneas `200:internal error` del mismo registro son de QUIC, ruido.
+
+**Arreglo (Nivel 3: parche y BOOT, dentro de D-0123 hasta el 23/11):** parche **0488** (propio, mínimo), CI verde, **`min130`** = `min129` + 0488, escrita (BOOT 20 de 80) y leída de vuelta. Vuelta atrás: `min129`.
+Pendiente de prueba por Pioxi: Safari y la canción de nuevo; no debe haber excepción ni cierres de `mediaserverd`.
+
+**Tanda 1 de demonios (E-0400):** 51 trabajos desactivados (33 antes), el teléfono llega a la pantalla de inicio, **0 arranques de `lskdd`** (484 antes), procesos 187→234 frente a 214→238 y huellas
+~150-225 MB menores en las mismas marcas de tiempo (depende del uso). La memoria libre mínima (31 MB) no es comparable. **Conclusión:** la tanda no rompe nada y quita el bucle; siguiente tanda posible, midiendo igual.
+
+**Dato para el orquestador sobre EFS:** el hash absoluto de EFS que imprime el flasher cambió en tres escrituras seguidas; el flasher lo compara antes y después de su operación (iguales) y no lo escribe. Posible causa, sin
+comprobar: TWRP lo monta o el teléfono lo modifica entre sesiones. Si te preocupa, una forma de saberlo es leer el hash dos veces seguidas en TWRP sin escribir nada.
+
+### V.13 min130: «couldn't communicate with a helper application» al guardar (E-0401, E-0402)
+
+`min130` (0488) funciona para lo suyo: **0 cierres de `mediaserverd`** (3 en `min129`). Pero guardar sigue fallando por **otra** causa, también nuestra:
+`SaveToFiles` x2 y `com.apple.DocumentManager.Service` **abortan al arrancar** con `NSInternalInconsistencyException: plugin has invalid sandbox or container: error 2 path ?`.
+Desensamblado de PlugInKit: llama a `sandbox_container_path_for_pid(getpid(), buf, 0x400)`; si da error lanza esa excepción; si da 0 solo comprueba `strlen(buf) > 1`. Nuestro «Sandbox» (`sweet_amfi.c`) contesta
+ENOENT a la operación 4 a todos (E-0338 lo vio con PhotosFileProvider; ahora es para **toda** extensión de app).
+
+**Arreglo (parche 0489, Nivel 3, dentro de D-0123):** para el propio pid, usuario no root y ejecutable dentro de un `.appex`, la operación 4 contesta 0 y `/private/var/mobile`; el resto, ENOENT como antes. CI verde, **`min131`** escrita (BOOT 21 de 80).
+Riesgo asumido: una extensión que use esa ruta como contenedor escribirá en el `$HOME` de mobile; no hay sandbox que lo impida. Pendiente: que Pioxi arranque y repita el guardado.
+
+### V.14 Incidente: min131 atascada en el logo (E-0403) y min132 (E-0404)
+
+`min131` (0489 v1) **se quedó en el logo**: el sistema entero vivía (táctil, `backboardd`, Wi-Fi, 139 procesos, 1,4-2,1 GB libres) pero **SpringBoard (pid 27) quedó a 11 MB y 0 % de CPU** durante los 11 min del registro,
+sin llegar a las llamadas que sí salen en `min130` (`SWEET AKS: SpringBoard sel 32`, creación de superficies, `HEROGPU: SpringBoard sel 5`). Las líneas de `hero-run` son idénticas a las de `min130`; la **única diferencia de kernel** es 0489 v1.
+**No hay ninguna línea «given the container path»**: el camino de éxito de 0489 no se ejecutó; el código nuevo que sí corrió fue el previo, que pedía `proc_getexecutablevnode` + `vn_getpath` en **cada** llamada de un usuario no root a la operación 4.
+**Hipótesis (no demostrada):** ese camino bloquea a SpringBoard (usuario mobile) al arrancar. No se descarta una carrera de arranque sin relación con un solo arranque.
+**Decisión:** v1 tenía un riesgo evitable; se sustituye por **v2 sin ninguna búsqueda de rutas**: PlugInKit se reconoce por el buffer (lo limpia y pone `?` en el primer byte, visto en su desensamblado), pid propio y no root.
+`min132` = `min130` + 0489 v2, BOOT 22 de 80, escrita. Si SpringBoard se para otra vez con v2, la hipótesis queda descartada. Vuelta atrás: `min130`. Dato: el hash absoluto de EFS ha cambiado en cinco escrituras seguidas (siempre idéntico antes y después de cada operación).
+
+### V.15 Atasco de arranque: no era el kernel ni el estado de SpringBoard; apunta a la tanda 1 de demonios (E-0405 a E-0408)
+
+Cuatro arranques atascados (`min131`, `min132`, `min130` x2) con SpringBoard parado a 11 MB y sin PosterBoard. **Descartado:** el parche 0489 (v1 y v2; `min130`, sin él, también se atasca), el estado de SpringBoard
+(`hero-run` renombró los cinco ficheros y reinició SpringBoard: igual). **Con la lista de 25 trabajos desactivados (33 con los fijos) SpringBoard llega a la pantalla de inicio.**
+**Causa probable (no del todo demostrada):** la tanda 1 (18 trabajos nuevos de E-0398). Que `min129` y `min130` arrancaran bien se explica porque la lista surte efecto **un arranque después** de escribirse.
+**Bisección en curso:** 11 de los 18 (sin Watch, CarPlay, FaceTime) en el DROP 60; `min132` (BOOT 24 de 80) para probar a la vez 0489 v2. Pregunta abierta: ¿cuál de los 18 espera SpringBoard? Aviso de una limitación ya conocida: arrancar iOS sin pasar por TWRP deja **el táctil sin alimentación** (`no supply`).
+
+### V.16 Archivos: qué falta y qué se sabe (E-0409, E-0410; informe `docs/herolte-files-research.md`)
+
+**Resuelto y confirmado en el teléfono:** `mediaserverd` ya no cae con vídeo (0488), las extensiones de app ya no abortan al arrancar (0489 v2, «given the container path» en el registro y 0 cierres), el atasco de
+arranque queda explicado por la tanda 1 de trabajos desactivados y la lista corta (25 + 11) llega a la pantalla de inicio con `lskdd` a 0 arranques.
+**Queda:** Archivos muestra «Content Unavailable». Dos causas distintas: las **etiquetas** dependen de Spotlight (desactivado), y **«En mi iPhone»** no existe porque el proveedor
+`LocalStorageFileProvider.appex` **nunca se ejecuta**. `fileproviderd` tiene un error para «extensión sin contenedor de grupo» que ignora la extensión; los contenedores existen en disco, pero no se sabe si LaunchServices los ve.
+**Sonda (DROP 61):** el censo de `hero-run` imprime los registros de LaunchServices (entitlements, `application-groups`, `groupContainerURLs`, `dataContainerURL`) de la extensión y de dos que sí arrancan.
+Siguiente: un arranque y leer esas líneas `groups ...`.
