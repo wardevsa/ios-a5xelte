@@ -1,0 +1,439 @@
+diff --git a/bsd/dev/herolte_wifi.c b/bsd/dev/herolte_wifi.c
+index 454dabb..df7e957 100644
+--- a/bsd/dev/herolte_wifi.c
++++ b/bsd/dev/herolte_wifi.c
+@@ -4,7 +4,7 @@
+  * cores held, firmware and NVRAM into the chip's memory, the ARM let go. The firmware says it runs by putting the address of
+  * its shared structure in the last word of the RAM, and its own console tells the rest.
+  *
+- * The firmware and the NVRAM are the phone's own, from VENDOR, in the drop zone: they are not in this repository.
++ * The firmware, the NVRAM and the CLM are the phone's own, from VENDOR, in the drop zone: they are not in this repository.
+  */
+ #include <sys/param.h>
+ #include <sys/systm.h>
+@@ -21,6 +21,7 @@
+ #include <pexpert/pexpert.h>
+ 
+ extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
++extern vm_offset_t ml_io_map_wcomb(vm_offset_t, vm_size_t);
+ extern void IOSleep(unsigned milliseconds);
+ void herolte_wifi_firmware(vm_offset_t cfg);
+ 
+@@ -31,6 +32,7 @@ void herolte_wifi_firmware(vm_offset_t cfg);
+ #define HW_RAMBASE      0x160000u           /* a 4359 of revision 9 or later */
+ #define HW_FW_MAX       (1024u * 1024u)
+ #define HW_NVRAM_MAX    (16u * 1024u)
++#define HW_CLM_MAX      (64u * 1024u)
+ 
+ #define BCMA_IOCTL      0x408u
+ #define BCMA_RESET_CTL  0x800u
+@@ -263,6 +265,386 @@ hw_console(uint32_t console, uint32_t *done)
+ 	}
+ }
+ 
++/*
++ * Third step, the conversation (brcmfmac's msgbuf.c and commonring.c): five rings in the phone's memory that the chip reads
++ * and writes itself, their indices in the chip's memory. Polled; no interrupt. The memory is a block of the first DRAM bank
++ * that XNU does not own, mapped uncached, at the same address for the chip (there is no IOMMU on this PCIe).
++ */
++#define HW_DMA_PA       0x8f000000u
++#define HW_DMA_BYTES    0x100000u
++#define HW_RING_CTRL    0x00000u            /* H2D control submit: 64 x 40 */
++#define HW_RING_CTRLCPL 0x01000u            /* D2H control complete: 64 x 24 */
++#define HW_RING_RXPOST  0x10000u            /* H2D rx post: 1024 x 32 */
++#define HW_RING_TXCPL   0x20000u            /* D2H tx complete: 1024 x 16 */
++#define HW_RING_RXCPL   0x30000u            /* D2H rx complete: 1024 x 32 */
++#define HW_SCRATCH      0x40000u
++#define HW_RINGUPD      0x41000u
++#define HW_IOCTL_REQ    0x42000u
++#define HW_CTRL_BUFS    0x50000u            /* 16 buffers of 8 KiB: 8 for answers, 8 for events */
++#define HW_CTRL_BUF     8192u
++
++#define MSG_IOCTLPTR_REQ        0x9
++#define MSG_IOCTLRESP_BUF_POST  0xb
++#define MSG_IOCTL_CMPLT         0xc
++#define MSG_EVENT_BUF_POST      0xd
++#define MSG_WL_EVENT            0xe
++
++#define WLC_UP          2
++#define WLC_GET_VAR     262
++#define WLC_SET_VAR     263
++#define E_ESCAN_RESULT  69
++
++static vm_offset_t hw_dma;
++static uint32_t hw_pcie2, hw_h2d_w, hw_h2d_r, hw_d2h_w, hw_d2h_r, hw_rx_off, hw_console_at, hw_console_done;
++static uint16_t hw_ctrl_w, hw_cpl_r;
++static uint16_t hw_trans;
++static int16_t hw_resp_status;
++static uint16_t hw_resp_len;
++static uint32_t hw_resp_id;
++static bool hw_resp_seen;
++static unsigned hw_ssids;
++static char hw_ssid_seen[48][33];
++
++static uint16_t
++hw_rd16(vm_offset_t base, uint32_t off)
++{
++	uint16_t v = *(volatile uint16_t *)(base + off);
++	__asm__ volatile ("dsb osh" ::: "memory");
++	return v;
++}
++
++static void
++hw_wr16(vm_offset_t base, uint32_t off, uint16_t v)
++{
++	*(volatile uint16_t *)(base + off) = v;
++	__asm__ volatile ("dsb osh" ::: "memory");
++}
++
++/* An item of the control submit ring, written by fill(), then the index and the doorbell. */
++static bool
++hw_submit(void (*fill)(volatile uint8_t *item, void *arg), void *arg)
++{
++	uint16_t next = (uint16_t)((hw_ctrl_w + 1) % 64);
++	for (unsigned t = 0; t < 200 && next == hw_rd16(hw_tcm, hw_h2d_r); t++) {
++		IOSleep(5);
++	}
++	if (next == hw_rd16(hw_tcm, hw_h2d_r)) {
++		printf("HEROLTE WIFI: the control ring stays full\n");
++		return false;
++	}
++	volatile uint8_t *item = (volatile uint8_t *)(hw_dma + HW_RING_CTRL + hw_ctrl_w * 40u);
++	for (unsigned i = 0; i < 40; i++) {
++		item[i] = 0;
++	}
++	fill(item, arg);
++	__asm__ volatile ("dsb sy" ::: "memory");
++	hw_ctrl_w = next;
++	hw_wr16(hw_tcm, hw_h2d_w, hw_ctrl_w);
++	bp_wr(hw_pcie2 + 0x140, 1);
++	return true;
++}
++
++static void
++hw_put32(volatile uint8_t *p, uint32_t v)
++{
++	p[0] = (uint8_t)v;
++	p[1] = (uint8_t)(v >> 8);
++	p[2] = (uint8_t)(v >> 16);
++	p[3] = (uint8_t)(v >> 24);
++}
++
++static void
++hw_put16(volatile uint8_t *p, uint16_t v)
++{
++	p[0] = (uint8_t)v;
++	p[1] = (uint8_t)(v >> 8);
++}
++
++static uint32_t
++hw_get32(const volatile uint8_t *p)
++{
++	return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24);
++}
++
++static uint16_t
++hw_get16(const volatile uint8_t *p)
++{
++	return (uint16_t)(p[0] | (p[1] << 8));
++}
++
++static uint32_t
++hw_get32be(const volatile uint8_t *p)
++{
++	return ((uint32_t)p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
++}
++
++/* struct msgbuf_rx_ioctl_resp_or_event: buffer n (0-7 answers, 8-15 events) given to the chip, its pktid n + 1. */
++static void
++hw_fill_post(volatile uint8_t *item, void *arg)
++{
++	uint32_t n = (uint32_t)(uintptr_t)arg;
++	item[0] = n < 8 ? MSG_IOCTLRESP_BUF_POST : MSG_EVENT_BUF_POST;
++	hw_put32(item + 4, n + 1);
++	hw_put16(item + 8, HW_CTRL_BUF);
++	hw_put32(item + 16, HW_DMA_PA + HW_CTRL_BUFS + n * HW_CTRL_BUF);
++}
++
++struct hw_req {
++	uint32_t cmd;
++	uint16_t in_len, out_len;
++};
++
++/* struct msgbuf_ioctl_req_hdr */
++static void
++hw_fill_ioctl(volatile uint8_t *item, void *arg)
++{
++	struct hw_req *r = arg;
++	item[0] = MSG_IOCTLPTR_REQ;
++	hw_put32(item + 4, 0xfffe);
++	hw_put32(item + 8, r->cmd);
++	hw_put16(item + 12, ++hw_trans);
++	hw_put16(item + 14, r->in_len);
++	hw_put16(item + 16, r->out_len);
++	hw_put32(item + 24, HW_DMA_PA + HW_IOCTL_REQ);
++}
++
++static void
++hw_event(const volatile uint8_t *pkt, uint16_t len)
++{
++	if (len < 72) {
++		return;
++	}
++	uint32_t type = hw_get32be(pkt + 28), status = hw_get32be(pkt + 32), datalen = hw_get32be(pkt + 44);
++	if (type != E_ESCAN_RESULT) {
++		printf("HEROLTE WIFI: event %u status %u\n", type, status);
++		return;
++	}
++	if (status != 8) {
++		printf("HEROLTE WIFI: scan done, status %u, %u networks\n", status, hw_ssids);
++		return;
++	}
++	const volatile uint8_t *res = pkt + 72;
++	if (datalen < 12 + 80 || 72 + datalen > len) {
++		return;
++	}
++	uint16_t count = hw_get16(res + 10);
++	const volatile uint8_t *bss = res + 12;
++	for (uint16_t i = 0; i < count && bss + 80 <= pkt + len; i++) {
++		uint32_t blen = hw_get32(bss + 4);
++		uint8_t slen = bss[18];
++		char ssid[33];
++		if (slen > 32) {
++			slen = 32;
++		}
++		for (unsigned k = 0; k < slen; k++) {
++			char c = (char)bss[19 + k];
++			ssid[k] = (c >= 0x20 && c < 0x7f) ? c : '?';
++		}
++		ssid[slen] = 0;
++		bool seen = false;
++		for (unsigned k = 0; k < hw_ssids && !seen; k++) {
++			seen = strcmp(hw_ssid_seen[k], ssid) == 0;
++		}
++		if (!seen && hw_ssids < 48) {
++			strlcpy(hw_ssid_seen[hw_ssids++], ssid, 33);
++			printf("HEROLTE WIFI: network \"%s\" %02x:%02x:%02x:%02x:%02x:%02x channel %u, %d dBm\n", slen ? ssid : "(hidden)",
++			    bss[8], bss[9], bss[10], bss[11], bss[12], bss[13], hw_get16(bss + 72) & 0xff, (int16_t)hw_get16(bss + 78));
++		}
++		if (blen < 80) {
++			break;
++		}
++		bss += blen;
++	}
++}
++
++/* What the chip has put in the control complete ring. */
++static void
++hw_drain(void)
++{
++	uint16_t w = hw_rd16(hw_tcm, hw_d2h_w);
++	while (hw_cpl_r != w && w < 64) {
++		const volatile uint8_t *m = (const volatile uint8_t *)(hw_dma + HW_RING_CTRLCPL + hw_cpl_r * 24u + hw_rx_off);
++		uint32_t id = hw_get32(m + 4);
++		switch (m[0]) {
++		case MSG_IOCTL_CMPLT:
++			hw_resp_status = (int16_t)hw_get16(m + 8);
++			hw_resp_len = hw_get16(m + 12);
++			hw_resp_id = id;
++			hw_resp_seen = true;
++			break;
++		case MSG_WL_EVENT:
++			if (id >= 9 && id <= 16) {
++				hw_event((const volatile uint8_t *)(hw_dma + HW_CTRL_BUFS + (id - 1) * HW_CTRL_BUF + hw_rx_off), hw_get16(m + 12));
++				hw_submit(hw_fill_post, (void *)(uintptr_t)(id - 1));
++			}
++			break;
++		case 0xa:                       /* the request taken */
++			break;
++		default:
++			printf("HEROLTE WIFI: message %u from the chip, status %d\n", m[0], (int16_t)hw_get16(m + 8));
++			break;
++		}
++		hw_cpl_r = (uint16_t)((hw_cpl_r + 1) % 64);
++		hw_wr16(hw_tcm, hw_d2h_r, hw_cpl_r);
++		w = hw_rd16(hw_tcm, hw_d2h_w);
++	}
++	hw_console(hw_console_at, &hw_console_done);
++}
++
++/*
++ * An ioctl: for a variable, the name and its data in the request buffer (brcmfmac's fwil.c), the answer copied to out.
++ * The firmware's own error, or -1 if it did not answer in two seconds.
++ */
++static int
++hw_ioctl(uint32_t cmd, const char *name, const void *in, uint32_t in_len, void *out, uint32_t out_len)
++{
++	volatile uint8_t *buf = (volatile uint8_t *)(hw_dma + HW_IOCTL_REQ);
++	uint32_t len = 0;
++	if (name) {
++		for (const char *c = name; *c; c++) {
++			buf[len++] = (uint8_t)*c;
++		}
++		buf[len++] = 0;
++	}
++	for (uint32_t i = 0; i < in_len; i++) {
++		buf[len++] = ((const uint8_t *)in)[i];
++	}
++	uint32_t total = len > out_len ? len : out_len;
++	for (uint32_t i = len; i < total; i++) {
++		buf[i] = 0;
++	}
++	struct hw_req r = { .cmd = cmd, .in_len = (uint16_t)(total > 1518 ? 1518 : total), .out_len = (uint16_t)total };
++	hw_resp_seen = false;
++	if (!hw_submit(hw_fill_ioctl, &r)) {
++		return -1;
++	}
++	for (unsigned t = 0; t < 400 && !hw_resp_seen; t++) {
++		IOSleep(5);
++		hw_drain();
++	}
++	if (!hw_resp_seen) {
++		printf("HEROLTE WIFI: no answer to ioctl %u %s\n", cmd, name ? name : "");
++		return -1;
++	}
++	if (hw_resp_id >= 1 && hw_resp_id <= 8) {
++		const volatile uint8_t *resp = (const volatile uint8_t *)(hw_dma + HW_CTRL_BUFS + (hw_resp_id - 1) * HW_CTRL_BUF);
++		for (uint32_t i = 0; out && i < out_len && i < hw_resp_len; i++) {
++			((uint8_t *)out)[i] = resp[i];
++		}
++		hw_submit(hw_fill_post, (void *)(uintptr_t)(hw_resp_id - 1));
++	}
++	return hw_resp_status;
++}
++
++static void
++hw_msgbuf(uint32_t shared, uint32_t ramsize, const uint8_t *clm, uint32_t clm_len)
++{
++	hw_dma = ml_io_map_wcomb(HW_DMA_PA, HW_DMA_BYTES);
++	if (!hw_dma) {
++		printf("HEROLTE WIFI: no mapping for the rings\n");
++		return;
++	}
++	for (uint32_t i = 0; i < HW_CTRL_BUFS + 16 * HW_CTRL_BUF; i += 8) {
++		*(volatile uint64_t *)(hw_dma + i) = 0;
++	}
++	uint32_t info = hw_rd(hw_tcm, shared + 48);
++	hw_rx_off = hw_rd(hw_tcm, shared + 36);
++	if (info < HW_RAMBASE || info >= HW_RAMBASE + ramsize) {
++		printf("HEROLTE WIFI: ring information at %#x?\n", info);
++		return;
++	}
++	uint32_t ringmem = hw_rd(hw_tcm, info), h2d_w = hw_rd(hw_tcm, info + 4), h2d_r = hw_rd(hw_tcm, info + 8);
++	uint32_t d2h_w = hw_rd(hw_tcm, info + 12), d2h_r = hw_rd(hw_tcm, info + 16);
++	printf("HEROLTE WIFI: rings at %#x, indices %#x %#x %#x %#x, flow rings %u, rx data offset %u\n", ringmem, h2d_w, h2d_r, d2h_w, d2h_r,
++	    hw_rd16(hw_tcm, info + 52), hw_rx_off);
++	static const uint32_t base[5] = { HW_RING_CTRL, HW_RING_RXPOST, HW_RING_CTRLCPL, HW_RING_TXCPL, HW_RING_RXCPL };
++	static const uint16_t items[5] = { 64, 1024, 64, 1024, 1024 }, size[5] = { 40, 32, 24, 16, 32 };
++	for (unsigned i = 0; i < 5; i++) {
++		uint32_t desc = ringmem + i * 16;
++		hw_wr(hw_tcm, desc + 4, items[i] | ((uint32_t)size[i] << 16));
++		hw_wr(hw_tcm, desc + 8, HW_DMA_PA + base[i]);
++		hw_wr(hw_tcm, desc + 12, 0);
++		uint32_t w = i < 2 ? h2d_w + i * 4 : d2h_w + (i - 2) * 4, r = i < 2 ? h2d_r + i * 4 : d2h_r + (i - 2) * 4;
++		hw_wr16(hw_tcm, w, 0);
++		hw_wr16(hw_tcm, r, 0);
++	}
++	hw_h2d_w = h2d_w;
++	hw_h2d_r = h2d_r;
++	hw_d2h_w = d2h_w;
++	hw_d2h_r = d2h_r;
++	hw_wr(hw_tcm, shared + 56, HW_DMA_PA + HW_SCRATCH);
++	hw_wr(hw_tcm, shared + 60, 0);
++	hw_wr(hw_tcm, shared + 52, 8);
++	hw_wr(hw_tcm, shared + 68, HW_DMA_PA + HW_RINGUPD);
++	hw_wr(hw_tcm, shared + 72, 0);
++	hw_wr(hw_tcm, shared + 64, 1024);
++	hw_wr(hw_cfg, 0x04, hw_rd(hw_cfg, 0x04) | 4u);          /* bus master: the chip may now reach these buffers */
++	for (uint32_t n = 0; n < 16; n++) {
++		hw_submit(hw_fill_post, (void *)(uintptr_t)n);
++	}
++
++	uint8_t mac[6] = { 0 };
++	int err = hw_ioctl(WLC_GET_VAR, "cur_etheraddr", NULL, 0, mac, 6);
++	printf("HEROLTE WIFI: cur_etheraddr: %d, %02x:%02x:%02x:%02x:%02x:%02x\n", err, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
++	char ver[128] = { 0 };
++	err = hw_ioctl(WLC_GET_VAR, "ver", NULL, 0, ver, sizeof(ver) - 1);
++	for (unsigned i = 0; i < sizeof(ver); i++) {
++		ver[i] = ver[i] == '\n' ? ' ' : ver[i];
++	}
++	printf("HEROLTE WIFI: ver: %d, %s\n", err, ver);
++
++	/* brcmf_c_download_blob(): the CLM in chunks of 1400 bytes */
++	static uint8_t chunk[12 + 1400];
++	uint32_t done = 0;
++	uint16_t flag = 2;                                      /* DL_BEGIN */
++	err = clm_len ? 0 : -1;
++	while (err == 0 && done < clm_len) {
++		uint32_t n = clm_len - done > 1400 ? 1400 : clm_len - done;
++		if (done + n == clm_len) {
++			flag = (uint16_t)(flag | 4);                    /* DL_END */
++		}
++		uint16_t f = (uint16_t)(flag | (1u << 12)), type = 2;
++		memcpy(chunk, &f, 2);
++		memcpy(chunk + 2, &type, 2);
++		memcpy(chunk + 4, &n, 4);
++		memset(chunk + 8, 0, 4);
++		memcpy(chunk + 12, clm + done, n);
++		err = hw_ioctl(WLC_SET_VAR, "clmload", chunk, 12 + n, NULL, 0);
++		flag = (uint16_t)(flag & ~2u);
++		done += n;
++	}
++	uint32_t clm_status = 0;
++	int status_err = hw_ioctl(WLC_GET_VAR, "clmload_status", NULL, 0, &clm_status, 4);
++	printf("HEROLTE WIFI: CLM %u bytes: %d, status %d/%u\n", clm_len, err, status_err, clm_status);
++
++	uint32_t one = 1;
++	printf("HEROLTE WIFI: up: %d\n", hw_ioctl(WLC_UP, NULL, &one, 4, NULL, 0));
++	uint8_t mask[16] = { 0 };
++	err = hw_ioctl(WLC_GET_VAR, "event_msgs", NULL, 0, mask, sizeof(mask));
++	mask[E_ESCAN_RESULT / 8] = (uint8_t)(mask[E_ESCAN_RESULT / 8] | (1u << (E_ESCAN_RESULT % 8)));
++	printf("HEROLTE WIFI: event_msgs: %d, set %d\n", err, hw_ioctl(WLC_SET_VAR, "event_msgs", mask, sizeof(mask), NULL, 0));
++
++	/* brcmf_escan_params_le, version 1: every channel, active, the firmware's own times */
++	uint8_t escan[72] = { 0 };
++	uint32_t v = 1, minus = 0xffffffffu;
++	uint16_t action = 1, sync = 0x1234;
++	memcpy(escan, &v, 4);
++	memcpy(escan + 4, &action, 2);
++	memcpy(escan + 6, &sync, 2);
++	memset(escan + 8 + 36, 0xff, 6);                        /* bssid: broadcast */
++	escan[8 + 42] = 2;                                      /* bss_type: any */
++	escan[8 + 43] = 0;                                      /* active */
++	for (unsigned i = 0; i < 4; i++) {
++		memcpy(escan + 8 + 44 + i * 4, &minus, 4);
++	}
++	printf("HEROLTE WIFI: escan: %d\n", hw_ioctl(WLC_SET_VAR, "escan", escan, sizeof(escan), NULL, 0));
++	for (unsigned t = 0; t < 1500; t++) {
++		IOSleep(10);
++		hw_drain();
++	}
++	printf("HEROLTE WIFI: %u networks seen\n", hw_ssids);
++}
++
+ void
+ herolte_wifi_firmware(vm_offset_t cfg)
+ {
+@@ -384,9 +766,18 @@ herolte_wifi_firmware(vm_offset_t cfg)
+ 	if (console < HW_RAMBASE || console >= HW_RAMBASE + ramsize) {
+ 		return;
+ 	}
+-	uint32_t done = 0;
+-	for (unsigned t = 0; t < 30; t++) {
+-		hw_console(console, &done);
+-		IOSleep(2000);
++	hw_console_at = console;
++	hw_pcie2 = pcie2;
++	IOSleep(1000);
++	hw_console(console, &hw_console_done);
++	uint8_t *clm = kalloc_data(HW_CLM_MAX, Z_WAITOK);
++	uint32_t clm_len = clm ? hw_read_file("/private/var/herolte/wifi/clm.blob", clm, HW_CLM_MAX) : 0;
++	hw_msgbuf(shared, ramsize, clm, clm_len);
++	if (clm) {
++		kfree_data(clm, HW_CLM_MAX);
++	}
++	for (unsigned t = 0; t < 5; t++) {
++		IOSleep(1000);
++		hw_console(console, &hw_console_done);
+ 	}
+ }

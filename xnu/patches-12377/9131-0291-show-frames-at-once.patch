@@ -1,0 +1,91 @@
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index b31acf4..c535638 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -130,8 +130,10 @@ class AppleCLCD : public IOMobileFramebuffer {
+ 	uint32_t            fOverwritten;   /* ... of them replaced before they were shown */
+ 
+ 	static void vsyncFired(OSObject *owner, IOTimerEventSource *sender);
++	static void showFired(OSObject *owner, IOTimerEventSource *sender);
+ 
+ public:
++	IOTimerEventSource *fShow;      /* a frame goes to the panel as soon as it is given (boot-arg sweetfb_tick=1: at the next tick) */
+ 	uint32_t      fVblSent;         /* vsync notifications a client asked for: 0 = CoreAnimation is on its own timer */
+ 	uint64_t      fPhys;
+ 	uint32_t      fWidth, fHeight, fRowBytes;
+@@ -298,6 +300,14 @@ AppleCLCD::start(IOService *provider)
+ 		IOLog("SWEET FB: no vsync timer\n");
+ 		return false;
+ 	}
++	int at_tick = 0;
++	PE_parse_boot_argn("sweetfb_tick", &at_tick, sizeof(at_tick));
++	if (!at_tick) {
++		fShow = IOTimerEventSource::timerEventSource(this, &AppleCLCD::showFired);
++		if (fShow != NULL && fWorkLoop->addEventSource(fShow) != kIOReturnSuccess) {
++			fShow = NULL;
++		}
++	}
+ 	uint32_t hz = 10;
+ #if defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 	/* A5's 1080x1920 panel copies 8.29 MB per full frame. Keep the
+@@ -367,6 +377,50 @@ AppleCLCD::rearmVsync(IOTimerEventSource *sender)
+ 	sender->wakeAtTime(kIOTimeOptionsWithLeeway, due, leeway);
+ }
+ 
++/*
++ * A frame is shown as soon as the window server has given it, not at the next tick: waiting cost up to a whole refresh,
++ * and a frame finished just after a tick was often replaced by the next before it was seen (overwritten=, 5% of them).
++ */
++void
++AppleCLCD::showFired(OSObject *owner, __unused IOTimerEventSource *sender)
++{
++	AppleCLCD *fb = (AppleCLCD *)owner;
++	uint8_t *rec = (uint8_t *)IOMallocData(SWEET_FB_SWAP_REC_SIZE);
++	if (rec == NULL) {
++		return;         /* the tick shows it */
++	}
++	IOLockLock(fb->fLock);
++	bool show = fb->fDirty && !fb->fPowerOff;
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	show = show && mach_absolute_time() >= sweet_fb_hold_until;
++#endif
++	if (show) {
++		memcpy(rec, fb->fPending, SWEET_FB_SWAP_REC_SIZE);
++		fb->fDirty = false;
++	}
++	IOLockUnlock(fb->fLock);
++	if (show) {
++		uint64_t before = mach_absolute_time();
++		uint64_t bytes = fb->present(rec);
++		uint64_t ns = 0;
++		absolutetime_to_nanoseconds(mach_absolute_time() - before, &ns);
++		uint64_t gap = fb->fVsyncCount - fb->fLastShown;
++		fb->fGaps[gap <= 1 ? 0 : gap >= 4 ? 3 : gap - 1] += gap <= 30 ? 1 : 0;
++		fb->fLastShown = fb->fVsyncCount;
++#if defined(ARM64_BOARD_CONFIG_A5XELTE)
++		fb->fPerfFrames++;
++		fb->fPerfBytes += bytes;
++		fb->fPerfNS += ns;
++		if (ns > fb->fPerfMaxNS) {
++			fb->fPerfMaxNS = ns;
++		}
++#else
++		(void)bytes;
++#endif
++	}
++	IOFreeData(rec, SWEET_FB_SWAP_REC_SIZE);
++}
++
+ void
+ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+ {
+@@ -624,6 +678,9 @@ AppleCLCD::swap(const uint8_t *rec)
+ 	fOverwritten += fDirty ? 1 : 0;
+ 	fDirty = true;
+ 	IOLockUnlock(fLock);
++	if (fShow != NULL) {
++		fShow->setTimeoutUS(1);
++	}
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ 	/* Raw record of the first swaps: offset=value of every non-zero word. */
+ 	if (sweet_fb_swap_count < 8) {

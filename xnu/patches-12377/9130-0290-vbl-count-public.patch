@@ -1,0 +1,17 @@
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index c7e67af..b31acf4 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -128,11 +128,11 @@ class AppleCLCD : public IOMobileFramebuffer {
+ 	uint32_t            fGaps[4];       /* frames shown 1, 2, 3, 4 to 30 ticks after the one before: what judder is */
+ 	uint32_t            fSwaps;         /* frames the window server gave, in this log window */
+ 	uint32_t            fOverwritten;   /* ... of them replaced before they were shown */
+-	uint32_t            fVblSent;       /* vsync notifications a client asked for: 0 = CoreAnimation is on its own timer */
+ 
+ 	static void vsyncFired(OSObject *owner, IOTimerEventSource *sender);
+ 
+ public:
++	uint32_t      fVblSent;         /* vsync notifications a client asked for: 0 = CoreAnimation is on its own timer */
+ 	uint64_t      fPhys;
+ 	uint32_t      fWidth, fHeight, fRowBytes;
+ 	uint32_t      fLogicalW, fLogicalH;     /* size reported to userland */

@@ -1,0 +1,65 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+index 129160f..4b44d3d 100644
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -139,7 +139,11 @@ herolte_gl_env(const char *path, int pid, const char **extra, int max)
+ 		}
+ 	}
+ 	/* libheroapp.dylib in the drop zone goes into every application: their last words, and no OpenGL ES that jumps to 0. */
+-	if (path != NULL && strstr(path, "/Applications/") != NULL && max >= 1) {
++	bool in_applications = false;
++	for (const char *p = path; p != NULL && (p = strchr(p, '/')) != NULL && !in_applications; p++) {
++		in_applications = strncmp(p, "/Applications/", 14) == 0;
++	}
++	if (in_applications && max >= 1) {
+ 		vnode_t appvp = NULLVP;
+ 		if (vnode_lookup(HGL_APP_LIB, 0, &appvp, vfs_context_kernel()) == 0) {
+ 			vnode_put(appvp);
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index 6154a7e..c7e67af 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -126,6 +126,9 @@ class AppleCLCD : public IOMobileFramebuffer {
+ 	void rearmVsync(IOTimerEventSource *sender);
+ 	uint64_t            fLastShown;     /* the tick the last frame went to the panel at */
+ 	uint32_t            fGaps[4];       /* frames shown 1, 2, 3, 4 to 30 ticks after the one before: what judder is */
++	uint32_t            fSwaps;         /* frames the window server gave, in this log window */
++	uint32_t            fOverwritten;   /* ... of them replaced before they were shown */
++	uint32_t            fVblSent;       /* vsync notifications a client asked for: 0 = CoreAnimation is on its own timer */
+ 
+ 	static void vsyncFired(OSObject *owner, IOTimerEventSource *sender);
+ 
+@@ -451,13 +454,14 @@ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+ 		absolutetime_to_nanoseconds(finished - fb->fPerfWindowStart, &elapsedNS);
+ 		if (fb->fPerfFrames != 0 && elapsedNS != 0) {
+ 			uint64_t fpsTenths = fb->fPerfFrames * 10000000000ULL / elapsedNS;
+-			IOLog("A5XELTE FB: frames=%llu elapsed_ms=%llu fps=%llu.%llu bytes=%llu avg_copy_us=%llu max_copy_us=%llu missed=%llu gaps=%u/%u/%u/%u\n",
++			IOLog("A5XELTE FB: frames=%llu elapsed_ms=%llu fps=%llu.%llu bytes=%llu avg_copy_us=%llu max_copy_us=%llu missed=%llu gaps=%u/%u/%u/%u swaps=%u overwritten=%u vbl=%u\n",
+ 			    fb->fPerfFrames, elapsedNS / 1000000, fpsTenths / 10,
+ 			    fpsTenths % 10, fb->fPerfBytes,
+ 			    fb->fPerfNS / fb->fPerfFrames / 1000, fb->fPerfMaxNS / 1000, fb->fVsyncMissed,
+-			    fb->fGaps[0], fb->fGaps[1], fb->fGaps[2], fb->fGaps[3]);
++			    fb->fGaps[0], fb->fGaps[1], fb->fGaps[2], fb->fGaps[3], fb->fSwaps, fb->fOverwritten, fb->fVblSent);
+ 		}
+ 		bzero(fb->fGaps, sizeof(fb->fGaps));
++		fb->fSwaps = fb->fOverwritten = fb->fVblSent = 0;
+ 		fb->fPerfFrames = fb->fPerfBytes = fb->fPerfNS = fb->fPerfMaxNS = 0;
+ 		fb->fPerfWindowStart = finished;
+ 	}
+@@ -616,6 +620,8 @@ AppleCLCD::swap(const uint8_t *rec)
+ {
+ 	IOLockLock(fLock);
+ 	memcpy(fPending, rec, SWEET_FB_SWAP_REC_SIZE);
++	fSwaps++;
++	fOverwritten += fDirty ? 1 : 0;
+ 	fDirty = true;
+ 	IOLockUnlock(fLock);
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+@@ -966,6 +972,7 @@ IOMobileFramebufferUserClient::notify(uint32_t type, const uint64_t *values, uin
+ 	if (type >= SWEET_FB_NOTIFY_TYPES || fFunc[type] == 0 || fPort == MACH_PORT_NULL) {
+ 		return;
+ 	}
++	fFB->fVblSent += type == SWEET_FB_NOTIFY_VSYNC ? 1 : 0;
+ 	bzero(ref, sizeof(ref));
+ 	setAsyncReference64(ref, fPort, (mach_vm_address_t)fFunc[type], fRefcon[type], fTask);
+ 	sendAsyncResult64WithOptions(ref, kIOReturnSuccess, (io_user_reference_t *)values, count,

@@ -1,0 +1,217 @@
+diff --git a/iokit/Kernel/arm/HeroGPU.cpp b/iokit/Kernel/arm/HeroGPU.cpp
+index 7c15d2c..b07c77c 100644
+--- a/iokit/Kernel/arm/HeroGPU.cpp
++++ b/iokit/Kernel/arm/HeroGPU.cpp
+@@ -13,6 +13,9 @@
+  *   3 MapBO       [handle]          -> [user address]  (write-combined)
+  *   4 Submit      [jc_va, js]       -> [status, us]    js 0 fragment, 1 the rest
+  *   5 Log         struct: text      (to the kernel log; test programs)
++ *   6 SurfaceBO   [IOSurface id]    -> [handle, gpu_va, size, bytes per row, width,
++ *                                       height, pixel format, offset, planes]
++ *   7 SyncBO      [handle]          clean+invalidate an imported surface's CPU caches
+  *
+  * Buffers are wired kernel buffers mapped noncached on the GPU side; the
+  * Mali is not IO-coherent, so the CPU sees them write-combined only (their
+@@ -34,6 +37,7 @@
+ #include <kern/thread.h>
+ #include <pexpert/pexpert.h>
+ #include <sys/proc.h>
++#include "SweetSurface.h"
+ 
+ extern "C" {
+ bool herolte_gpu_up(void);
+@@ -51,6 +55,8 @@ enum {
+ 	kHeroGPUMapBO    = 3,
+ 	kHeroGPUSubmit   = 4,
+ 	kHeroGPULog      = 5,
++	kHeroGPUSurfaceBO = 6,
++	kHeroGPUSyncBO   = 7,
+ };
+ 
+ #define HEROGPU_MAX_BOS         4096
+@@ -111,12 +117,84 @@ herogpu_param(uint64_t param)
+ }
+ 
+ struct herogpu_bo {
+-	IOBufferMemoryDescriptor *mem;
++	IOBufferMemoryDescriptor *mem;          /* own buffer, or NULL for an imported surface */
++	SweetSurface             *surface;      /* imported IOSurface (retained), or NULL */
+ 	IOMemoryMap              *umap;
+ 	uint64_t                  va;
+ 	uint32_t                  pages;
+ };
+ 
++static bool
++herogpu_bo_used(const struct herogpu_bo *bo)
++{
++	return bo->mem != NULL || bo->surface != NULL;
++}
++
++static IOMemoryDescriptor *
++herogpu_bo_memory(const struct herogpu_bo *bo)
++{
++	return bo->mem != NULL ? (IOMemoryDescriptor *)bo->mem :
++	       bo->surface != NULL ? bo->surface->memory : NULL;
++}
++
++/* Clean and invalidate the CPU caches over a surface's pixels (the Mali is not IO-coherent). */
++static void
++herogpu_surface_sync(SweetSurface *s)
++{
++	uintptr_t k = s->kernelAddress();
++	if (k == 0) {
++		return;
++	}
++	for (uintptr_t p = k & ~(uintptr_t)63; p < k + s->allocSize; p += 64) {
++		__asm__ volatile ("dc civac, %0" : : "r" (p) : "memory");
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++}
++
++/*
++ * Map IOSurface `id`'s pixels into the GPU (the EAGL shim's GPU blit into
++ * backboardd's display surfaces). Kernel-allocated and physical surfaces
++ * only: wrapped client memory is not a SweetSurface buffer the GPU may
++ * write. The surface stays retained until the BO is freed.
++ */
++static bool
++herogpu_bo_import_surface(struct herogpu_bo *bo, uint32_t id)
++{
++	SweetSurface *s = sweet_surface_copy(id);
++	if (s == NULL || s->memory == NULL || s->allocSize == 0) {
++		OSSafeReleaseNULL(s);
++		return false;
++	}
++	uint64_t size = ((uint64_t)s->allocSize + 0xfff) & ~0xfffull;
++	if (size > s->memory->getLength() || size > HEROGPU_MAX_BO_BYTES) {
++		s->release();
++		return false;
++	}
++	bo->pages = (uint32_t)(size / 0x1000);
++	uint64_t *pa = (uint64_t *)IOMallocData(bo->pages * sizeof(uint64_t));
++	bool ok = pa != NULL;
++	for (uint32_t i = 0; ok && i < bo->pages; i++) {
++		IOByteCount len = 0;
++		pa[i] = s->memory->getPhysicalSegment((IOByteCount)i * 0x1000, &len, kIOMemoryMapperNone);
++		ok = pa[i] != 0 && (pa[i] & 0xfff) == 0;
++	}
++	bo->va = ok ? herolte_gpu_va_alloc(size) : 0;
++	ok = bo->va != 0 && herolte_gpu_map(bo->va, pa, bo->pages);
++	if (pa != NULL) {
++		IOFreeData(pa, bo->pages * sizeof(uint64_t));
++	}
++	if (!ok) {
++		s->release();
++		bo->va = 0;
++		bo->pages = 0;
++		return false;
++	}
++	/* Dirty CPU lines written back later would land over the GPU's pixels. */
++	herogpu_surface_sync(s);
++	bo->surface = s;
++	return true;
++}
++
+ /* Allocate, zero, clean and GPU-map a buffer. */
+ static bool
+ herogpu_bo_create(struct herogpu_bo *bo, uint64_t size)
+@@ -159,12 +237,13 @@ herogpu_bo_create(struct herogpu_bo *bo, uint64_t size)
+ static void
+ herogpu_bo_free(struct herogpu_bo *bo)
+ {
+-	if (bo->mem == NULL) {
++	if (!herogpu_bo_used(bo)) {
+ 		return;
+ 	}
+ 	herolte_gpu_unmap(bo->va, bo->pages);
+ 	OSSafeReleaseNULL(bo->umap);
+ 	OSSafeReleaseNULL(bo->mem);
++	OSSafeReleaseNULL(bo->surface);
+ 	bzero(bo, sizeof(*bo));
+ }
+ 
+@@ -256,7 +335,7 @@ HeroGPUUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *
+     __unused IOExternalMethodDispatch *dispatch, __unused OSObject *target,
+     __unused void *reference)
+ {
+-	uint64_t out[3] = { 0, 0, 0 };
++	uint64_t out[9] = { 0 };
+ 	uint32_t outCount = 0;
+ 	IOReturn ret = kIOReturnSuccess;
+ 	uint64_t in0 = args->scalarInputCount > 0 ? args->scalarInput[0] : 0;
+@@ -270,7 +349,7 @@ HeroGPUUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *
+ 		break;
+ 	case kHeroGPUCreateBO: {
+ 		unsigned i = 0;
+-		while (i < HEROGPU_MAX_BOS && fBOs[i].mem != NULL) {
++		while (i < HEROGPU_MAX_BOS && herogpu_bo_used(&fBOs[i])) {
+ 			i++;
+ 		}
+ 		if (i == HEROGPU_MAX_BOS) {
+@@ -286,7 +365,7 @@ HeroGPUUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *
+ 		break;
+ 	}
+ 	case kHeroGPUFreeBO:
+-		if (in0 == 0 || in0 > HEROGPU_MAX_BOS || fBOs[in0 - 1].mem == NULL) {
++		if (in0 == 0 || in0 > HEROGPU_MAX_BOS || !herogpu_bo_used(&fBOs[in0 - 1])) {
+ 			ret = kIOReturnBadArgument;
+ 		} else {
+ 			herogpu_bo_free(&fBOs[in0 - 1]);
+@@ -294,13 +373,14 @@ HeroGPUUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *
+ 		break;
+ 	case kHeroGPUMapBO: {
+ 		struct herogpu_bo *bo = in0 && in0 <= HEROGPU_MAX_BOS ? &fBOs[in0 - 1] : NULL;
+-		if (bo == NULL || bo->mem == NULL) {
++		if (bo == NULL || !herogpu_bo_used(bo)) {
+ 			ret = kIOReturnBadArgument;
+ 			break;
+ 		}
+ 		if (bo->umap == NULL) {
+-			bo->umap = bo->mem->createMappingInTask(fTask, 0,
+-			    kIOMapAnywhere | kIOMapWriteCombineCache);
++			/* A surface keeps the cache mode its other mappings use. */
++			bo->umap = herogpu_bo_memory(bo)->createMappingInTask(fTask, 0,
++			    kIOMapAnywhere | (bo->surface ? bo->surface->mapCache : kIOMapWriteCombineCache));
+ 		}
+ 		if (bo->umap == NULL) {
+ 			ret = kIOReturnNoMemory;
+@@ -314,6 +394,39 @@ HeroGPUUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *
+ 		out[0] = herolte_gpu_submit(in1 ? 1 : 0, in0, &out[1]);
+ 		outCount = 2;
+ 		break;
++	case kHeroGPUSurfaceBO: {
++		unsigned i = 0;
++		while (i < HEROGPU_MAX_BOS && herogpu_bo_used(&fBOs[i])) {
++			i++;
++		}
++		if (i == HEROGPU_MAX_BOS) {
++			ret = kIOReturnNoResources;
++		} else if (!herogpu_bo_import_surface(&fBOs[i], (uint32_t)in0)) {
++			ret = kIOReturnNotFound;
++		} else {
++			SweetSurface *s = fBOs[i].surface;
++			out[0] = i + 1;
++			out[1] = fBOs[i].va;
++			out[2] = (uint64_t)fBOs[i].pages * 0x1000;
++			out[3] = s->bytesPerRow;
++			out[4] = s->width;
++			out[5] = s->height;
++			out[6] = s->pixelFormat;
++			out[7] = s->offset;
++			out[8] = s->planeCount;
++			outCount = 9;
++		}
++		break;
++	}
++	case kHeroGPUSyncBO: {
++		struct herogpu_bo *bo = in0 && in0 <= HEROGPU_MAX_BOS ? &fBOs[in0 - 1] : NULL;
++		if (bo == NULL || !herogpu_bo_used(bo)) {
++			ret = kIOReturnBadArgument;
++		} else if (bo->surface != NULL) {
++			herogpu_surface_sync(bo->surface);
++		}
++		break;
++	}
+ 	case kHeroGPULog:
+ 		/* Test programs have no console here: their lines go to the
+ 		 * kernel log (and the USERDATA log ring). */

@@ -1,0 +1,19 @@
+diff --git a/osfmk/arm/pmap/pmap.c b/osfmk/arm/pmap/pmap.c
+index 455b307..6f07ecf 100644
+--- a/osfmk/arm/pmap/pmap.c
++++ b/osfmk/arm/pmap/pmap.c
+@@ -11518,6 +11518,14 @@ pmap_create_commpages(vm_map_address_t *kernel_data_addr, vm_map_address_t *kern
+ 
+ 	do {
+ 		int text_leaf_index = random() % num_ptes;
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		/*
++		 * 16K VM pages over 4K hardware pages: the slide is in hardware pages,
++		 * but a VM page must start on a 16K boundary. Three boots in four the
++		 * commpage text landed off one and pmap_enter_pte() panicked.
++		 */
++		text_leaf_index &= ~(PAGE_RATIO - 1);
++#endif
+ 
+ 		// Generate a VA for the commpage text within the same nesting block as
+ 		// the data comm page, with a new leaf index we've just generated.

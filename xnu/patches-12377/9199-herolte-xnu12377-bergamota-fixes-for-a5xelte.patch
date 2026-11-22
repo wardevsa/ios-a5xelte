@@ -1,0 +1,122 @@
+diff --git a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
+index eb48b13..5c1dba2 100644
+--- a/bsd/kern/kern_exit.c
++++ b/bsd/kern/kern_exit.c
+@@ -2079,7 +2079,7 @@ proc_prepareexit(proc_t p, int rv, boolean_t perf_notify)
+ 	task_t task = proc_task(p);
+ 
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 	/*
+ 	 * sweet: 12377 panics for a dying initproc here, before the SWEET crash report further down (0043) ever runs:
+ 	 * print launchd's registers/backtrace/slide first (iOS 26 launchd SIGSEGV with no report).
+diff --git a/bsd/vfs/vfs_lookup.c b/bsd/vfs/vfs_lookup.c
+index 227678c..424bf36 100644
+--- a/bsd/vfs/vfs_lookup.c
++++ b/bsd/vfs/vfs_lookup.c
+@@ -399,7 +399,7 @@ retry_copy:
+ 	assert(bytes_copied <= cnp->cn_pnlen);
+ 	ndp->ni_pathlen = (u_int)bytes_copied;
+ 	bytes_copied = 0;
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 	{
+ 		/*
+ 		 * boot-arg sweetdenypath=SUFFIX: any lookup of a path ending in SUFFIX fails with ENOENT. Recovery tool: a
+diff --git a/iokit/Kernel/arm/hid/IOHIDEvent.cpp b/iokit/Kernel/arm/hid/IOHIDEvent.cpp
+index 01e38bd..7b73b19 100644
+--- a/iokit/Kernel/arm/hid/IOHIDEvent.cpp
++++ b/iokit/Kernel/arm/hid/IOHIDEvent.cpp
+@@ -1534,7 +1534,7 @@ void IOHIDEvent::setDoubleValue( IOHIDEventField         key,
+     SET_EVENT_VALUE(this, key, value, options, Double);
+ }
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+ /*
+  * iOS 26 has two digitizer layouts. Events a kernel service queues (IOHIDEventServiceQueue -> getLength/readBytes ->
+  * appendBytes) are read in the native 160-byte layout: position, pressure, twist and orientation as doubles,
+@@ -1653,7 +1653,7 @@ IOByteCount IOHIDEvent::getLength(UInt32 * count)
+ 
+         for(i=0 ;i<childCount; i++) {
+             if ( (child = (IOHIDEvent *)_children->getObject(i)) ) {
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+                 /* iOS 26 queue format: every event, child included, carries its own queue element (readBytes) */
+                 length += child->getLength(count);
+ #else
+@@ -1834,7 +1834,7 @@ IOByteCount IOHIDEvent::readBytes(void * bytes, IOByteCount withLength)
+     //bytes += sizeof(IOHIDSystemQueueElement);
+     withLength -= sizeof(IOHIDSystemQueueElement);
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+     /*
+      * iOS 26 (IOHIDFamily 2238) reads a queued event as a run of IOHIDSystemQueueElement + event data pairs: the
+      * parent first, then one element per child (depth = parent + 1), with the parent's eventCount the total. Our
+diff --git a/osfmk/arm/pmap/pmap.c b/osfmk/arm/pmap/pmap.c
+index 6f07ecf..35ca7f5 100644
+--- a/osfmk/arm/pmap/pmap.c
++++ b/osfmk/arm/pmap/pmap.c
+@@ -6041,7 +6041,7 @@ wimg_to_pte(unsigned int wimg, pmap_paddr_t pa)
+ 		pte |= ARM_PTE_NX | ARM_PTE_PNX;
+ 		break;
+ 	case VM_WIMG_WCOMB:
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 		/*
+ 		 * sweet: Normal non-cacheable wherever it is, as in xnu-11215. gDramBase/gDramSize are only the kernel's RAM, and
+ 		 * the display low pool (framebuffer flip and scan-out buffers) is DRAM below it: as Device-GRE, bzero's DC ZVA
+diff --git a/osfmk/arm64/sweet_platform_stubs.c b/osfmk/arm64/sweet_platform_stubs.c
+index 09814e0..0913b1f 100644
+--- a/osfmk/arm64/sweet_platform_stubs.c
++++ b/osfmk/arm64/sweet_platform_stubs.c
+@@ -4,7 +4,7 @@
+  */
+ #include <arm/machine_routines.h>
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+ /*
+  * kern_mib.c: hw.features/engineering-sample sysctls. A Poco F1 has no Apple fuses; answer like the
+  * ADT does (/chosen certificate-production-status 0): not production fused.
+diff --git a/osfmk/kern/exclaves.c b/osfmk/kern/exclaves.c
+index 40284b8..ea5dfe9 100644
+--- a/osfmk/kern/exclaves.c
++++ b/osfmk/kern/exclaves.c
+@@ -3329,7 +3329,7 @@ STARTUP(TUNABLES, STARTUP_RANK_MIDDLE, exclaves_requirement_startup);
+ #endif /* CONFIG_EXCLAVES */
+ 
+ /* SWEET: the KDK ships the Tightbeam headers, but libTightbeam is only linked for exclaves configs. */
+-#if __has_include(<Tightbeam/tightbeam.h>) && !defined(ARM64_BOARD_CONFIG_SWEET)
++#if __has_include(<Tightbeam/tightbeam.h>) && !defined(ARM64_BOARD_CONFIG_SWEET) && !defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 
+ #include <Tightbeam/tightbeam.h>
+ 
+diff --git a/osfmk/vm/vm_map.c b/osfmk/vm/vm_map.c
+index f540f13..54ce11d 100644
+--- a/osfmk/vm/vm_map.c
++++ b/osfmk/vm/vm_map.c
+@@ -5932,7 +5932,7 @@ vm_map_protect(
+ 	}
+ 
+ 	vm_map_lock_ctx_set_preflight(ctx, ^kern_return_t (vm_map_lock_ctx_t vctx, vm_map_entry_t vme) {
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 		vm_prot_t sweet_req = new_prot;
+ 		kern_return_t sweet_kr = vm_map_protect_preflight(vctx, vme, set_max, &new_prot /*in/out*/);
+ 		if (sweet_kr != KERN_SUCCESS) {
+diff --git a/osfmk/vm/vm_map_internal.h b/osfmk/vm/vm_map_internal.h
+index 48cc850..d3ae7c0 100644
+--- a/osfmk/vm/vm_map_internal.h
++++ b/osfmk/vm/vm_map_internal.h
+@@ -991,7 +991,7 @@ static inline bool
+ VM_MAP_POLICY_WRITABLE_SHARED_REGION(
+ 	vm_map_t map __unused)
+ {
+-#if __x86_64__ || defined(ARM64_BOARD_CONFIG_SWEET)
++#if __x86_64__ || defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_A5XELTE)
+ 	/*
+ 	 * sweet: no TPRO in the CPU, so iOS 26's dyld makes the shared cache's __TPRO_CONST writable with vm_protect(RW)
+ 	 * (launchd, first iOS 26 boots: refused against the task's r--/r-- shared region submap entry, then SIGSEGV).

@@ -1,0 +1,192 @@
+diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
+index ce16f45..a86bc5b 100644
+--- a/osfmk/arm64/arm_vm_init.c
++++ b/osfmk/arm64/arm_vm_init.c
+@@ -1846,6 +1846,55 @@ sweet_early_map_final(void)
+ }
+ #endif
+ 
++#if defined(A5XELTE)
++/*
++ * 9165: the A5XELTE/HEROLTE early console (sweet_early.c) draws into DECON's scanout at A5XELTE_FB_PA through the
++ * bootstrap TTBR0. Give it the same kind of Normal-NC alias SWEET's sweet_early_map_final installs, in the unused
++ * L2 blocks above low globals and below gVirtBase, so marks and panics stay visible until serial_init. Returns the
++ * alias of A5XELTE_FB_PA, or 0 (and maps nothing) when the blocks are not free.
++ */
++static vm_map_address_t
++a5xelte_early_map_final(void)
++{
++	const uint64_t pa = A5XELTE_FB_PA & ~(uint64_t)ARM_TT_L2_OFFMASK;
++	const uint64_t end = A5XELTE_FB_PA + (uint64_t)A5XELTE_FB_STRIDE * A5XELTE_FB_HEIGHT;
++	const unsigned int blocks = (unsigned int)((end - pa + ARM_TT_L2_SIZE - 1) / ARM_TT_L2_SIZE);
++	/*
++	 * Right after the low globals' block, whose L1 entry arm_vm_init has just made a table. Not
++	 * VM_MIN_KERNEL_ADDRESS + one block as on SWEET: with 4 KiB pages that is another L1 entry, with no table
++	 * (BOOT 18k3: "no room for a TTBR1 framebuffer alias").
++	 */
++	const vm_map_address_t va = LOW_GLOBAL_BASE_ADDRESS + ARM_TT_L2_SIZE;
++
++	if (va + (vm_map_address_t)blocks * ARM_TT_L2_SIZE > gVirtBase) {
++		return 0;
++	}
++	for (unsigned int i = 0; i < blocks; i++) {
++		vm_map_address_t v = va + (vm_map_address_t)i * ARM_TT_L2_SIZE;
++		tt_entry_t l1 = cpu_tte[(v & ARM_TT_L1_INDEX_MASK) >> ARM_TT_L1_SHIFT];
++		if ((l1 & (ARM_TTE_VALID | ARM_TTE_TYPE_MASK)) != (ARM_TTE_VALID | ARM_TTE_TYPE_TABLE)) {
++			return 0;
++		}
++		tt_entry_t *l2 = (tt_entry_t *)phystokv(l1 & ARM_TTE_TABLE_MASK);
++		if (l2[(v & ARM_TT_L2_INDEX_MASK) >> ARM_TT_L2_SHIFT] != ARM_TTE_EMPTY) {
++			return 0;
++		}
++	}
++	for (unsigned int i = 0; i < blocks; i++) {
++		vm_map_address_t v = va + (vm_map_address_t)i * ARM_TT_L2_SIZE;
++		tt_entry_t l1 = cpu_tte[(v & ARM_TT_L1_INDEX_MASK) >> ARM_TT_L1_SHIFT];
++		tt_entry_t *l2 = (tt_entry_t *)phystokv(l1 & ARM_TTE_TABLE_MASK);
++		l2[(v & ARM_TT_L2_INDEX_MASK) >> ARM_TT_L2_SHIFT] = (pa + (uint64_t)i * ARM_TT_L2_SIZE) |
++		    ARM_TTE_VALID | ARM_TTE_TYPE_BLOCK |
++		    ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY) |
++		    ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_WRITECOMB) |
++		    ARM_TTE_BLOCK_AF | ARM_TTE_BLOCK_PNX | ARM_TTE_BLOCK_NX;
++	}
++	__asm__ volatile("dsb ishst" ::: "memory");
++	return va + (A5XELTE_FB_PA - pa);
++}
++#endif
++
+ void
+ arm_vm_init(uint64_t memory_size, boot_args * args)
+ {
+@@ -1950,6 +1999,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	if (dynamic_memory_begin > VM_MAX_KERNEL_ADDRESS) {
+ 		panic("Unsupported memory configuration %lx", mem_size);
+ 	}
++	sweet_early_mark(21, "physmap bounds set");
+ 
+ 	boot_tte = (tt_entry_t *)&bootstrap_pagetables;
+ 	boot_ttep = kvtophys((vm_offset_t)boot_tte);
+@@ -1983,6 +2033,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	arm_replace_identity_map();
+ #endif
+ 
++	sweet_early_mark(22, "allocating page table pages");
+ 	/* Initialize invalid tte page */
+ 	invalid_tte = (tt_entry_t *)alloc_ptpage(TRUE);
+ 	invalid_ttep = kvtophys((vm_offset_t)invalid_tte);
+@@ -2010,7 +2061,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	 *
+ 	 *   the so called physical aperture should be statically mapped
+ 	 */
++	sweet_early_mark(23, "building kernel aperture tables");
+ 	init_ptpages(cpu_tte, gVirtBase, dynamic_memory_begin, TRUE, ARM_TTE_TABLE_AP(ARM_TTE_TABLE_AP_USER_NA));
++	sweet_early_mark(24, "kernel aperture tables built");
+ 
+ #if defined(ARM_LARGE_MEMORY)
+ 	/*
+@@ -2160,7 +2213,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	vm_prelink_sdata = segPRELINKDATAB;
+ 	vm_prelink_edata = segPRELINKDATAB + segSizePRELINKDATA;
+ 
++	sweet_early_mark(25, "calling arm_vm_prot_init");
+ 	arm_vm_prot_init(args);
++	sweet_early_mark(26, "arm_vm_prot_init done");
+ 
+ 	/*
+ 	 * Initialize the page tables for the low globals:
+@@ -2200,11 +2255,17 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	kasan_init();
+ #endif /* KASAN */
+ 
++	sweet_early_mark(27, "dynamic tables built");
+ #if defined(SWEET) && !defined(A5XELTE)
+ 	/* phystokv() must still refer to the bootstrap aperture here. */
+ 	sweet_early_map_final();
++#endif
++#if defined(A5XELTE)
++	const vm_map_address_t a5_fb_va = a5xelte_early_map_final();
++	sweet_early_mark(28, a5_fb_va ? "TTBR1 framebuffer alias mapped" : "no room for a TTBR1 framebuffer alias");
+ #endif
+ 	arm_vm_physmap_init(args);
++	sweet_early_mark(29, "arm_vm_physmap_init done; switching TTBR1");
+ 	set_mmu_ttb_alternate(cpu_ttep & TTBR_BADDR_MASK);
+ 
+ 	ml_enable_monitor();
+@@ -2212,6 +2273,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ #if defined(SWEET) && !defined(A5XELTE)
+ 	/* The final TTBR1 is live; leave the outgoing VA=PA framebuffer alias. */
+ 	sweet_early_relocate(SWEET_EARLY_FB_VA);
++#endif
++#if defined(A5XELTE)
++	sweet_early_relocate(a5_fb_va);
+ #endif
+ 	set_mmu_ttb(invalid_ttep & TTBR_BADDR_MASK);
+ 
+diff --git a/osfmk/arm64/sweet_early.c b/osfmk/arm64/sweet_early.c
+index aecf005..5a31bf9 100644
+--- a/osfmk/arm64/sweet_early.c
++++ b/osfmk/arm64/sweet_early.c
+@@ -11,8 +11,13 @@
+ #include <stdint.h>
+ #include <kern/misc_protos.h>
+ 
+-/* The bootstrap TTBR0 maps DECON scanout VA=PA until arm_vm_init. */
+-#define A5_FB ((volatile uint32_t *)(uintptr_t)A5XELTE_FB_PA)
++/*
++ * The bootstrap TTBR0 maps DECON scanout VA=PA until arm_vm_init. 9165: arm_vm_init also maps it in the final
++ * TTBR1 (a5xelte_early_map_final) and sweet_early_relocate moves the console there before TTBR0 goes, so the
++ * marks inside arm_vm_init and any panic before serial_init stay on screen.
++ */
++static volatile uint32_t *a5_fb = (volatile uint32_t *)(uintptr_t)A5XELTE_FB_PA;
++#define A5_FB a5_fb
+ #define A5_STRIDE (A5XELTE_FB_STRIDE / 4u)
+ #define A5_SCALE ((unsigned int)A5XELTE_FB_TEXT_SCALE)
+ #define A5_ROW_HEIGHT (16u * A5_SCALE)
+@@ -78,19 +83,18 @@ a5_string(const char *s)
+ void
+ sweet_early_mark(unsigned int stage, const char *label)
+ {
+-	if (!a5_active || stage > 7) {
++	if (!a5_active || stage > 99) {
+ 		return;
+ 	}
+ 	a5_string("A5 XNU STAGE ");
+-	sweet_early_putc((char)('0' + stage));
++	if (stage >= 10) {
++		sweet_early_putc((char)('0' + stage / 10));
++	}
++	sweet_early_putc((char)('0' + stage % 10));
+ 	a5_string(": ");
+ 	a5_string(label);
+ 	sweet_early_putc('\n');
+ 	__asm__ volatile("dsb sy" ::: "memory");
+-	/* arm_vm_init replaces TTBR0; low physical aliases then cease to exist. */
+-	if (stage == 7) {
+-		a5_active = 0;
+-	}
+ }
+ 
+ void
+@@ -109,7 +113,21 @@ sweet_early_panic(const char *fmt, va_list *args)
+ 	__asm__ volatile("dsb sy" ::: "memory");
+ }
+ 
+-void sweet_early_relocate(uint64_t base) { (void)base; }
++/* base: the TTBR1 VA of A5XELTE_FB_PA (0: no alias; the console then stops with TTBR0). */
++void
++sweet_early_relocate(uint64_t base)
++{
++	sweet_early_mark(8, "leaving bootstrap TTBR0");
++	if (base == 0) {
++		a5_string("A5 XNU: no TTBR1 framebuffer alias; early console ends here\n");
++		__asm__ volatile("dsb sy" ::: "memory");
++		a5_active = 0;
++		return;
++	}
++	a5_fb = (volatile uint32_t *)(uintptr_t)base;
++	__asm__ volatile("dsb sy" ::: "memory");
++	sweet_early_mark(9, "kernel framebuffer VA live");
++}
+ void sweet_early_disable(void) { a5_active = 0; }
+ /* xnu-11215 (Bergamota 0082/0195): arm_init.c calls these for every SWEET board; the A5XELTE/HEROLTE
+  * console draws straight into the S-Boot framebuffer and keeps no log ring. */

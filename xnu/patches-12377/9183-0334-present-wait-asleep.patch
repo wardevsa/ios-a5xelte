@@ -1,0 +1,43 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index b256f8f..961f7e3 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -88,7 +88,8 @@ hg_msleep(unsigned ms)
+  * herogpu_sleep_us=0 spins as before.
+  */
+ static uint32_t hg_sleep_us = 50;
+-static bool hg_run_nap;         /* set by herolte_gpu_submit() alone: a client's IOKit call, holding only hg_mtx */
++static bool hg_run_nap;         /* set by herolte_gpu_submit() and (0334) the present path: holding only hg_mtx */
++static uint32_t hg_sleep_present = 1;   /* (0334) herogpu_sleep_present=0: the frame's scaling job spins as before */
+ 
+ static void
+ hg_usleep(unsigned us)
+@@ -1856,6 +1857,12 @@ hgp_draw_locked(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h)
+ 	__asm__ volatile ("dsb sy" ::: "memory");
+ 
+ 	hg_run_quiet = true;
++	/*
++	 * (0334) The frame's scaling job is waited for asleep too: it lasts 3-5 ms a frame (avg_copy_us) and the
++	 * spinning kept a core busy for it. Its caller is AppleCLCD::present() on the framebuffer's work loop,
++	 * holding only hg_mtx (a mutex), where blocking is allowed. herogpu_sleep_present=0 spins as before.
++	 */
++	hg_run_nap = hg_sleep_present != 0;
+ 	hg_affinity = hg_rd(hg_gpu, SHADER_PRESENT_LO);
+ 	hg_job_va = HG_SCR_VA + S_TILER_JOB;
+ 	hg_job_cpu = scr + S_TILER_JOB;
+@@ -1868,6 +1875,7 @@ hgp_draw_locked(int s, uint32_t off, uint32_t stride, uint32_t w, uint32_t h)
+ 	hg_job_va = HG_TEST_VA;
+ 	hg_job_cpu = 0;
+ 	hg_affinity = 1;
++	hg_run_nap = false;
+ 	hg_run_quiet = false;
+ 	if (ok && hfb_state == 1 && hg_rd(hfb_idma, 0xb74) != (uint32_t)target_pa) {
+ 		hg_wr(hfb_idma, 0x74, (uint32_t)target_pa);
+@@ -3419,6 +3427,7 @@ herolte_gpu_probe(void)
+ 
+ 	PE_parse_boot_argn("herogpu_flush", &hg_flush_mode, sizeof(hg_flush_mode));
+ 	PE_parse_boot_argn("herogpu_sleep_us", &hg_sleep_us, sizeof(hg_sleep_us));
++	PE_parse_boot_argn("herogpu_sleep_present", &hg_sleep_present, sizeof(hg_sleep_present));
+ 	int wifi = 1;                                          /* herowifi=0: no Wi-Fi */
+ 	PE_parse_boot_argn("herowifi", &wifi, sizeof(wifi));
+ 	if (wifi &&

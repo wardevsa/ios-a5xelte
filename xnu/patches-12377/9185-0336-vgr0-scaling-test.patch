@@ -1,0 +1,134 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 099526b..29d195a 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -3095,6 +3095,115 @@ hg_decon_measure(vm_offset_t decon, const char *when)
+ 	printf("HEROLTE DECON: %s: %u frames in 200 ms, period %llu us, reading %llu us, top line %u, span %llu us\n", when, frames,
+ 	    period / 26, active / 26, top, (rise - first) / 26);
+ }
++/*
++ * (0336) Scaling in hardware, a test: VGR0 (DISP1, the only channels of the 8890 that scale) shows a 750x1334 test
++ * picture at 0x92000000 (between the panel's second buffer and TIMA's log at 0x92e02000; in no RAM bank) scaled to the
++ * panel's 1440x2560, as window 0's channel for 8 s; then window 0 goes back to G1. Registers and order as Samsung's
++ * vpp_reg_8890.c (vpp_reg_init, set_in_format, set_in_size, set_scale_ratio, set_in_buf_addr), coefficients from
++ * vpp_coef.h (8:8 and up: the first set; 9 phases are written, as Samsung does). SysMMU 0x13E30000 is found disabled
++ * and blocked (CTRL_BLOCK_DISABLE 0x3): CTRL_DISABLE (0) lets the channel read physical addresses.
++ */
++static const int16_t hg_vgr_h_coef[9][8] = {
++	{  0,  0,   0, 128,   0,   0,  0,  0 }, { -1,  2,  -6, 127,   7,  -2,  1,  0 }, { -1,  4, -12, 125,  16,  -5,  1,  0 },
++	{ -1,  5, -15, 120,  25,  -8,  2,  0 }, { -1,  6, -18, 114,  35, -10,  3, -1 }, { -1,  6, -20, 107,  46, -13,  4, -1 },
++	{ -2,  7, -21,  99,  57, -16,  5, -1 }, { -1,  6, -20,  89,  68, -18,  5, -1 }, { -1,  6, -20,  79,  79, -20,  6, -1 },
++};
++static const int16_t hg_vgr_v_coef[9][4] = {
++	{  0, 128,   0,  0 }, { -4, 127,   5,  0 }, { -6, 124,  11, -1 }, { -8, 118,  19, -1 }, { -8, 111,  27, -2 },
++	{ -8, 102,  37, -3 }, { -8,  92,  48, -4 }, { -7,  81,  59, -5 }, { -6,  70,  70, -6 },
++};
++#define HG_VGR_TEST_PA  0x92000000u
++#define HG_VGR_SRC_W    750u
++#define HG_VGR_SRC_H    1334u
++
++static void
++hg_vgr0_program(vm_offset_t vg, uint32_t pa, uint32_t sw, uint32_t sh, uint32_t stride_px, uint32_t dw, uint32_t dh)
++{
++	hg_wr(vg, 0x00, hg_rd(vg, 0x00) | (1u << 24));                 /* VG_ENABLE_SRESET */
++	for (unsigned i = 0; i < 100000 && (hg_rd(vg, 0x00) & (1u << 24)); i++) {
++		delay(10);
++	}
++	hg_wr(vg, 0x00, hg_rd(vg, 0x00) | (1u << 16));                 /* VG_ENABLE_RT_PATH_EN */
++	hg_wr(vg, 0x04, 1u);                                            /* VG_IRQ: enabled, the masks clear */
++	hg_wr(vg, 0x60, 0x44444444u);                                   /* QOS LUT */
++	hg_wr(vg, 0x64, 0x44444444u);
++	hg_wr(vg, 0xa54, 0x3fu);                                        /* dynamic clock gating */
++	hg_wr(vg, 0x0c, 0xffu << 24);                                   /* OUT_CON: frame alpha 0xff */
++	hg_wr(vg, 0x08, 0xff800000u);                                   /* IN_CON as G1 has it: ARGB8888 */
++	hg_wr(vg, 0x14, 0);                                             /* SRC_OFFSET */
++	hg_wr(vg, 0x10, stride_px | (sh << 16));                        /* SRC_SIZE */
++	hg_wr(vg, 0x18, sw | (sh << 16));                               /* IMG_SIZE */
++	hg_wr(vg, 0x2c, dw | (dh << 16));                               /* SCALED_SIZE */
++	hg_wr(vg, 0x44, (uint32_t)(((uint64_t)sw << 20) / dw));         /* H_RATIO */
++	hg_wr(vg, 0x48, (uint32_t)(((uint64_t)sh << 20) / dh));         /* V_RATIO */
++	for (unsigned i = 0; i < 9; i++) {
++		for (unsigned j = 0; j < 8; j++) {
++			for (unsigned k = 0; k < 2; k++) {
++				hg_wr(vg, 0x290 + i * 4 + j * 0x24 + k * 0x200, (uint32_t)(int32_t)hg_vgr_h_coef[i][j]);
++			}
++		}
++		for (unsigned j = 0; j < 4; j++) {
++			for (unsigned k = 0; k < 2; k++) {
++				hg_wr(vg, 0x200 + i * 4 + j * 0x24 + k * 0x200, (uint32_t)(int32_t)hg_vgr_v_coef[i][j]);
++			}
++		}
++	}
++	hg_wr(vg, 0x5b0, 0);                                            /* fraction positions */
++	hg_wr(vg, 0x5b4, 0);
++	hg_wr(vg, 0x5b8, 0);
++	hg_wr(vg, 0x5bc, 0);
++	hg_wr(vg, 0xa48, dw * dh);                                      /* SMART_IF_PIXEL_NUM */
++	hg_wr(vg, 0x74, pa);                                            /* BASE_ADDR_Y(0) */
++	hg_wr(vg, 0x94, pa);                                            /* BASE_ADDR_CB(0) */
++	hg_wr(vg, 0x1c, 1u);                                            /* PINGPONG_UPDATE */
++}
++
++static void
++hg_vgr0_test(vm_offset_t decon, vm_offset_t vg, vm_offset_t mmu)
++{
++	uint32_t bytes = HG_VGR_SRC_W * HG_VGR_SRC_H * 4;
++	vm_offset_t pic = ml_io_map(HG_VGR_TEST_PA, (bytes + 0xfffu) & ~0xfffu);
++	if (!pic) {
++		printf("HEROLTE VGR0: test picture not mapped\n");
++		return;
++	}
++	/* quarters red, green, blue, yellow; a white frame 8 pixels wide; a grey diagonal: what scaling does to it shows */
++	for (uint32_t y = 0; y < HG_VGR_SRC_H; y++) {
++		volatile uint32_t *row = (volatile uint32_t *)(pic + (vm_offset_t)y * HG_VGR_SRC_W * 4);
++		for (uint32_t x = 0; x < HG_VGR_SRC_W; x++) {
++			uint32_t c = y < HG_VGR_SRC_H / 2 ? (x < HG_VGR_SRC_W / 2 ? 0xffff0000u : 0xff00ff00u) :
++			    (x < HG_VGR_SRC_W / 2 ? 0xff0000ffu : 0xffffff00u);
++			if (x < 8 || y < 8 || x >= HG_VGR_SRC_W - 8 || y >= HG_VGR_SRC_H - 8) {
++				c = 0xffffffffu;
++			} else if (x * HG_VGR_SRC_H / HG_VGR_SRC_W == y || x * HG_VGR_SRC_H / HG_VGR_SRC_W == y + 1) {
++				c = 0xff808080u;
++			}
++			row[x] = c;
++		}
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++	uint32_t ctrl = hg_rd(mmu, 0x0);
++	hg_wr(mmu, 0x0, 0);                                             /* CTRL_DISABLE: bypass, not blocked */
++	printf("HEROLTE VGR0: sysmmu ctrl %#x -> %#x, status %#x\n", ctrl, hg_rd(mmu, 0x0), hg_rd(mmu, 0x8));
++	hg_vgr0_program(vg, HG_VGR_TEST_PA, HG_VGR_SRC_W, HG_VGR_SRC_H, HG_VGR_SRC_W, 1440, 2560);
++	printf("HEROLTE VGR0: programmed: enable %#x irq %#x in %#x src %#x img %#x scaled %#x ratio %#x %#x base %#x\n",
++	    hg_rd(vg, 0x00), hg_rd(vg, 0x04), hg_rd(vg, 0x08), hg_rd(vg, 0x10), hg_rd(vg, 0x18), hg_rd(vg, 0x2c),
++	    hg_rd(vg, 0x44), hg_rd(vg, 0x48), hg_rd(vg, 0x74));
++	uint32_t wc = hg_rd(decon, 0x130);
++	hg_wr(decon, 0x130, (wc & ~(7u << 12)) | (5u << 12));           /* window 0 from channel 5, VGR0 */
++	hg_wr(decon, 0x60, hg_rd(decon, 0x60) | 1u);                    /* SHADOW_REG_UPDATE_REQ_WIN(0) */
++	printf("HEROLTE VGR0: window 0 control %#x -> %#x: VGR0 on screen for 8 s (a test picture: four colours, white frame)\n",
++	    wc, hg_rd(decon, 0x130));
++	for (unsigned s = 0; s < 8; s++) {
++		hg_msleep(1000);
++		printf("HEROLTE VGR0: %u s: enable %#x irq %#x shadow base %#x update req %#x\n", s + 1, hg_rd(vg, 0x00),
++		    hg_rd(vg, 0x04), hg_rd(vg, 0xb74), hg_rd(decon, 0x60));
++	}
++	hg_wr(decon, 0x130, wc);                                        /* back to G1 */
++	hg_wr(decon, 0x60, hg_rd(decon, 0x60) | 1u);
++	printf("HEROLTE VGR0: window 0 back to %#x (G1)\n", hg_rd(decon, 0x130));
++}
++
+ static void
+ hg_bus_thread(__unused void *arg, __unused wait_result_t wr)
+ {
+@@ -3182,6 +3291,13 @@ hg_bus_thread(__unused void *arg, __unused wait_result_t wr)
+ 					printf("HEROLTE DISP1: sysmmu ctrl %#x cfg %#x status %#x version %#x\n", hg_rd(mmu1, 0x0),
+ 					    hg_rd(mmu1, 0x4), hg_rd(mmu1, 0x8), hg_rd(mmu1, 0x34));
+ 				}
++				/* (0336) boot-arg herovgr=0 leaves VGR0 alone */
++				uint32_t vgr_test = 1;
++				PE_parse_boot_argn("herovgr", &vgr_test, sizeof(vgr_test));
++				if (vgr_test && vgr0 && mmu1) {
++					hg_msleep(10000);
++					hg_vgr0_test(decon, vgr0, mmu1);
++				}
+ 			} else {
+ 				printf("HEROLTE DISP1: domain off: VGR0 not read\n");
+ 			}

@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       macos_version:
-        description: macOS release whose xnu to build (13.5 = xnu-8796, iOS 16 era)
-        default: "13.5"
+        description: macOS release whose xnu to build (13.5 = xnu-8796 / iOS 16; 15.3 = xnu-11215 / iOS 18; 26.5 = xnu-12377 / iOS 26)
+        default: ""
       kernel_config:
         description: RELEASE / DEVELOPMENT / DEBUG
         default: DEVELOPMENT
@@ -16,13 +16,14 @@ on:
         description: make -k (collect all compile errors in one run)
         default: "true"
       runner:
-        description: GitHub runner image (empty = macos-15-intel)
+        description: GitHub runner image (empty = macos-26 for 26.x, macos-15-intel otherwise)
         default: ""
   push:
-    branches: [main, herolte, codex/a5xelte-bringup, herolte-ios18]
+    branches: [main, herolte, codex/a5xelte-bringup, herolte-ios18, herolte-ios26]
     paths:
       - "xnu/patches/**"
       - "xnu/patches-11215/**"
+      - "xnu/patches-12377/**"
       - ".github/workflows/xnu.yml"
 
 concurrency:
@@ -32,8 +33,9 @@ concurrency:
 env:
   DXB_REPO: https://github.com/blacktop/darwin-xnu-build
   DXB_SHA: 663906528d1cd5ea8fde7de6f16de73db9511549
-  # herolte-ios18: xnu-11215 (macOS 15.3, iOS 18); everything else xnu-8796 (13.5, iOS 16)
-  MACOS_VERSION: ${{ inputs.macos_version || (github.ref_name == 'herolte-ios18' && '15.3' || '13.5') }}
+  # herolte-ios26: xnu-12377.121.6 (macOS 26.5, iOS 26); herolte-ios18: xnu-11215 (macOS 15.3, iOS 18);
+  # everything else xnu-8796 (13.5, iOS 16)
+  MACOS_VERSION: ${{ inputs.macos_version || (github.ref_name == 'herolte-ios26' && '26.5' || (github.ref_name == 'herolte-ios18' && '15.3' || '13.5')) }}
   KERNEL_CONFIG: ${{ inputs.kernel_config || 'DEVELOPMENT' }}
   MACHINE_CONFIG: ${{ inputs.machine_config || 'HEROLTE' }}
 
@@ -46,7 +48,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: ${{ fromJSON(inputs.runner && format('["{0}"]', inputs.runner) || '["macos-15-intel"]') }}
+        # 26.x (xnu-12377): macos-26 with Xcode 26.1, as Bergamota and dxb's own CI build 26.5
+        runner: ${{ fromJSON(inputs.runner && format('["{0}"]', inputs.runner) || (startsWith(inputs.macos_version || (github.ref_name == 'herolte-ios26' && '26.5' || ''), '26.') && '["macos-26"]' || '["macos-15-intel"]')) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     steps:
@@ -57,15 +60,17 @@ jobs:
           git init -q dxb
           git -C dxb fetch -q --depth 1 "$DXB_REPO" "$DXB_SHA"
           git -C dxb checkout -q FETCH_HEAD
-          if [[ "$MACOS_VERSION" == 15.* ]]; then
-            # xnu-11215 (iOS 18): Bergamota's series and the herolte port on top (9NNN-*,
-            # port11215/ in the v80emu work). dxb applies patches/15.0/*.sh, then
-            # patches/15.0/*.patch in name order: its own first, ours ("sweet-") after.
-            for f in xnu/patches-11215/*.patch xnu/patches-11215/*.sh; do
+          if [[ "$MACOS_VERSION" == 15.* || "$MACOS_VERSION" == 26.* ]]; then
+            # xnu-11215 (iOS 18) / xnu-12377 (iOS 26): Bergamota's series and the herolte port on top
+            # (9NNN-*; for 12377 carried over by 3-way merge, see xnu/patches-12377/README.md). dxb applies
+            # patches/<ver>/*.sh, then patches/<ver>/*.patch in name order: its own first, ours ("sweet-") after.
+            # 26.x: dxb downloads KDK 26.5 (25F71); its 00_setup_coreentitlements.sh needs the KDK's headers.
+            if [[ "$MACOS_VERSION" == 26.* ]]; then SRC=xnu/patches-12377 PDIR=dxb/patches/26.0
+            else SRC=xnu/patches-11215 PDIR=dxb/patches/15.0; fi
+            for f in "$SRC"/*.patch "$SRC"/*.sh; do
               [ -e "$f" ] || continue
-              cp "$f" "dxb/patches/15.0/sweet-$(basename "$f")"
+              cp "$f" "$PDIR/sweet-$(basename "$f")"
             done
-            PDIR=dxb/patches/15.0
             # dxb only warns when a patch does not apply; one of ours must not be skipped silently.
             python3 - <<'PY'
           p = 'dxb/build.sh'
@@ -108,7 +113,11 @@ jobs:
           sudo chmod +x /usr/local/bin/xcodes
           sw_vers
           ls -d /Applications/Xcode*.app
-          if [[ "$MACOS_VERSION" == 15.* ]]; then
+          if [[ "$MACOS_VERSION" == 26.* ]]; then
+            # xnu-12377: Xcode 26.1 (what Bergamota and dxb's own CI build 26.5 with)
+            XC=$(ls -d /Applications/Xcode_26.1*.app 2>/dev/null | sort -V | tail -1)
+            [ -n "$XC" ] || XC=$(ls -d /Applications/Xcode_26.*.app | sort -V | head -1)
+          elif [[ "$MACOS_VERSION" == 15.* ]]; then
             # xnu-11215: Xcode 16.2, as Bergamota builds it
             XC=$(ls -d /Applications/Xcode_16.2*.app 2>/dev/null | sort -V | tail -1)
             [ -n "$XC" ] || XC=$(ls -d /Applications/Xcode_16.*.app | sort -V | head -1)

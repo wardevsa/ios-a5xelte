@@ -1,0 +1,102 @@
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index c535638..b6cdf23 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -53,6 +53,7 @@ extern "C" uint64_t a5xelte_power_pressed_at;   /* bsd/dev/a5xelte_keys.c */
+ #include <pexpert/pexpert.h>
+ #include <pexpert/arm64/board_config.h>
+ #include <kern/clock.h>
++#include <arm/machine_routines.h>
+ #include <kern/thread.h>
+ #include <sys/proc.h>
+ 
+@@ -90,6 +91,9 @@ enum {
+ #define SWEET_FB_NOTIFY_TYPES           8
+ #define SWEET_FB_NOTIFY_VSYNC           5
+ #define SWEET_FB_VSYNC_US               16667
++#define SWEET_FB_PANEL_US               16740   /* the panel's TE, measured with the vclk on DISP_PLL (bsd/dev/herolte_gpu.c) */
++#define SWEET_FB_PANEL_LINES            2560
++#define SWEET_FB_LINE_TICKS             151     /* a line, 5.81 us, in 26 MHz timer ticks */
+ #if defined(ARM64_BOARD_CONFIG_A5XELTE)
+ #define SWEET_FB_DOT_PITCH              A5XELTE_FB_DOT_PITCH
+ #else
+@@ -134,6 +138,7 @@ class AppleCLCD : public IOMobileFramebuffer {
+ 
+ public:
+ 	IOTimerEventSource *fShow;      /* a frame goes to the panel as soon as it is given (boot-arg sweetfb_tick=1: at the next tick) */
++	uintptr_t     fDecon;           /* DECON_F, for its line counter: where the panel is reading (0: sweetfb_nosync=1) */
+ 	uint32_t      fVblSent;         /* vsync notifications a client asked for: 0 = CoreAnimation is on its own timer */
+ 	uint64_t      fPhys;
+ 	uint32_t      fWidth, fHeight, fRowBytes;
+@@ -307,6 +312,11 @@ AppleCLCD::start(IOService *provider)
+ 		if (fShow != NULL && fWorkLoop->addEventSource(fShow) != kIOReturnSuccess) {
+ 			fShow = NULL;
+ 		}
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++		int no_sync = 0;
++		PE_parse_boot_argn("sweetfb_nosync", &no_sync, sizeof(no_sync));
++		fDecon = no_sync ? 0 : ml_io_map(0x13960000u, 0x1000);
++#endif
+ 	}
+ 	uint32_t hz = 10;
+ #if defined(ARM64_BOARD_CONFIG_A5XELTE)
+@@ -361,15 +371,22 @@ void
+ AppleCLCD::rearmVsync(IOTimerEventSource *sender)
+ {
+ 	uint64_t period, now = mach_absolute_time();
+-	nanoseconds_to_absolutetime(SWEET_FB_VSYNC_US * 1000ULL, &period);
++	nanoseconds_to_absolutetime(fDecon ? SWEET_FB_PANEL_US * 1000ULL : SWEET_FB_VSYNC_US * 1000ULL, &period);
+ 	if (fVsyncNext == 0) {
+ 		fVsyncNext = now;
+ 	}
+-	fVsyncNext += period;
+-	if (fVsyncNext <= now) {
+-		uint64_t missed = (now - fVsyncNext) / period + 1;
+-		fVsyncNext += missed * period;
+-		fVsyncMissed += missed;
++	uint32_t line = fDecon ? (*(volatile uint32_t *)(fDecon + 0x8c) & 0xffff) : 0;
++	if (line != 0 && line <= SWEET_FB_PANEL_LINES) {
++		/* The panel is reading: the tick goes with the end of a frame's reading, the panel's own 59.7 Hz. */
++		uint64_t left = (SWEET_FB_PANEL_LINES - line) * SWEET_FB_LINE_TICKS;
++		fVsyncNext = now + left + (left < period / 2 ? period : 0);
++	} else {
++		fVsyncNext += period;
++		if (fVsyncNext <= now) {
++			uint64_t missed = (now - fVsyncNext) / period + 1;
++			fVsyncNext += missed * period;
++			fVsyncMissed += missed;
++		}
+ 	}
+ 	AbsoluteTime due, leeway;
+ 	AbsoluteTime_to_scalar(&due) = fVsyncNext;
+@@ -382,9 +399,20 @@ AppleCLCD::rearmVsync(IOTimerEventSource *sender)
+  * and a frame finished just after a tick was often replaced by the next before it was seen (overwritten=, 5% of them).
+  */
+ void
+-AppleCLCD::showFired(OSObject *owner, __unused IOTimerEventSource *sender)
++AppleCLCD::showFired(OSObject *owner, IOTimerEventSource *sender)
+ {
+ 	AppleCLCD *fb = (AppleCLCD *)owner;
++	/*
++	 * Not while the panel reads what would be written: that is what tears. The frame goes in when the reading ends, into
++	 * the 1.9 ms it stands still, and a copy of 2.5 ms overruns only into the top of the next reading.
++	 */
++	uint32_t line = fb->fDecon ? (*(volatile uint32_t *)(fb->fDecon + 0x8c) & 0xffff) : 0;
++	if (line != 0 && line < SWEET_FB_PANEL_LINES && sender != NULL) {
++		uint64_t ns;
++		absolutetime_to_nanoseconds((SWEET_FB_PANEL_LINES - line) * SWEET_FB_LINE_TICKS, &ns);
++		sender->setTimeoutUS((uint32_t)(ns / 1000) + 1);
++		return;
++	}
+ 	uint8_t *rec = (uint8_t *)IOMallocData(SWEET_FB_SWAP_REC_SIZE);
+ 	if (rec == NULL) {
+ 		return;         /* the tick shows it */
+@@ -457,7 +485,7 @@ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+ 		fb->rearmVsync(sender);
+ 		return;
+ 	}
+-	bool flush = fb->fDirty && (count % fb->fFlushTicks) == 0;
++	bool flush = fb->fDirty && (count % fb->fFlushTicks) == 0 && fb->fShow == NULL;
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ 	/* bsd/dev/herolte_gpu.c holds the panel for its GPU-drawn test frames. */
+ 	if (flush && now < sweet_fb_hold_until) {

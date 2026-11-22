@@ -1,0 +1,53 @@
+diff --git a/bsd/dev/sweet_reboot.c b/bsd/dev/sweet_reboot.c
+index 8228f52..cb0bb1f 100644
+--- a/bsd/dev/sweet_reboot.c
++++ b/bsd/dev/sweet_reboot.c
+@@ -253,4 +253,11 @@ sweet_reboot_restart(int panic_restart)
+ 	delay(2000 * 1000);
+ 	return -1;
+ }
++#elif defined(ARM64_BOARD_CONFIG_A5XELTE) || defined(ARM64_BOARD_CONFIG_HEROLTE)
++/* SweetPlatformExpert.cpp notes panics for every SWEET board; no PM8998 reboot reason here. */
++void sweet_reboot_note_panic(void);
++void
++sweet_reboot_note_panic(void)
++{
++}
+ #endif /* ARM64_BOARD_CONFIG_SWEET */
+diff --git a/iokit/Kernel/arm/SweetAdreno.cpp b/iokit/Kernel/arm/SweetAdreno.cpp
+index 2fc64a8..9099c7f 100644
+--- a/iokit/Kernel/arm/SweetAdreno.cpp
++++ b/iokit/Kernel/arm/SweetAdreno.cpp
+@@ -22,7 +22,8 @@
+  */
+ #include <pexpert/arm64/board_config.h>
+ 
+-#if defined(SWEET)
++/* The Poco F1's Adreno 630 (bsd/dev/sweet_a630.c, built for ARM64_BOARD_CONFIG_SWEET only): not on A5XELTE/HEROLTE. */
++#if defined(SWEET) && !defined(A5XELTE)
+ #include <IOKit/IOService.h>
+ #include <IOKit/IOUserClient.h>
+ #include <IOKit/IOKitKeys.h>
+diff --git a/osfmk/arm64/sweet_early.c b/osfmk/arm64/sweet_early.c
+index fb6ddd9..aecf005 100644
+--- a/osfmk/arm64/sweet_early.c
++++ b/osfmk/arm64/sweet_early.c
+@@ -111,6 +111,18 @@ sweet_early_panic(const char *fmt, va_list *args)
+ 
+ void sweet_early_relocate(uint64_t base) { (void)base; }
+ void sweet_early_disable(void) { a5_active = 0; }
++/* xnu-11215 (Bergamota 0082/0195): arm_init.c calls these for every SWEET board; the A5XELTE/HEROLTE
++ * console draws straight into the S-Boot framebuffer and keeps no log ring. */
++void sweet_early_set_cmdline(const char *cmdline) { (void)cmdline; }
++void sweet_early_flush_log(void) { }
++void
++sweet_early_set_video(uint64_t pa, uint64_t width, uint64_t height, uint64_t rowbytes)
++{
++	(void)pa;
++	(void)width;
++	(void)height;
++	(void)rowbytes;
++}
+ #elif defined(SWEET)
+ #include <stdint.h>
+ #include <kern/misc_protos.h>

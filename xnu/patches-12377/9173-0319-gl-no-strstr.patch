@@ -1,0 +1,20 @@
+diff --git a/bsd/dev/herolte_gl.c b/bsd/dev/herolte_gl.c
+index 3eddddb..d7d1d19 100644
+--- a/bsd/dev/herolte_gl.c
++++ b/bsd/dev/herolte_gl.c
+@@ -154,8 +154,13 @@ herolte_gl_env(const char *path, int pid, const char **extra, int max)
+ 	 * ...and the poster extensions of the frameworks (CollectionsPoster draws iOS's own wallpapers, and dies with only
+ 	 * "abort" in the log): their last words too.
+ 	 */
+-	if (!in_applications && path != NULL && strstr(path, ".appex/") != NULL && strstr(path, "Poster") != NULL) {
+-		in_applications = true;
++	if (!in_applications && path != NULL) {
++		bool appex = false, poster = false;
++		for (const char *p = path; *p != '\0'; p++) {
++			appex = appex || strncmp(p, ".appex/", 7) == 0;
++			poster = poster || strncmp(p, "Poster", 6) == 0;
++		}
++		in_applications = appex && poster;
+ 	}
+ 	if (in_applications && max >= 1) {
+ 		vnode_t appvp = NULLVP;

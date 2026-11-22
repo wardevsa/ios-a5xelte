@@ -1,0 +1,201 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index df7939a..cf998be 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -2599,6 +2599,46 @@ hp_boot_mhz(void)
+ 	return p ? 26 * m / (p << s) : 0;
+ }
+ 
++/*
++ * (9197) The heat steps' rates: the raised one as hg_cpu_up chose it (herocpu_mhz), and 1976 MHz at 912.5 mV for "warm"
++ * (ECT, hg_cpu_up's table). hc_go: 0 the raised rate, 1 the warm one, 2 the bootloader's. A step down between two raised
++ * rates goes through the bootloader's numbers first, as hc_go_high only ever raises the voltage.
++ */
++struct hc_rate {
++	uint32_t mhz, m;
++	uint8_t volt, promise;
++};
++static struct hc_rate hc_full, hc_warm = { 1976, 228, 0x62, 5 };
++
++static bool
++hc_go(int want, int *have)
++{
++	if (want == *have) {
++		return true;
++	}
++	if (want == 2) {
++		bool ok = hc_go_low();
++		*have = hc.high ? *have : 2;
++		return ok;
++	}
++	const struct hc_rate *r = want == 1 && hc_full.mhz > hc_warm.mhz ? &hc_warm : &hc_full;
++	if (hc.high && !hc_go_low()) {
++		return false;
++	}
++	*have = 2;
++	hc.mhz = r->mhz;
++	hc.m = r->m;
++	hc.volt = r->volt;
++	hc.promise = r->promise;
++	if (!hc_go_high()) {
++		return false;
++	}
++	*have = want;
++	return true;
++}
++
++void herolte_power_down(int restart);
++
+ static void
+ hg_power_thread(__unused void *arg, __unused wait_result_t wr)
+ {
+@@ -2606,21 +2646,32 @@ hg_power_thread(__unused void *arg, __unused wait_result_t wr)
+ 	extern struct processor *thread_bind(struct processor *processor);
+ 	/*
+ 	 * (0331) The heat is the SoC's: the battery's TEMP stayed at 28.0 C for a whole session (boot-0330: written by the
+-	 * host on Android, not measured). The TMUs read fine (boot-0330) and are calibrated by their own fuses, two points
+-	 * as Samsung's exynos8890 data (25 and 85 C): TRIMINFO bits 7:0 the code at 25 C, 15:8 the code at 85 C; their
+-	 * CURRENT_TEMP, bits 7:0, gave 44-49 C with the UI running. herohot=N, 80 C by default, back under N - 10.
+-	 * herotmu=0: no TMU read at all (and no heat limit).
++	 * host on Android, not measured). The four TMUs are calibrated by their own fuses, two points (25 and 85 C).
++	 * (9197) The fuses and the reading are the Exynos7 layout (Linux exynos_tmu.c: EXYNOS7_TMU_TEMP_MASK 0x1ff, the
++	 * 85 C code at bit 9): TRIMINFO bits 8:0 the code at 25 C, from bit 9 the code at 85 C, CURRENT_TEMP bits 8:0;
++	 * about one code per degree (this phone: 49/104, 43/99, 48/104, 45/101). 0331 took bits 7:0 and 15:8, 85 C at code
++	 * ~205: a slope 2.9 times too flat. Its "57 C" was ~117 C (boot-18k36, the user burnt a finger on the phone) and
++	 * its 80 C limit never came. Now in steps, by the hottest of the four, each left again 8 C under its mark:
++	 *   herowarm=70     Mongoose to 1976 MHz (912.5 mV) when it runs faster
++	 *   herohot=80      Mongoose to the bootloader's rate and voltage (728 MHz)
++	 *   heroveryhot=90  the Mongoose cores out of the scheduler as well: only the A53s run
++	 *   herocrit=105    power off (herolte_power_down: on a cable, the charging screen), after three readings in a row
++	 * herotmu=0: no TMU read at all, and none of it.
+ 	 */
+-	uint32_t hot = 80, tmu_on = 1;
++	uint32_t warm = 70, hot = 80, veryhot = 90, crit = 105, tmu_on = 1;
++	PE_parse_boot_argn("herowarm", &warm, sizeof(warm));
+ 	PE_parse_boot_argn("herohot", &hot, sizeof(hot));
++	PE_parse_boot_argn("heroveryhot", &veryhot, sizeof(veryhot));
++	PE_parse_boot_argn("herocrit", &crit, sizeof(crit));
+ 	PE_parse_boot_argn("herotmu", &tmu_on, sizeof(tmu_on));
+-	uint32_t cool = hot > 10 ? hot - 10 : 0;
++	const int marks[3] = { (int)warm, (int)hot, (int)veryhot };
+ 	for (unsigned i = 0; i < 300 && !hc.saved; i++) {
+ 		hg_msleep(1000);
+ 	}
+-	if (!hc.saved) {
+-		printf("HEROLTE POWER: the Mongoose cluster's boot state was not saved: left as it is\n");
+-		return;
++	/* (9197) without the saved boot state no rate is changed, but the heat is still watched (parking, power off) */
++	bool rates = hc.saved;
++	if (!rates) {
++		printf("HEROLTE POWER: the Mongoose cluster's boot state was not saved: its rate is left as it is\n");
+ 	}
+ 	/* (the rate is changed from an A53, as at boot) */
+ 	thread_bind(cpu_to_processor(0));
+@@ -2632,8 +2683,8 @@ hg_power_thread(__unused void *arg, __unused wait_result_t wr)
+ 		tmu[i] = ml_io_map(hp_tmu_pa[i], 0x1000);
+ 		if (tmu[i]) {
+ 			uint32_t trim = hg_rd(tmu[i], 0x0);
+-			e25[i] = (int)(trim & 0xff);
+-			e85[i] = (int)((trim >> 8) & 0xff);
++			e25[i] = (int)(trim & 0x1ff);
++			e85[i] = (int)((trim >> 9) & 0xff);
+ 			if (e25[i] > 0 && e85[i] > e25[i] + 20) {
+ 				sensors |= 1u << i;
+ 			}
+@@ -2641,19 +2692,26 @@ hg_power_thread(__unused void *arg, __unused wait_result_t wr)
+ 			    sensors & (1u << i) ? "" : " (not used)");
+ 		}
+ 	}
+-	printf("HEROLTE POWER: Mongoose to %u MHz with the screen off or the SoC at %u C (back under %u C)\n", hp_boot_mhz(), hot, cool);
++	if (rates) {
++		hc_full.mhz = hc.mhz;
++		hc_full.m = hc.m;
++		hc_full.volt = hc.volt;
++		hc_full.promise = hc.promise;
++	}
++	printf("HEROLTE POWER: heat steps: %u MHz at %u C, %u MHz at %u C, A53s only at %u C, power off at %u C; screen off %u MHz\n",
++	    hc_full.mhz > hc_warm.mhz ? hc_warm.mhz : hc_full.mhz, warm, hp_boot_mhz(), hot, veryhot, crit, hp_boot_mhz());
+ 	hp_pmu = ml_io_map(0x105c0000u, 0x4000);  /* (9195) for herolte_power_down() */
+ 	/*
+ 	 * (9192, iOS 18) With the screen off the Mongoose cores are also taken out of the scheduler's recommended set, as
+ 	 * Apple's perf controller does: the A53s run what keeps running, the big cores idle. iOS 18 has no real sleep here
+ 	 * and its daemons go on with the screen off: at 728 MHz the four Mongooses still ran them, and the phone stayed hot.
+-	 * Boot-arg herosleep=0: the rate alone, as before.
++	 * Boot-arg herosleep=0: the rate alone, as before (heroveryhot parks them all the same).
+ 	 */
+ 	extern void sched_perfcontrol_update_recommended_cores(uint32_t recommended_cores);
+ 	uint32_t park = 1;
+ 	PE_parse_boot_argn("herosleep", &park, sizeof(park));
+ 	bool parked = false;
+-	bool hot_now = false;
++	int level = 0, rate = 0, crit_n = 0;
+ 	uint64_t last_log = 0;
+ 	int top = -1000, seen_max = -1000;
+ 	for (;;) {
+@@ -2669,40 +2727,49 @@ hg_power_thread(__unused void *arg, __unused wait_result_t wr)
+ 			if (!(sensors & (1u << i))) {
+ 				continue;
+ 			}
+-			int code = (int)(hg_rd(tmu[i], 0x40) & 0xff);
++			int code = (int)(hg_rd(tmu[i], 0x40) & 0x1ff);
+ 			int t = (code - e25[i]) * 60 / (e85[i] - e25[i]) + 25;
+-			if (t > 0 && t < 130) {
++			if (t > 0 && t < 160) {
+ 				c[i] = t;
+ 				top = t > top ? t : top;
+ 			}
+ 		}
+ 		seen_max = top > seen_max ? top : seen_max;
+ 		if (top > -1000) {
+-			if (top >= (int)hot) {
+-				hot_now = true;
+-			} else if (top < (int)cool) {
+-				hot_now = false;
++			crit_n = top >= (int)crit ? crit_n + 1 : 0;
++			if (crit_n >= 3) {
++				printf("HEROLTE POWER: SoC %d C (big %d, little %d, GPU %d, ISP %d), at or over %u C: power off\n",
++				    top, c[0], c[1], c[2], c[3], crit);
++				herolte_power_down(0);
++			}
++			while (level < 3 && top >= marks[level]) {
++				level++;
++			}
++			while (level > 0 && top < marks[level - 1] - 8) {
++				level--;
+ 			}
+ 		}
+-		bool want_low = screen_off || hot_now;
+-		if (!hc.broken && want_low == hc.high) {
+-			bool ok = want_low ? hc_go_low() : hc_go_high();
+-			printf("HEROLTE POWER: Mongoose %s %u MHz (screen %s%s, SoC %d C)\n", ok ? "to" : "NOT to",
+-			    want_low ? hp_boot_mhz() : hc.mhz, screen_off ? "off" : "on", hot_now ? ", hot" : "", top);
++		int want = screen_off || level >= 2 ? 2 : level;
++		if (rates && !hc.broken && want != rate) {
++			bool ok = hc_go(want, &rate);
++			printf("HEROLTE POWER: Mongoose %s %u MHz (screen %s, heat step %d, SoC %d C)\n", ok ? "to" : "NOT to",
++			    rate == 2 ? hp_boot_mhz() : hc.mhz, screen_off ? "off" : "on", level, top);
+ 		}
+-		if (park && screen_off != parked) {
+-			parked = screen_off;
++		bool want_park = (park && screen_off) || level >= 3;
++		if (want_park != parked) {
++			parked = want_park;
+ 			sched_perfcontrol_update_recommended_cores(parked ? 0x0fu : 0xffu);
+-			printf("HEROLTE POWER: %s\n", parked ? "screen off: only the A53s run (Mongoose cores idle)" :
+-			    "screen on: all eight cores");
++			printf("HEROLTE POWER: %s (SoC %d C)\n", !parked ? "all eight cores" : screen_off ?
++			    "screen off: only the A53s run (Mongoose cores idle)" : "very hot: only the A53s run", top);
+ 		}
+ 		uint64_t since = 0;
+ 		absolutetime_to_nanoseconds(now - last_log, &since);
+ 		if (last_log == 0 || since > 60ull * NSEC_PER_SEC) {
+ 			last_log = now;
+ 			int b = herolte_fg_temp_dc;
+-			printf("HEROLTE POWER: SoC %d C (big %d, little %d, GPU %d, ISP %d; most %d), battery reg %d.%u C, Mongoose %s, screen %s\n",
+-			    top, c[0], c[1], c[2], c[3], seen_max, b / 10, (unsigned)(b < 0 ? -b : b) % 10, hc.high ? "up" : "down", off ? "off" : "on");
++			printf("HEROLTE POWER: SoC %d C (big %d, little %d, GPU %d, ISP %d; most %d), heat step %d, battery reg %d.%u C, Mongoose %u MHz, screen %s\n",
++			    top, c[0], c[1], c[2], c[3], seen_max, level, b / 10, (unsigned)(b < 0 ? -b : b) % 10,
++			    rate == 2 || !hc.high ? hp_boot_mhz() : hc.mhz, off ? "off" : "on");
+ 			seen_max = -1000;
+ 		}
+ 	}

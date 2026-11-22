@@ -1,0 +1,83 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 440448f..48f295f 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -601,6 +601,14 @@ static bool hg_run(unsigned js, const char *what);
+ static void
+ hg_read_fault_probe(uint64_t job_va)
+ {
++	/* The GPU's own tables, in memory no reset touches: still what they were written to be? */
++	volatile uint64_t *tables = (volatile uint64_t *)hg_mem;
++	printf("HEROLTE GPU: tables l0 %#llx (expect %#llx) l1 %#llx (expect %#llx) l2[test] %#llx (expect %#llx) l3[0] %#llx (expect %#llx)\n",
++	    tables[0], (uint64_t)(HG_TEST_PA + 0x1000) | 3, tables[0x1000 / 8], (uint64_t)(HG_TEST_PA + 0x2000) | 3,
++	    tables[0x2000 / 8 + ((HG_TEST_VA >> 21) & 0x1ff)], (uint64_t)(HG_TEST_PA + 0x3000) | 3, tables[0x3000 / 8],
++	    (uint64_t)(HG_TEST_PA + HG_DATA_OFF) | 0x2c1);
++	printf("HEROLTE GPU: AS0 transtab %#x%08x memattr %#x transcfg %#x\n", hg_rd(hg_gpu, AS0 + 0x04), hg_rd(hg_gpu, AS0 + 0x00),
++	    hg_rd(hg_gpu, AS0 + 0x08), hg_rd(hg_gpu, AS0 + 0x30));
+ 	uint64_t pte = hgu_pte(job_va);
+ 	uint64_t pa = (pte & 0xfffffff000ull) | (job_va & 0xfff);
+ 	if ((pte & 1) && pa >= 0x880000000ull && pa < 0x900000000ull) {
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index 3dc6d44..c1b8a32 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -264,9 +264,20 @@ AppleCLCD::start(IOService *provider)
+ 	fClients = OSArray::withCapacity(4);
+ 	/* The default surface must have the presented size (a mismatch left
+ 	 * every swap layer empty); scaled, it is the panel's top-left part. */
+-	fSurface = sweet_surface_create_physical(fPhys, fScaled ? fLogicalW : fWidth,
+-	    fScaled ? fLogicalH : fHeight, fRowBytes, SWEET_FB_FORMAT_BGRA);
+-	fPixels = fSurface != NULL ? fSurface->kernelAddress() : 0;
++#if defined(ARM64_BOARD_CONFIG_HEROLTE)
++	/* Scaled, what CoreAnimation draws into the default surface must not land on the panel unscaled (a small copy of
++	 * the screen in its corner): the surface has its own memory, free in the first bank, and is presented like any other. */
++	if (fScaled) {
++		fSurface = sweet_surface_create_physical(0xa0000000ULL, fLogicalW, fLogicalH, (fLogicalW * 4 + 63) & ~63u,
++		    SWEET_FB_FORMAT_BGRA);
++		SweetSurface *panel = sweet_surface_create_physical(fPhys, fWidth, fHeight, fRowBytes, SWEET_FB_FORMAT_BGRA);
++		fPixels = panel != NULL ? panel->kernelAddress() : 0;
++	} else
++#endif
++	{
++		fSurface = sweet_surface_create_physical(fPhys, fWidth, fHeight, fRowBytes, SWEET_FB_FORMAT_BGRA);
++		fPixels = fSurface != NULL ? fSurface->kernelAddress() : 0;
++	}
+ 	fWorkLoop = IOWorkLoop::workLoop();
+ 	if (fLock == NULL || fClients == NULL || fPixels == 0 || fWorkLoop == NULL) {
+ 		IOLog("SWEET FB: setup failed\n");
+@@ -605,8 +616,8 @@ AppleCLCD::scaledCopy(uintptr_t src, uint32_t srcRowBytes, int32_t dx, int32_t d
+     int32_t w, int32_t h)
+ {
+ 	static uint16_t column[2048];
+-	int32_t px0 = dx * 3 / 2, px1 = (dx + w) * 3 / 2;
+-	int32_t py0 = dy * 3 / 2, py1 = (dy + h) * 3 / 2;
++	int32_t px0 = dx * (int32_t)fWidth / (int32_t)fLogicalW, px1 = (dx + w) * (int32_t)fWidth / (int32_t)fLogicalW;
++	int32_t py0 = dy * (int32_t)fHeight / (int32_t)fLogicalH, py1 = (dy + h) * (int32_t)fHeight / (int32_t)fLogicalH;
+ 	if (px1 > (int32_t)fWidth) {
+ 		px1 = (int32_t)fWidth;
+ 	}
+@@ -618,13 +629,13 @@ AppleCLCD::scaledCopy(uintptr_t src, uint32_t srcRowBytes, int32_t dx, int32_t d
+ 		return 0;
+ 	}
+ 	for (int32_t x = 0; x < pw; x++) {
+-		int32_t c = (px0 + x) * 2 / 3 - dx;
++		int32_t c = (px0 + x) * (int32_t)fLogicalW / (int32_t)fWidth - dx;
+ 		column[x] = (uint16_t)(c < 0 ? 0 : (c >= w ? w - 1 : c));
+ 	}
+ 	int32_t previous = -1;
+ 	uint32_t *prevRow = NULL;
+ 	for (int32_t py = py0; py < py1; py++) {
+-		int32_t r = py * 2 / 3 - dy;
++		int32_t r = py * (int32_t)fLogicalH / (int32_t)fHeight - dy;
+ 		r = r < 0 ? 0 : (r >= h ? h - 1 : r);
+ 		uint32_t *out = (uint32_t *)(fPixels + (uint64_t)py * fRowBytes + (uint64_t)px0 * 4);
+ 		if (r == previous && prevRow != NULL) {
+@@ -681,7 +692,7 @@ AppleCLCD::present(const uint8_t *rec)
+ 			    s ? s->pixelFormat : 0, s ? s->bytesPerRow : 0, sx, sy, get32(a, 8),
+ 			    get32(a, 12), dx, dy, w, h);
+ 		}
+-		if (s == NULL || s == fSurface) {
++		if (s == NULL || (s == fSurface && !fScaled)) {
+ 			OSSafeReleaseNULL(s);
+ 			continue;
+ 		}

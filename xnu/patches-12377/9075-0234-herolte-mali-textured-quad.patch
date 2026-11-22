@@ -1,0 +1,277 @@
+diff --git a/bsd/dev/herolte_gpu.c b/bsd/dev/herolte_gpu.c
+index 0cf8f05..a3e9022 100644
+--- a/bsd/dev/herolte_gpu.c
++++ b/bsd/dev/herolte_gpu.c
+@@ -165,6 +165,8 @@ hg_pmic_dump(void)
+  *   herogpu=7  + the GPU copies the last iOS frame to the panel (tile
+  *              preload, 256 rows lower), then all 12 cores clear the panel
+  *   herogpu=8  WRITE_VALUE, then one triangle drawn with a Midgard shader
++ *   herogpu=9  WRITE_VALUE, then a 180x320 texture scaled 8x to the panel,
++ *              on one shader core and again on all 12
+  *
+  * The fragment job is the A5's (0131-0133): Mesa Panfrost Midgard v4
+  * single-target framebuffer descriptor and the empty polygon list with
+@@ -564,12 +566,32 @@ hg_gpu_copy_test(uint64_t hold)
+ #define S_HEAP          0x10000u
+ #define S_HEAP_BYTES    0x40000u
+ #define HG_BIN_LEVEL    4u              /* 16 << 4 = 256-pixel bins */
++/* herogpu=9 only: varyings, sampler and a small texture. */
++#define S_VARY_BUF      0x0a00u         /* Attribute Buffer (16 B, align 32) */
++#define S_VARY          0x0a40u         /* Attribute (8 B) */
++#define S_SAMPLER       0x0a80u         /* Sampler (32 B) */
++#define S_TEX_PTRS      0x0ac0u         /* one 64-bit texture descriptor pointer */
++#define S_TEXDESC       0x0b00u         /* Texture (32 B) + Surface With Stride */
++#define S_VARY_DATA     0x0c00u         /* 4 vertices x vec4 texel coordinates */
++#define S_TEX           0x80000u
++#define HG_TEX_W        180u            /* the panel / 8 */
++#define HG_TEX_H        320u
+ 
++/* Solid colour: one writeout bundle, constants read as fp32 (~0.008). */
+ static const uint32_t hg_midgard_shader[12] = {
+ 	0x0822001e, 0x841f0358, 0x4000027b, 0x0240ffae, 0xc0a00000, 0xfffffa77,
+ 	0x0000ffff, 0x00000000, 0x3c003c00, 0x3c003c00, 0x3c003c00, 0x3c003c00,
+ };
+ #define HG_SHADER_TAG   0xeu            /* TAG_ALU_12_WRITEOUT */
++/* Textured: ld_vary_32 r0 / imov r28, r0 / tex r29 = texture(r28.xy) /
++ * imov r0, r29 + writeout (tools/herolte-midgard-shader.py, textured). */
++static const uint32_t hg_midgard_tex_shader[20] = {
++	0xc9e09885, 0x01403939, 0x00000030, 0x00000000, 0x00020038, 0x027b7018,
++	0xffae4000, 0x00000000, 0x210b12d3, 0x00e43d67, 0x00000000, 0x00000000,
++	0x0822001d, 0x841f03b8, 0x4000027b, 0x0240ffae, 0xc0a00000, 0xfffffc6f,
++	0x0000ffff, 0x00000000,
++};
++#define HG_TEX_SHADER_TAG 0x5u          /* TAG_LOAD_STORE_4 */
+ 
+ static void
+ hg_wr32(vm_offset_t base, uint32_t off, uint32_t v)
+@@ -599,8 +621,16 @@ hg_tiler_size(uint32_t bytes_per_tile)
+ 	return (size + 0x1ff) & ~0x1ffu;
+ }
+ 
++/*
++ * herogpu=9 builds on the same draw: a 180x320 test image (gradient,
++ * checkerboard, white frame) in the scratch block is the texture of a
++ * full-panel quad, so the GPU scales it 8x with bilinear filtering. As in
++ * Mesa's preload (blit) shader there is still no vertex shader: the varying
++ * buffer holds unnormalized texel coordinates per vertex and the sampler
++ * takes them as is.
++ */
+ static void
+-hg_draw_triangle(uint64_t hold)
++hg_draw(uint64_t hold, bool tex)
+ {
+ 	static vm_offset_t scr;
+ 	if (!scr) {
+@@ -624,13 +654,27 @@ hg_draw_triangle(uint64_t hold)
+ 	uint64_t fbd_ptr = (HG_SCR_VA + S_FBD) | 1;     /* MFBD, one render target */
+ 
+ 	/* Shader. */
+-	for (unsigned i = 0; i < 12; i++) {
+-		hg_wr32(scr, S_SHADER + i * 4, hg_midgard_shader[i]);
++	if (tex) {
++		for (unsigned i = 0; i < 20; i++) {
++			hg_wr32(scr, S_SHADER + i * 4, hg_midgard_tex_shader[i]);
++		}
++	} else {
++		for (unsigned i = 0; i < 12; i++) {
++			hg_wr32(scr, S_SHADER + i * 4, hg_midgard_shader[i]);
++		}
+ 	}
+ 
+ 	/* Renderer State. */
+-	hg_wr64(scr, S_RSD + 0, (HG_SCR_VA + S_SHADER) | HG_SHADER_TAG);
+-	hg_wr32(scr, S_RSD + 16, 2u << 16);             /* work register count 2 */
++	if (tex) {
++		hg_wr64(scr, S_RSD + 0, (HG_SCR_VA + S_SHADER) | HG_TEX_SHADER_TAG);
++		hg_wr32(scr, S_RSD + 8, 1u | (1u << 16));       /* 1 sampler, 1 texture */
++		hg_wr32(scr, S_RSD + 12, 1u << 16);             /* 1 varying */
++		/* As Mesa's preload RSD on v4/v5: 4 work registers, force early-z. */
++		hg_wr32(scr, S_RSD + 16, (4u << 16) | (1u << 10));
++	} else {
++		hg_wr64(scr, S_RSD + 0, (HG_SCR_VA + S_SHADER) | HG_SHADER_TAG);
++		hg_wr32(scr, S_RSD + 16, 2u << 16);     /* work register count 2 */
++	}
+ 	hg_wr32(scr, S_RSD + 32, 0xffffu | (7u << 24)); /* sample mask, depth ALWAYS */
+ 	/* Stencil masks; Midgard's fixed-function alpha test must be ALWAYS
+ 	 * (0 = NEVER kills every fragment). */
+@@ -659,25 +703,87 @@ hg_draw_triangle(uint64_t hold)
+ 		{ 0x43820000u, 0x44ed8000u },
+ 		{ 0x44938000u, 0x44ed8000u },
+ 	};
+-	for (unsigned v = 0; v < 3; v++) {
+-		hg_wr32(scr, S_POS + v * 16 + 0, pos[v][0]);
+-		hg_wr32(scr, S_POS + v * 16 + 4, pos[v][1]);
++	/* Textured: a triangle strip over the whole panel, (0,0) (W,0) (0,H)
++	 * (W,H), with texel coordinates (0,0) .. (180,320) as the varying. */
++	static const uint32_t quad[4][4] = {
++		{ F32_0, F32_0, F32_0, F32_0 },
++		{ F32_1440, F32_0, 0x43340000u /* 180 */, F32_0 },
++		{ F32_0, F32_2560, F32_0, 0x43a00000u /* 320 */ },
++		{ F32_1440, F32_2560, 0x43340000u, 0x43a00000u },
++	};
++	unsigned nverts = tex ? 4 : 3;
++	for (unsigned v = 0; v < nverts; v++) {
++		hg_wr32(scr, S_POS + v * 16 + 0, tex ? quad[v][0] : pos[v][0]);
++		hg_wr32(scr, S_POS + v * 16 + 4, tex ? quad[v][1] : pos[v][1]);
+ 		hg_wr32(scr, S_POS + v * 16 + 8, F32_HALF);
+ 		hg_wr32(scr, S_POS + v * 16 + 12, F32_1);
++		if (tex) {
++			hg_wr32(scr, S_VARY_DATA + v * 16 + 0, quad[v][2]);
++			hg_wr32(scr, S_VARY_DATA + v * 16 + 4, quad[v][3]);
++			hg_wr32(scr, S_VARY_DATA + v * 16 + 8, F32_0);
++			hg_wr32(scr, S_VARY_DATA + v * 16 + 12, F32_1);
++		}
++	}
++	if (tex) {
++		/* Test image, panel-native bytes (B, G, R, A): a gradient, red
++		 * across and green down, a 20-texel checkerboard darkening every
++		 * other square, a 2-texel white frame and a white diagonal. */
++		for (uint32_t y = 0; y < HG_TEX_H; y++) {
++			for (uint32_t x = 0; x < HG_TEX_W; x++) {
++				uint32_t r = x * 255 / (HG_TEX_W - 1), g = y * 255 / (HG_TEX_H - 1);
++				uint32_t b = 160;
++				if (((x / 20) ^ (y / 20)) & 1) {
++					r /= 2;
++					g /= 2;
++					b /= 2;
++				}
++				uint32_t c = 0xff000000u | (r << 16) | (g << 8) | b;
++				if (x < 2 || y < 2 || x >= HG_TEX_W - 2 || y >= HG_TEX_H - 2 ||
++				    x * HG_TEX_H / HG_TEX_W == y) {
++					c = 0xffffffffu;
++				}
++				hg_wr32(scr, S_TEX + (y * HG_TEX_W + x) * 4, c);
++			}
++		}
++		/* Varying 0: RGB32F (RGB1 swizzle) from buffer 0, offset 0. */
++		hg_wr64(scr, S_VARY_BUF + 0, (HG_SCR_VA + S_VARY_DATA) | 1);    /* 1D */
++		hg_wr32(scr, S_VARY_BUF + 8, 16);                               /* stride */
++		hg_wr32(scr, S_VARY_BUF + 12, 16 * 4);                          /* size */
++		hg_wr32(scr, S_VARY + 0, (1u << 9) | (((183u << 12) | 0xa88u) << 10));
++		hg_wr32(scr, S_VARY + 4, 0);
++		/* Sampler: bilinear, unnormalized coordinates, clamp to edge. */
++		hg_wr32(scr, S_SAMPLER + 0, 0);
++		hg_wr32(scr, S_SAMPLER + 8, 9u | (9u << 4) | (9u << 8));
++		/* Texture: 180x320 RGBA8 UNORM, 2D, linear, 64-bit with strides,
++		 * then its one surface. */
++		hg_wr32(scr, S_TEXDESC + 0, (HG_TEX_W - 1) | ((HG_TEX_H - 1) << 16));
++		hg_wr32(scr, S_TEXDESC + 8, ((187u << 12) | 0x688u) | (2u << 22) | (2u << 24) |
++		    (3u << 28));
++		hg_wr32(scr, S_TEXDESC + 16, 0x688u);                          /* swizzle */
++		hg_wr64(scr, S_TEXDESC + 32, HG_SCR_VA + S_TEX);
++		hg_wr32(scr, S_TEXDESC + 40, HG_TEX_W * 4);                     /* row stride */
++		hg_wr32(scr, S_TEXDESC + 44, HG_TEX_W * 4 * HG_TEX_H);         /* surface stride */
++		hg_wr64(scr, S_TEX_PTRS, HG_SCR_VA + S_TEXDESC);
+ 	}
+ 
+ 	/* Tiler job: header, Invocation (+32), Primitive (+40), Draw (+64). */
+ 	uint32_t tj = S_TILER_JOB;
+ 	hg_wr32(scr, tj + 16, 1u | (7u << 1) | (1u << 16));    /* 64-bit, TILER, index 1 */
+-	hg_wr32(scr, tj + 32, 2);                       /* 3 vertices: num_y - 1 */
++	hg_wr32(scr, tj + 32, nverts - 1);              /* num_y - 1 (2 bits for 3 or 4) */
+ 	hg_wr32(scr, tj + 36, (32u << 22) | (2u << 28));        /* z shift 32, split 2 */
+-	hg_wr32(scr, tj + 40, 8u |                      /* triangles */
++	hg_wr32(scr, tj + 40, (tex ? 10u : 8u) |        /* triangle strip / triangles */
+ 	    (1u << 15) | (1u << 16) | (1u << 17) |      /* first provoking, depth culls */
+ 	    (6u << 26));                                /* job task split */
+-	hg_wr32(scr, tj + 52, 2);                       /* index count - 1 */
++	hg_wr32(scr, tj + 52, nverts - 1);              /* index count - 1 */
+ 	uint32_t d = tj + 64;
+ 	hg_wr32(scr, d + 0, 0x7);                       /* 4 comps, 64-bit descriptors */
+ 	hg_wr64(scr, d + 16, HG_SCR_VA + S_POS);        /* Position */
++	if (tex) {
++		hg_wr64(scr, d + 32, HG_SCR_VA + S_TEX_PTRS);   /* Textures */
++		hg_wr64(scr, d + 40, HG_SCR_VA + S_SAMPLER);    /* Samplers */
++		hg_wr64(scr, d + 80, HG_SCR_VA + S_VARY_BUF);   /* Varying buffers */
++		hg_wr64(scr, d + 88, HG_SCR_VA + S_VARY);       /* Varyings */
++	}
+ 	hg_wr64(scr, d + 56, HG_SCR_VA + S_RSD);        /* State */
+ 	hg_wr64(scr, d + 96, HG_SCR_VA + S_VIEWPORT);   /* Viewport */
+ 	hg_wr64(scr, d + 112, fbd_ptr);                 /* FBD (v5 tiler: tagged) */
+@@ -727,8 +833,9 @@ hg_draw_triangle(uint64_t hold)
+ 	}
+ 	hg_job_va = HG_TEST_VA;
+ 	hg_job_cpu = 0;
+-	printf("HEROLTE GPU: DRAW: %llu us -> %s\n", hg_us_since(start),
+-	    ok ? "A TRIANGLE ON A DARK BLUE SCREEN FOR 8 SECONDS (white or black)" : "failed");
++	printf("HEROLTE GPU: DRAW: %llu us -> %s\n", hg_us_since(start), !ok ? "failed" : tex ?
++	    "A 180x320 TEST IMAGE SCALED 8x TO THE WHOLE SCREEN FOR 8 SECONDS" :
++	    "A TRIANGLE ON A DARK BLUE SCREEN FOR 8 SECONDS (white or black)");
+ 	volatile uint32_t *p = (volatile uint32_t *)(scr + S_POLY);
+ 	printf("HEROLTE GPU: DRAW: polygon list %08x %08x %08x %08x %08x %08x %08x %08x\n",
+ 	    p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
+@@ -751,16 +858,58 @@ hg_draw_triangle(uint64_t hold)
+ 	}
+ 	printf("HEROLTE GPU: DRAW: nonzero words header=%u body=%u (first %#x) heap=%u\n",
+ 	    nz_head, nz_body, first_body, nz_heap);
+-	/* Read back the panel inside the triangle and in the background. */
++	/* Read back the panel inside the triangle and in the background; for
++	 * the texture, next to the texel each pixel should come from. */
+ 	static const uint32_t probe[4][2] = { { 720, 1500 }, { 720, 800 }, { 400, 1850 }, { 720, 300 } };
+ 	for (unsigned i = 0; i < 4; i++) {
+ 		uint64_t pa = HG_FB_PA + (uint64_t)probe[i][1] * HG_FB_STRIDE + probe[i][0] * 4;
+ 		vm_offset_t pg = ml_io_map(pa & ~0xfffull, 0x1000);
+-		if (pg) {
++		if (!pg) {
++			continue;
++		}
++		uint32_t px = *(volatile uint32_t *)(pg + (pa & 0xfff));
++		if (tex) {
++			uint32_t tx = probe[i][0] / 8, ty = probe[i][1] / 8;
++			printf("HEROLTE GPU: DRAW: pixel (%u,%u) = %08x, texel (%u,%u) = %08x\n",
++			    probe[i][0], probe[i][1], px, tx, ty,
++			    *(volatile uint32_t *)(scr + S_TEX + (ty * HG_TEX_W + tx) * 4));
++		} else {
+ 			printf("HEROLTE GPU: DRAW: pixel (%u,%u) = %08x%s\n", probe[i][0], probe[i][1],
+-			    *(volatile uint32_t *)(pg + (pa & 0xfff)), i == 3 ? " (background)" : "");
++			    px, i == 3 ? " (background)" : "");
+ 		}
+ 	}
++	if (!ok || !tex) {
++		return;
++	}
++
++	/* The same scaled draw again on all 12 shader cores, timed: what a
++	 * GPU upscale of every iOS frame would cost. Fresh polygon list and
++	 * heap, job headers back to "not run". */
++	uint32_t all = hg_rd(hg_gpu, SHADER_PRESENT_LO);
++	if (!hg_power(SHADER_PWRON_LO, SHADER_READY_LO, all, "all shader cores")) {
++		return;
++	}
++	hg_zero(scr + S_POLY, S_HEAP + S_HEAP_BYTES - S_POLY);
++	for (unsigned i = 0; i < 4; i++) {
++		hg_wr32(scr, S_TILER_JOB + i * 4, 0);
++		hg_wr32(scr, S_FRAG_JOB + i * 4, 0);
++	}
++	__asm__ volatile ("dsb sy" ::: "memory");
++	hg_affinity = all;
++	start = mach_absolute_time();
++	hg_job_va = HG_SCR_VA + S_TILER_JOB;
++	hg_job_cpu = scr + S_TILER_JOB;
++	ok = hg_run(1, "DRAW tiler job, all cores");
++	if (ok) {
++		hg_job_va = HG_SCR_VA + S_FRAG_JOB;
++		hg_job_cpu = scr + S_FRAG_JOB;
++		ok = hg_run(0, "DRAW fragment job, all cores");
++	}
++	hg_job_va = HG_TEST_VA;
++	hg_job_cpu = 0;
++	hg_affinity = 1;
++	printf("HEROLTE GPU: DRAW (%#x): scaled image in %llu us -> %s\n", all, hg_us_since(start),
++	    ok ? "ok" : "failed");
+ }
+ 
+ /* herogpu=7, step 2: all shader cores clear the whole panel, timed. */
+@@ -813,10 +962,10 @@ hg_jobs(vm_offset_t pmu, int mode)
+ 		hg_cores_off();
+ 		return;
+ 	}
+-	if (mode == 8) {
++	if (mode >= 8) {
+ 		uint64_t hold8;
+ 		nanoseconds_to_absolutetime(8ull * NSEC_PER_SEC, &hold8);
+-		hg_draw_triangle(hold8);
++		hg_draw(hold8, mode >= 9);
+ 		hg_cores_off();
+ 		return;
+ 	}

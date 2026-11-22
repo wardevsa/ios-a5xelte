@@ -1,0 +1,16 @@
+diff --git a/bsd/dev/herolte_drop.c b/bsd/dev/herolte_drop.c
+index bf37841..d3e8ed8 100644
+--- a/bsd/dev/herolte_drop.c
++++ b/bsd/dev/herolte_drop.c
+@@ -139,6 +139,11 @@ hdrop_file(struct hdrop_reader *r, const char *path, int mode, uint64_t data, ui
+ 	if (error) {
+ 		return error;
+ 	}
++	/* vnode_open leaves O_TRUNC to its callers: a shorter file kept the old tail. */
++	struct vnode_attr va;
++	VATTR_INIT(&va);
++	VATTR_SET(&va, va_data_size, 0);
++	error = vnode_setattr(vp, &va, ctx);
+ 	for (uint64_t done = 0; done < size && !error;) {
+ 		uint32_t n = (uint32_t)MIN(size - done, (uint64_t)(HDROP_CHUNK / 2));
+ 		const uint8_t *p = hdrop_at(r, data + done, n);

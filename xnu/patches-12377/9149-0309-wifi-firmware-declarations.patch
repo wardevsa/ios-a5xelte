@@ -1,0 +1,16 @@
+diff --git a/bsd/dev/herolte_wifi.c b/bsd/dev/herolte_wifi.c
+index 0b5932a..454dabb 100644
+--- a/bsd/dev/herolte_wifi.c
++++ b/bsd/dev/herolte_wifi.c
+@@ -16,9 +16,11 @@
+ #include <sys/kauth.h>
+ #include <kern/kalloc.h>
+ #include <kern/clock.h>
++#include <mach/mach_time.h>
+ #include <machine/machine_routines.h>
+ #include <pexpert/pexpert.h>
+ 
++extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
+ extern void IOSleep(unsigned milliseconds);
+ void herolte_wifi_firmware(vm_offset_t cfg);
+ 

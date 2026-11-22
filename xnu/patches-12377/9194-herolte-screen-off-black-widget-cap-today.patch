@@ -1,0 +1,35 @@
+diff --git a/bsd/dev/sweet_sample.c b/bsd/dev/sweet_sample.c
+index 4733ac3..102578a 100644
+--- a/bsd/dev/sweet_sample.c
++++ b/bsd/dev/sweet_sample.c
+@@ -124,7 +124,8 @@ sweet_top_cap(task_t task, const char *name)
+ 	}
+ 	bool widget = false;
+ 	for (const char *c = name; *c != '\0' && !widget; c++) {
+-		widget = strncmp(c, "Wid", 3) == 0;     /* 9178: "HealthBalanceWid", names cut at 16 */
++		widget = strncmp(c, "Wid", 3) == 0 ||  /* 9178: "HealthBalanceWid", names cut at 16 */
++		    strncmp(c, "Today", 5) == 0;       /* (9194) NewsToday2, News's widget, ~18 % in boot-18k29 */
+ 	}
+ 	if (percent <= 0 || percent > 100 || !widget) {
+ 		return;
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index af747fb..99b992c 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -530,6 +530,16 @@ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+ #if defined(ARM64_BOARD_CONFIG_HEROLTE)
+ 		if (step == 0) {
+ 			herolte_fb_primary();
++			/*
++			 * (9194) Black at once, no fade: with VGR0 presenting (0338) the frame the user saw is in the second
++			 * buffer, and the panel memory halved here held an old one; the power-off "animation" was that old frame
++			 * scrambled (boot-18k22). herovgr=0 avoided it at the cost of a GPU scaling pass every frame (kernel_task
++			 * 20 -> 52 %, boot-18k29).
++			 */
++			step = 6;
++			IOLockLock(fb->fLock);
++			fb->fFadeStep = 7;
++			IOLockUnlock(fb->fLock);
+ 		}
+ #endif
+ 		if (step <= 6) {
