@@ -284,3 +284,19 @@ Pioxi ya pidió que se incluya el brillo; el suelo por defecto (64) queda como d
 - Defecto mío: el nombre de proceso salió vacío (`proc_name` por `dlsym`); lo mapeé con las líneas `XPC[pid]` y `SMP` del mismo registro. Si quieres nombres directos, otro DROP (sin urgencia).
 
 **Propuesta:** (1) lista de demonios que podrían no arrancar (candidatos por huella y por ser inútiles sin SIM/iCloud/Apple Watch/Siri) midiendo antes el efecto en memoria libre, con `heronoexec` (nivel 2: argumento de arranque, hay 3 caracteres libres en la línea; mejor `disabled.list` que ya existe en el DROP); (2) probar apagar el proceso GPU de WebKit.
+
+### V.12 «Internal error» al guardar un MP3 (E-0399) y resultado de la tanda 1 de demonios (E-0400)
+
+**Causa raíz (confirmada, con código y datos):** `mediaserverd` abortaba cada vez que WebKit reproducía un medio con pista de vídeo. Excepción en el registro unificado:
+`-[__NSCFNumber objectForKey:]: unrecognized selector`; lanzada desde **VideoToolbox +0x27548c**, que busca en el registro de IOKit la propiedad **`DisplayPipePlaneBaseAlignment`** y lee **`PlaneBaseAlignmentLinear`**
+de ella. Nuestro parche **0046/0061** la deja como un **número (64)**; iOS espera un **diccionario**. Upstream ya lo había corregido en su 0342 (Note FE 0462) con el mismo comentario.
+El «internal error» de Safari es el aviso genérico por perder el servicio de medios. Las líneas `200:internal error` del mismo registro son de QUIC, ruido.
+
+**Arreglo (Nivel 3: parche y BOOT, dentro de D-0123 hasta el 23/11):** parche **0488** (propio, mínimo), CI verde, **`min130`** = `min129` + 0488, escrita (BOOT 20 de 80) y leída de vuelta. Vuelta atrás: `min129`.
+Pendiente de prueba por Pioxi: Safari y la canción de nuevo; no debe haber excepción ni cierres de `mediaserverd`.
+
+**Tanda 1 de demonios (E-0400):** 51 trabajos desactivados (33 antes), el teléfono llega a la pantalla de inicio, **0 arranques de `lskdd`** (484 antes), procesos 187→234 frente a 214→238 y huellas
+~150-225 MB menores en las mismas marcas de tiempo (depende del uso). La memoria libre mínima (31 MB) no es comparable. **Conclusión:** la tanda no rompe nada y quita el bucle; siguiente tanda posible, midiendo igual.
+
+**Dato para el orquestador sobre EFS:** el hash absoluto de EFS que imprime el flasher cambió en tres escrituras seguidas; el flasher lo compara antes y después de su operación (iguales) y no lo escribe. Posible causa, sin
+comprobar: TWRP lo monta o el teléfono lo modifica entre sesiones. Si te preocupa, una forma de saberlo es leer el hash dos veces seguidas en TWRP sin escribir nada.
