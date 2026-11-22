@@ -303,6 +303,46 @@ ask_for_old_wallpaper(void)
 }
 
 static void run_ls_migrator(void);
+
+/*
+ * E-0410: fileproviderd's code has "[ERROR] Extension %@ doesn't have a group container for document group %@ specified via %@. Ignoring the extension." and the LocalStorage
+ * provider (the "On My iPhone" of Files) is never launched; its Info.plist names the document group group.com.apple.FileProvider.LocalStorage. What LaunchServices knows of three
+ * extensions (the provider, and SaveToFiles and DocumentManager.Service, which do launch): the record, its entitlements' application-groups, its group container URLs and its data
+ * container URL, one line each in census.out (which hero-run copies to the kernel log).
+ */
+static id
+getter(id object, const char *selector)
+{
+   SEL sel = sel_registerName(selector);
+   if (object == nil || !((BOOL (*)(id, SEL, SEL))objc_msgSend)(object, sel_registerName("respondsToSelector:"), sel))
+      return nil;
+   return ((id (*)(id, SEL))objc_msgSend)(object, sel);
+}
+
+static void
+probe_group_containers(void)
+{
+   static const char *const ids[] = {
+      "com.apple.FileProvider.LocalStorage",
+      "com.apple.DocumentManagerUICore.SaveToFiles",
+      "com.apple.DocumentManagerUICore.Service",
+   };
+   Class records = objc_getClass("LSApplicationExtensionRecord");
+   for (size_t i = 0; records && i < sizeof(ids) / sizeof(ids[0]); i++) {
+      id error = nil;
+      id record = send_id(((id (*)(id, SEL))objc_msgSend)((id)records, sel_registerName("alloc")), "initWithBundleIdentifier:error:", nsstring(ids[i]), &error);
+      dprintf(census_fd, "groups %s: record %s; error %s\n", ids[i], text_of(record), text_of(error));
+      if (!record)
+         continue;
+      id ent = getter(record, "entitlements");
+      id groups = ent ? send_id(ent, "objectForKey:", nsstring("com.apple.security.application-groups"), NULL) : nil;
+      dprintf(census_fd, "groups %s: entitlements %s; application-groups %s\n", ids[i], ent ? "present" : "NONE", text_of(groups));
+      dprintf(census_fd, "groups %s: groupContainerURLs %s\n", ids[i], text_of(getter(record, "groupContainerURLs")));
+      dprintf(census_fd, "groups %s: dataContainerURL %s\n", ids[i], text_of(getter(record, "dataContainerURL")));
+      dprintf(census_fd, "groups %s: containerURL %s\n", ids[i], text_of(getter(record, "containerURL")));
+   }
+}
+
 static void
 extension_census(void)
 {
@@ -339,6 +379,7 @@ extension_census(void)
          "initWithBundleIdentifier:error:", nsstring(known[i]), &error);
       dprintf(census_fd, "record %s: %s; error %s\n", known[i], text_of(record), text_of(error));
    }
+   probe_group_containers();
    id attributes = ((id (*)(id, SEL, id, id))objc_msgSend)((id)objc_getClass("NSDictionary"),
       sel_registerName("dictionaryWithObject:forKey:"), nsstring("com.apple.posterkit.provider"),
       nsstring("NSExtensionPointName"));
