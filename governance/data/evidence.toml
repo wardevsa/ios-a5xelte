@@ -5979,3 +5979,18 @@ sha256 = "37685df408cd6d3c84a1f4d3eeb53871c852279dc36aa0c7c241679d9c691866"
 size = 285741
 immutable = true
 note = "Registro persistente del arranque atascado (scratch)."
+
+[[evidence]]
+id = "E-0407"
+title = "LA REINICIALIZACIÓN DEL ESTADO DE SPRINGBOARD NO ARREGLA EL ATASCO (el Director: 'the same'): registro del arranque (log-n34, 720 s): hero-run hizo lo aprobado: 'reset.sb: FrontBoard/applicationState.db (319488 bytes) -> .s7bak: ok', el -wal, el -shm, RecentAppLayouts.pb.lzfse y com.apple.springboard.plist: todos ok, y 'SpringBoard killed to start again without them (1)': SpringBoard arrancó dos veces ('exec SpringBoard' x2) y las dos se quedaron en 11 MB, 'exec PosterBoard' 0: el estado de SpringBoard NO es la causa; (los cinco .s7bak quedan en su sitio; devolverlos es opcional); NUEVA HIPÓTESIS, desde la comparación de secuencias (log-n31 bueno frente a log-n34 atascado, líneas exec/XPC/Sandbox/AKS/HEROGPU): en el arranque bueno arrancan MobileInternetSharing, accessoryupdaterd, cloudpaird, nanoprefsyncd, OTACrashCopier y safetyalertsd; en los atascados no; ES CONSECUENCIA POSIBLE (son trabajos a demanda: los pide quien llega más lejos) o CAUSA; lo único que no se puede descartar de lo que cambió entre el arranque bueno (min130, 11:1x) y los cuatro malos es la LISTA DE TRABAJOS DESACTIVADOS (tanda 1 de E-0398: 51 trabajos, 18 nuevos: lskdd, nanoregistryd, nanoregistrylaunchd, nanoprefsyncd.2, nanotimekitcompaniond, carkitd, avconferenced, FTConversationService, 4 UARPUpdaterService, accessoryupdaterd, cloudpaird, MobileInternetSharing, OTACrashCopier, OTATaskingAgent, safetyalertsd): un cliente (SpringBoard) puede esperar para siempre a un servicio mach de un trabajo desactivado (advertido en el propio código de hero-run: 41 de golpe dejaron a SpringBoard esperando); ¡OJO!: el arranque bueno n31 tenía la lista de 51 ya escrita por hero-run en n30, pero el efecto de la lista parece llegar UN ARRANQUE DESPUÉS (el comentario del código lo dice: 'from the next boot on'), lo que explicaría que min129 (n30) y min130 (n31) fueran buenos con los 18 nuevos aún no efectivos y que los atascos empiecen en n32; no está demostrado; PRUEBA: DROP 59 de 80: disabled.list vuelve a las 25 líneas originales (se quitan las 18 de la tanda 1); como el efecto puede llegar al arranque siguiente, puede hacer falta DOS arranques para ver el resultado; si SpringBoard arranca, la causa es la tanda 1 y se hace una bisección de las 18 (de 9 en 9); si no, se descarta; contadores D-0123: BOOT 23 de 80, DROP 59 de 80"
+kind = "log"
+path = "/tmp/herolte-work/ios-crashes/log-n34.txt"
+location = "scratch"
+created = "2026-11-22"
+domain = "device"
+level = "L2"
+device = "this-unit"
+sha256 = "ea4b5cc1804243dbc76fa154c5c9363b6f703fa89aeaeeac37bc1eb20ddc15ef"
+size = 271819
+immutable = true
+note = "Registro del arranque con el reinicio de estado (scratch)."
