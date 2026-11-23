@@ -2164,10 +2164,37 @@ ios26_function_values(unsigned function)
 	const float *values;
 	uint32_t count;
 
+	static uint8_t looked[90];
+
 	if (!ios26_numbers || ca_context == NULL || function >= 90) {
 		return;
 	}
 	state = *(const char *const *)((const char *)ca_context + 0x10);
+	/* boot 26k7h: nothing was ever read; what the state holds, the first three times for each function */
+	if (looked[function] < 3 && plausible(state, 8)) {
+		char line[600];
+		int used = snprintf(line, sizeof(line), "hakios-gl: iOS 26: function %u, state %p:", function, (const void *)state);
+		for (unsigned w = 0; w < 16 && used < (int)sizeof(line) - 24; w++) {
+			used += snprintf(line + used, sizeof(line) - (size_t)used, " %llx",
+			    (unsigned long long)*(const uint64_t *)(state + 8 * w));
+		}
+		say("%s\n", line);
+		for (unsigned i = 0; i < 4; i++) {
+			const char *p = *(const char *const *)(state + 0x28 + 8 * i);
+			if (!plausible(p, 8)) {
+				say("hakios-gl:   entry %u: %p\n", i, (const void *)p);
+				continue;
+			}
+			const float *v = *(const float *const *)(p + 0x30);
+			say("hakios-gl:   entry %u: %p: +0x24 %u, +0x28 %u, +0x30 %p%s", i, (const void *)p, *(const uint32_t *)(p + 0x24),
+			    *(const uint32_t *)(p + 0x28), (const void *)v, plausible(v, 4) ? ":" : "\n");
+			if (plausible(v, 4)) {
+				say(" %.3g %.3g %.3g %.3g %.3g %.3g %.3g %.3g\n", (double)v[0], (double)v[1], (double)v[2], (double)v[3],
+				    (double)v[4], (double)v[5], (double)v[6], (double)v[7]);
+			}
+		}
+		looked[function]++;
+	}
 	if (!plausible(state, 8) || !plausible(param = *(const char *const *)(state + 0x28), 8)) {
 		return;
 	}
