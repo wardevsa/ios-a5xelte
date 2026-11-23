@@ -163,7 +163,7 @@ write_code(uintptr_t at, const void *bytes, size_t n)
 }
 
 static void
-install(void)
+install(intptr_t image_slide)
 {
 	size_t length = 0;
 	const char *setting = getenv("BGL_CA_HOOK");
@@ -190,11 +190,12 @@ install(void)
 		say("ca_server_hook26: GLES failed earlier this boot: software renderer\n");
 		return;
 	}
+	/* boot 26k7: nothing was printed past this point, so _dyld_get_shared_cache_range() gave NULL on this system; dyld's
+	 * image callback passes the slide of QuartzCore, which for an image of the shared cache is the cache's slide */
 	const void *cache = _dyld_get_shared_cache_range(&length);
-	if (cache == NULL) {
-		return;
-	}
-	slide = (uintptr_t)cache - CACHE_BASE;
+	slide = cache != NULL ? (uintptr_t)cache - CACHE_BASE : (uintptr_t)image_slide;
+	say("ca_server_hook26: backboardd, cache %p, image slide %#lx: slide %#lx\n", cache, (unsigned long)image_slide,
+	    (unsigned long)slide);
 	const uint32_t *cbz = (const uint32_t *)(A_RENDERER_CBZ + slide);
 	const uint32_t *nmc = (const uint32_t *)(A_NEW_METAL_CONTEXT + slide);
 	const uint32_t *gnc = (const uint32_t *)(A_GLES_NEW_CONTEXT + slide);
@@ -238,13 +239,12 @@ on_image(const struct mach_header *mh, intptr_t image_slide)
 	static int done;
 	Dl_info di;
 
-	(void)image_slide;
 	if (done || !dladdr(mh, &di) || di.dli_fname == NULL || strstr(di.dli_fname, "/QuartzCore.framework/QuartzCore") == NULL) {
 		return;
 	}
 	done = 1;
 	if (strcmp(getprogname(), "backboardd") == 0) {
-		install();
+		install(image_slide);
 	}
 }
 
