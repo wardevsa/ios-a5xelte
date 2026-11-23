@@ -161,6 +161,8 @@ main(int argc, char **argv)
    printf("%s: %zu bytes of AIR, %u function constants; air_to_nir %.2f s: %u NIR instructions, %u blocks\n", fn,
           code_size, nfc, t1 - t0, count_instrs(nir), count_blocks(nir));
    fflush(stdout);
+   if (getenv("HERO_NIR_AIR"))   /* what the AIR front end hands over, before any lowering */
+      nir_print_shader(nir, stdout);
 
    NIR_PASS(_, nir, nir_lower_io, nir_var_shader_in | nir_var_shader_out, type_size_vec4,
             nir_lower_io_use_interpolated_input_intrinsics);

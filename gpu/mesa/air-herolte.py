@@ -1183,6 +1183,14 @@ change('Midgard RA: spills a round', '../../panfrost/midgard/midgard_ra.c',
    const char *herolte_spills = getenv("HERO_MIDGARD_SPILLS");
    if (herolte_spills && atoi(herolte_spills) > 0)
       herolte_cap = atoi(herolte_spills);
+   /* which classes spill in batches (HERO_MIDGARD_BATCH_CLASSES, a mask of REG_CLASS_*): the special ones, whose
+    * spills are moves into work registers. Batches of work spills (TLS) each bring new load/store conflicts, and on
+    * QuartzCore's uber shaders ran into the 1000-round limit, or out of candidates when mixed with the others; with
+    * the special classes alone fixed_frag_lph_cph/cpf allocate in ~65 rounds (275 one at a time) */
+   unsigned herolte_classes = 0x1e;
+   const char *herolte_bc = getenv("HERO_MIDGARD_BATCH_CLASSES");
+   if (herolte_bc)
+      herolte_classes = strtoul(herolte_bc, NULL, 0);
    herolte_midgard_ra_rounds = 0;
 ''')
 change('Midgard RA: batch', '../../panfrost/midgard/midgard_ra.c',
@@ -1196,7 +1204,7 @@ change('Midgard RA: batch', '../../panfrost/midgard/midgard_ra.c',
             /* HEROLTE: more of the best candidates of this same graph, ranked in one pass over it; the fills of the
              * ones just spilled are new indices, past this graph's nodes, so they cannot be picked */
             unsigned herolte_n = 0;
-            if (herolte_batch > 1) {
+            if (herolte_batch > 1 && (herolte_classes & (1u << l->spill_class))) {
                unsigned *herolte_nodes = malloc(herolte_batch * sizeof(unsigned));
                herolte_n = herolte_best_spill_nodes(l, herolte_nodes, herolte_batch);
                for (unsigned k = 0; k < herolte_n; k++) {
@@ -1208,7 +1216,8 @@ change('Midgard RA: batch', '../../panfrost/midgard/midgard_ra.c',
             if (getenv("HERO_MIDGARD_RA_LOG"))
                fprintf(stderr, "HEROLTE midgard RA: round %u, class %u, %u nodes, batch %u: %u spilled\\n",
                        herolte_midgard_ra_rounds, l->spill_class, l->node_count, herolte_batch, MAX2(herolte_n, 1));
-            herolte_batch = MIN2(herolte_batch * 2, herolte_cap);
+            if (herolte_classes & (1u << l->spill_class))
+               herolte_batch = MIN2(herolte_batch * 2, herolte_cap);
          }
       }
       herolte_midgard_ra_rounds++;
@@ -1324,6 +1333,252 @@ change('Midgard timing: line', '../../panfrost/midgard/midgard_compile.c',
               (herolte_t4 - herolte_t3) / 1e9, herolte_midgard_ra_rounds, ctx->spills, ctx->fills,
               (herolte_t4 - herolte_t0) / 1e9);
 ''')
+
+# 25. lcra_solve assigns registers greedily in node-number order. After scheduling the program is linear, and the
+# temporaries spilling makes get the highest numbers though they live anywhere: in the two load/store registers (r26,
+# r27) that order fragments them, and RA "fails" where a colouring exists -- on the PC, QuartzCore's uber shader
+# alternated work-class spills with one load/store spill a round for 450+ rounds, or ran out of load/store candidates
+# with batches ("Failed to choose spill node"). Greedy by first appearance in the program is what an interval graph
+# wants: try that order first, then lcra_solve's own (HERO_MIDGARD_RA_ORDER=0: only lcra_solve's).
+change('Midgard RA: program order', '../../panfrost/midgard/midgard_ra.c',
+       '''   mir_compute_interference(ctx, l);
+
+   *spilled = !lcra_solve(l);
+   return l;
+}''',
+       '''   mir_compute_interference(ctx, l);
+
+   /* HEROLTE: first in program order, then lcra_solve's node order */
+   const char *herolte_order = getenv("HERO_MIDGARD_RA_ORDER");
+   if (!(herolte_order && herolte_order[0] == '0') && herolte_solve_in_program_order(ctx, l)) {
+      *spilled = false;
+      return l;
+   }
+   *spilled = !lcra_solve(l);
+   return l;
+}''')
+change('Midgard RA: program order solver', '../../panfrost/midgard/midgard_ra.c',
+       '''static struct lcra_state *
+allocate_registers(compiler_context *ctx, bool *spilled)
+{''',
+       '''#include <string.h>
+#include "util/bitset.h"
+
+/* HEROLTE: lcra.c's lcra_test_linear (static there) */
+static bool
+herolte_test_linear(struct lcra_state *l, unsigned *solutions, unsigned i)
+{
+   unsigned *row = &l->linear[i * l->node_count];
+   signed constant = solutions[i];
+
+   for (unsigned j = 0; j < l->node_count; ++j) {
+      if (solutions[j] == ~0)
+         continue;
+      signed lhs = solutions[j] - constant;
+      if (lhs < -15 || lhs > 15)
+         continue;
+      if (row[j] & (1 << (lhs + 15)))
+         return false;
+   }
+   return true;
+}
+
+/* HEROLTE: lcra_solve, the nodes taken in order of first appearance in the (scheduled) program; on failure the
+ * solutions are put back as they were (precoloured nodes only) and false is returned */
+static bool
+herolte_solve_in_program_order(compiler_context *ctx, struct lcra_state *l)
+{
+   unsigned n = l->node_count, count = 0;
+   unsigned *order = malloc(n * sizeof(unsigned));
+   unsigned *saved = malloc(n * sizeof(unsigned));
+   BITSET_WORD *seen = calloc(BITSET_WORDS(n), sizeof(BITSET_WORD));
+   bool ok = true;
+
+   memcpy(saved, l->solutions, n * sizeof(unsigned));
+   mir_foreach_instr_global(ctx, ins) {
+      unsigned nodes[1 + MIR_SRC_COUNT] = { ins->dest };
+      for (unsigned s = 0; s < MIR_SRC_COUNT; s++)
+         nodes[1 + s] = ins->src[s];
+      for (unsigned k = 0; k < 1 + MIR_SRC_COUNT; k++) {
+         if (nodes[k] < n && !BITSET_TEST(seen, nodes[k])) {
+            BITSET_SET(seen, nodes[k]);
+            order[count++] = nodes[k];
+         }
+      }
+   }
+   for (unsigned i = 0; i < n; i++)
+      if (!BITSET_TEST(seen, i))
+         order[count++] = i;
+
+   for (unsigned o = 0; o < count && ok; ++o) {
+      unsigned step = order[o];
+      if (l->solutions[step] != ~0 || l->alignment[step] == 0)
+         continue;
+
+      unsigned _class = l->class[step];
+      unsigned class_start = l->class_start[_class];
+      unsigned BA = l->alignment[step];
+      unsigned shift = (BA & 0xffff) - 1;
+      unsigned bound = BA >> 16;
+      unsigned P = bound >> shift;
+      unsigned Q = l->modulus[step];
+      unsigned r_max = l->class_size[_class];
+      unsigned k_max = r_max >> shift;
+      unsigned m_max = k_max / P;
+      bool succ = false;
+
+      for (unsigned m = 0; m < m_max && !succ; ++m) {
+         for (unsigned q = 0; q < Q && !succ; ++q) {
+            l->solutions[step] = ((m * P + q) << shift) + class_start;
+            succ = herolte_test_linear(l, l->solutions, step);
+         }
+      }
+      if (!succ) {
+         l->solutions[step] = ~0;
+         ok = false;
+      }
+   }
+   if (!ok)
+      memcpy(l->solutions, saved, n * sizeof(unsigned));
+   free(order);
+   free(saved);
+   free(seen);
+   return ok;
+}
+
+static struct lcra_state *
+allocate_registers(compiler_context *ctx, bool *spilled)
+{''')
+
+# 26. The frontend lays every alloca out in scratch memory. QuartzCore's uber shader has 240 bytes of it: a table of
+# 16-byte entries from byte 84 on, indexed at run time, and below it bytes reached only at constant offsets (8-bit flags
+# stored and read back, 336 stores). On Midgard every scratch access is a load/store whose operand has to sit in r26/r27,
+# and those flags, live for long stretches, are what RA could not place (boot 26k7k's shader on the PC, "Failed to
+# choose spill node"). Accesses at constant offsets below the lowest base of any run-time-indexed access (an access
+# from an alloca's base stays in that alloca, and allocas are laid out in order) become function_temp variables, one
+# per (offset, size) when nothing else overlaps it, and nir_lower_vars_to_ssa makes them values.
+change('scratch at constant offsets to variables: pass', 'air_to_nir.c',
+       '''   nir_index_ssa_defs(nir_shader_get_entrypoint(c.nir));
+''',
+       '''   {
+      void herolte_scratch_to_vars(nir_shader *nir);   /* HEROLTE, below */
+      herolte_scratch_to_vars(c.nir);
+   }
+   nir_index_ssa_defs(nir_shader_get_entrypoint(c.nir));
+''')
+change('scratch at constant offsets to variables: function', 'air_to_nir.c',
+       '''/* -- HEROLTE: calls through a function number''',
+       '''/* -- HEROLTE: scratch reached only at constant offsets, as variables (air-herolte.py 26) -- */
+#include <stdlib.h>
+#include "util/u_dynarray.h"
+
+/* the constants an offset adds up to, the rest taken as >= 0 */
+static unsigned
+herolte_const_part(nir_scalar s, unsigned depth)
+{
+   if (nir_scalar_is_const(s))
+      return nir_scalar_as_uint(s);
+   if (depth < 8 && nir_scalar_is_alu(s) && nir_scalar_alu_op(s) == nir_op_iadd)
+      return herolte_const_part(nir_scalar_chase_alu_src(s, 0), depth + 1) +
+             herolte_const_part(nir_scalar_chase_alu_src(s, 1), depth + 1);
+   return 0;
+}
+
+struct herolte_scratch_access {
+   nir_intrinsic_instr *intr;
+   unsigned offset, bytes, bits, comps;
+   bool ok;
+   nir_variable *var;
+};
+
+void herolte_scratch_to_vars(nir_shader *nir);
+void
+herolte_scratch_to_vars(nir_shader *nir)
+{
+   nir_function_impl *impl = nir_shader_get_entrypoint(nir);
+   struct util_dynarray list;
+   unsigned limit = ~0u;
+
+   NIR_PASS(_, nir, nir_opt_constant_folding);
+   NIR_PASS(_, nir, nir_copy_prop);
+   util_dynarray_init(&list, NULL);
+   nir_foreach_block(block, impl) {
+      nir_foreach_instr(instr, block) {
+         if (instr->type != nir_instr_type_intrinsic)
+            continue;
+         nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+         bool store = intr->intrinsic == nir_intrinsic_store_scratch;
+         if (!store && intr->intrinsic != nir_intrinsic_load_scratch)
+            continue;
+         nir_src *off = &intr->src[store ? 1 : 0];
+         if (!nir_src_is_const(*off)) {
+            limit = MIN2(limit, herolte_const_part(nir_get_scalar(off->ssa, 0), 0));
+            continue;
+         }
+         unsigned bits = store ? nir_src_bit_size(intr->src[0]) : intr->def.bit_size;
+         unsigned comps = store ? nir_src_num_components(intr->src[0]) : intr->def.num_components;
+         struct herolte_scratch_access a = {
+            .intr = intr, .offset = nir_src_as_uint(*off), .bytes = bits / 8 * comps, .bits = bits,
+            .comps = comps, .ok = bits >= 8 && (!store || nir_intrinsic_write_mask(intr) == BITFIELD_MASK(comps)),
+         };
+         util_dynarray_append(&list, struct herolte_scratch_access, a);
+      }
+   }
+   unsigned n = util_dynarray_num_elements(&list, struct herolte_scratch_access), moved = 0;
+   struct herolte_scratch_access *acc = util_dynarray_begin(&list);
+   for (unsigned i = 0; i < n; i++) {
+      if (acc[i].offset + acc[i].bytes > limit)
+         acc[i].ok = false;
+      for (unsigned j = 0; j < i; j++) {
+         bool overlap = acc[i].offset < acc[j].offset + acc[j].bytes && acc[j].offset < acc[i].offset + acc[i].bytes;
+         bool same = acc[i].offset == acc[j].offset && acc[i].bits == acc[j].bits && acc[i].comps == acc[j].comps;
+         if (overlap && !same)
+            acc[i].ok = acc[j].ok = false;
+      }
+   }
+   /* a group is moved only when every access of it can be */
+   for (unsigned i = 0; i < n; i++) {
+      for (unsigned j = 0; j < n && acc[i].ok; j++) {
+         if (!acc[j].ok && acc[j].offset == acc[i].offset)
+            acc[i].ok = false;
+      }
+   }
+   nir_builder b = nir_builder_create(impl);
+   for (unsigned i = 0; i < n; i++) {
+      if (!acc[i].ok)
+         continue;
+      nir_variable *var = NULL;
+      for (unsigned j = 0; j < i && !var; j++) {
+         if (acc[j].ok && acc[j].offset == acc[i].offset)
+            var = acc[j].var;
+      }
+      if (!var) {
+         enum glsl_base_type t = acc[i].bits == 8 ? GLSL_TYPE_UINT8 : acc[i].bits == 16 ? GLSL_TYPE_UINT16 :
+                                 acc[i].bits == 64 ? GLSL_TYPE_UINT64 : GLSL_TYPE_UINT;
+         var = nir_local_variable_create(impl, glsl_vector_type(t, acc[i].comps), "herolte_scratch");
+      }
+      acc[i].var = var;
+      b.cursor = nir_before_instr(&acc[i].intr->instr);
+      if (acc[i].intr->intrinsic == nir_intrinsic_store_scratch) {
+         nir_store_var(&b, var, acc[i].intr->src[0].ssa, BITFIELD_MASK(acc[i].comps));
+         nir_instr_remove(&acc[i].intr->instr);
+      } else {
+         nir_def_replace(&acc[i].intr->def, nir_load_var(&b, var));
+      }
+      moved++;
+   }
+   util_dynarray_fini(&list);
+   if (moved) {
+      nir_metadata_preserve(impl, nir_metadata_control_flow);
+      NIR_PASS(_, nir, nir_lower_vars_to_ssa);
+      NIR_PASS(_, nir, nir_opt_dce);
+   }
+   if (getenv("HERO_SCRATCH_LOG"))
+      fprintf(stderr, "HEROLTE scratch: %u of %u constant-offset accesses moved to variables, run-time-indexed "
+              "from byte %u\\n", moved, n, limit);
+}
+
+/* -- HEROLTE: calls through a function number''')
 
 # 23. AIR's discard_fragment is NIR demote, which Midgard's emit_intrinsic does not know ("Unhandled intrinsic demote"
 # three times in backboardd's main fragment shader, boot 26k7k: nothing emitted, the fragment kept). As ios-b1lte did
