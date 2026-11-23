@@ -1580,6 +1580,48 @@ herolte_scratch_to_vars(nir_shader *nir)
 
 /* -- HEROLTE: calls through a function number''')
 
+# 27. ios-b1lte's module dump (B1L-0086/0087, off since B1L-0110), back for one name: HERO_DUMP_MODULES=SUBSTRING in
+# gl.env sends the AIR modules whose entry point contains it through our kernel log (herodrm_log; this kernel has no
+# kern.hakios.say), as "B2LMOD" lines for ios-b1lte's scripts/extract-b2lmod.py. Boot 26k7m: QuartzCore's own
+# specialisation of the uber shader, A2Xghfc, was still in mir_ra after 600 s on the phone, where the PC's generic
+# fixed_frag_lph_cph takes 25 s; the PC needs that module.
+change('module dump by name: switch', 'air_metal.c',
+       '''   if (1)
+      return;   /* B2L (B1L-0110): off */
+   static int in_bbd = -1;
+   static unsigned modules;
+''',
+       '''   const char *herolte_want = getenv("HERO_DUMP_MODULES");   /* HEROLTE: these only */
+   if (!herolte_want || !herolte_want[0] || !entry || !strstr(entry, herolte_want))
+      return;
+   static int in_bbd = -1;
+   static unsigned modules;
+''')
+change('module dump by name: kernel log', 'air_metal.c',
+       '''         if (n > 0)
+            (void)sysctlbyname("kern.hakios.say", NULL, NULL, line, (size_t)MIN2(n, (int)sizeof(line) - 1));
+         if ((c & 31) == 31)
+            usleep(2000);   /* a breath for the log's writer */
+''',
+       '''         if (n > 0) {   /* HEROLTE: our kernel log */
+            static void (*herolte_log)(const char *, ...);
+            if (!herolte_log)
+               herolte_log = (void (*)(const char *, ...))dlsym(RTLD_DEFAULT, "herodrm_log");
+            if (herolte_log)
+               herolte_log("%s", line);
+         }
+         if ((c & 31) == 31)
+            usleep(2000);   /* a breath for the log's writer */
+''')
+change('module dump by name: dlsym', 'air_metal.c',
+       '''static void
+b2l_dump_module(const char *kind, const char *entry, const void *bitcode, size_t size)
+{''',
+       '''#include <dlfcn.h>   /* HEROLTE: herodrm_log */
+static void
+b2l_dump_module(const char *kind, const char *entry, const void *bitcode, size_t size)
+{''')
+
 # 23. AIR's discard_fragment is NIR demote, which Midgard's emit_intrinsic does not know ("Unhandled intrinsic demote"
 # three times in backboardd's main fragment shader, boot 26k7k: nothing emitted, the fragment kept). As ios-b1lte did
 # for Bifrost (B1L-0091): emitted as Midgard's discard, which mir_analyze_helper_terminate keeps alive for derivatives.
