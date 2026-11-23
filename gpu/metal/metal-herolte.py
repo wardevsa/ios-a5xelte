@@ -108,6 +108,10 @@ herolte_track(uint32_t handle)
 	pthread_mutex_unlock(&herolte_lock);
 }
 
+/* Command buffers that completed with imported surfaces to sync: QuartzCore's Metal renderer draws the display into
+ * such surfaces, so in backboardd this staying 0 means nothing reached the screen (ca_server_hook26.c's watchdog). */
+unsigned long hero_metal_surface_writes;
+
 /* Called when a command buffer completes (hakiosmetal_air.m): what the GPU wrote into surfaces, to the display. */
 void
 hero_sync_surfaces(void)
@@ -117,6 +121,8 @@ hero_sync_surfaces(void)
 	pthread_mutex_lock(&herolte_lock);
 	for (unsigned i = 0; i < herolte_nbos; i++)
 		herolte_sync_fn(herolte_bos[i]);
+	if (herolte_nbos > 0)
+		hero_metal_surface_writes++;
 	pthread_mutex_unlock(&herolte_lock);
 }
 ''')

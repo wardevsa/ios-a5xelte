@@ -140,6 +140,30 @@ watchdog(void *unused)
 	return NULL;
 }
 
+/*
+ * Metal's watchdog (boot 26k7j: backboardd on Metal ran at 200% CPU for 7 minutes and never drew, the screen stayed on
+ * the kernel's text). The driver counts the command buffers that wrote into imported surfaces -- QuartzCore draws the
+ * display into those (hero_metal_surface_writes, gpu/metal/metal-herolte.py); with none 150 s after backboardd started,
+ * it is ended, and the next backboardd of this boot is put on OpenGL ES (METAL_TRIED).
+ */
+static void *
+metal_watchdog(void *unused)
+{
+	(void)unused;
+	for (int s = 10; s <= 150; s += 10) {
+		sleep(10);
+		const unsigned long *writes = dlsym(RTLD_DEFAULT, "hero_metal_surface_writes");
+		say("ca_server_hook26: Metal, %d s: %s %lu surface writes\n", s, writes != NULL ? "driver loaded," : "no driver yet,",
+		    writes != NULL ? *writes : 0UL);
+		if (writes != NULL && *writes > 0) {
+			return NULL;
+		}
+	}
+	say("ca_server_hook26: Metal drew nothing in 150 s: backboardd ends, the next one is on OpenGL ES\n");
+	usleep(200000);
+	abort();
+}
+
 /* async-signal-safe: a crash once the patches are in marks this boot, the next backboardd stays on the software renderer */
 static void
 crash_mark(int sig)
@@ -250,6 +274,10 @@ install(intptr_t image_slide)
 			}
 			say("ca_server_hook26: backboardd is in metal.allow: QuartzCore's Metal renderer this time (OpenGL ES if "
 			    "backboardd starts again this boot)\n");
+			pthread_t t;
+			if (pthread_create(&t, NULL, metal_watchdog, NULL) == 0) {
+				pthread_detach(t);
+			}
 			return;
 		}
 		say("ca_server_hook26: Metal was tried earlier this boot: OpenGL ES\n");
