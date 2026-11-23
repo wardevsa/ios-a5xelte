@@ -1421,14 +1421,26 @@ drawing(struct eagl *e)
  * wrote): when its seed has moved, and once every 30 frames for those who draw without moving it (see
  * surface_changed()).
  */
+/*
+ * iOS 26 (boot 26k7f): applications draw into these surfaces with the seed left at 0, so "once every 30 frames" let the
+ * GPU read up to a second of old pixels: Settings' rows ghosted over each other while scrolling, with stripes. The caches
+ * are now cleaned the first time such a picture is drawn with in each frame; HERO_SHARED_CLEAN=N (gl.env) cleans
+ * once every N frames instead.
+ */
 static unsigned shared_cleans;
+static unsigned shared_clean_every;
 
 static void
 shared_picture_fresh(struct eagl *e, struct image *image)
 {
 	uint32_t seed = IOSurfaceGetSeed(image->surface);
 
-	if (seed == image->seed && e->frames - image->cleaned < 30) {
+	if (shared_clean_every == 0) {
+		const char *every = getenv("HERO_SHARED_CLEAN");
+		shared_clean_every = every != NULL && atoi(every) > 0 ? (unsigned)atoi(every) : 1;
+	}
+	/* `cleaned` is the frame number plus one: 0 is never */
+	if (seed == image->seed && image->cleaned != 0 && e->frames + 1 - image->cleaned < shared_clean_every) {
 		return;
 	}
 	hakios_gl_surface_written(e->gl, IOSurfaceGetID(image->surface));
@@ -1437,7 +1449,7 @@ shared_picture_fresh(struct eagl *e, struct image *image)
 		    "the GPU\n", image->texture, IOSurfaceGetID(image->surface), seed, image->seed);
 	}
 	image->seed = seed;
-	image->cleaned = e->frames;
+	image->cleaned = e->frames + 1;
 }
 
 /* ---- the entries written by hand ---------------------------------------------------------------- */
