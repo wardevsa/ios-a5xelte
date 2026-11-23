@@ -27,6 +27,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -143,23 +144,30 @@ watchdog(void *unused)
 /*
  * Metal's watchdog (boot 26k7j: backboardd on Metal ran at 200% CPU for 7 minutes and never drew, the screen stayed on
  * the kernel's text). The driver counts the command buffers that wrote into imported surfaces -- QuartzCore draws the
- * display into those (hero_metal_surface_writes, gpu/metal/metal-herolte.py); with none 150 s after backboardd started,
+ * display into those (hero_metal_surface_writes, gpu/metal/metal-herolte.py); with none 600 s after backboardd started,
  * it is ended, and the next backboardd of this boot is put on OpenGL ES (METAL_TRIED).
  */
 static void *
 metal_watchdog(void *unused)
 {
 	(void)unused;
-	for (int s = 10; s <= 150; s += 10) {
+	/* boot 26k7k: the first boot's shaders are compiled before anything is drawn (QuartzCore's main fragment shader
+	 * alone took Midgard more than 150 s), and they are kept in Mesa's disk cache for the next boots: so 600 s by
+	 * default, HERO_METAL_WAIT=seconds in gl.env */
+	const char *w = getenv("HERO_METAL_WAIT");
+	int wait = w != NULL && atoi(w) >= 20 ? atoi(w) : 600;
+	for (int s = 10; s <= wait; s += 10) {
 		sleep(10);
 		const unsigned long *writes = dlsym(RTLD_DEFAULT, "hero_metal_surface_writes");
-		say("ca_server_hook26: Metal, %d s: %s %lu surface writes\n", s, writes != NULL ? "driver loaded," : "no driver yet,",
-		    writes != NULL ? *writes : 0UL);
+		if (s % 30 == 0 || (writes != NULL && *writes > 0)) {
+			say("ca_server_hook26: Metal, %d s: %s %lu surface writes\n", s,
+			    writes != NULL ? "driver loaded," : "no driver yet,", writes != NULL ? *writes : 0UL);
+		}
 		if (writes != NULL && *writes > 0) {
 			return NULL;
 		}
 	}
-	say("ca_server_hook26: Metal drew nothing in 150 s: backboardd ends, the next one is on OpenGL ES\n");
+	say("ca_server_hook26: Metal drew nothing in %d s: backboardd ends, the next one is on OpenGL ES\n", wait);
 	usleep(200000);
 	abort();
 }
@@ -238,9 +246,17 @@ install(intptr_t image_slide)
 		say("ca_server_hook26: off (BGL_CA_HOOK=0)\n");
 		return;
 	}
-	if (sysctlbyname("kern.boottime", &bt, &bl, NULL, 0) == 0) {
-		snprintf(session, sizeof(session), "%ld.%06d", (long)bt.tv_sec, (int)bt.tv_usec);
+	/* boot 26k7k: the second backboardd of a boot did not see the first one's METAL_TRIED -- kern.boottime moves when
+	 * the clock is set (Wi-Fi time comes in between); the boot session's UUID, made once at boot by IOPMrootDomain,
+	 * does not */
+	size_t sl = sizeof(session) - 1;
+	if (sysctlbyname("kern.bootsessionuuid", session, &sl, NULL, 0) != 0 || session[0] == 0) {
+		session[0] = 0;
+		if (sysctlbyname("kern.boottime", &bt, &bl, NULL, 0) == 0) {
+			snprintf(session, sizeof(session), "%ld.%06d", (long)bt.tv_sec, (int)bt.tv_usec);
+		}
 	}
+	session[sizeof(session) - 1] = 0;
 	if ((fd = open(MARKER, O_RDONLY)) >= 0) {
 		ssize_t n = read(fd, seen, sizeof(seen) - 1);
 		close(fd);
@@ -268,10 +284,14 @@ install(intptr_t image_slide)
 			}
 		}
 		if (!session[0] || strcmp(tried, session) != 0) {
-			if ((fd = open(METAL_TRIED, O_WRONLY | O_CREAT | O_TRUNC, 0644)) >= 0) {
-				(void)write(fd, session, strlen(session));
-				close(fd);
+			int wfd = open(METAL_TRIED, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			int werr = wfd < 0 ? errno : 0;
+			if (wfd >= 0) {
+				(void)write(wfd, session, strlen(session));
+				close(wfd);
 			}
+			say("ca_server_hook26: boot session %s, %s had \"%s\"; marked (errno %d)\n", session, METAL_TRIED, tried,
+			    werr);
 			say("ca_server_hook26: backboardd is in metal.allow: QuartzCore's Metal renderer this time (OpenGL ES if "
 			    "backboardd starts again this boot)\n");
 			pthread_t t;

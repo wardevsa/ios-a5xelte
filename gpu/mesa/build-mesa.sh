@@ -106,13 +106,16 @@ cpu = 'arm64'
 endian = 'little'
 EOF
 
+# shader-cache (boot 26k7k): panfrost's disk cache, which ios-b1lte's B1L-0095 names by the image's LC_UUID; without
+# it every backboardd compiled QuartzCore's main fragment shader again, minutes on Midgard. Its directory is
+# MESA_SHADER_CACHE_DIR in /private/var/herolte/gl.env (backboardd runs as mobile).
 cd mesa
 [ -d build ] || meson setup build --cross-file ../ios-cross.txt \
   --buildtype=release -Db_ndebug=true -Dprefix=/ \
   -Dgallium-drivers=softpipe,panfrost -Dvulkan-drivers= \
   -Dllvm=disabled -Dglx=disabled -Degl=disabled -Dgbm=disabled -Dplatforms= \
   -Dosmesa=true -Dopengl=true -Dgles1=disabled -Dgles2=enabled -Dshared-glapi=enabled \
-  -Dshader-cache=disabled -Dvalgrind=disabled -Dlibunwind=disabled -Dzstd=disabled \
+  -Dshader-cache=enabled -Dvalgrind=disabled -Dlibunwind=disabled -Dzstd=disabled \
   -Dxmlconfig=disabled -Dbuild-tests=false -Dglvnd=disabled -Dlmsensors=disabled \
   -Dgallium-opencl=disabled -Dgallium-rusticl=false -Dgallium-xa=disabled \
   -Dgallium-vdpau=disabled -Dgallium-va=disabled -Dtools= -Dperfetto=false

@@ -1169,4 +1169,219 @@ change('constant-buffer loads hoisted: pass', 'air_metal.c',
             NULL);   /* HEROLTE: out of every if, to be pushed */
 ''')
 
+# 21. Midgard's register allocator, one spill a round (boot 26k7k: backboardd on Metal spent 150 s and more in Midgard's
+# compiler on QuartzCore's main fragment shader, A2Xghfc, ~75 000 NIR instructions in ~12 000 blocks, and never drew).
+# mir_ra spills one node, then recomputes liveness and the whole interference graph, up to 1000 times; on the PC
+# (gpu/mesa/hero-midcomp.c) that loop was where the time went. Each round now spills a batch picked from the same
+# graph, 1, 2, 4 ... up to 64 (HERO_MIDGARD_SPILLS=N caps it; 1 is Mesa's own behaviour): a shader that needs one or
+# two spills gets the same code as before, a huge one converges in tens of rounds instead of hundreds.
+change('Midgard RA: spills a round', '../../panfrost/midgard/midgard_ra.c',
+       '''   int iter_count = 1000; /* max iterations */
+''',
+       '''   int iter_count = 1000; /* max iterations */
+   unsigned herolte_batch = 1, herolte_cap = 64;   /* HEROLTE: spills a round */
+   const char *herolte_spills = getenv("HERO_MIDGARD_SPILLS");
+   if (herolte_spills && atoi(herolte_spills) > 0)
+      herolte_cap = atoi(herolte_spills);
+   herolte_midgard_ra_rounds = 0;
+''')
+change('Midgard RA: batch', '../../panfrost/midgard/midgard_ra.c',
+       '''         } else {
+            mir_spill_register(ctx, spill_node, l->spill_class, &spill_count);
+         }
+      }
+''',
+       '''         } else {
+            mir_spill_register(ctx, spill_node, l->spill_class, &spill_count);
+            /* HEROLTE: more of the best candidates of this same graph, ranked in one pass over it; the fills of the
+             * ones just spilled are new indices, past this graph's nodes, so they cannot be picked */
+            unsigned herolte_n = 0;
+            if (herolte_batch > 1) {
+               unsigned *herolte_nodes = malloc(herolte_batch * sizeof(unsigned));
+               herolte_n = herolte_best_spill_nodes(l, herolte_nodes, herolte_batch);
+               for (unsigned k = 0; k < herolte_n; k++) {
+                  if (herolte_nodes[k] != (unsigned)spill_node)
+                     mir_spill_register(ctx, herolte_nodes[k], l->spill_class, &spill_count);
+               }
+               free(herolte_nodes);
+            }
+            if (getenv("HERO_MIDGARD_RA_LOG"))
+               fprintf(stderr, "HEROLTE midgard RA: round %u, class %u, %u nodes, batch %u: %u spilled\\n",
+                       herolte_midgard_ra_rounds, l->spill_class, l->node_count, herolte_batch, MAX2(herolte_n, 1));
+            herolte_batch = MIN2(herolte_batch * 2, herolte_cap);
+         }
+      }
+      herolte_midgard_ra_rounds++;
+''')
+change('Midgard RA: round count', '../../panfrost/midgard/midgard_ra.c',
+       '''/* Run register allocation in a loop, spilling until we succeed */
+''',
+       '''#include <stdlib.h>
+unsigned herolte_midgard_ra_rounds;   /* HEROLTE: for midgard_compile.c's timing line */
+
+/* HEROLTE: the k spillable nodes of the failed class with the most benefit -- lcra_get_best_spill_node's measure
+ * (Chaitin's: constraints over cost + 1) -- best first, from one pass over the graph; how many were found */
+static unsigned
+herolte_best_spill_nodes(struct lcra_state *l, unsigned *out, unsigned k)
+{
+   float *best = malloc(k * sizeof(float));
+   unsigned n = 0;
+
+   for (unsigned i = 0; i < l->node_count; ++i) {
+      if (l->class[i] != l->spill_class || l->spill_cost[i] < 0)
+         continue;
+      unsigned constraints = 0;
+      const uint32_t *row = &l->linear[i * l->node_count];
+      for (unsigned j = 0; j < l->node_count; ++j)
+         constraints += util_bitcount(row[j]);
+      float benefit = constraints / (float)(l->spill_cost[i] + 1);
+      if (benefit <= 0.0)
+         continue;
+      if (n < k)
+         n++;
+      else if (benefit <= best[n - 1])
+         continue;
+      unsigned p = n - 1;
+      while (p > 0 && best[p - 1] < benefit) {
+         best[p] = best[p - 1];
+         out[p] = out[p - 1];
+         p--;
+      }
+      best[p] = benefit;
+      out[p] = i;
+   }
+   free(best);
+   return n;
+}
+
+/* Run register allocation in a loop, spilling until we succeed */
+''')
+
+# 22. Where a Midgard compile's time goes, one line on stderr for any shader over half a second (HERO_MIDGARD_TIME=1:
+# every shader). On the phone stderr is the process's log (hero_log.c).
+change('Midgard timing: clock', '../../panfrost/midgard/midgard_compile.c',
+       '''void
+midgard_compile_shader_nir(nir_shader *nir,
+                           const struct panfrost_compile_inputs *inputs,
+                           struct util_dynarray *binary,
+                           struct pan_shader_info *info)
+{
+   midgard_debug = debug_get_option_midgard_debug();
+''',
+       '''#include "util/os_time.h"
+extern unsigned herolte_midgard_ra_rounds;
+
+void
+midgard_compile_shader_nir(nir_shader *nir,
+                           const struct panfrost_compile_inputs *inputs,
+                           struct util_dynarray *binary,
+                           struct pan_shader_info *info)
+{
+   midgard_debug = debug_get_option_midgard_debug();
+   int64_t herolte_t0 = os_time_get_nano(), herolte_t1, herolte_t2, herolte_t3, herolte_t4;   /* HEROLTE: timing */
+   unsigned herolte_mir_rounds = 0, herolte_nir = 0;
+''')
+change('Midgard timing: after NIR', '../../panfrost/midgard/midgard_compile.c',
+       '''   /* Optimisation passes */
+   optimise_nir(nir, ctx->quirks, inputs->is_blend);
+''',
+       '''   /* Optimisation passes */
+   optimise_nir(nir, ctx->quirks, inputs->is_blend);
+   herolte_t1 = os_time_get_nano();
+   nir_foreach_function_impl(herolte_impl, nir) {
+      nir_foreach_block(herolte_block, herolte_impl) {
+         nir_foreach_instr(herolte_instr, herolte_block)
+            herolte_nir++;
+      }
+   }
+''')
+change('Midgard timing: MIR rounds', '../../panfrost/midgard/midgard_compile.c',
+       '''   do {
+      progress = false;
+      progress |= midgard_opt_dead_code_eliminate(ctx);
+''',
+       '''   do {
+      herolte_mir_rounds++;
+      progress = false;
+      progress |= midgard_opt_dead_code_eliminate(ctx);
+''')
+change('Midgard timing: line', '../../panfrost/midgard/midgard_compile.c',
+       '''   /* Schedule! */
+   midgard_schedule_program(ctx);
+   mir_ra(ctx);
+''',
+       '''   /* Schedule! */
+   herolte_t2 = os_time_get_nano();
+   midgard_schedule_program(ctx);
+   herolte_t3 = os_time_get_nano();
+   mir_ra(ctx);
+   herolte_t4 = os_time_get_nano();
+   if (herolte_t4 - herolte_t0 > 500000000 || getenv("HERO_MIDGARD_TIME"))
+      fprintf(stderr, "HEROLTE midgard: %s, %u NIR instructions, %u blocks: NIR %.2f s, MIR %.2f s (%u rounds), "
+              "schedule %.2f s, RA %.2f s (%u rounds, %u spills, %u fills), %.2f s\\n",
+              gl_shader_stage_name(ctx->stage), herolte_nir, ctx->block_count, (herolte_t1 - herolte_t0) / 1e9,
+              (herolte_t2 - herolte_t1) / 1e9, herolte_mir_rounds, (herolte_t3 - herolte_t2) / 1e9,
+              (herolte_t4 - herolte_t3) / 1e9, herolte_midgard_ra_rounds, ctx->spills, ctx->fills,
+              (herolte_t4 - herolte_t0) / 1e9);
+''')
+
+# 23. AIR's discard_fragment is NIR demote, which Midgard's emit_intrinsic does not know ("Unhandled intrinsic demote"
+# three times in backboardd's main fragment shader, boot 26k7k: nothing emitted, the fragment kept). As ios-b1lte did
+# for Bifrost (B1L-0091): emitted as Midgard's discard, which mir_analyze_helper_terminate keeps alive for derivatives.
+change('Midgard demote as discard', '../../panfrost/midgard/midgard_compile.c',
+       '''   case nir_intrinsic_terminate_if:
+   case nir_intrinsic_terminate: {
+      bool conditional = instr->intrinsic == nir_intrinsic_terminate_if;
+''',
+       '''   case nir_intrinsic_demote_if:   /* HEROLTE: AIR's discard_fragment */
+   case nir_intrinsic_demote:
+   case nir_intrinsic_terminate_if:
+   case nir_intrinsic_terminate: {
+      bool conditional = instr->intrinsic == nir_intrinsic_terminate_if ||
+                         instr->intrinsic == nir_intrinsic_demote_if;
+''')
+
+# 24. [[point_coord]]: the frontend gives nir_load_point_coord, and Midgard (fs_point_is_sysval false before v6) reads
+# it only as the PNTC input varying, as GL hands it over ("Unhandled intrinsic load_point_coord", boot 26k7k).
+change('point coord as a varying: callback', 'air_metal.c',
+       '''static void
+finalize_for_gallium(nir_shader *nir, struct pipe_screen *screen, unsigned ubo_base)
+{''',
+       '''/* HEROLTE: [[point_coord]] as the PNTC input varying, for a screen that does not take it as a system value */
+static bool
+herolte_point_coord_varying(nir_builder *b, nir_intrinsic_instr *intr, void *data)
+{
+   nir_variable **var = data;
+   if (intr->intrinsic != nir_intrinsic_load_point_coord)
+      return false;
+   if (*var == NULL) {
+      *var = nir_variable_create(b->shader, nir_var_shader_in, glsl_vec_type(2), "herolte_point_coord");
+      (*var)->data.location = VARYING_SLOT_PNTC;
+      (*var)->data.driver_location = b->shader->num_inputs++;
+   }
+   b->cursor = nir_before_instr(&intr->instr);
+   nir_def_replace(&intr->def, nir_load_var(b, *var));
+   return true;
+}
+
+static void
+finalize_for_gallium(nir_shader *nir, struct pipe_screen *screen, unsigned ubo_base)
+{''')
+change('point coord as a varying: pass', 'air_metal.c',
+       '''            if (var->data.location == VARYING_SLOT_POS)
+               var->data.driver_location = nir->num_inputs++;
+      }
+   }
+''',
+       '''            if (var->data.location == VARYING_SLOT_POS)
+               var->data.driver_location = nir->num_inputs++;
+      }
+   }
+   if (nir->info.stage == MESA_SHADER_FRAGMENT && !screen->caps.fs_point_is_sysval) {   /* HEROLTE */
+      nir_variable *herolte_pc = NULL;
+      NIR_PASS(_, nir, nir_shader_intrinsics_pass, herolte_point_coord_varying, nir_metadata_control_flow,
+               &herolte_pc);
+   }
+''')
+
 print('air-herolte: ' + ', '.join(done))
