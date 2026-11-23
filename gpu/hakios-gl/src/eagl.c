@@ -4117,10 +4117,29 @@ my_glShaderSource(void *context, GLuint shader, GLsizei count, const GLchar *con
 	}
 	parts[0] = head;
 	parts[3] = text;
+	/*
+	 * iOS 26 (boots 26k7d/26k7f): some of QuartzCore's fragment shaders end in "gl_FragData[0] = s0;" with neither s0 nor
+	 * the sampler it comes from declared ("`s0' undeclared"); the program did not link and its draws were lost. As its
+	 * other single-texture shaders do, s0 is texture0 at texcoord0_0.
+	 */
+	char fixed_start[512] = "";
+	if (fragment && strstr(text, "= s0;") != NULL && strstr(text, "vec4 s0") == NULL && strstr(text, "texcoord0_0") != NULL &&
+	    strstr(text, "texture0") == NULL) {
+		static unsigned told_s0;
+		fetch = strstr(text, "gl_LastFragData") != NULL;
+		snprintf(fixed_start, sizeof(fixed_start), "uniform lowp sampler2D texture0;\n"
+		    "#define s0 texture(texture0, texcoord0_0)\n%s", fetch ? fragment_fetch : fragment_plain);
+		if (told_s0++ < 3) {
+			say("hakios-gl: shader %u uses s0 undeclared: given texture0 at texcoord0_0\n", shader);
+		}
+	}
 	if (fragment) {
 		fetch = strstr(text, "gl_LastFragData") != NULL;
 		parts[2] = fetch ? fragment_fetch : fragment_plain;
 		parts[4] = fetch ? fragment_fetch_end : fragment_plain_end;
+		if (strncmp(fixed_start, "uniform lowp sampler2D texture0;", 32) == 0) {
+			parts[2] = fixed_start;
+		}
 	}
 	free((void *)e->sources[shader % 256]);
 	e->sources[shader % 256] = text;
