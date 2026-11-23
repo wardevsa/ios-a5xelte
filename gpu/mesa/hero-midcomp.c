@@ -125,7 +125,16 @@ main(int argc, char **argv)
    void *ctx = ralloc_context(NULL);
    struct air_metallib lib;
    const char *lerr = NULL;
-   if (!air_metallib_parse(ctx, data, size, &lib, &lerr)) {
+   if (size < 4 || memcmp(data, "MTLB", 4)) {   /* one module (ios-b1lte's extract-b2lmod.py output) */
+      static struct air_metallib_function one;
+      one.name = fn ? fn : "module";
+      one.bitcode = data;
+      one.bitcode_size = size;
+      lib.functions = &one;
+      lib.num_functions = 1;
+      if (!fn)
+         fn = one.name;
+   } else if (!air_metallib_parse(ctx, data, size, &lib, &lerr)) {
       printf("%s: %s\n", path, lerr ? lerr : "not a metallib");
       return 2;
    }

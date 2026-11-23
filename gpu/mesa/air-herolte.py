@@ -1179,7 +1179,8 @@ change('Midgard RA: spills a round', '../../panfrost/midgard/midgard_ra.c',
        '''   int iter_count = 1000; /* max iterations */
 ''',
        '''   int iter_count = 1000; /* max iterations */
-   unsigned herolte_batch = 1, herolte_cap = 64;   /* HEROLTE: spills a round */
+   /* HEROLTE: spills a round, at most 4: the phone's A2Xghfc ran out of texture-class candidates with 8 or 64 */
+   unsigned herolte_batch = 1, herolte_cap = 4;
    const char *herolte_spills = getenv("HERO_MIDGARD_SPILLS");
    if (herolte_spills && atoi(herolte_spills) > 0)
       herolte_cap = atoi(herolte_spills);
@@ -1239,10 +1240,7 @@ herolte_best_spill_nodes(struct lcra_state *l, unsigned *out, unsigned k)
    for (unsigned i = 0; i < l->node_count; ++i) {
       if (l->class[i] != l->spill_class || l->spill_cost[i] < 0)
          continue;
-      unsigned constraints = 0;
-      const uint32_t *row = &l->linear[i * l->node_count];
-      for (unsigned j = 0; j < l->node_count; ++j)
-         constraints += util_bitcount(row[j]);
+      unsigned constraints = lcra_count_constraints(l, i);   /* air-herolte 28 */
       float benefit = constraints / (float)(l->spill_cost[i] + 1);
       if (benefit <= 0.0)
          continue;
@@ -1364,23 +1362,11 @@ allocate_registers(compiler_context *ctx, bool *spilled)
        '''#include <string.h>
 #include "util/bitset.h"
 
-/* HEROLTE: lcra.c's lcra_test_linear (static there) */
+/* HEROLTE: lcra.c's (exported by air-herolte 28) */
 static bool
 herolte_test_linear(struct lcra_state *l, unsigned *solutions, unsigned i)
 {
-   unsigned *row = &l->linear[i * l->node_count];
-   signed constant = solutions[i];
-
-   for (unsigned j = 0; j < l->node_count; ++j) {
-      if (solutions[j] == ~0)
-         continue;
-      signed lhs = solutions[j] - constant;
-      if (lhs < -15 || lhs > 15)
-         continue;
-      if (row[j] & (1 << (lhs + 15)))
-         return false;
-   }
-   return true;
+   return lcra_test_linear(l, solutions, i);
 }
 
 /* HEROLTE: lcra_solve, the nodes taken in order of first appearance in the (scheduled) program; on failure the
@@ -1621,6 +1607,310 @@ b2l_dump_module(const char *kind, const char *entry, const void *bitcode, size_t
 static void
 b2l_dump_module(const char *kind, const char *entry, const void *bitcode, size_t size)
 {''')
+
+# 28. LCRA's interference as lists, not a matrix. lcra.c (Midgard's alone: Bifrost has its own in bi_ra.c) keeps an
+# n x n array of 32-bit constraint words: for the phone's A2Xghfc (boot 26k7n, ~10 600 nodes) that is ~450 MB zeroed
+# every RA round, and lcra_test_linear / lcra_count_constraints walk whole rows. On the PC the one-node-a-round runs it
+# needs (special classes alone allocate there, 290-617 rounds) took 200-400 s, and the phone was ~10x slower. Each
+# node now keeps the (node, bits) pairs added for it, sorted and OR-merged when first read after an add.
+def replace_function(name, path, signature, body):
+    p = f'{AIR}/{path}'
+    s = open(p).read()
+    if body in s:
+        done.append(f'{name} (already)')
+        return
+    i = s.find(signature)
+    if i < 0 or s.count(signature) != 1:
+        sys.exit(f'air-herolte: {name}: {path} is not as expected')
+    start = s.rfind('\n', 0, s.rfind('\n', 0, i)) + 1   # the return type's line
+    end = s.find('\n}\n', i) + 3
+    open(p, 'w').write(s[:start] + body + s[end:])
+    done.append(name)
+
+
+change('LCRA lists: state', '../../panfrost/util/lcra.h',
+       '''   uint32_t *linear;
+''',
+       '''   /* HEROLTE: per node, the (node, constraint bits) pairs added for it; sorted and merged by node when read after
+    * an add (lcra.c herolte_merge), with the bits' count per node */
+   struct lcra_edge {
+      unsigned node;
+      uint32_t mask;
+   } **edges;
+   unsigned *edge_count, *edge_cap, *constraints;
+   bool *edge_merged;
+''')
+change('LCRA lists: prototypes', '../../panfrost/util/lcra.h',
+       '''signed lcra_get_best_spill_node(struct lcra_state *l);
+''',
+       '''signed lcra_get_best_spill_node(struct lcra_state *l);
+
+/* HEROLTE: for midgard_ra.c */
+bool lcra_test_linear(struct lcra_state *l, unsigned *solutions, unsigned i);
+unsigned lcra_count_constraints(struct lcra_state *l, unsigned i);
+''')
+change('LCRA lists: alloc', '../../panfrost/util/lcra.c',
+       '''   l->linear = calloc(sizeof(l->linear[0]), node_count * node_count);
+''',
+       '''   l->edges = calloc(sizeof(l->edges[0]), node_count);   /* HEROLTE */
+   l->edge_count = calloc(sizeof(unsigned), node_count);
+   l->edge_cap = calloc(sizeof(unsigned), node_count);
+   l->constraints = calloc(sizeof(unsigned), node_count);
+   l->edge_merged = calloc(sizeof(bool), node_count);
+''')
+change('LCRA lists: free', '../../panfrost/util/lcra.c',
+       '''   free(l->linear);
+''',
+       '''   for (unsigned i = 0; i < l->node_count; i++)   /* HEROLTE */
+      free(l->edges[i]);
+   free(l->edges);
+   free(l->edge_count);
+   free(l->edge_cap);
+   free(l->constraints);
+   free(l->edge_merged);
+''')
+change('LCRA lists: add', '../../panfrost/util/lcra.c',
+       '''   l->linear[j * l->node_count + i] |= constraint_fw;
+   l->linear[i * l->node_count + j] |= constraint_bw;
+''',
+       '''   herolte_push(l, j, i, constraint_fw);   /* HEROLTE */
+   herolte_push(l, i, j, constraint_bw);
+''')
+change('LCRA lists: push and merge', '../../panfrost/util/lcra.c',
+       '''void
+lcra_add_node_interference(struct lcra_state *l, unsigned i, unsigned cmask_i,''',
+       '''/* HEROLTE: node i's pair (j, bits) */
+static void
+herolte_push(struct lcra_state *l, unsigned i, unsigned j, uint32_t mask)
+{
+   if (!mask)
+      return;
+   l->edge_merged[i] = false;
+   if (l->edge_count[i] && l->edges[i][l->edge_count[i] - 1].node == j) {   /* the same pair again, as often */
+      l->edges[i][l->edge_count[i] - 1].mask |= mask;
+      return;
+   }
+   if (l->edge_count[i] == l->edge_cap[i]) {
+      l->edge_cap[i] = l->edge_cap[i] ? l->edge_cap[i] * 2 : 8;
+      l->edges[i] = realloc(l->edges[i], l->edge_cap[i] * sizeof(struct lcra_edge));
+   }
+   l->edges[i][l->edge_count[i]++] = (struct lcra_edge){ j, mask };
+   l->edge_merged[i] = false;
+}
+
+static int
+herolte_edge_cmp(const void *a, const void *b)
+{
+   unsigned x = ((const struct lcra_edge *)a)->node, y = ((const struct lcra_edge *)b)->node;
+   return x < y ? -1 : x > y;
+}
+
+/* HEROLTE: node i's pairs sorted, one per node (bits OR-ed), and their bits counted */
+static void
+herolte_merge(struct lcra_state *l, unsigned i)
+{
+   if (l->edge_merged[i])
+      return;
+   struct lcra_edge *e = l->edges[i];
+   unsigned n = l->edge_count[i], o = 0, count = 0;
+   if (n > 1)
+      qsort(e, n, sizeof(*e), herolte_edge_cmp);
+   for (unsigned k = 0; k < n; k++) {
+      if (o && e[o - 1].node == e[k].node)
+         e[o - 1].mask |= e[k].mask;
+      else
+         e[o++] = e[k];
+   }
+   for (unsigned k = 0; k < o; k++)
+      count += util_bitcount(e[k].mask);
+   l->edge_count[i] = o;
+   l->constraints[i] = count;
+   l->edge_merged[i] = true;
+}
+
+void
+lcra_add_node_interference(struct lcra_state *l, unsigned i, unsigned cmask_i,''')
+replace_function('LCRA lists: test', '../../panfrost/util/lcra.c',
+                 'lcra_test_linear(struct lcra_state *l, unsigned *solutions, unsigned i)\n{',
+                 '''bool
+lcra_test_linear(struct lcra_state *l, unsigned *solutions, unsigned i)
+{
+   /* HEROLTE: node i's pairs only */
+   herolte_merge(l, i);
+   const struct lcra_edge *e = l->edges[i];
+   signed constant = solutions[i];
+
+   for (unsigned k = 0; k < l->edge_count[i]; ++k) {
+      unsigned j = e[k].node;
+      if (solutions[j] == ~0)
+         continue;
+      signed lhs = solutions[j] - constant;
+      if (lhs < -15 || lhs > 15)
+         continue;
+      if (e[k].mask & (1 << (lhs + 15)))
+         return false;
+   }
+   return true;
+}
+''')
+replace_function('LCRA lists: count', '../../panfrost/util/lcra.c',
+                 'lcra_count_constraints(struct lcra_state *l, unsigned i)\n{',
+                 '''unsigned
+lcra_count_constraints(struct lcra_state *l, unsigned i)
+{
+   herolte_merge(l, i);   /* HEROLTE */
+   return l->constraints[i];
+}
+''')
+
+# 29. Midgard's liveness, which every RA round recomputes: with LCRA's matrix gone (28) it was 60 % of A2Xghfc's RA
+# on the PC. Its worklist is a pointer-hashed set, so blocks come off it in no useful order and a backward analysis
+# over ~3 300 blocks of ~11 000 nodes (a 22 KB array a block, in and out) takes many more block updates than it needs,
+# each allocating a fresh array. Whole passes in reverse program order instead, until a pass changes nothing (the
+# same fixed point: live_out only grows, each block is recomputed from it), with one scratch array.
+replace_function('Midgard liveness: block update', '../../panfrost/util/pan_liveness.c',
+                 'liveness_block_update(pan_block *blk, unsigned temp_count,',
+                 '''static bool
+liveness_block_update(pan_block *blk, unsigned temp_count,
+                      pan_liveness_update callback, uint16_t *live)
+{
+   /* HEROLTE: into a scratch array, copied to live_in only when it changed */
+   liveness_block_live_out(blk, temp_count);
+   memcpy(live, blk->live_out, temp_count * sizeof(uint16_t));
+
+   pan_foreach_instr_in_block_rev(blk, ins)
+      callback(live, (void *)ins, temp_count);
+
+   if (!memcmp(blk->live_in, live, temp_count * sizeof(uint16_t)))
+      return false;
+   memcpy(blk->live_in, live, temp_count * sizeof(uint16_t));
+   return true;
+}
+''')
+replace_function('Midgard liveness: passes', '../../panfrost/util/pan_liveness.c',
+                 'pan_compute_liveness(struct list_head *blocks, unsigned temp_count,',
+                 '''void
+pan_compute_liveness(struct list_head *blocks, unsigned temp_count,
+                     pan_liveness_update callback)
+{
+   /* HEROLTE: passes over the blocks in reverse program order until nothing changes */
+   pan_free_liveness(blocks);
+
+   list_for_each_entry(pan_block, block, blocks, link) {
+      block->live_in = rzalloc_array(block, uint16_t, temp_count);
+      block->live_out = rzalloc_array(block, uint16_t, temp_count);
+   }
+
+   uint16_t *live = malloc(MAX2(temp_count, 1) * sizeof(uint16_t));
+   bool progress;
+   do {
+      progress = false;
+      list_for_each_entry_rev(pan_block, blk, blocks, link)
+         progress |= liveness_block_update(blk, temp_count, callback, live);
+   } while (progress);
+   free(live);
+}
+''')
+
+# 30. mir_compute_interference, every RA round: for each instruction with a destination it scanned all temp_count
+# nodes for the live ones (A2Xghfc: ~30 000 instructions x ~11 000 nodes a round). The live nodes are kept as a list
+# as well, and only the destination and sources an instruction's liveness update touches are re-checked.
+change('Midgard interference: live list', '../../panfrost/midgard/midgard_ra.c',
+       '''      mir_foreach_instr_in_block_rev(blk, ins) {
+         /* Mark all registers live after the instruction as
+          * interfering with the destination */
+
+         unsigned dest = ins->dest;
+
+         if (dest < ctx->temp_count) {
+            for (unsigned i = 0; i < ctx->temp_count; ++i) {
+               if (live[i]) {
+                  unsigned mask = mir_bytemask(ins);
+                  lcra_add_node_interference(l, dest, mask, i, live[i]);
+               }
+            }
+         }
+
+         /* Add blend shader interference: blend shaders might
+          * clobber r0-r3. */
+         if (ins->compact_branch && ins->writeout) {
+            for (unsigned i = 0; i < ctx->temp_count; ++i) {
+               if (!live[i])
+                  continue;
+
+               for (unsigned j = 0; j < 4; j++) {
+                  lcra_add_node_interference(l, ctx->temp_count + j, 0xFFFF, i,
+                                             live[i]);
+               }
+            }
+         }
+
+         /* Update live_in */
+         mir_liveness_ins_update(live, ins, ctx->temp_count);
+      }
+''',
+       '''      /* HEROLTE: the live nodes as a list too (herolte_list, position herolte_pos[node], ~0 when not in it) */
+      unsigned *herolte_list = malloc(MAX2(ctx->temp_count, 1) * sizeof(unsigned));
+      unsigned *herolte_pos = malloc(MAX2(ctx->temp_count, 1) * sizeof(unsigned));
+      unsigned herolte_n = 0;
+      for (unsigned i = 0; i < ctx->temp_count; ++i) {
+         herolte_pos[i] = live[i] ? herolte_n : ~0u;
+         if (live[i])
+            herolte_list[herolte_n++] = i;
+      }
+
+      mir_foreach_instr_in_block_rev(blk, ins) {
+         /* Mark all registers live after the instruction as
+          * interfering with the destination */
+
+         unsigned dest = ins->dest;
+
+         if (dest < ctx->temp_count) {
+            unsigned mask = mir_bytemask(ins);
+            for (unsigned k = 0; k < herolte_n; ++k) {
+               unsigned i = herolte_list[k];
+               lcra_add_node_interference(l, dest, mask, i, live[i]);
+            }
+         }
+
+         /* Add blend shader interference: blend shaders might
+          * clobber r0-r3. */
+         if (ins->compact_branch && ins->writeout) {
+            for (unsigned k = 0; k < herolte_n; ++k) {
+               unsigned i = herolte_list[k];
+               for (unsigned j = 0; j < 4; j++) {
+                  lcra_add_node_interference(l, ctx->temp_count + j, 0xFFFF, i,
+                                             live[i]);
+               }
+            }
+         }
+
+         /* Update live_in */
+         mir_liveness_ins_update(live, ins, ctx->temp_count);
+
+         /* HEROLTE: what the update touched, back in step with the list */
+         unsigned touched[1 + MIR_SRC_COUNT] = { ins->dest };
+         for (unsigned s = 0; s < MIR_SRC_COUNT; s++)
+            touched[1 + s] = ins->src[s];
+         for (unsigned t = 0; t < 1 + MIR_SRC_COUNT; t++) {
+            unsigned node = touched[t];
+            if (node >= ctx->temp_count)
+               continue;
+            bool is = live[node] != 0, in = herolte_pos[node] != ~0u;
+            if (is && !in) {
+               herolte_pos[node] = herolte_n;
+               herolte_list[herolte_n++] = node;
+            } else if (!is && in) {
+               unsigned last = herolte_list[--herolte_n];
+               herolte_list[herolte_pos[node]] = last;
+               herolte_pos[last] = herolte_pos[node];
+               herolte_pos[node] = ~0u;
+            }
+         }
+      }
+      free(herolte_list);
+      free(herolte_pos);
+''')
 
 # 23. AIR's discard_fragment is NIR demote, which Midgard's emit_intrinsic does not know ("Unhandled intrinsic demote"
 # three times in backboardd's main fragment shader, boot 26k7k: nothing emitted, the fragment kept). As ios-b1lte did
