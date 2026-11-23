@@ -73,6 +73,21 @@ say(const char *format, ...)
 	if (n > (int)sizeof(line) - 1) {
 		n = sizeof(line) - 1;
 	}
+	/* Boots 26k7/26k7b: backboardd's stderr pipe (hero_log.c) went quiet after 13 lines, before this file's first line;
+	 * the libdrm stand-in's herodrm_log() goes to the kernel log at once, from this thread */
+	static void (*klog)(const char *, ...);
+	static int looked;
+	if (!looked) {
+		klog = (void (*)(const char *, ...))dlsym(RTLD_DEFAULT, "herodrm_log");
+		looked = 1;
+	}
+	if (klog != NULL) {
+		while (n > 0 && line[n - 1] == '\n') {
+			line[--n] = 0;
+		}
+		klog("backboardd: %s", line);
+		return;
+	}
 	write(2, line, (size_t)n);              /* the kernel sends backboardd's stderr to its log (herogl) */
 }
 
@@ -251,5 +266,8 @@ on_image(const struct mach_header *mh, intptr_t image_slide)
 __attribute__((constructor)) static void
 ca_server_hook26_init(void)
 {
+	if (strcmp(getprogname(), "backboardd") == 0) {
+		say("ca_server_hook26: loaded, waiting for QuartzCore\n");
+	}
 	_dyld_register_func_for_add_image(on_image);
 }

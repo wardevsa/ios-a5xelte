@@ -4,6 +4,7 @@
 // (gpu/mesa/herodrm.c), so the shim's and Mesa's messages from inside a system daemon reach the USERDATA log
 // ring that TWRP can read. At most HERO_LOG_MAX lines (default 3000), then one line saying the rest is dropped.
 #include <dlfcn.h>
+#include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,7 +22,11 @@ static void *pump(void *arg) {
     const char *prog = getprogname();
     for (;;) {
         ssize_t n = read(log_fd, buf, sizeof buf);
-        if (n <= 0) return NULL;
+        if (n <= 0) {
+            // iOS 26 backboardd went quiet after its first 13 lines (boots 26k7/26k7b): say why, if this is it
+            klog("%s: stderr pump stopped: read %zd, errno %d", prog, n, errno);
+            return NULL;
+        }
         for (ssize_t i = 0; i < n; i++) {
             char c = buf[i];
             if (c != '\n' && len < sizeof line - 1) { line[len++] = c; continue; }
