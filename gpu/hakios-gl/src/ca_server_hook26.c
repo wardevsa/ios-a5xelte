@@ -53,8 +53,30 @@ extern const void *_dyld_get_shared_cache_range(size_t *length);
 #define W_PUSH_GO_ON            0x1400000fu     /* b +0x3c */
 static const uint32_t w_new_metal[4] = { 0xd503237f, 0xa9ba6ffc, 0xa90167fa, 0xa9025ff8 };
 
+#define METAL_ALLOW             "/private/var/herolte/metal.allow"
+#define METAL_TRIED             "/private/var/tmp/herolte-metal-tried"
+
 static uintptr_t slide;
 static char session[64];
+
+/* backboardd named in metal.allow (hero-metal-plugin.m's list): one name a line */
+static bool
+metal_allowed(void)
+{
+	FILE *f = fopen(METAL_ALLOW, "r");
+	char line[128];
+	bool ok = false;
+
+	if (f == NULL) {
+		return false;
+	}
+	while (!ok && fgets(line, sizeof(line), f) != NULL) {
+		line[strcspn(line, "\r\n \t#")] = 0;
+		ok = strcmp(line, "backboardd") == 0;
+	}
+	fclose(f);
+	return ok;
+}
 static volatile int made_ok;
 static unsigned made;
 
@@ -205,6 +227,32 @@ install(intptr_t image_slide)
 	if (session[0] && strcmp(seen, session) == 0) {
 		say("ca_server_hook26: GLES failed earlier this boot: software renderer\n");
 		return;
+	}
+	/*
+	 * Metal (docs/herolte-metal.md; as ios-b1lte, whose backboardd draws on Metal): with backboardd in metal.allow, the
+	 * first backboardd of a boot is left alone, so QuartzCore's own Metal renderer gets the T880 through HeroMetal.bundle.
+	 * Any later one this boot (the first died, or was restarted) is put on OpenGL ES as before -- the kernel's herogl
+	 * inserts this library twice at most.
+	 */
+	if (metal_allowed()) {
+		char tried[64] = "";
+		if ((fd = open(METAL_TRIED, O_RDONLY)) >= 0) {
+			ssize_t n = read(fd, tried, sizeof(tried) - 1);
+			close(fd);
+			if (n > 0) {
+				tried[n] = 0;
+			}
+		}
+		if (!session[0] || strcmp(tried, session) != 0) {
+			if ((fd = open(METAL_TRIED, O_WRONLY | O_CREAT | O_TRUNC, 0644)) >= 0) {
+				(void)write(fd, session, strlen(session));
+				close(fd);
+			}
+			say("ca_server_hook26: backboardd is in metal.allow: QuartzCore's Metal renderer this time (OpenGL ES if "
+			    "backboardd starts again this boot)\n");
+			return;
+		}
+		say("ca_server_hook26: Metal was tried earlier this boot: OpenGL ES\n");
 	}
 	/* boot 26k7: nothing was printed past this point, so _dyld_get_shared_cache_range() gave NULL on this system; dyld's
 	 * image callback passes the slide of QuartzCore, which for an image of the shared cache is the cache's slide */
