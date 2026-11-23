@@ -35,6 +35,7 @@
 #include <unistd.h>
 
 void hakios_gl_set_ca_context(void *context);   /* eagl.c reads the function of each draw from it */
+void hakios_gl_ios26_functions(void);           /* eagl.c: this QuartzCore's function numbers, and their numbers */
 extern const void *_dyld_get_shared_cache_range(size_t *length);
 
 #define MARKER                  "/private/var/tmp/herolte-gl-fallback"
@@ -240,6 +241,7 @@ install(intptr_t image_slide)
 		if (pthread_create(&t, NULL, watchdog, NULL) == 0) {
 			pthread_detach(t);
 		}
+		hakios_gl_ios26_functions();
 		for (unsigned i = 0; i < sizeof(sigs) / sizeof(sigs[0]); i++) {
 			signal(sigs[i], crash_mark);
 		}

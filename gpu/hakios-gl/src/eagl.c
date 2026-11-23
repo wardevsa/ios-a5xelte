@@ -2139,6 +2139,66 @@ hakios_gl_set_ca_context(void *context)
 static GLfloat function_values[90][20];
 static uint8_t function_given[90];
 
+/*
+ * (Galaxy S7 port, iOS 26: 23G90) There is no function_uniform() any more for ca_hooks.c to watch: the renderer keeps a
+ * draw's state at context+0x10 (its function's number at +0x10, as before) and the function's numbers in objects listed
+ * from +0x28, each with its vec4 count at +0x28 and the numbers at +0x30 -- what its program binding hands glUniform4fv
+ * (QuartzCore 0x18415ec28). The first of them is read here when a draw is about to be made with no program, so the
+ * functions eagl.c draws itself (vcm: the keyboard's letters, Spotlight's icons) have their numbers again.
+ * ca_server_hook26.c turns it on (hakios_gl_ios26_functions()).
+ */
+static int ios26_numbers;
+
+static bool
+plausible(const void *p, uintptr_t align)
+{
+	uintptr_t v = (uintptr_t)p;
+	return v >= 0x100000000ULL && v < 0x1000000000ULL && (v & (align - 1)) == 0;
+}
+
+static void
+ios26_function_values(unsigned function)
+{
+	static uint8_t said[90];
+	const char *state, *param;
+	const float *values;
+	uint32_t count;
+
+	if (!ios26_numbers || ca_context == NULL || function >= 90) {
+		return;
+	}
+	state = *(const char *const *)((const char *)ca_context + 0x10);
+	if (!plausible(state, 8) || !plausible(param = *(const char *const *)(state + 0x28), 8)) {
+		return;
+	}
+	count = *(const uint32_t *)(param + 0x28);
+	values = *(const float *const *)(param + 0x30);
+	if (count == 0 || count > 5 || !plausible(values, 4)) {
+		return;
+	}
+	memcpy(function_values[function], values, 4 * count * sizeof(float));
+	function_given[function] = (uint8_t)(4 * count);
+	if (said[function]++ < 2) {
+		say("hakios-gl: iOS 26: function %u's numbers from its state: %u vec4, %.3g %.3g %.3g %.3g ...\n", function,
+		    count, (double)values[0], (double)values[1], (double)values[2], (double)values[3]);
+	}
+}
+
+/* iOS 26 (23G90) by its table of names (QuartzCore 0x1e61f9890, from "clr" = 0): c4p 22, ds8 29, vrd 39, vrb 41, sb3 45,
+ * vcm 52 -- vrc came in at 40 and others after it */
+void hakios_gl_ios26_functions(void);
+
+void
+hakios_gl_ios26_functions(void)
+{
+	static const unsigned ios26[6] = { 22, 29, 39, 41, 45, 52 };
+
+	memcpy(hakios_functions, ios26, sizeof(hakios_functions));
+	ios26_numbers = 1;
+	say("hakios-gl: iOS 26: CoreAnimation's function numbers (vcm 52, sb3 45, vrb 41) and their numbers from each draw's "
+	    "state\n");
+}
+
 /* From inject.c, at every GLContext::function_uniform(): the numbers a function is given, which no shader of CoreAnimation's takes. */
 void
 hakios_gl_function_values(void *context, unsigned function, unsigned index, size_t components, size_t count, const float *values)
@@ -3039,6 +3099,10 @@ group_draw_begin(struct eagl *e, GLint enabled[4])
 	static uint8_t said[90];
 	unsigned function = ca_context != NULL ? *(*(uint8_t **)((char *)ca_context + 0x10) + 0x10) : 90;
 	struct group_texture *into = group_of(e, e->colour), *from = NULL;
+
+	if (e->program == 0) {
+		ios26_function_values(function);
+	}
 	const GLfloat *colours = NULL;
 	GLfloat matrix[16], texmat[4] = { 1, 1, 0, 0 };
 	bool cover;
@@ -3165,6 +3229,9 @@ plain_draw_begin(struct eagl *e, GLint enabled[4])
 	GLint rows = 0;
 	GLuint program;
 
+	if (e->program == 0) {
+		ios26_function_values(function);
+	}
 	if (e->program == 0) {
 		e->line.vrd += function == FUNCTION_VARIABLE_DOWNSAMPLE;
 		e->line.vrb += function == FUNCTION_VARIABLE_BLUR;
